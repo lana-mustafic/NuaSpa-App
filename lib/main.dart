@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
-import 'screens/zaposlenici/zaposlenik_form.dart'; // Importuj formu
+import 'package:provider/provider.dart'; // Moramo uvesti provider
+import 'screens/zaposlenici/zaposlenik_form.dart'; 
+import 'providers/uloga_provider.dart'; // Importuj provider koji si napravila
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    // MultiProvider omogućava da dodaješ više providera kasnije (npr. za Auth, Usluge itd.)
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UlogaProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -14,10 +24,17 @@ class MyApp extends StatelessWidget {
       title: 'NuaSpa Desktop',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.teal,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
+        // Dodajemo malo globalnog stila za gumbe
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ),
-      // OVDJE postavljamo tvoju formu kao početni ekran
+      // Tvoja forma je i dalje početni ekran
       home: const ZaposlenikForm(), 
     );
   }
