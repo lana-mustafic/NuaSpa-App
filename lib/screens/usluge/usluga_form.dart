@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-// Provjeri da li je 'nuaspa_app' tačno ime tvog projekta u pubspec.yaml
 import 'package:nuaspa_app/widgets/forms/custom_text_field.dart';
-import 'package:nuaspa_app/widgets/forms/custom_dropdown.dart';
 
 class UslugaForm extends StatefulWidget {
   const UslugaForm({super.key});
@@ -16,8 +14,15 @@ class _UslugaFormState extends State<UslugaForm> {
   final _cijenaController = TextEditingController();
 
   @override
+  void dispose() {
+    // Dobra praksa: uvijek uništi controllere kad se ekran zatvori
+    _nazivController.dispose();
+    _cijenaController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Scaffold dodajemo jer svaki ekran treba da ima bazu (pozadinu, appbar itd.)
     return Scaffold(
       appBar: AppBar(title: const Text("Nova Usluga")),
       body: Center(
@@ -43,7 +48,6 @@ class _UslugaFormState extends State<UslugaForm> {
                 CustomTextField(
                   label: "Cijena", 
                   controller: _cijenaController,
-                  // Ako tvoj CustomTextField nema isNumeric, izbriši ovu liniju ispod
                 ),
                 
                 const SizedBox(height: 20),
@@ -54,7 +58,8 @@ class _UslugaFormState extends State<UslugaForm> {
                   child: ElevatedButton(
                     onPressed: () {
                       if (_formKey.currentState!.validate()) {
-                        print("Spasavam uslugu: ${_nazivController.text}");
+                        // Izmijenjeno: debugPrint umjesto print
+                        debugPrint("Spasavam uslugu: ${_nazivController.text}");
                       }
                     },
                     style: ElevatedButton.styleFrom(

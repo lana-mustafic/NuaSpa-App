@@ -17,7 +17,8 @@ class UlogaProvider with ChangeNotifier {
     try {
       _uloge = await ApiService().getUloge();
     } catch (e) {
-      print("Greška u provideru: $e");
+      // Izmijenjeno: debugPrint umjesto print
+      debugPrint("Greška u provideru: $e");
     } finally {
       _isLoading = false;
       notifyListeners(); // Javi UI-u da su podaci stigli
