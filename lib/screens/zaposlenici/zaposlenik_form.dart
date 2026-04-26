@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // Dodano za Provider
+import 'package:provider/provider.dart';
 import '../../widgets/forms/custom_text_field.dart';
 import '../../widgets/forms/custom_dropdown.dart';
 import '../../models/referentni_podatak.dart';
-import '../../providers/uloga_provider.dart'; // Dodano
+import '../../providers/uloga_provider.dart';
+import '../../services/api_service.dart'; // MORAŠ imati ovaj import za PDF
 
 class ZaposlenikForm extends StatefulWidget {
   const ZaposlenikForm({super.key});
@@ -22,27 +23,47 @@ class _ZaposlenikFormState extends State<ZaposlenikForm> {
   @override
   void initState() {
     super.initState();
-    // Inicijalno učitavanje podataka preko Providera
     Future.microtask(() => 
       context.read<UlogaProvider>().fetchUloge()
     );
   }
 
+  @override
+  void dispose() {
+    _imeController.dispose();
+    _prezimeController.dispose();
+    super.dispose();
+  }
+
+  // Funkcija za PDF Export
+  Future<void> _preuzmiIzvjestaj() async {
+    // Prikazujemo mali krug dok se skida
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    await ApiService().downloadReport();
+
+    if (!mounted) return;
+    Navigator.pop(context); // Zatvori krug
+  }
+
   void _spasi() {
     if (_formKey.currentState!.validate() && _odabranaUloga != null) {
-      // Simulacija novog zaposlenika za State Syncing
       final noviZaposlenik = ReferentniPodatak(
         id: DateTime.now().millisecondsSinceEpoch, 
         naziv: "${_imeController.text} ${_prezimeController.text} (${_odabranaUloga!.naziv})"
       );
 
-      // Slanje podatka u Provider (ovo osvježava listu svuda)
       context.read<UlogaProvider>().dodajUlogu(noviZaposlenik);
 
-      // Očisti formu nakon unosa
       _imeController.clear();
       _prezimeController.clear();
       setState(() => _odabranaUloga = null);
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Zaposlenik dodan na listu!")),
@@ -54,10 +75,21 @@ class _ZaposlenikFormState extends State<ZaposlenikForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(title: const Text("Upravljanje Zaposlenicima"), centerTitle: true),
-      body: Row( // Row koristimo jer je Desktop, pa možemo imati formu lijevo, a listu desno
+      appBar: AppBar(
+        title: const Text("Upravljanje Zaposlenicima"), 
+        centerTitle: true,
+        // OVDJE DODAJEMO DUGME ZA PDF
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: _preuzmiIzvjestaj,
+            tooltip: "Export PDF",
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+      body: Row( 
         children: [
-          // LIJEVA STRANA: Forma
           Expanded(
             flex: 2,
             child: SingleChildScrollView(
@@ -77,7 +109,6 @@ class _ZaposlenikFormState extends State<ZaposlenikForm> {
                         CustomTextField(label: "Prezime", controller: _prezimeController),
                         const SizedBox(height: 10),
                         
-                        // Dropdown koji sluša podatke iz Providera
                         Consumer<UlogaProvider>(
                           builder: (context, provider, child) {
                             if (provider.isLoading) return const CircularProgressIndicator();
@@ -109,8 +140,6 @@ class _ZaposlenikFormState extends State<ZaposlenikForm> {
               ),
             ),
           ),
-
-          // DESNA STRANA: List View (State Syncing)
           const VerticalDivider(width: 1),
           Expanded(
             flex: 3,
@@ -138,7 +167,10 @@ class _ZaposlenikFormState extends State<ZaposlenikForm> {
                             return Card(
                               margin: const EdgeInsets.only(bottom: 10),
                               child: ListTile(
-                                leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white)),
+                                leading: const CircleAvatar(
+                                  backgroundColor: Colors.teal, 
+                                  child: Icon(Icons.person, color: Colors.white)
+                                ),
                                 title: Text(item.naziv),
                                 trailing: const Icon(Icons.check_circle, color: Colors.green),
                               ),
