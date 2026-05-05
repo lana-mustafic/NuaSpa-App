@@ -1,0 +1,416 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import '../../../models/usluga.dart';
+import '../../../models/kategorija_usluga.dart';
+import '../../../models/zaposlenik.dart';
+import '../../../models/rezervacija.dart';
+import '../../../models/recenzija.dart';
+import '../../../models/payment_intent_response.dart';
+import '../api_client.dart';
+
+class ApiService {
+  final Dio _dio = ApiClient().dio;
+
+  /// Opcionalni filteri mapiraju na [UslugaSearchObject] na backendu.
+  Future<List<Usluga>> getUsluge({String? naziv, double? maxCijena}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (naziv != null && naziv.trim().isNotEmpty) {
+        query['Naziv'] = naziv.trim();
+      }
+      if (maxCijena != null) {
+        query['MaxCijena'] = maxCijena;
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Usluga',
+        queryParameters: query.isEmpty ? null : query,
+      );
+
+      final data = response.data;
+      if (data is! List) {
+        debugPrint('Neočekivan odgovor za Usluga: $data');
+        return [];
+      }
+
+      return data
+          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getUsluge: $e');
+      return [];
+    }
+  }
+
+  /// Preporuke po kategorijama iz favorita i rezervacija (ili prvih N iz kataloga).
+  Future<List<Usluga>> getPreporuke({int take = 10}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Preporuka',
+        queryParameters: {'take': take},
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getPreporuke: $e');
+      return [];
+    }
+  }
+
+  Future<Usluga?> getUslugaById(int id) async {
+    try {
+      final response = await _dio.get<dynamic>('Usluga/$id');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Usluga.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getUslugaById: $e');
+      return null;
+    }
+  }
+
+  Future<List<Zaposlenik>> getZaposlenici() async {
+    try {
+      final response = await _dio.get<dynamic>('Zaposlenik');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getZaposlenici: $e');
+      return [];
+    }
+  }
+
+  Future<List<Rezervacija>> getRezervacije() async {
+    try {
+      final response = await _dio.get<dynamic>('Rezervacija');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Rezervacija.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacije: $e');
+      return [];
+    }
+  }
+
+  /// `Datum` / `IsPotvrdjena` mapiraju na [RezervacijaSearchObject]
+  /// (za terapeuta backend i dalje vraća samo njegove rezervacije).
+  Future<List<Rezervacija>> getRezervacijeFiltered({
+    DateTime? datum,
+    bool? isPotvrdjena,
+  }) async {
+    try {
+      final query = <String, dynamic>{};
+      if (datum != null) {
+        final d = DateTime(datum.year, datum.month, datum.day);
+        query['Datum'] =
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      }
+      if (isPotvrdjena != null) {
+        query['IsPotvrdjena'] = isPotvrdjena;
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Rezervacija',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Rezervacija.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
+      return [];
+    }
+  }
+
+  Future<List<DateTime>> getDostupniTermini({
+    required int zaposlenikId,
+    required DateTime datum,
+  }) async {
+    try {
+      final d = DateTime(datum.year, datum.month, datum.day);
+      final dateStr =
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final response = await _dio.get<dynamic>(
+        'Rezervacija/dostupni-termini',
+        queryParameters: {
+          'zaposlenikId': zaposlenikId,
+          'datum': dateStr,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      final list = data.map((e) {
+        if (e is String) return DateTime.parse(e);
+        return DateTime.parse(e.toString());
+      }).toList();
+      list.sort();
+      return list;
+    } catch (e) {
+      debugPrint('Greška u ApiService.getDostupniTermini: $e');
+      return [];
+    }
+  }
+
+  Future<Rezervacija?> createRezervacija({
+    required DateTime datumRezervacije,
+    required int uslugaId,
+    required int zaposlenikId,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Rezervacija',
+        data: {
+          'datumRezervacije': datumRezervacije.toIso8601String(),
+          'uslugaId': uslugaId,
+          'zaposlenikId': zaposlenikId,
+        },
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Rezervacija.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createRezervacija: $e');
+      return null;
+    }
+  }
+
+  Future<List<Recenzija>> getRecenzijeByUsluga(int uslugaId) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Recenzija',
+        queryParameters: {'uslugaId': uslugaId},
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Recenzija.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRecenzijeByUsluga: $e');
+      return [];
+    }
+  }
+
+  Future<Recenzija?> createRecenzija({
+    required int uslugaId,
+    required int ocjena,
+    required String komentar,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Recenzija',
+        data: {
+          'uslugaId': uslugaId,
+          'ocjena': ocjena,
+          'komentar': komentar,
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Recenzija.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createRecenzija: $e');
+      return null;
+    }
+  }
+
+  Future<Set<int>> getMyFavoriteIds() async {
+    try {
+      final response = await _dio.get<dynamic>('Favorit/ids');
+      final data = response.data;
+      if (data is! List) return {};
+      return data.map((e) => (e as num).toInt()).toSet();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getMyFavoriteIds: $e');
+      return {};
+    }
+  }
+
+  Future<bool> addFavorite(int uslugaId) async {
+    try {
+      await _dio.post<dynamic>('Favorit', data: {'uslugaId': uslugaId});
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.addFavorite: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeFavorite(int uslugaId) async {
+    try {
+      await _dio.delete<dynamic>('Favorit/$uslugaId');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.removeFavorite: $e');
+      return false;
+    }
+  }
+
+  Future<List<Usluga>> getMyFavorites() async {
+    try {
+      final response = await _dio.get<dynamic>('Favorit');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getMyFavorites: $e');
+      return [];
+    }
+  }
+
+  Future<List<KategorijaUsluga>> getKategorijeUsluga() async {
+    try {
+      final response = await _dio.get<dynamic>('KategorijaUsluga');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => KategorijaUsluga.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getKategorijeUsluga: $e');
+      return [];
+    }
+  }
+
+  Future<KategorijaUsluga?> createKategorijaUsluga(String naziv) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'KategorijaUsluga',
+        data: {'id': 0, 'naziv': naziv},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return KategorijaUsluga.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createKategorijaUsluga: $e');
+      return null;
+    }
+  }
+
+  Future<KategorijaUsluga?> updateKategorijaUsluga(KategorijaUsluga k) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'KategorijaUsluga/${k.id}',
+        data: k.toJson(),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return KategorijaUsluga.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateKategorijaUsluga: $e');
+      return null;
+    }
+  }
+
+  Future<String?> deleteKategorijaUsluga(int id) async {
+    try {
+      await _dio.delete<void>('KategorijaUsluga/$id');
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      debugPrint('Greška u ApiService.deleteKategorijaUsluga: $e');
+      return e.message;
+    }
+  }
+
+  Future<Usluga?> createUsluga(Usluga u) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Usluga',
+        data: u.toAdminJson(includeId: false),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Usluga.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createUsluga: $e');
+      return null;
+    }
+  }
+
+  Future<Usluga?> updateUsluga(Usluga u) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Usluga/${u.id}',
+        data: u.toAdminJson(includeId: true),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Usluga.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateUsluga: $e');
+      return null;
+    }
+  }
+
+  Future<String?> deleteUsluga(int id) async {
+    try {
+      await _dio.delete<void>('Usluga/$id');
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      debugPrint('Greška u ApiService.deleteUsluga: $e');
+      return e.message;
+    }
+  }
+
+  Future<bool> updateRezervacijaPotvrdjena(int id, bool isPotvrdjena) async {
+    try {
+      await _dio.patch<void>(
+        'Rezervacija/$id',
+        data: {'isPotvrdjena': isPotvrdjena},
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateRezervacijaPotvrdjena: $e');
+      return false;
+    }
+  }
+
+  Future<PaymentIntentResponse?> createPaymentIntent(int rezervacijaId) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Placanje/create-intent',
+        data: {'rezervacijaId': rezervacijaId},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return PaymentIntentResponse.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createPaymentIntent: $e');
+      return null;
+    }
+  }
+
+  Future<void> downloadReport() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/izvjestaj_top_usluge.pdf';
+      await _dio.download('Izvjestaj/top-usluge', filePath);
+      await OpenFile.open(filePath);
+    } catch (e) {
+      debugPrint('Greška pri downloadu: $e');
+    }
+  }
+}
