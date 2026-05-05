@@ -14,6 +14,7 @@ import 'models/usluga.dart';
 
 void main() {
   runApp(
+    // MultiProvider omogućava da dodaješ više providera kasnije (npr. za Auth, Usluge itd.)
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthState()),
@@ -30,10 +31,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'NuaSpa App',
+      title: 'NuaSpa Desktop',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
         inputDecorationTheme: const InputDecorationTheme(
           border: OutlineInputBorder(),
@@ -336,6 +337,8 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+      // Tvoja forma je i dalje početni ekran
+      home: const ZaposlenikForm(), 
     );
   }
 }
