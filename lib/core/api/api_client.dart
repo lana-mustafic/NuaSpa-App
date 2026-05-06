@@ -4,18 +4,15 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_interceptor.dart';
+import '../config/app_config.dart';
 
 /// Jedinstveni Dio za cijelu aplikaciju (JWT + isti baseUrl).
 class ApiClient {
   ApiClient._() {
     dio = Dio(
       BaseOptions(
-        // Android emulator: 10.0.2.2 -> host machine localhost.
-        // Windows desktop app: koristi HTTP endpoint (bez TLS/cert problema).
-        // Ako želiš HTTPS na Windowsu, promijeni na https://localhost:7155/api/ i instaliraj/dev-trust cert.
-        baseUrl: Platform.isWindows
-            ? 'http://127.0.0.1:5088/api/'
-            : 'https://10.0.2.2:7155/api/',
+        // Zadano po platformi; override: --dart-define=NUASPA_API_BASE_URL=https://host/api/
+        baseUrl: AppConfig.apiBaseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 20),
         headers: {
