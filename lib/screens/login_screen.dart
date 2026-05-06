@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../ui/widgets/glass_panel.dart';
+import '../ui/widgets/primary_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,77 +43,147 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final status = context.watch<AuthProvider>().status;
 
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.spa, size: 100, color: Colors.deepPurple),
-                const SizedBox(height: 20),
-                const Text(
-                  "NuaSpa Login",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 30),
-                
-                // USERNAME POLJE
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: "Korisničko ime",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return "Unesite korisničko ime";
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // PASSWORD POLJE
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: !_isPasswordVisible,
-                  decoration: InputDecoration(
-                    labelText: "Lozinka",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) return "Lozinka mora imati bar 6 znakova";
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 30),
-
-                // DUGME ZA PRIJAVU
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: status == AuthStatus.authenticating ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: status == AuthStatus.authenticating
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("PRIJAVI SE"),
-                  ),
-                ),
-              ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).scaffoldBackgroundColor,
+                  scheme.surface,
+                  scheme.surface,
+                ],
+              ),
             ),
           ),
-        ),
+          Positioned(
+            left: -120,
+            top: -120,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primary.withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -140,
+            bottom: -140,
+            child: Container(
+              width: 360,
+              height: 360,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.secondary.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: GlassPanel(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.spa_outlined,
+                                size: 26, color: scheme.primary),
+                            const SizedBox(width: 10),
+                            Text(
+                              'NuaSpa',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Prijava',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Unesite korisničko ime i lozinku da nastavite.',
+                          style:
+                              TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                        ),
+                        const SizedBox(height: 18),
+
+                        TextFormField(
+                          controller: _usernameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Korisničko ime',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Unesite korisničko ime';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: !_isPasswordVisible,
+                          decoration: InputDecoration(
+                            labelText: 'Lozinka',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              tooltip: _isPasswordVisible
+                                  ? 'Sakrij lozinku'
+                                  : 'Prikaži lozinku',
+                              icon: Icon(
+                                _isPasswordVisible
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              onPressed: () => setState(
+                                  () => _isPasswordVisible = !_isPasswordVisible),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Unesite lozinku';
+                            }
+                            if (value.length < 3) return 'Lozinka je prekratka';
+                            return null;
+                          },
+                          onFieldSubmitted: (_) => _submit(),
+                        ),
+                        const SizedBox(height: 18),
+
+                        if (status == AuthStatus.authenticating)
+                          const Center(child: CircularProgressIndicator())
+                        else
+                          PrimaryButton(
+                            label: 'Prijavi se',
+                            icon: Icons.login,
+                            onPressed: _submit,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

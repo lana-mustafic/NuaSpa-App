@@ -3,6 +3,7 @@ import '../../core/api/services/api_service.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/rezervacija.dart';
 import '../../models/usluga.dart';
+import '../../ui/widgets/page_header.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -16,41 +17,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin panel'),
-      ),
-      body: IndexedStack(
-        index: _tab,
-        children: const [
-          _AdminCategoriesPage(),
-          _AdminServicesPage(),
-          _AdminReservationsPage(),
-          _AdminReportPage(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.category_outlined),
-            selectedIcon: Icon(Icons.category),
-            label: 'Kategorije',
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PageHeader(
+            title: 'Admin panel',
+            subtitle: 'Upravljanje kategorijama, uslugama, rezervacijama i izvještajima.',
+            trailing: SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Kategorije'), icon: Icon(Icons.category_outlined)),
+                ButtonSegment(value: 1, label: Text('Usluge'), icon: Icon(Icons.spa_outlined)),
+                ButtonSegment(value: 2, label: Text('Rezervacije'), icon: Icon(Icons.event_note_outlined)),
+                ButtonSegment(value: 3, label: Text('Izvještaj'), icon: Icon(Icons.picture_as_pdf_outlined)),
+              ],
+              selected: {_tab},
+              onSelectionChanged: (s) => setState(() => _tab = s.first),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.spa_outlined),
-            selectedIcon: Icon(Icons.spa),
-            label: 'Usluge',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.event_note_outlined),
-            selectedIcon: Icon(Icons.event_note),
-            label: 'Rezervacije',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.picture_as_pdf_outlined),
-            label: 'Izvještaj',
+          const SizedBox(height: 14),
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
+              children: const [
+                _AdminCategoriesPage(),
+                _AdminServicesPage(),
+                _AdminReservationsPage(),
+                _AdminReportPage(),
+              ],
+            ),
           ),
         ],
       ),
@@ -170,36 +166,44 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
           return const Center(child: CircularProgressIndicator());
         }
         final list = snap.data ?? [];
-        return Scaffold(
-          body: RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 88),
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final k = list[i];
-                return ListTile(
-                  leading: const Icon(Icons.folder_outlined),
-                  title: Text(k.naziv),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (v) {
-                      if (v == 'edit') _editCategory(k);
-                      if (v == 'delete') _delete(k);
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                      PopupMenuItem(value: 'delete', child: Text('Obriši')),
-                    ],
-                  ),
-                  onTap: () => _editCategory(k),
-                );
-              },
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: () async => _reload(),
+              child: Scrollbar(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 88),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final k = list[i];
+                    return ListTile(
+                      leading: const Icon(Icons.folder_outlined),
+                      title: Text(k.naziv),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (v) {
+                          if (v == 'edit') _editCategory(k);
+                          if (v == 'delete') _delete(k);
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Uredi')),
+                          PopupMenuItem(value: 'delete', child: Text('Obriši')),
+                        ],
+                      ),
+                      onTap: () => _editCategory(k),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _editCategory(null),
-            child: const Icon(Icons.add),
-          ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: FloatingActionButton(
+                onPressed: () => _editCategory(null),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -419,39 +423,49 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
           return const Center(child: CircularProgressIndicator());
         }
         final list = snap.data ?? [];
-        return Scaffold(
-          body: RefreshIndicator(
-            onRefresh: _reloadAll,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 88),
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final u = list[i];
-                return ListTile(
-                  leading: const Icon(Icons.spa_outlined),
-                  title: Text(u.naziv),
-                  subtitle: Text(
-                    '${u.cijena.toStringAsFixed(2)} KM · ${u.kategorija}',
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (v) {
-                      if (v == 'edit') _editService(u);
-                      if (v == 'delete') _delete(u);
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                      PopupMenuItem(value: 'delete', child: Text('Obriši')),
-                    ],
-                  ),
-                  onTap: () => _editService(u),
-                );
-              },
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _reloadAll,
+              child: Scrollbar(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 88),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final u = list[i];
+                    return ListTile(
+                      leading: const Icon(Icons.spa_outlined),
+                      title: Text(u.naziv),
+                      subtitle: Text(
+                        '${u.cijena.toStringAsFixed(2)} KM · ${u.kategorija}',
+                        style:
+                            TextStyle(color: Colors.white.withValues(alpha: 0.70)),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (v) {
+                          if (v == 'edit') _editService(u);
+                          if (v == 'delete') _delete(u);
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Uredi')),
+                          PopupMenuItem(value: 'delete', child: Text('Obriši')),
+                        ],
+                      ),
+                      onTap: () => _editService(u),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _editService(null),
-            child: const Icon(Icons.add),
-          ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: FloatingActionButton(
+                onPressed: () => _editService(null),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -493,38 +507,42 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
         final list = snap.data ?? [];
         return RefreshIndicator(
           onRefresh: () async => _reload(),
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 88),
-            itemCount: list.length,
-            itemBuilder: (context, i) {
-              final r = list[i];
-              return SwitchListTile(
-                secondary: Icon(
-                  r.isPotvrdjena ? Icons.check_circle : Icons.schedule,
-                  color: r.isPotvrdjena ? Colors.green : Colors.orange,
-                ),
-                title: Text(r.uslugaNaziv ?? 'Usluga'),
-                subtitle: Text(
-                  '${r.datumRezervacije.toLocal()} · '
-                  '${r.korisnikIme ?? ''} · ${r.zaposlenikIme ?? ''}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                value: r.isPotvrdjena,
-                onChanged: (v) async {
-                  final ok =
-                      await _api.updateRezervacijaPotvrdjena(r.id, v);
-                  if (!context.mounted) return;
-                  if (!ok) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Nije moguće ažurirati rezervaciju.'),
-                      ),
-                    );
-                  }
-                  _reload();
-                },
-              );
-            },
+          child: Scrollbar(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(bottom: 88),
+              itemCount: list.length,
+              itemBuilder: (context, i) {
+                final r = list[i];
+                return SwitchListTile(
+                  secondary: Icon(
+                    r.isPotvrdjena ? Icons.check_circle : Icons.schedule,
+                    color: r.isPotvrdjena ? Colors.green : Colors.orange,
+                  ),
+                  title: Text(r.uslugaNaziv ?? 'Usluga'),
+                  subtitle: Text(
+                    '${r.datumRezervacije.toLocal().toString().split(".").first} · '
+                    '${r.korisnikIme ?? ''} · ${r.zaposlenikIme ?? ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.70),
+                    ),
+                  ),
+                  value: r.isPotvrdjena,
+                  onChanged: (v) async {
+                    final ok = await _api.updateRezervacijaPotvrdjena(r.id, v);
+                    if (!context.mounted) return;
+                    if (!ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Nije moguće ažurirati rezervaciju.'),
+                        ),
+                      );
+                    }
+                    _reload();
+                  },
+                );
+              },
+            ),
           ),
         );
       },
@@ -539,7 +557,7 @@ class _AdminReportPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = ApiService();
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -550,7 +568,7 @@ class _AdminReportPage extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Preuzmite PDF sa top uslugama (isti endpoint kao na backendu).',
-            style: TextStyle(color: Colors.grey.shade700),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(

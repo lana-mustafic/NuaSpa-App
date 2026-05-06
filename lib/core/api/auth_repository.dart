@@ -5,6 +5,8 @@ import 'api_client.dart';
 class AuthRepository {
   final ApiClient _apiClient = ApiClient();
 
+  String get baseUrlForDebug => _apiClient.dio.options.baseUrl;
+
   Future<Response> login(String username, String password) async {
     try {
       return await _apiClient.dio.post(

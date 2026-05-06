@@ -34,7 +34,9 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint("Pokušaj logina za: $username na http://10.0.2.2:7155/api");
+      debugPrint(
+        "Pokušaj logina za: $username na ${_repository.baseUrlForDebug}",
+      );
       final response = await _repository.login(username, password);
       
       // Provjeravamo da li response sadrži token

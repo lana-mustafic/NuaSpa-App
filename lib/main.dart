@@ -11,6 +11,11 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/therapist/therapist_schedule_screen.dart';
 import 'core/api/services/api_service.dart';
 import 'models/usluga.dart';
+import 'ui/layout/desktop_shell.dart';
+import 'ui/theme/app_theme.dart';
+import 'ui/widgets/hover_card.dart';
+import 'ui/widgets/primary_button.dart';
+import 'ui/behavior/app_scroll_behavior.dart';
 
 void main() {
   runApp(
@@ -33,15 +38,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'NuaSpa Desktop',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-          filled: true,
-          fillColor: Colors.white,
-        ),
-      ),
+      theme: AppTheme.dark(),
+      scrollBehavior: const AppScrollBehavior(),
       home: const AuthWrapper(),
     );
   }
@@ -55,7 +53,7 @@ class AuthWrapper extends StatelessWidget {
     final authStatus = context.watch<AuthProvider>().status;
 
     if (authStatus == AuthStatus.authenticated) {
-      return const HomePage();
+      return const DesktopShell(home: HomePage());
     } else {
       return const LoginScreen();
     }
@@ -105,7 +103,11 @@ class _HomePageState extends State<HomePage> {
       children: [
         Row(
           children: [
-            Icon(Icons.auto_awesome, size: 20, color: Colors.deepPurple.shade700),
+            Icon(
+              Icons.auto_awesome_outlined,
+              size: 20,
+              color: Theme.of(context).colorScheme.secondary,
+            ),
             const SizedBox(width: 8),
             Text(
               'Preporučeno za vas',
@@ -117,7 +119,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 172,
+          height: 190,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: list.length,
@@ -125,63 +127,73 @@ class _HomePageState extends State<HomePage> {
             itemBuilder: (context, index) {
               final u = list[index];
               return SizedBox(
-                width: 144,
-                child: Material(
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  color: Colors.grey.shade100,
-                  elevation: 1,
-                  shadowColor: Colors.black26,
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (context) =>
-                              ServiceDetailsScreen(serviceId: u.id),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
+                width: 180,
+                child: HoverCard(
+                  padding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (context) =>
+                            ServiceDetailsScreen(serviceId: u.id),
+                      ),
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
                           child: Image.network(
                             u.slikaUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: Colors.deepPurple.shade50,
-                              child: Icon(Icons.spa_outlined,
-                                  color: Colors.deepPurple.shade200),
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.08),
+                              child: Icon(
+                                Icons.spa_outlined,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.55),
+                              ),
                             ),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                u.naziv,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              u.naziv,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
                               ),
-                              Text(
-                                '${u.cijena.toStringAsFixed(2)} KM',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700,
-                                ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${u.cijena.toStringAsFixed(2)} KM',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.72),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -194,145 +206,159 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("NuaSpa Dashboard"),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            tooltip: "Odjavi se",
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              context.read<AuthProvider>().logout();
-            },
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+    return Scrollbar(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.spa_outlined, size: 72, color: Colors.deepPurple),
-            const SizedBox(height: 16),
+            Text('Dobrodošli', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
             Text(
-              "Dobrodošli u NuaSpa!",
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center,
+              'Upravljajte katalogom, rezervacijama i rasporedom terapeuta.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             _buildPreporukeStrip(context),
-            const SizedBox(height: 28),
+            const SizedBox(height: 22),
+            LayoutBuilder(
+              builder: (context, c) {
+                final w = c.maxWidth;
+                final cols = w >= 1100 ? 3 : (w >= 760 ? 2 : 1);
+                final gap = 12.0;
+                final tileW = (w - gap * (cols - 1)) / cols;
 
-            if (context.watch<AuthProvider>().isAdmin) ...[
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  foregroundColor: Colors.deepPurple,
-                  side: const BorderSide(color: Colors.deepPurple),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (context) => const AdminDashboardScreen(),
+                final actions = <Widget>[
+                  HoverCard(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ServiceCatalogScreen(),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        const Icon(Icons.grid_view_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Katalog usluga',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                },
-                icon: const Icon(Icons.admin_panel_settings_outlined),
-                label: const Text('Admin panel'),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            if (context.watch<AuthProvider>().isZaposlenik) ...[
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  foregroundColor: Colors.teal.shade800,
-                  side: BorderSide(color: Colors.teal.shade700),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (context) => const TherapistScheduleScreen(),
+                  ),
+                  if (!context.watch<AuthProvider>().isZaposlenik)
+                    HoverCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ReservationListScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_note_rounded),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Moje rezervacije',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.calendar_month_outlined),
-                label: const Text('Terapeut · raspored'),
-              ),
-              const SizedBox(height: 16),
-            ],
+                  if (!context.watch<AuthProvider>().isZaposlenik)
+                    HoverCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const FavoritesScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.favorite_border),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Favoriti',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (context.watch<AuthProvider>().isZaposlenik)
+                    HoverCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TherapistScheduleScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_outlined),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Raspored terapeuta',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (context.watch<AuthProvider>().isAdmin)
+                    HoverCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const AdminDashboardScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.admin_panel_settings_outlined),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Admin panel',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ];
 
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (context) => const ServiceCatalogScreen(),
-                  ),
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: actions
+                      .map((w) => SizedBox(width: tileW, child: w))
+                      .toList(),
                 );
               },
-              icon: const Icon(Icons.grid_view_rounded),
-              label: const Text("Otvori Katalog Usluga"),
             ),
-
-            const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (context) => const ReservationListScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.event_note_rounded),
-              label: const Text("Moje rezervacije"),
-            ),
-
-            const SizedBox(height: 16),
-
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (context) => const FavoritesScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.favorite),
-              label: const Text("Favoriti"),
-            ),
-
-            const SizedBox(height: 24),
-            Text(
-              "JWT token je validan. Možete pristupiti uslugama.",
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-              textAlign: TextAlign.center,
+            const SizedBox(height: 18),
+            PrimaryButton(
+              label: 'Odjavi se',
+              icon: Icons.logout,
+              onPressed: () => context.read<AuthProvider>().logout(),
             ),
           ],
         ),
