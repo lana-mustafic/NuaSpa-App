@@ -59,7 +59,9 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
     if (!auth.isZaposlenik || zid == null) return;
 
     final f = _loadDay(zid, _day);
-    setState(() => _dayFuture = f);
+    setState(() {
+      _dayFuture = f;
+    });
   }
 
   @override
