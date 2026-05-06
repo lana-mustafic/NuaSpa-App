@@ -131,8 +131,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 6),
                         Text(
                           'Unesite korisničko ime i lozinku da nastavite.',
-                          style:
-                              TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.72),
+                          ),
                         ),
                         const SizedBox(height: 18),
 
