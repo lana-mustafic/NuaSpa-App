@@ -4,6 +4,7 @@ import '../../providers/service_provider.dart';
 import 'service_details_screen.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/hover_card.dart';
+import '../../ui/widgets/load_retry_panel.dart';
 
 class ServiceCatalogScreen extends StatefulWidget {
   const ServiceCatalogScreen({super.key});
@@ -58,9 +59,38 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
           ),
           const SizedBox(height: 14),
           Expanded(
-            child: serviceProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : LayoutBuilder(
+            child: _buildCatalogBody(context, serviceProvider),
+          ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCatalogBody(
+    BuildContext context,
+    ServiceProvider serviceProvider,
+  ) {
+    if (serviceProvider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (serviceProvider.loadFailed) {
+      return LoadRetryPanel(
+        message: serviceProvider.loadError ?? 'Nepoznata greška.',
+        onRetry: () => serviceProvider.fetchServices(),
+      );
+    }
+    if (serviceProvider.services.isEmpty) {
+      return Center(
+        child: Text(
+          'Nema dostupnih usluga u katalogu.',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
                     builder: (context, c) {
                       final w = c.maxWidth;
                       final crossAxisCount = w >= 1200
@@ -199,12 +229,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                         ),
                       );
                     },
-                  ),
-          ),
-          ],
-        ),
-      ),
-    );
+                  );
   }
 }
 
