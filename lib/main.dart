@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
@@ -17,8 +18,15 @@ import 'ui/widgets/hover_card.dart';
 import 'ui/widgets/primary_button.dart';
 import 'ui/behavior/app_scroll_behavior.dart';
 import 'ui/navigation/desktop_nav.dart';
+import 'bootstrap/desktop_window.dart';
+import 'core/config/app_config.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await configureDesktopWindowIfNeeded();
+  if (kDebugMode) {
+    debugPrint('NuaSpa API base URL: ${AppConfig.apiBaseUrl}');
+  }
   runApp(
     // MultiProvider omogućava da dodaješ više providera kasnije (npr. za Auth, Usluge itd.)
     MultiProvider(

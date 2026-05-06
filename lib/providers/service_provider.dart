@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../models/usluga.dart';
 // Provjeri da li je putanja tačna prema tvom folderu:
@@ -10,6 +11,7 @@ class ServiceProvider with ChangeNotifier {
   List<Usluga> _filteredServices = []; // Samo one koje prikazujemo (nakon pretrage)
   bool _isLoading = false;
   Set<int> _favoriteIds = {};
+  String? _loadError;
 
   // Getteri
   List<Usluga> get services => _filteredServices;
@@ -21,8 +23,37 @@ class ServiceProvider with ChangeNotifier {
   Set<int> get favoriteIds => _favoriteIds;
   bool isFavorite(int uslugaId) => _favoriteIds.contains(uslugaId);
 
+  /// Postavljen ako zadnji [fetchServices] nije uspio (npr. nema konekcije).
+  String? get loadError => _loadError;
+  bool get loadFailed => _loadError != null;
+
+  static String _mapLoadError(Object e) {
+    if (e is DioException) {
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Isteklo je vrijeme čekanja. Provjerite mrežu i da li je API dostupan.';
+        case DioExceptionType.connectionError:
+          return 'Nema veze sa serverom. Pokrenite backend ili provjerite NUASPA_API_BASE_URL.';
+        case DioExceptionType.badCertificate:
+          return 'Problem sa HTTPS certifikatom (dev: koristite HTTP ili povjereni certifikat).';
+        case DioExceptionType.badResponse:
+          final code = e.response?.statusCode;
+          if (code == 401) {
+            return 'Niste prijavljeni ili je sesija istekla. Prijavite se ponovo.';
+          }
+          return 'Server je vratio grešku (${code ?? '?'}).';
+        default:
+          break;
+      }
+    }
+    return 'Došlo je do greške pri učitavanju. Pokušajte ponovo.';
+  }
+
   // Funkcija za povlačenje podataka
   Future<void> fetchServices() async {
+    _loadError = null;
     _isLoading = true;
     notifyListeners();
 
@@ -30,8 +61,13 @@ class ServiceProvider with ChangeNotifier {
       _favoriteIds = await _apiService.getMyFavoriteIds();
       _allServices = await _apiService.getUsluge();
       _filteredServices = _allServices; // Na početku, prikazujemo sve
-    } catch (e) {
-      debugPrint("Greška pri dohvatu usluga: $e");
+      _loadError = null;
+    } catch (e, st) {
+      debugPrint('Greška pri dohvatu usluga: $e\n$st');
+      _loadError = _mapLoadError(e);
+      _allServices = [];
+      _filteredServices = [];
+      _favoriteIds = {};
     } finally {
       _isLoading = false;
       notifyListeners();
