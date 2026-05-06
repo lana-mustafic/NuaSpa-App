@@ -28,6 +28,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   final ApiService _api = ApiService();
   late DateTime _day;
   Future<_DayData>? _dayFuture;
+  bool _autoLoadScheduled = false;
 
   @override
   void initState() {
@@ -59,7 +60,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
 
     final f = _loadDay(zid, _day);
     setState(() => _dayFuture = f);
-    await f;
   }
 
   @override
@@ -89,6 +89,17 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
           ),
         ),
       );
+    }
+
+    // Ako je korisnik tek dobio token/claim nakon login-a, initState _reload može
+    // završiti prije nego što zid postane dostupan. U tom slučaju pokreni auto reload.
+    if (_dayFuture == null && !_autoLoadScheduled) {
+      _autoLoadScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        _autoLoadScheduled = false;
+        await _reload();
+      });
     }
 
     final dayLabel = _formatDate(_day);
