@@ -131,6 +131,11 @@ class _DesktopShellState extends State<DesktopShell> {
                 padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
+                  child: Material(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surface
+                        .withValues(alpha: 0.45),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
                     switchInCurve: Curves.easeOutCubic,
@@ -151,6 +156,7 @@ class _DesktopShellState extends State<DesktopShell> {
                       key: ValueKey('${items[_index].label}-$_index'),
                       child: page,
                     ),
+                  ),
                   ),
                 ),
               ),

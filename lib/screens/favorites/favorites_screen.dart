@@ -13,6 +13,8 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -24,15 +26,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final sp = context.watch<ServiceProvider>();
     final favorites = sp.favoriteServices;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const PageHeader(
             title: 'Favoriti',
             subtitle: 'Vaše omiljene usluge na jednom mjestu.',
@@ -56,7 +66,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           : (w >= 760 ? 2 : 1);
 
                       return Scrollbar(
+                        controller: _scrollController,
                         child: GridView.builder(
+                          controller: _scrollController,
+                          primary: false,
                           padding: const EdgeInsets.all(0),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
@@ -143,7 +156,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     },
                   ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

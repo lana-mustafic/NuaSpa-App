@@ -20,11 +20,18 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   final StripePaymentService _stripe = StripePaymentService();
 
   late Future<List<Rezervacija>> _futureReservations;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _futureReservations = _apiService.getRezervacije();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -37,11 +44,13 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   Widget build(BuildContext context) {
     final hideFab = context.watch<AuthProvider>().isZaposlenik;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           PageHeader(
             title: 'Moje rezervacije',
             subtitle: 'Pregled vaših rezervacija, statusa i plaćanja.',
@@ -93,7 +102,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                 }
 
                 return Scrollbar(
+                  controller: _scrollController,
                   child: SingleChildScrollView(
+                    controller: _scrollController,
+                    primary: false,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: DataTable(
@@ -183,7 +195,8 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
               },
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

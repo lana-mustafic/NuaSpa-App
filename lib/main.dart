@@ -72,11 +72,18 @@ class _HomePageState extends State<HomePage> {
   final ApiService _api = ApiService();
   List<Usluga>? _preporuke;
   bool _preporukeLoading = true;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadPreporuke();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPreporuke() async {
@@ -207,7 +214,10 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scrollbar(
+      controller: _scrollController,
       child: SingleChildScrollView(
+        controller: _scrollController,
+        primary: false,
         padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -17,11 +17,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           PageHeader(
             title: 'Admin panel',
             subtitle: 'Upravljanje kategorijama, uslugama, rezervacijama i izvještajima.',
@@ -48,7 +50,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ],
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -64,11 +67,18 @@ class _AdminCategoriesPage extends StatefulWidget {
 class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
   final ApiService _api = ApiService();
   Future<List<KategorijaUsluga>>? _future;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _reload();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _reload() {
@@ -171,7 +181,10 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
             RefreshIndicator(
               onRefresh: () async => _reload(),
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView.builder(
+                  controller: _scrollController,
+                  primary: false,
                   padding: const EdgeInsets.only(bottom: 88),
                   itemCount: list.length,
                   itemBuilder: (context, i) {
@@ -221,11 +234,18 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
   final ApiService _api = ApiService();
   Future<List<Usluga>>? _futureUsluge;
   List<KategorijaUsluga> _katCache = [];
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _reloadAll();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _reloadAll() async {
@@ -428,7 +448,10 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
             RefreshIndicator(
               onRefresh: _reloadAll,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView.builder(
+                  controller: _scrollController,
+                  primary: false,
                   padding: const EdgeInsets.only(bottom: 88),
                   itemCount: list.length,
                   itemBuilder: (context, i) {
@@ -483,11 +506,18 @@ class _AdminReservationsPage extends StatefulWidget {
 class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   final ApiService _api = ApiService();
   Future<List<Rezervacija>>? _future;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _reload();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _reload() {
@@ -508,7 +538,10 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
         return RefreshIndicator(
           onRefresh: () async => _reload(),
           child: Scrollbar(
+            controller: _scrollController,
             child: ListView.builder(
+              controller: _scrollController,
+              primary: false,
               padding: const EdgeInsets.only(bottom: 88),
               itemCount: list.length,
               itemBuilder: (context, i) {
