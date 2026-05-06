@@ -29,6 +29,8 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   late DateTime _day;
   Future<_DayData>? _dayFuture;
   bool _autoLoadScheduled = false;
+  String? _loadError;
+  bool? _filterPotvrdjena; // null=all, false=pending, true=confirmed
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
     final f = _loadDay(zid, _day);
     setState(() {
       _dayFuture = f;
+      _loadError = null;
     });
   }
 
@@ -127,6 +130,29 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
+            if (snap.hasError) {
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    'Greška pri učitavanju rasporeda.',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _loadError ?? snap.error.toString(),
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Pokušaj ponovo'),
+                  ),
+                ],
+              );
+            }
+
             final data = snap.data ??
                 _DayData(rezervacije: [], slotovi: []);
 
@@ -172,6 +198,36 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                 Text(
                   'Termini (${data.rezervacije.length})',
                   style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Sve'),
+                      selected: _filterPotvrdjena == null,
+                      onSelected: (_) async {
+                        setState(() => _filterPotvrdjena = null);
+                        await _reload();
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Na čekanju'),
+                      selected: _filterPotvrdjena == false,
+                      onSelected: (_) async {
+                        setState(() => _filterPotvrdjena = false);
+                        await _reload();
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Potvrđene'),
+                      selected: _filterPotvrdjena == true,
+                      onSelected: (_) async {
+                        setState(() => _filterPotvrdjena = true);
+                        await _reload();
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 if (data.rezervacije.isEmpty)
@@ -228,10 +284,23 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   }
 
   Future<_DayData> _loadDay(int zaposlenikId, DateTime day) async {
-    final rez = await _api.getRezervacijeFiltered(datum: day);
-    final slotovi =
-        await _api.getDostupniTermini(zaposlenikId: zaposlenikId, datum: day);
-    return _DayData(rezervacije: rez, slotovi: slotovi);
+    try {
+      final results = await Future.wait([
+        _api.getRezervacijeFiltered(datum: day, isPotvrdjena: _filterPotvrdjena),
+        _api.getDostupniTermini(zaposlenikId: zaposlenikId, datum: day),
+      ]).timeout(const Duration(seconds: 12));
+
+      final rez = results[0] as List<Rezervacija>;
+      final slotovi = results[1] as List<DateTime>;
+      return _DayData(rezervacije: rez, slotovi: slotovi);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadError = e.toString();
+        });
+      }
+      rethrow;
+    }
   }
 }
 
@@ -254,10 +323,13 @@ class _ReservationTerapeutTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dt = rezervacija.datumRezervacije.toLocal();
+    final isPast = dt.isBefore(DateTime.now());
+    final messenger = ScaffoldMessenger.of(context);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: SwitchListTile(
-        secondary: Icon(
+      child: ListTile(
+        leading: Icon(
           rezervacija.isPotvrdjena ? Icons.check_circle : Icons.schedule,
           color: rezervacija.isPotvrdjena ? Colors.green : Colors.orange,
         ),
@@ -268,8 +340,55 @@ class _ReservationTerapeutTile extends StatelessWidget {
           '${rezervacija.isPlacena ? 'Plaćeno' : 'Nije plaćeno'}',
           style: const TextStyle(fontSize: 12),
         ),
-        value: rezervacija.isPotvrdjena,
-        onChanged: (v) => onToggle(v),
+        isThreeLine: true,
+        trailing: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (isPast)
+              const Text(
+                'Prošlo',
+                style: TextStyle(color: Colors.grey),
+              )
+            else if (!rezervacija.isPotvrdjena)
+              FilledButton(
+                onPressed: () async {
+                  await onToggle(true);
+                },
+                child: const Text('Potvrdi'),
+              )
+            else
+              OutlinedButton(
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Vrati na čekanje?'),
+                      content: const Text(
+                        'Ovo će označiti rezervaciju kao nepotvrđenu.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Odustani'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Potvrdi'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  await onToggle(false);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Rezervacija vraćena na čekanje.')),
+                  );
+                },
+                child: const Text('Vrati'),
+              ),
+          ],
+        ),
       ),
     );
   }
