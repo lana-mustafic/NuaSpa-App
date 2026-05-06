@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/usluga.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/recenzija.dart';
+import '../../ui/widgets/page_header.dart';
+import '../../ui/widgets/hover_card.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final int serviceId;
@@ -191,95 +193,166 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Detalji usluge'),
-      ),
-      body: FutureBuilder<Usluga?>(
-        future: _serviceFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<Usluga?>(
+      future: _serviceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Greška pri učitavanju: ${snapshot.error}'),
-            );
-          }
-
-          final service = snapshot.data;
-          if (service == null) {
-            return const Center(child: Text('Usluga nije pronađena.'));
-          }
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  service.slikaUrl,
-                  height: 220,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const SizedBox(
-                      height: 220,
-                      child: Center(child: Icon(Icons.broken_image, size: 60)),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                service.naziv,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${service.cijena} KM',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                service.trajanje,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[700],
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Kategorija: ${service.kategorija}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-
-              // Opis trenutno nije modeliran na Flutteru (nema polje u `Usluga` modelu),
-              // pa ga za sada preskačemo. (Možemo dodati sljedeće u fazama.)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Opis uskoro (potrebno je dodati polje u Flutter model).',
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              _buildReviewsSection(),
-            ],
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Greška pri učitavanju: ${snapshot.error}'),
           );
-        },
-      ),
+        }
+
+        final service = snapshot.data;
+        if (service == null) {
+          return const Center(child: Text('Usluga nije pronađena.'));
+        }
+
+        return LayoutBuilder(
+          builder: (context, c) {
+            final wide = c.maxWidth >= 980;
+
+            final hero = HoverCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      service.slikaUrl,
+                      height: wide ? 420 : 240,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return SizedBox(
+                          height: wide ? 420 : 240,
+                          child: const Center(
+                            child: Icon(Icons.broken_image, size: 60),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          service.naziv,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              '${service.cijena} KM',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              '• ${service.trajanje}',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.72),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Kategorija: ${service.kategorija}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            final detailsPanel = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                PageHeader(
+                  title: 'Detalji usluge',
+                  subtitle: 'Pregled usluge i recenzija.',
+                  trailing: IconButton(
+                    tooltip: 'Nazad',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surface
+                        .withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.10),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: const Text(
+                    'Opis uskoro (potrebno je dodati polje u Flutter model).',
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _buildReviewsSection(),
+              ],
+            );
+
+            if (!wide) {
+              return Scrollbar(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+                  children: [
+                    detailsPanel,
+                    const SizedBox(height: 14),
+                    hero,
+                  ],
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: hero),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    flex: 6,
+                    child: Scrollbar(
+                      child: SingleChildScrollView(
+                        child: detailsPanel,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

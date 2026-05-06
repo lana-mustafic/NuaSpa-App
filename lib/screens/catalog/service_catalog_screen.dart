@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/service_provider.dart';
 import 'service_details_screen.dart';
+import '../../ui/widgets/page_header.dart';
+import '../../ui/widgets/hover_card.dart';
 
 class ServiceCatalogScreen extends StatefulWidget {
   const ServiceCatalogScreen({super.key});
@@ -26,144 +28,159 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   Widget build(BuildContext context) {
     var serviceProvider = Provider.of<ServiceProvider>(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Katalog Usluga"),
-      ),
-      body: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. SEARCH BAR
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (value) => serviceProvider.searchServices(value),
-              decoration: InputDecoration(
-                hintText: "Pretraži usluge...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
+          const PageHeader(
+            title: 'Katalog usluga',
+            subtitle: 'Pretraži i upravljaj favoritima.',
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            onChanged: (value) => serviceProvider.searchServices(value),
+            decoration: const InputDecoration(
+              hintText: 'Pretraži usluge…',
+              prefixIcon: Icon(Icons.search),
             ),
           ),
-
-          // 2. GRID VIEW (Katalog)
+          const SizedBox(height: 14),
           Expanded(
             child: serviceProvider.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : GridView.builder(
-                    padding: const EdgeInsets.all(10),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, 
-                      childAspectRatio: 0.8, 
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: serviceProvider.services.length,
-                    itemBuilder: (context, index) {
-                      var usluga = serviceProvider.services[index];
-                      final isFav = serviceProvider.isFavorite(usluga.id);
+                : LayoutBuilder(
+                    builder: (context, c) {
+                      final w = c.maxWidth;
+                      final crossAxisCount = w >= 1200
+                          ? 4
+                          : (w >= 900 ? 3 : (w >= 640 ? 2 : 1));
 
-                      return Stack(
-                        children: [
-                          Positioned.fill(
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(15),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ServiceDetailsScreen(
-                                      serviceId: usluga.id,
+                      return Scrollbar(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(0),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            childAspectRatio: 1.18,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: serviceProvider.services.length,
+                          itemBuilder: (context, index) {
+                            var usluga = serviceProvider.services[index];
+                            final isFav =
+                                serviceProvider.isFavorite(usluga.id);
+
+                            return Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: HoverCard(
+                                    padding: EdgeInsets.zero,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ServiceDetailsScreen(
+                                            serviceId: usluga.id,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Expanded(
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                              top: Radius.circular(16),
+                                            ),
+                                            child: Image.network(
+                                              usluga.slikaUrl,
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error,
+                                                      stackTrace) =>
+                                                  const Center(
+                                                child: Icon(
+                                                  Icons.broken_image,
+                                                  size: 44,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              12, 10, 12, 12),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                usluga.naziv,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                '${usluga.cijena} KM • ${usluga.trajanje}',
+                                                style: TextStyle(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.72),
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                );
-                              },
-                              child: Card(
-                                elevation: 3,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius:
-                                            const BorderRadius.vertical(
-                                          top: Radius.circular(15),
-                                        ),
-                                        child: Image.network(
-                                          usluga.slikaUrl,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error,
-                                                  stackTrace) =>
-                                              const Icon(
-                                            Icons.broken_image,
-                                            size: 50,
-                                          ),
-                                        ),
+                                Positioned(
+                                  top: 10,
+                                  right: 10,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.14),
+                                        width: 0.8,
                                       ),
                                     ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(8.0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            usluga.naziv,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(
-                                            "${usluga.cijena} KM",
-                                            style: const TextStyle(
-                                              color: Colors.green,
-                                            ),
-                                          ),
-                                          Text(
-                                            usluga.trajanje,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ],
+                                    child: IconButton(
+                                      tooltip: isFav
+                                          ? 'Ukloni iz favorita'
+                                          : 'Dodaj u favorite',
+                                      icon: Icon(
+                                        isFav
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: isFav
+                                            ? Colors.redAccent
+                                            : Colors.white,
                                       ),
+                                      onPressed: () {
+                                        serviceProvider
+                                            .toggleFavorite(usluga.id);
+                                      },
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: Material(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              shape: const CircleBorder(),
-                              child: IconButton(
-                                tooltip: isFav
-                                    ? 'Ukloni iz favorita'
-                                    : 'Dodaj u favorite',
-                                icon: Icon(
-                                  isFav
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: isFav ? Colors.red : Colors.black87,
-                                ),
-                                onPressed: () {
-                                  serviceProvider.toggleFavorite(usluga.id);
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                              ],
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
