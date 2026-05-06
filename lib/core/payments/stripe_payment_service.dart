@@ -1,21 +1,36 @@
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:flutter/foundation.dart';
 import '../api/services/api_service.dart';
+import '../stripe_publishable_key.dart';
 
 class StripePaymentService {
   final ApiService _api = ApiService();
 
+  /// Payment Sheet podržan je tipično na mobilnim platformama; desktop izbjegava crash.
+  static bool get paymentSheetSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
+
   Future<bool> payForReservation(int rezervacijaId) async {
+    if (!paymentSheetSupported) {
+      debugPrint(
+        'Stripe: plaćanje putem Payment Sheet-a nije podržano na ovoj platformi (koristi Android/iOS).',
+      );
+      return false;
+    }
+
     try {
       final intent = await _api.createPaymentIntent(rezervacijaId);
       if (intent == null) return false;
 
-      // Init Stripe (runtime)
-      if (intent.publishableKey.isEmpty) {
-        debugPrint('Stripe publishable key nije postavljen.');
+      if (kStripePublishableKey.isEmpty) {
+        debugPrint(
+          'Stripe: postavi STRIPE_PUBLISHABLE_KEY (dart-define). Publishable key se ne šalje s API-ja.',
+        );
         return false;
       }
-      Stripe.publishableKey = intent.publishableKey;
+      Stripe.publishableKey = kStripePublishableKey;
 
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(

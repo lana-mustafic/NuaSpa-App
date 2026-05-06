@@ -337,8 +337,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      // Tvoja forma je i dalje početni ekran
-      home: const ZaposlenikForm(), 
     );
   }
 }

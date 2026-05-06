@@ -14,9 +14,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+    Future.microtask(() async {
       if (!mounted) return;
-      context.read<ServiceProvider>().refreshFavorites();
+      // Učitaj katalog i ID-eve favorita; favoriteServices filtrira po _allServices.
+      await context.read<ServiceProvider>().fetchServices();
     });
   }
 

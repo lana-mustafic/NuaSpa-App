@@ -94,6 +94,16 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                           child: FilledButton(
                             onPressed: () async {
                               final messenger = ScaffoldMessenger.of(context);
+                              if (!StripePaymentService.paymentSheetSupported) {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Online plaćanje (Stripe) dostupno je samo na Android i iOS uređajima.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
                               final ok = await _stripe.payForReservation(r.id);
                               if (!mounted) return;
                               if (ok) {

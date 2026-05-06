@@ -45,6 +45,8 @@ class ServiceProvider with ChangeNotifier {
 
   Future<void> toggleFavorite(int uslugaId) async {
     final wasFavorite = _favoriteIds.contains(uslugaId);
+    final previousIds = Set<int>.from(_favoriteIds);
+
     if (wasFavorite) {
       _favoriteIds.remove(uslugaId);
     } else {
@@ -53,18 +55,15 @@ class ServiceProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      if (wasFavorite) {
-        await _apiService.removeFavorite(uslugaId);
-      } else {
-        await _apiService.addFavorite(uslugaId);
+      final ok = wasFavorite
+          ? await _apiService.removeFavorite(uslugaId)
+          : await _apiService.addFavorite(uslugaId);
+      if (!ok) {
+        _favoriteIds = previousIds;
+        notifyListeners();
       }
     } catch (e) {
-      // rollback
-      if (wasFavorite) {
-        _favoriteIds.add(uslugaId);
-      } else {
-        _favoriteIds.remove(uslugaId);
-      }
+      _favoriteIds = previousIds;
       notifyListeners();
       debugPrint("Greška pri toggle favorite: $e");
     }

@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'auth_interceptor.dart';
 
 /// Jedinstveni Dio za cijelu aplikaciju (JWT + isti baseUrl).
@@ -19,15 +17,8 @@ class ApiClient {
     );
 
     dio.interceptors.add(AuthInterceptor());
-
-    dio.httpClientAdapter = IOHttpClientAdapter(
-      createHttpClient: () {
-        final client = HttpClient();
-        client.badCertificateCallback =
-            (X509Certificate cert, String host, int port) => true;
-        return client;
-      },
-    );
+    // Koristi zadano HTTPS potvrđivanje certifikata (bez prihvatanja svih certifikata).
+    // Za lokalni dev s self-signed certifikatom koristi pravi CA/trust store ili reverse proxy s valjanim certifikatom.
   }
 
   static final ApiClient _instance = ApiClient._();
