@@ -14,12 +14,21 @@ import 'core/api/services/api_service.dart';
 import 'models/usluga.dart';
 import 'ui/layout/desktop_shell.dart';
 import 'ui/theme/app_theme.dart';
+import 'ui/theme/mobile_spa_theme.dart';
+import 'ui/layout/mobile_shell.dart';
+import 'providers/mobile_nav_provider.dart';
 import 'ui/widgets/hover_card.dart';
 import 'ui/widgets/primary_button.dart';
 import 'ui/behavior/app_scroll_behavior.dart';
 import 'ui/navigation/desktop_nav.dart';
 import 'bootstrap/desktop_window.dart';
 import 'core/config/app_config.dart';
+
+bool _nuaspaUseMobileClient() {
+  if (kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,10 +53,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = _nuaspaUseMobileClient();
+    if (kDebugMode) {
+      debugPrint(
+        'NuaSpa: Flutter client=${mobile ? "mobile (Android/iOS spa theme)" : "desktop/web (dark theme)"}',
+      );
+    }
     return MaterialApp(
-      title: 'NuaSpa Desktop',
+      title: mobile ? 'NuaSpa' : 'NuaSpa Desktop',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
+      theme: mobile ? MobileSpaTheme.light() : AppTheme.dark(),
       scrollBehavior: const AppScrollBehavior(),
       home: const AuthWrapper(),
     );
@@ -62,6 +77,15 @@ class AuthWrapper extends StatelessWidget {
     final authStatus = context.watch<AuthProvider>().status;
 
     if (authStatus == AuthStatus.authenticated) {
+      if (_nuaspaUseMobileClient()) {
+        if (kDebugMode) {
+          debugPrint('NuaSpa: showing MobileShell (premium bottom nav)');
+        }
+        return ChangeNotifierProvider(
+          create: (_) => MobileNavProvider(),
+          child: const MobileShell(),
+        );
+      }
       return ChangeNotifierProvider(
         create: (_) => DesktopNav(),
         child: const DesktopShell(home: HomePage()),
