@@ -31,6 +31,9 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   bool _autoLoadScheduled = false;
   String? _loadError;
   bool? _filterPotvrdjena; // null=all, false=pending, true=confirmed
+  bool? _filterPlacena; // null=all, false=neplaćeno, true=plaćeno
+  final TextEditingController _searchCtrl = TextEditingController();
+  int? _selectedRezervacijaId;
 
   @override
   void initState() {
@@ -38,6 +41,12 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
     final n = DateTime.now();
     _day = DateTime(n.year, n.month, n.day);
     WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -209,92 +218,258 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        Text(
-                          'Termini (${data.rezervacije.length})',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            ChoiceChip(
-                              label: const Text('Sve'),
-                              selected: _filterPotvrdjena == null,
-                              onSelected: (_) async {
-                                setState(() => _filterPotvrdjena = null);
-                                await _reload();
-                              },
-                            ),
-                            ChoiceChip(
-                              label: const Text('Na čekanju'),
-                              selected: _filterPotvrdjena == false,
-                              onSelected: (_) async {
-                                setState(() => _filterPotvrdjena = false);
-                                await _reload();
-                              },
-                            ),
-                            ChoiceChip(
-                              label: const Text('Potvrđene'),
-                              selected: _filterPotvrdjena == true,
-                              onSelected: (_) async {
-                                setState(() => _filterPotvrdjena = true);
-                                await _reload();
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        if (data.rezervacije.isEmpty)
-                          Text(
-                            'Nema rezervacija za ovaj dan.',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.70),
-                            ),
-                          )
-                        else
-                          ...data.rezervacije.map((r) => _ReservationTerapeutTile(
-                                rezervacija: r,
-                                onToggle: (v) async {
-                                  final ok = await _api
-                                      .updateRezervacijaPotvrdjena(r.id, v);
-                                  if (!context.mounted) return;
-                                  if (!ok) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content:
-                                            Text('Ažuriranje nije uspjelo.'),
+                        LayoutBuilder(
+                          builder: (context, c) {
+                            final isWide = c.maxWidth >= 1100;
+                            final q = _searchCtrl.text.trim().toLowerCase();
+
+                            final filtered = data.rezervacije.where((r) {
+                              if (_filterPlacena != null &&
+                                  r.isPlacena != _filterPlacena) {
+                                return false;
+                              }
+                              if (q.isEmpty) {
+                                return true;
+                              }
+                              final s = [
+                                r.uslugaNaziv,
+                                r.korisnikIme,
+                                r.zaposlenikIme,
+                              ].whereType<String>().join(' ').toLowerCase();
+                              return s.contains(q);
+                            }).toList();
+
+                            if (_selectedRezervacijaId != null &&
+                                !filtered.any(
+                                    (r) => r.id == _selectedRezervacijaId)) {
+                              _selectedRezervacijaId = null;
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Rezervacije (${filtered.length})',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall,
                                       ),
-                                    );
-                                  }
-                                  if (context.mounted) await _reload();
-                                },
-                              )),
-                        const SizedBox(height: 22),
-                        Text(
-                          'Slobodni slotovi (${data.slotovi.length})',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        if (data.slotovi.isEmpty)
-                          Text(
-                            'Nema slobodnih slotova (ili su svi zauzeti).',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.70),
-                            ),
-                          )
-                        else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: data.slotovi
-                                .map(
-                                  (t) => Chip(
-                                    label: Text(_formatTime(t.toLocal())),
+                                    ),
+                                    SizedBox(
+                                      width: isWide ? 340 : 260,
+                                      child: TextField(
+                                        controller: _searchCtrl,
+                                        onChanged: (_) => setState(() {}),
+                                        decoration: const InputDecoration(
+                                          hintText:
+                                              'Pretraga (usluga/klijent)…',
+                                          prefixIcon: Icon(Icons.search),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    ChoiceChip(
+                                      label: const Text('Sve'),
+                                      selected: _filterPotvrdjena == null,
+                                      onSelected: (_) async {
+                                        setState(
+                                            () => _filterPotvrdjena = null);
+                                        await _reload();
+                                      },
+                                    ),
+                                    ChoiceChip(
+                                      label: const Text('Na čekanju'),
+                                      selected: _filterPotvrdjena == false,
+                                      onSelected: (_) async {
+                                        setState(
+                                            () => _filterPotvrdjena = false);
+                                        await _reload();
+                                      },
+                                    ),
+                                    ChoiceChip(
+                                      label: const Text('Potvrđene'),
+                                      selected: _filterPotvrdjena == true,
+                                      onSelected: (_) async {
+                                        setState(
+                                            () => _filterPotvrdjena = true);
+                                        await _reload();
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    FilterChip(
+                                      label: const Text('Plaćeno'),
+                                      selected: _filterPlacena == true,
+                                      onSelected: (v) => setState(() {
+                                        _filterPlacena = v ? true : null;
+                                      }),
+                                    ),
+                                    FilterChip(
+                                      label: const Text('Neplaćeno'),
+                                      selected: _filterPlacena == false,
+                                      onSelected: (v) => setState(() {
+                                        _filterPlacena = v ? false : null;
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                if (!isWide) ...[
+                                  if (filtered.isEmpty)
+                                    Text(
+                                      'Nema rezervacija za ovaj dan.',
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.70),
+                                      ),
+                                    )
+                                  else
+                                    ...filtered.map(
+                                      (r) => _ReservationTerapeutTile(
+                                        rezervacija: r,
+                                        onToggle: (v) async {
+                                          final ok = await _api
+                                              .updateRezervacijaPotvrdjena(
+                                                  r.id, v);
+                                          if (!context.mounted) return;
+                                          if (!ok) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Ažuriranje nije uspjelo.'),
+                                              ),
+                                            );
+                                          }
+                                          if (context.mounted) await _reload();
+                                        },
+                                      ),
+                                    ),
+                                  const SizedBox(height: 22),
+                                  _SlotsSection(slotovi: data.slotovi),
+                                  const SizedBox(height: 8),
+                                ] else ...[
+                                  SizedBox(
+                                    height: 520,
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 7,
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            child: SingleChildScrollView(
+                                              child: DataTable(
+                                                headingRowHeight: 44,
+                                                dataRowMinHeight: 50,
+                                                dataRowMaxHeight: 62,
+                                                columns: const [
+                                                  DataColumn(
+                                                      label: Text('Vrijeme')),
+                                                  DataColumn(
+                                                      label: Text('Usluga')),
+                                                  DataColumn(
+                                                      label: Text('Klijent')),
+                                                  DataColumn(
+                                                      label: Text('Status')),
+                                                  DataColumn(
+                                                      label: Text('Plaćanje')),
+                                                ],
+                                                rows: [
+                                                  for (final r in filtered)
+                                                    DataRow(
+                                                      selected: r.id ==
+                                                          _selectedRezervacijaId,
+                                                      onSelectChanged: (_) {
+                                                        setState(() =>
+                                                            _selectedRezervacijaId =
+                                                                r.id);
+                                                      },
+                                                      cells: [
+                                                        DataCell(Text(
+                                                          _formatTime(r
+                                                              .datumRezervacije
+                                                              .toLocal()),
+                                                        )),
+                                                        DataCell(Text(
+                                                            r.uslugaNaziv ??
+                                                                'Usluga')),
+                                                        DataCell(Text(
+                                                            r.korisnikIme ??
+                                                                '-')),
+                                                        DataCell(Chip(
+                                                          label: Text(
+                                                            r.isPotvrdjena
+                                                                ? 'Potvrđena'
+                                                                : 'Na čekanju',
+                                                          ),
+                                                        )),
+                                                        DataCell(Text(
+                                                          r.isPlacena
+                                                              ? 'Plaćeno'
+                                                              : 'Neplaćeno',
+                                                        )),
+                                                      ],
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          flex: 5,
+                                          child: _ReservationDetailsPanel(
+                                            rezervacija: _selectedRezervacijaId ==
+                                                    null
+                                                ? null
+                                                : filtered.firstWhere(
+                                                    (r) =>
+                                                        r.id ==
+                                                        _selectedRezervacijaId,
+                                                    orElse: () =>
+                                                        filtered.first,
+                                                  ),
+                                            slotovi: data.slotovi,
+                                            onToggle: (r, v) async {
+                                              final ok = await _api
+                                                  .updateRezervacijaPotvrdjena(
+                                                r.id,
+                                                v,
+                                              );
+                                              if (!context.mounted) return;
+                                              if (!ok) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                        'Ažuriranje nije uspjelo.'),
+                                                  ),
+                                                );
+                                              }
+                                              if (context.mounted) {
+                                                await _reload();
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                )
-                                .toList(),
-                          ),
-                        const SizedBox(height: 8),
+                                  const SizedBox(height: 8),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
                       ],
                     ),
                   );
@@ -333,6 +508,161 @@ class _DayData {
   final List<DateTime> slotovi;
 
   _DayData({required this.rezervacije, required this.slotovi});
+}
+
+class _SlotsSection extends StatelessWidget {
+  const _SlotsSection({required this.slotovi});
+
+  final List<DateTime> slotovi;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Slobodni slotovi (${slotovi.length})',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        if (slotovi.isEmpty)
+          Text(
+            'Nema slobodnih slotova (ili su svi zauzeti).',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: slotovi
+                .map((t) => Chip(label: Text(_formatTime(t.toLocal()))))
+                .toList(),
+          ),
+      ],
+    );
+  }
+}
+
+class _ReservationDetailsPanel extends StatelessWidget {
+  const _ReservationDetailsPanel({
+    required this.rezervacija,
+    required this.slotovi,
+    required this.onToggle,
+  });
+
+  final Rezervacija? rezervacija;
+  final List<DateTime> slotovi;
+  final Future<void> Function(Rezervacija r, bool v) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rezervacija == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Detalji', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Odaberi rezervaciju iz tabele.',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+              ),
+              const SizedBox(height: 18),
+              _SlotsSection(slotovi: slotovi),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final dt = rezervacija!.datumRezervacije.toLocal();
+    final isPast = dt.isBefore(DateTime.now());
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Detalji', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            Text(
+              rezervacija!.uslugaNaziv ?? 'Usluga',
+              style: Theme.of(context).textTheme.titleLarge,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${_formatDateTimeLocal(dt)}\n'
+              'Klijent: ${rezervacija!.korisnikIme ?? '-'}\n'
+              'Plaćanje: ${rezervacija!.isPlacena ? 'Plaćeno' : 'Neplaćeno'}',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Chip(
+                  label: Text(
+                    rezervacija!.isPotvrdjena ? 'Potvrđena' : 'Na čekanju',
+                  ),
+                ),
+                const Spacer(),
+                if (isPast)
+                  const Text('Prošlo', style: TextStyle(color: Colors.grey))
+                else if (!rezervacija!.isPotvrdjena)
+                  FilledButton(
+                    onPressed: () => onToggle(rezervacija!, true),
+                    child: const Text('Potvrdi'),
+                  )
+                else
+                  OutlinedButton(
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Vrati na čekanje?'),
+                          content: const Text(
+                            'Ovo će označiti rezervaciju kao nepotvrđenu.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Odustani'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Potvrdi'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (ok != true) return;
+                      await onToggle(rezervacija!, false);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Rezervacija vraćena na čekanje.'),
+                        ),
+                      );
+                    },
+                    child: const Text('Vrati'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                child: _SlotsSection(slotovi: slotovi),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ReservationTerapeutTile extends StatelessWidget {
