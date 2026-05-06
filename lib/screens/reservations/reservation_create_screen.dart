@@ -150,11 +150,19 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     navigator.pop(true);
   }
 
+  int? _effectiveDropdownValue(int? selected, List<int> validIds) {
+    if (selected == null || validIds.isEmpty) return null;
+    return validIds.contains(selected) ? selected : null;
+  }
+
   Widget _buildServiceTherapistPickers(
     BuildContext context,
     List<Usluga> services,
     List<Zaposlenik> therapists,
   ) {
+    final serviceIds = services.map((s) => s.id).toList();
+    final therapistIds = therapists.map((t) => t.id).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -166,7 +174,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
-              value: _selectedServiceId,
+              hint: services.isEmpty
+                  ? const Text('Nema učitanih usluga')
+                  : const Text('Odaberite uslugu'),
+              value: _effectiveDropdownValue(_selectedServiceId, serviceIds),
               items: services
                   .map(
                     (s) => DropdownMenuItem<int>(
@@ -194,7 +205,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
-              value: _selectedTherapistId,
+              hint: therapists.isEmpty
+                  ? const Text('Nema terapeuta')
+                  : const Text('Odaberite terapeuta'),
+              value: _effectiveDropdownValue(_selectedTherapistId, therapistIds),
               items: therapists
                   .map(
                     (t) => DropdownMenuItem<int>(
@@ -350,7 +364,8 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final serviceProvider = Provider.of<ServiceProvider>(context);
-    final services = serviceProvider.services;
+    // Pun katalog — ne oslanjati se na filtriranu listu iz pretrage kataloga.
+    final services = serviceProvider.allServices;
 
     Widget? leading;
     if (Navigator.canPop(context)) {
@@ -376,21 +391,36 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
             final therapists = snapshot.data!.therapists;
 
+            // Ako je ID izvan liste (npr. nakon promjene podataka), vrati na prvu valjanu stavku.
+            final serviceIds = services.map((s) => s.id).toSet();
+            final therapistIds = therapists.map((t) => t.id).toSet();
+            final needsSanitize = (_selectedServiceId != null &&
+                    !serviceIds.contains(_selectedServiceId)) ||
+                (_selectedTherapistId != null &&
+                    !therapistIds.contains(_selectedTherapistId));
+
             final needsDefaults = (services.isNotEmpty &&
                     _selectedServiceId == null) ||
-                (therapists.isNotEmpty && _selectedTherapistId == null);
+                (therapists.isNotEmpty && _selectedTherapistId == null) ||
+                needsSanitize;
             if (needsDefaults && !_defaultsPostFramePending) {
               _defaultsPostFramePending = true;
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 _defaultsPostFramePending = false;
                 if (!mounted) return;
-                final freshServices =
-                    context.read<ServiceProvider>().services;
+                final freshAll =
+                    context.read<ServiceProvider>().allServices;
                 setState(() {
-                  if (freshServices.isNotEmpty && _selectedServiceId == null) {
-                    _selectedServiceId = freshServices.first.id;
+                  if (freshAll.isEmpty) {
+                    _selectedServiceId = null;
+                  } else if (_selectedServiceId == null ||
+                      !freshAll.any((u) => u.id == _selectedServiceId)) {
+                    _selectedServiceId = freshAll.first.id;
                   }
-                  if (therapists.isNotEmpty && _selectedTherapistId == null) {
+                  if (therapists.isEmpty) {
+                    _selectedTherapistId = null;
+                  } else if (_selectedTherapistId == null ||
+                      !therapists.any((t) => t.id == _selectedTherapistId)) {
                     _selectedTherapistId = therapists.first.id;
                   }
                 });

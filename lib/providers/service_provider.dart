@@ -13,6 +13,10 @@ class ServiceProvider with ChangeNotifier {
 
   // Getteri
   List<Usluga> get services => _filteredServices;
+
+  /// Sve učitane usluge (bez pretrage u katalogu). Koristiti za dropdowne npr. kod rezervacije.
+  List<Usluga> get allServices => List<Usluga>.unmodifiable(_allServices);
+
   bool get isLoading => _isLoading;
   Set<int> get favoriteIds => _favoriteIds;
   bool isFavorite(int uslugaId) => _favoriteIds.contains(uslugaId);
