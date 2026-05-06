@@ -67,6 +67,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                   PrimaryButton(
                     label: 'Nova rezervacija',
                     icon: Icons.add,
+                    tooltip: 'Kreiraj novu rezervaciju',
                     onPressed: () async {
                       final created = await Navigator.push<bool>(
                         context,
@@ -152,7 +153,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                       else
                                         SizedBox(
                                           height: 34,
-                                          child: FilledButton(
+                                          child: Tooltip(
+                                            message:
+                                                'Plati Online (Stripe, Android/iOS)',
+                                            child: FilledButton(
                                             onPressed: () async {
                                               final messenger =
                                                   ScaffoldMessenger.of(context);
@@ -180,6 +184,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                               if (ok) _refresh();
                                             },
                                             child: const Text('Plati'),
+                                            ),
                                           ),
                                         ),
                                     ],

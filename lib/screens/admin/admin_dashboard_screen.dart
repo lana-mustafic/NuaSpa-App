@@ -193,6 +193,7 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
                       leading: const Icon(Icons.folder_outlined),
                       title: Text(k.naziv),
                       trailing: PopupMenuButton<String>(
+                        tooltip: 'Akcije za kategoriju',
                         onSelected: (v) {
                           if (v == 'edit') _editCategory(k);
                           if (v == 'delete') _delete(k);
@@ -212,6 +213,7 @@ class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
               right: 0,
               bottom: 0,
               child: FloatingActionButton(
+                tooltip: 'Nova kategorija',
                 onPressed: () => _editCategory(null),
                 child: const Icon(Icons.add),
               ),
@@ -465,6 +467,7 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
                             TextStyle(color: Colors.white.withValues(alpha: 0.70)),
                       ),
                       trailing: PopupMenuButton<String>(
+                        tooltip: 'Akcije za uslugu',
                         onSelected: (v) {
                           if (v == 'edit') _editService(u);
                           if (v == 'delete') _delete(u);
@@ -484,6 +487,7 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
               right: 0,
               bottom: 0,
               child: FloatingActionButton(
+                tooltip: 'Nova usluga',
                 onPressed: () => _editService(null),
                 child: const Icon(Icons.add),
               ),
@@ -604,17 +608,20 @@ class _AdminReportPage extends StatelessWidget {
             style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
           ),
           const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () async {
-              await api.downloadReport();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Završeno preuzimanje.')),
-                );
-              }
-            },
-            icon: const Icon(Icons.download),
-            label: const Text('Preuzmi Top usluge (PDF)'),
+          Tooltip(
+            message: 'Preuzmi PDF izvještaj (top usluge)',
+            child: FilledButton.icon(
+              onPressed: () async {
+                await api.downloadReport();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Završeno preuzimanje.')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.download),
+              label: const Text('Preuzmi Top usluge (PDF)'),
+            ),
           ),
         ],
       ),

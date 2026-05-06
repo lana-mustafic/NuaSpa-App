@@ -8,6 +8,7 @@ import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
 import '../widgets/glass_sidebar.dart';
+import '../navigation/desktop_nav.dart';
 
 class DesktopShell extends StatefulWidget {
   const DesktopShell({
@@ -23,12 +24,14 @@ class DesktopShell extends StatefulWidget {
 
 class _NavItem {
   const _NavItem({
+    required this.key,
     required this.label,
     required this.icon,
     required this.builder,
     this.visible = true,
   });
 
+  final DesktopRouteKey key;
   final String label;
   final IconData icon;
   final Widget Function() builder;
@@ -36,25 +39,62 @@ class _NavItem {
 }
 
 class _DesktopShellState extends State<DesktopShell> {
-  int _index = 0;
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final nav = context.watch<DesktopNav>();
 
     final items = <_NavItem>[
-      _NavItem(label: 'Home', icon: Icons.home_outlined, builder: () => widget.home),
-      _NavItem(label: 'Katalog', icon: Icons.grid_view_rounded, builder: () => const ServiceCatalogScreen()),
-      _NavItem(label: 'Rezervacije', icon: Icons.event_note_rounded, builder: () => const ReservationListScreen(), visible: !auth.isZaposlenik),
-      _NavItem(label: 'Favoriti', icon: Icons.favorite_border, builder: () => const FavoritesScreen(), visible: !auth.isZaposlenik),
-      _NavItem(label: 'Raspored', icon: Icons.calendar_month_outlined, builder: () => const TherapistScheduleScreen(), visible: auth.isZaposlenik),
-      _NavItem(label: 'Admin', icon: Icons.admin_panel_settings_outlined, builder: () => const AdminDashboardScreen(), visible: auth.isAdmin),
+      _NavItem(
+        key: DesktopRouteKey.home,
+        label: 'Home',
+        icon: Icons.home_outlined,
+        builder: () => widget.home,
+      ),
+      _NavItem(
+        key: DesktopRouteKey.catalog,
+        label: 'Katalog',
+        icon: Icons.grid_view_rounded,
+        builder: () => const ServiceCatalogScreen(),
+      ),
+      _NavItem(
+        key: DesktopRouteKey.reservations,
+        label: 'Rezervacije',
+        icon: Icons.event_note_rounded,
+        builder: () => const ReservationListScreen(),
+        visible: !auth.isZaposlenik,
+      ),
+      _NavItem(
+        key: DesktopRouteKey.favorites,
+        label: 'Favoriti',
+        icon: Icons.favorite_border,
+        builder: () => const FavoritesScreen(),
+        visible: !auth.isZaposlenik,
+      ),
+      _NavItem(
+        key: DesktopRouteKey.schedule,
+        label: 'Raspored',
+        icon: Icons.calendar_month_outlined,
+        builder: () => const TherapistScheduleScreen(),
+        visible: auth.isZaposlenik,
+      ),
+      _NavItem(
+        key: DesktopRouteKey.admin,
+        label: 'Admin',
+        icon: Icons.admin_panel_settings_outlined,
+        builder: () => const AdminDashboardScreen(),
+        visible: auth.isAdmin,
+      ),
     ].where((e) => e.visible).toList();
 
-    // Clamp index if role changes.
-    if (_index >= items.length) _index = 0;
+    final idx = items.indexWhere((it) => it.key == nav.route);
+    final safeIndex = idx < 0 ? 0 : idx;
+    final currentItem = items.isEmpty ? null : items[safeIndex];
+    if (currentItem == null) {
+      return const SizedBox.shrink();
+    }
 
-    final page = items[_index].builder();
+    final page = currentItem.builder();
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 980;
 
@@ -94,8 +134,9 @@ class _DesktopShellState extends State<DesktopShell> {
                         child: NavigationRail(
                           backgroundColor: Colors.transparent,
                           extended: isWide,
-                          selectedIndex: _index,
-                          onDestinationSelected: (i) => setState(() => _index = i),
+                          selectedIndex: safeIndex,
+                          onDestinationSelected: (i) =>
+                              context.read<DesktopNav>().goTo(items[i].key),
                           labelType: isWide ? null : NavigationRailLabelType.all,
                           minExtendedWidth: 260,
                           destinations: [
@@ -153,7 +194,7 @@ class _DesktopShellState extends State<DesktopShell> {
                       );
                     },
                     child: KeyedSubtree(
-                      key: ValueKey('${items[_index].label}-$_index'),
+                      key: ValueKey('${currentItem.label}-${currentItem.key.name}'),
                       child: page,
                     ),
                   ),

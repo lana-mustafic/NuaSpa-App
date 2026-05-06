@@ -186,6 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           PrimaryButton(
                             label: 'Prijavi se',
                             icon: Icons.login,
+                            tooltip: 'Prijava na račun',
                             onPressed: _submit,
                           ),
                       ],

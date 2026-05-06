@@ -83,6 +83,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             final u = favorites[index];
                             return HoverCard(
                               padding: const EdgeInsets.all(14),
+                              tooltip: 'Otvori detalje: ${u.naziv}',
                               onTap: () {
                                 Navigator.push(
                                   context,
