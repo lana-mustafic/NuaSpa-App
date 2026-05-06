@@ -16,6 +16,7 @@ import 'ui/theme/app_theme.dart';
 import 'ui/widgets/hover_card.dart';
 import 'ui/widgets/primary_button.dart';
 import 'ui/behavior/app_scroll_behavior.dart';
+import 'ui/navigation/desktop_nav.dart';
 
 void main() {
   runApp(
@@ -53,7 +54,10 @@ class AuthWrapper extends StatelessWidget {
     final authStatus = context.watch<AuthProvider>().status;
 
     if (authStatus == AuthStatus.authenticated) {
-      return const DesktopShell(home: HomePage());
+      return ChangeNotifierProvider(
+        create: (_) => DesktopNav(),
+        child: const DesktopShell(home: HomePage()),
+      );
     } else {
       return const LoginScreen();
     }
@@ -213,6 +217,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.read<DesktopNav?>();
     return Scrollbar(
       controller: _scrollController,
       child: SingleChildScrollView(
@@ -241,12 +246,16 @@ class _HomePageState extends State<HomePage> {
                 final actions = <Widget>[
                   HoverCard(
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ServiceCatalogScreen(),
-                        ),
-                      );
+                      if (nav != null) {
+                        nav.goTo(DesktopRouteKey.catalog);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ServiceCatalogScreen(),
+                          ),
+                        );
+                      }
                     },
                     child: Row(
                       children: [
@@ -264,12 +273,16 @@ class _HomePageState extends State<HomePage> {
                   if (!context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ReservationListScreen(),
-                          ),
-                        );
+                        if (nav != null) {
+                          nav.goTo(DesktopRouteKey.reservations);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ReservationListScreen(),
+                            ),
+                          );
+                        }
                       },
                       child: Row(
                         children: [
@@ -287,12 +300,16 @@ class _HomePageState extends State<HomePage> {
                   if (!context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const FavoritesScreen(),
-                          ),
-                        );
+                        if (nav != null) {
+                          nav.goTo(DesktopRouteKey.favorites);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const FavoritesScreen(),
+                            ),
+                          );
+                        }
                       },
                       child: Row(
                         children: [
@@ -310,12 +327,16 @@ class _HomePageState extends State<HomePage> {
                   if (context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const TherapistScheduleScreen(),
-                          ),
-                        );
+                        if (nav != null) {
+                          nav.goTo(DesktopRouteKey.schedule);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const TherapistScheduleScreen(),
+                            ),
+                          );
+                        }
                       },
                       child: Row(
                         children: [
@@ -333,12 +354,16 @@ class _HomePageState extends State<HomePage> {
                   if (context.watch<AuthProvider>().isAdmin)
                     HoverCard(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const AdminDashboardScreen(),
-                          ),
-                        );
+                        if (nav != null) {
+                          nav.goTo(DesktopRouteKey.admin);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AdminDashboardScreen(),
+                            ),
+                          );
+                        }
                       },
                       child: Row(
                         children: [
