@@ -41,7 +41,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = context.watch<AuthProvider>().status;
+    final auth = context.watch<AuthProvider>();
+    final status = auth.status;
+
+    final info = auth.infoMessage;
+    if (info != null && info.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(info)),
+        );
+        context.read<AuthProvider>().consumeInfoMessage();
+      });
+    }
 
     final scheme = Theme.of(context).colorScheme;
 

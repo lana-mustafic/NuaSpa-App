@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:async';
 import '../core/api/auth_repository.dart';
 import '../core/jwt_roles.dart';
+import '../core/auth/auth_events.dart';
 
 enum AuthStatus { unauthenticated, authenticating, authenticated, error }
 
@@ -11,8 +13,20 @@ class AuthProvider extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   List<String> _roles = [];
   int? _zaposlenikId;
+  StreamSubscription<AuthEvent>? _authEventsSub;
+  String? _infoMessage;
 
   AuthStatus get status => _status;
+  String? get infoMessage => _infoMessage;
+
+  AuthProvider() {
+    _authEventsSub = AuthEvents.instance.stream.listen((event) async {
+      if (event is AuthEventForceLogout) {
+        _infoMessage = event.message ?? 'Prijavite se ponovo.';
+        await logout();
+      }
+    });
+  }
 
   List<String> get roles => List.unmodifiable(_roles);
 
@@ -91,5 +105,15 @@ class AuthProvider extends ChangeNotifier {
     _zaposlenikId = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
+  }
+
+  void consumeInfoMessage() {
+    _infoMessage = null;
+  }
+
+  @override
+  void dispose() {
+    _authEventsSub?.cancel();
+    super.dispose();
   }
 }
