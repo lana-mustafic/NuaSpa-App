@@ -23,12 +23,7 @@ import 'ui/behavior/app_scroll_behavior.dart';
 import 'ui/navigation/desktop_nav.dart';
 import 'bootstrap/desktop_window.dart';
 import 'core/config/app_config.dart';
-
-bool _nuaspaUseMobileClient() {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
-}
+import 'core/platform/nua_spa_platform.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +48,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = _nuaspaUseMobileClient();
+    final mobile = nuaspaUseMobileShell();
     if (kDebugMode) {
       debugPrint(
         'NuaSpa: Flutter client=${mobile ? "mobile (Android/iOS spa theme)" : "desktop/web (dark theme)"}',
@@ -77,7 +72,7 @@ class AuthWrapper extends StatelessWidget {
     final authStatus = context.watch<AuthProvider>().status;
 
     if (authStatus == AuthStatus.authenticated) {
-      if (_nuaspaUseMobileClient()) {
+      if (nuaspaUseMobileShell()) {
         if (kDebugMode) {
           debugPrint('NuaSpa: showing MobileShell (premium bottom nav)');
         }

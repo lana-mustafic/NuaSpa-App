@@ -1,9 +1,14 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import '../../models/usluga.dart';
+
 import '../../core/api/services/api_service.dart';
+import '../../core/platform/nua_spa_platform.dart';
 import '../../models/recenzija.dart';
-import '../../ui/widgets/page_header.dart';
+import '../../models/usluga.dart';
+import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/hover_card.dart';
+import '../../ui/widgets/page_header.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final int serviceId;
@@ -75,7 +80,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     );
   }
 
-  Widget _buildReviewsSection() {
+  Widget _buildReviewsSection(
+    BuildContext context, {
+    bool useSpaChrome = false,
+  }) {
     return FutureBuilder<List<Recenzija>>(
       future: _recenzijeFuture,
       builder: (context, snapshot) {
@@ -112,6 +120,18 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               ...reviews.map((r) {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
+                  color: useSpaChrome
+                      ? Colors.white.withValues(alpha: 0.88)
+                      : null,
+                  elevation: useSpaChrome ? 0 : null,
+                  shape: useSpaChrome
+                      ? RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(
+                            color: MobileSpaColors.lavender.withValues(alpha: 0.35),
+                          ),
+                        )
+                      : null,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -200,6 +220,134 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     );
   }
 
+  Widget _buildMobileSpaDetails(BuildContext context, Usluga service) {
+    final tt = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: MobileSpaColors.softWhite,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 288,
+            backgroundColor: MobileSpaColors.softWhite,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Center(
+                child: Material(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.pop(context),
+                    child: const SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 17,
+                        color: MobileSpaColors.royalPurple,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.parallax,
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    service.slikaUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return ColoredBox(
+                        color: MobileSpaColors.lavender.withValues(alpha: 0.28),
+                        child: Icon(
+                          Icons.spa_outlined,
+                          size: 56,
+                          color: MobileSpaColors.royalPurple.withValues(alpha: 0.28),
+                        ),
+                      );
+                    },
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.1),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.32),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(22, 16, 22, 32 + bottomInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(service.naziv, style: tt.headlineSmall),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      _SpaMetaChip(
+                        icon: Icons.payments_outlined,
+                        label: '${service.cijena.toStringAsFixed(0)} KM',
+                        goldAccent: true,
+                      ),
+                      _SpaMetaChip(
+                        icon: Icons.schedule_rounded,
+                        label: service.trajanje,
+                        goldAccent: false,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    service.kategorija,
+                    style: tt.bodySmall?.copyWith(
+                      color: MobileSpaColors.royalPurple.withValues(alpha: 0.52),
+                      letterSpacing: 0.25,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _SpaDescriptionPanel(
+                    text: service.opis.trim().isEmpty ? null : service.opis,
+                  ),
+                  const SizedBox(height: 26),
+                  Text('Detalji i recenzije', style: tt.titleLarge),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Iskustva drugih gostiju i tvoja ocjena.',
+                    style: tt.bodySmall,
+                  ),
+                  const SizedBox(height: 18),
+                  _buildReviewsSection(context, useSpaChrome: true),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -208,18 +356,60 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
         future: _serviceFuture,
         builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
+          if (nuaspaUseMobileShell()) {
+            return const Scaffold(
+              backgroundColor: MobileSpaColors.softWhite,
+              body: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          }
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
-          return Center(
+          final err = Padding(
+            padding: const EdgeInsets.all(24),
             child: Text('Greška pri učitavanju: ${snapshot.error}'),
           );
+          if (nuaspaUseMobileShell()) {
+            return Scaffold(
+              backgroundColor: MobileSpaColors.softWhite,
+              appBar: AppBar(
+                backgroundColor: MobileSpaColors.softWhite,
+                foregroundColor: MobileSpaColors.royalPurple,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              body: Center(child: err),
+            );
+          }
+          return Center(child: err);
         }
 
         final service = snapshot.data;
         if (service == null) {
+          if (nuaspaUseMobileShell()) {
+            return Scaffold(
+              backgroundColor: MobileSpaColors.softWhite,
+              appBar: AppBar(
+                backgroundColor: MobileSpaColors.softWhite,
+                foregroundColor: MobileSpaColors.royalPurple,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              body: const Center(child: Text('Usluga nije pronađena.')),
+            );
+          }
           return const Center(child: Text('Usluga nije pronađena.'));
+        }
+
+        if (nuaspaUseMobileShell()) {
+          return _buildMobileSpaDetails(context, service);
         }
 
         return LayoutBuilder(
@@ -276,7 +466,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                             Text(
                               '• ${service.trajanje}',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.72),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.72),
                               ),
                             ),
                           ],
@@ -285,7 +478,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         Text(
                           'Kategorija: ${service.kategorija}',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.72),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.72),
                           ),
                         ),
                       ],
@@ -321,12 +517,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       width: 0.8,
                     ),
                   ),
-                  child: const Text(
-                    'Opis uskoro (potrebno je dodati polje u Flutter model).',
+                  child: Text(
+                    service.opis.trim().isEmpty
+                        ? 'Opis uskoro.'
+                        : service.opis,
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildReviewsSection(),
+                _buildReviewsSection(context),
               ],
             );
 
@@ -375,3 +573,86 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   }
 }
 
+class _SpaMetaChip extends StatelessWidget {
+  const _SpaMetaChip({
+    required this.icon,
+    required this.label,
+    this.goldAccent = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool goldAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: goldAccent
+            ? MobileSpaColors.gold.withValues(alpha: 0.28)
+            : MobileSpaColors.lavender.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: MobileSpaColors.lavender.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color: MobileSpaColors.royalPurple.withValues(alpha: 0.78),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: MobileSpaColors.royalPurple,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpaDescriptionPanel extends StatelessWidget {
+  const _SpaDescriptionPanel({this.text});
+
+  final String? text;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: MobileSpaColors.lavender.withValues(alpha: 0.38),
+            ),
+          ),
+          child: Text(
+            text ?? 'Opis uskoro.',
+            style: tt.bodyMedium?.copyWith(
+              color: text == null
+                  ? MobileSpaColors.royalPurple.withValues(alpha: 0.45)
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
