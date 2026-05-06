@@ -6,11 +6,15 @@ class HoverCard extends StatefulWidget {
     required this.child,
     this.onTap,
     this.padding,
+    this.tooltip,
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry? padding;
+
+  /// Desktop/long-press hint; shown on hover (and long-press on touch).
+  final String? tooltip;
 
   @override
   State<HoverCard> createState() => _HoverCardState();
@@ -28,7 +32,7 @@ class _HoverCardState extends State<HoverCard> {
         ? borderRadiusGeo
         : BorderRadius.circular(16);
 
-    return MouseRegion(
+    final card = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
@@ -67,6 +71,12 @@ class _HoverCardState extends State<HoverCard> {
         ),
       ),
     );
+
+    final tip = widget.tooltip?.trim();
+    if (tip != null && tip.isNotEmpty) {
+      return Tooltip(message: tip, child: card);
+    }
+    return card;
   }
 }
 

@@ -6,18 +6,20 @@ class PrimaryButton extends StatelessWidget {
     required this.label,
     this.icon,
     this.onPressed,
+    this.tooltip,
   });
 
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(14);
 
-    return DecoratedBox(
+    final btn = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
         gradient: LinearGradient(
@@ -55,6 +57,12 @@ class PrimaryButton extends StatelessWidget {
         ),
       ),
     );
+
+    final tip = tooltip?.trim();
+    if (tip != null && tip.isNotEmpty) {
+      return Tooltip(message: tip, child: btn);
+    }
+    return btn;
   }
 }
 

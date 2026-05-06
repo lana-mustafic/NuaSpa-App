@@ -64,7 +64,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       children: List.generate(5, (i) {
         final v = i + 1;
         return IconButton(
-          tooltip: '$v',
+          tooltip: 'Ocjena $v od 5',
           onPressed: () => setState(() => _ocjena = v),
           icon: Icon(
             v <= _ocjena ? Icons.star : Icons.star_border,
@@ -153,41 +153,46 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () async {
-                final komentar = _komentarController.text.trim();
-                if (komentar.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Unesi komentar.')),
+            Tooltip(
+              message: 'Pošalji recenziju',
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final komentar = _komentarController.text.trim();
+                  if (komentar.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Unesi komentar.')),
+                    );
+                    return;
+                  }
+
+                  final messenger = ScaffoldMessenger.of(context);
+
+                  final created = await _apiService.createRecenzija(
+                    uslugaId: widget.serviceId,
+                    ocjena: _ocjena,
+                    komentar: komentar,
                   );
-                  return;
-                }
 
-                final messenger = ScaffoldMessenger.of(context);
+                  if (!mounted) return;
 
-                final created = await _apiService.createRecenzija(
-                  uslugaId: widget.serviceId,
-                  ocjena: _ocjena,
-                  komentar: komentar,
-                );
+                  if (created == null) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Neuspjelo slanje recenzije.'),
+                      ),
+                    );
+                    return;
+                  }
 
-                if (!mounted) return;
-
-                if (created == null) {
+                  _komentarController.clear();
+                  await _refreshRecenzije();
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('Neuspjelo slanje recenzije.')),
+                    const SnackBar(content: Text('Recenzija je dodana.')),
                   );
-                  return;
-                }
-
-                _komentarController.clear();
-                await _refreshRecenzije();
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Recenzija je dodana.')),
-                );
-              },
-              icon: const Icon(Icons.send),
-              label: const Text('Pošalji'),
+                },
+                icon: const Icon(Icons.send),
+                label: const Text('Pošalji'),
+              ),
             ),
           ],
         );

@@ -167,10 +167,13 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                           style: TextStyle(color: Colors.red.shade300),
                         ),
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _reload,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Pokušaj ponovo'),
+                        Tooltip(
+                          message: 'Učitaj raspored ponovo',
+                          child: FilledButton.icon(
+                            onPressed: _reload,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Pokušaj ponovo'),
+                          ),
                         ),
                       ],
                     );
@@ -189,6 +192,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                         Row(
                           children: [
                             IconButton(
+                              tooltip: 'Prethodni dan',
                               onPressed: () async {
                                 setState(() {
                                   _day = _day.subtract(const Duration(days: 1));
@@ -198,22 +202,28 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                               icon: const Icon(Icons.chevron_left),
                             ),
                             Expanded(
-                              child: InkWell(
-                                onTap: _pickDate,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  child: Text(
-                                    dayLabel,
-                                    textAlign: TextAlign.center,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
+                              child: Tooltip(
+                                message: 'Odaberi datum iz kalendara',
+                                child: InkWell(
+                                  onTap: _pickDate,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      dayLabel,
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                             IconButton(
+                              tooltip: 'Sljedeći dan',
                               onPressed: () async {
                                 setState(() {
                                   _day = _day.add(const Duration(days: 1));
@@ -621,12 +631,17 @@ class _ReservationDetailsPanel extends StatelessWidget {
                 if (isPast)
                   const Text('Prošlo', style: TextStyle(color: Colors.grey))
                 else if (!rezervacija!.isPotvrdjena)
-                  FilledButton(
-                    onPressed: () => onToggle(rezervacija!, true),
-                    child: const Text('Potvrdi'),
+                  Tooltip(
+                    message: 'Potvrdi rezervaciju',
+                    child: FilledButton(
+                      onPressed: () => onToggle(rezervacija!, true),
+                      child: const Text('Potvrdi'),
+                    ),
                   )
                 else
-                  OutlinedButton(
+                  Tooltip(
+                    message: 'Vrati rezervaciju na čekanje',
+                    child: OutlinedButton(
                     onPressed: () async {
                       final ok = await showDialog<bool>(
                         context: context,
@@ -657,6 +672,7 @@ class _ReservationDetailsPanel extends StatelessWidget {
                       );
                     },
                     child: const Text('Vrati'),
+                  ),
                   ),
               ],
             ),
@@ -713,14 +729,19 @@ class _ReservationTerapeutTile extends StatelessWidget {
                 style: TextStyle(color: Colors.grey),
               )
             else if (!rezervacija.isPotvrdjena)
-              FilledButton(
-                onPressed: () async {
-                  await onToggle(true);
-                },
-                child: const Text('Potvrdi'),
+              Tooltip(
+                message: 'Potvrdi rezervaciju',
+                child: FilledButton(
+                  onPressed: () async {
+                    await onToggle(true);
+                  },
+                  child: const Text('Potvrdi'),
+                ),
               )
             else
-              OutlinedButton(
+              Tooltip(
+                message: 'Vrati rezervaciju na čekanje',
+                child: OutlinedButton(
                 onPressed: () async {
                   final ok = await showDialog<bool>(
                     context: context,
@@ -748,6 +769,7 @@ class _ReservationTerapeutTile extends StatelessWidget {
                   );
                 },
                 child: const Text('Vrati'),
+              ),
               ),
           ],
         ),

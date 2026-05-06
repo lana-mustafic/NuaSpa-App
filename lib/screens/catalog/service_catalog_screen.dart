@@ -91,6 +91,8 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                                 Positioned.fill(
                                   child: HoverCard(
                                     padding: EdgeInsets.zero,
+                                    tooltip:
+                                        'Otvori detalje: ${usluga.naziv}',
                                     onTap: () {
                                       Navigator.push(
                                         context,

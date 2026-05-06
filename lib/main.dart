@@ -141,6 +141,7 @@ class _HomePageState extends State<HomePage> {
                 width: 180,
                 child: HoverCard(
                   padding: EdgeInsets.zero,
+                  tooltip: 'Otvori detalje: ${u.naziv}',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -245,6 +246,7 @@ class _HomePageState extends State<HomePage> {
 
                 final actions = <Widget>[
                   HoverCard(
+                    tooltip: 'Otvori katalog usluga',
                     onTap: () {
                       if (nav != null) {
                         nav.goTo(DesktopRouteKey.catalog);
@@ -299,6 +301,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (!context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
+                      tooltip: 'Lista favorita',
                       onTap: () {
                         if (nav != null) {
                           nav.goTo(DesktopRouteKey.favorites);
@@ -326,6 +329,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
+                      tooltip: 'Raspored terapeuta',
                       onTap: () {
                         if (nav != null) {
                           nav.goTo(DesktopRouteKey.schedule);
@@ -353,6 +357,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (context.watch<AuthProvider>().isAdmin)
                     HoverCard(
+                      tooltip: 'Administracija',
                       onTap: () {
                         if (nav != null) {
                           nav.goTo(DesktopRouteKey.admin);
@@ -393,6 +398,7 @@ class _HomePageState extends State<HomePage> {
             PrimaryButton(
               label: 'Odjavi se',
               icon: Icons.logout,
+              tooltip: 'Odjava s računa',
               onPressed: () => context.read<AuthProvider>().logout(),
             ),
           ],
