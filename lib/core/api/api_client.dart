@@ -11,9 +11,10 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         // Android emulator: 10.0.2.2 -> host machine localhost.
-        // Windows desktop app: koristi localhost direktno.
+        // Windows desktop app: koristi HTTP endpoint (bez TLS/cert problema).
+        // Ako želiš HTTPS na Windowsu, promijeni na https://localhost:7155/api/ i instaliraj/dev-trust cert.
         baseUrl: Platform.isWindows
-            ? 'https://localhost:7155/api/'
+            ? 'http://localhost:5088/api/'
             : 'https://10.0.2.2:7155/api/',
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 20),
