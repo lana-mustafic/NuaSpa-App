@@ -34,6 +34,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   bool? _filterPlacena; // null=all, false=neplaćeno, true=plaćeno
   final TextEditingController _searchCtrl = TextEditingController();
   int? _selectedRezervacijaId;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -46,6 +47,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -112,11 +114,13 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
 
     final dayLabel = _formatDate(_day);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             children: [
               Expanded(
@@ -176,7 +180,10 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
                       _DayData(rezervacije: [], slotovi: []);
 
                   return Scrollbar(
+                    controller: _scrollController,
                     child: ListView(
+                      controller: _scrollController,
+                      primary: false,
                       padding: const EdgeInsets.all(0),
                       children: [
                         Row(
@@ -477,7 +484,8 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen> {
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

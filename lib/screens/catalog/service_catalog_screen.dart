@@ -13,6 +13,8 @@ class ServiceCatalogScreen extends StatefulWidget {
 }
 
 class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -25,17 +27,26 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     var serviceProvider = Provider.of<ServiceProvider>(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const PageHeader(
             title: 'Katalog usluga',
             subtitle: 'Pretraži i upravljaj favoritima.',
+            trailing: _BackIfPossible(),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -57,7 +68,10 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                           : (w >= 900 ? 3 : (w >= 640 ? 2 : 1));
 
                       return Scrollbar(
+                        controller: _scrollController,
                         child: GridView.builder(
+                          controller: _scrollController,
+                          primary: false,
                           padding: const EdgeInsets.all(0),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
@@ -185,8 +199,23 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                     },
                   ),
           ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _BackIfPossible extends StatelessWidget {
+  const _BackIfPossible();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Navigator.canPop(context)) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: 'Nazad',
+      onPressed: () => Navigator.pop(context),
+      icon: const Icon(Icons.arrow_back),
     );
   }
 }

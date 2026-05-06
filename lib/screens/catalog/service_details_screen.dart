@@ -16,6 +16,8 @@ class ServiceDetailsScreen extends StatefulWidget {
 
 class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   final ApiService _apiService = ApiService();
+  final ScrollController _leftScrollController = ScrollController();
+  final ScrollController _rightScrollController = ScrollController();
 
   Future<Usluga?> get _serviceFuture => _apiService.getUslugaById(widget.serviceId);
   late Future<List<Recenzija>> _recenzijeFuture;
@@ -32,6 +34,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   @override
   void dispose() {
     _komentarController.dispose();
+    _leftScrollController.dispose();
+    _rightScrollController.dispose();
     super.dispose();
   }
 
@@ -193,9 +197,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Usluga?>(
-      future: _serviceFuture,
-      builder: (context, snapshot) {
+    return Material(
+      color: Colors.transparent,
+      child: FutureBuilder<Usluga?>(
+        future: _serviceFuture,
+        builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -321,7 +327,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
             if (!wide) {
               return Scrollbar(
+                controller: _leftScrollController,
                 child: ListView(
+                  controller: _leftScrollController,
+                  primary: false,
                   padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
                   children: [
                     detailsPanel,
@@ -342,7 +351,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   Expanded(
                     flex: 6,
                     child: Scrollbar(
+                      controller: _rightScrollController,
                       child: SingleChildScrollView(
+                        controller: _rightScrollController,
+                        primary: false,
                         child: detailsPanel,
                       ),
                     ),
@@ -353,6 +365,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
           },
         );
       },
+      ),
     );
   }
 }
