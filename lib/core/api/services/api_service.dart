@@ -20,6 +20,7 @@ import '../../../models/admin/radno_vrijeme.dart';
 import '../../../models/admin/prostorija.dart';
 import '../../../models/admin/oprema.dart';
 import '../api_client.dart';
+import '../../../models/rezervacija_oprema_item.dart';
 
 class ApiService {
   final Dio _dio = ApiClient().dio;
@@ -223,6 +224,8 @@ class ApiService {
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
+    int? prostorijaId,
+    List<RezervacijaOpremaItem>? oprema,
   }) async {
     try {
       final response = await _dio.post<dynamic>(
@@ -231,6 +234,11 @@ class ApiService {
           'datumRezervacije': datumRezervacije.toIso8601String(),
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
+          'prostorijaId': prostorijaId,
+          'oprema': (oprema ?? const [])
+              .where((x) => x.opremaId > 0 && x.kolicina > 0)
+              .map((x) => x.toJson())
+              .toList(),
         },
       );
 

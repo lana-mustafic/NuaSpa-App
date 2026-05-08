@@ -1,3 +1,5 @@
+import 'rezervacija_oprema_item.dart';
+
 class Rezervacija {
   final int id;
   final DateTime datumRezervacije;
@@ -6,6 +8,9 @@ class Rezervacija {
   final bool isOtkazana;
   final String? razlogOtkaza;
   final DateTime? otkazanaAt;
+  final int? prostorijaId;
+  final String? prostorijaNaziv;
+  final List<RezervacijaOpremaItem> oprema;
   final String? korisnikIme;
   final String? uslugaNaziv;
   final String? zaposlenikIme;
@@ -18,12 +23,16 @@ class Rezervacija {
     required this.isOtkazana,
     required this.razlogOtkaza,
     required this.otkazanaAt,
+    required this.prostorijaId,
+    required this.prostorijaNaziv,
+    required this.oprema,
     this.korisnikIme,
     this.uslugaNaziv,
     this.zaposlenikIme,
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
+    final opremaJson = json['oprema'];
     return Rezervacija(
       id: json['id'] as int,
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
@@ -34,6 +43,15 @@ class Rezervacija {
       otkazanaAt: (json['otkazanaAt'] as String?) == null
           ? null
           : DateTime.parse(json['otkazanaAt'] as String),
+      prostorijaId: (json['prostorijaId'] as num?)?.toInt(),
+      prostorijaNaziv: json['prostorijaNaziv'] as String?,
+      oprema: opremaJson is List
+          ? opremaJson
+              .whereType<Map>()
+              .map((e) =>
+                  RezervacijaOpremaItem.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
       korisnikIme: json['korisnikIme'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
       zaposlenikIme: json['zaposlenikIme'] as String?,
