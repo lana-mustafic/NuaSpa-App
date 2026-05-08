@@ -7,6 +7,7 @@ import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/admin/prostorija.dart';
 import '../../models/admin/oprema.dart';
+import '../../models/admin/resource_availability.dart';
 import '../../ui/widgets/page_header.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -625,6 +626,10 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       qty[it.opremaId] = it.kolicina;
     }
 
+    ResourceAvailability? availability;
+    bool loadingAvailability = false;
+    Map<int, int> remainingMap = {};
+
     // Fetch therapists/services lazily (same API used elsewhere)
     final therapists = await _api.getZaposlenici();
     final services = await _api.getUsluge();
@@ -652,6 +657,34 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       slotCtrl.value = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     }
 
+    Future<void> loadAvailability(StateSetter setLocal) async {
+      loadingAvailability = true;
+      setLocal(() {});
+      availability = await _api.getResourceAvailability(
+        slot: slotCtrl.value,
+        excludeRezervacijaId: r.id,
+      );
+      if (!mounted) return;
+      remainingMap = availability == null
+          ? {}
+          : {for (final e in availability!.equipment) e.opremaId: e.remaining};
+      // clamp room selection
+      if (roomCtrl.value != null &&
+          availability != null &&
+          !availability!.freeRooms.any((x) => x.id == roomCtrl.value)) {
+        roomCtrl.value = null;
+      }
+      // clamp equipment qty
+      for (final entry in qty.entries.toList()) {
+        final max = remainingMap[entry.key];
+        if (max == null) continue;
+        if (entry.value > max) qty[entry.key] = max;
+        if (qty[entry.key] == 0) qty.remove(entry.key);
+      }
+      loadingAvailability = false;
+      setLocal(() {});
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -660,6 +693,13 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           width: 720,
           child: StatefulBuilder(
             builder: (ctx, setLocal) {
+              // initial load
+              if (availability == null && !loadingAvailability) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!ctx.mounted) return;
+                  loadAvailability(setLocal);
+                });
+              }
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -672,6 +712,10 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                         onPressed: () async {
                           await pickDate();
                           if (!ctx.mounted) return;
+                          final d = dateCtrl.value;
+                          final t = slotCtrl.value;
+                          slotCtrl.value = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+                          await loadAvailability(setLocal);
                           setLocal(() {});
                         },
                         icon: const Icon(Icons.date_range_outlined),
@@ -683,6 +727,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                         onPressed: () async {
                           await pickTime();
                           if (!ctx.mounted) return;
+                          await loadAvailability(setLocal);
                           setLocal(() {});
                         },
                         icon: const Icon(Icons.schedule_outlined),
@@ -748,20 +793,24 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                       child: DropdownButton<int?>(
                         isExpanded: true,
                         value: roomCtrl.value,
-                        hint: const Text('— bez prostorije —'),
+                        hint: loadingAvailability
+                            ? const Text('Učitavam dostupnost...')
+                            : const Text('— bez prostorije —'),
                         items: [
                           const DropdownMenuItem<int?>(
                             value: null,
                             child: Text('— bez prostorije —'),
                           ),
-                          ..._prostorije.map(
+                          ...(availability?.freeRooms ?? _prostorije).map(
                             (p) => DropdownMenuItem<int?>(
                               value: p.id,
                               child: Text('${p.naziv} (kap: ${p.kapacitet})'),
                             ),
                           ),
                         ],
-                        onChanged: (v) => setLocal(() => roomCtrl.value = v),
+                        onChanged: loadingAvailability
+                            ? null
+                            : (v) => setLocal(() => roomCtrl.value = v),
                       ),
                     ),
                   ),
@@ -769,6 +818,8 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                   _EditEquipmentPicker(
                     oprema: _oprema,
                     qty: qty,
+                    remainingMap: remainingMap,
+                    loadingAvailability: loadingAvailability,
                     onChanged: () => setLocal(() {}),
                   ),
                 ],
@@ -968,11 +1019,15 @@ class _EditEquipmentPicker extends StatelessWidget {
   const _EditEquipmentPicker({
     required this.oprema,
     required this.qty,
+    required this.remainingMap,
+    required this.loadingAvailability,
     required this.onChanged,
   });
 
   final List<Oprema> oprema;
   final Map<int, int> qty;
+  final Map<int, int> remainingMap;
+  final bool loadingAvailability;
   final VoidCallback onChanged;
 
   @override
@@ -985,19 +1040,21 @@ class _EditEquipmentPicker extends StatelessWidget {
           children: [
             Text('Oprema', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 10),
-            if (oprema.isEmpty)
+            if (loadingAvailability)
+              const Text('Učitavam dostupnost opreme...')
+            else if (oprema.isEmpty)
               const Text('Nema opreme.')
             else
               ...oprema.map((e) {
                 final current = qty[e.id] ?? 0;
-                final max = e.kolicina;
+                final max = remainingMap[e.id] ?? e.kolicina;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
                       Expanded(child: Text(e.naziv, overflow: TextOverflow.ellipsis)),
                       const SizedBox(width: 10),
-                      Text('max $max'),
+                      Text('preostalo $max'),
                       const SizedBox(width: 10),
                       IconButton(
                         onPressed: current <= 0

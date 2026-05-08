@@ -6,6 +6,7 @@ import '../../providers/service_provider.dart';
 
 import '../../models/admin/oprema.dart';
 import '../../models/admin/prostorija.dart';
+import '../../models/admin/resource_availability.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/usluga.dart';
 import '../../models/rezervacija_oprema_item.dart';
@@ -46,6 +47,8 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   List<Prostorija> _prostorije = [];
   List<Oprema> _oprema = [];
   final Map<int, int> _opremaQty = {}; // opremaId -> qty
+  ResourceAvailability? _availability;
+  bool _loadingAvailability = false;
 
   Future<_ReservationBootstrap>? _bootstrapFuture;
   bool _bootstrapStarted = false;
@@ -125,6 +128,39 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     setState(() {
       _availableSlots = slots;
       _loadingSlots = false;
+    });
+  }
+
+  Future<void> _loadAvailability() async {
+    final slot = _selectedSlot;
+    final isAdmin = context.read<AuthProvider>().isAdmin;
+    if (!isAdmin || slot == null) return;
+
+    setState(() => _loadingAvailability = true);
+    final avail = await _apiService.getResourceAvailability(slot: slot);
+    if (!mounted) return;
+
+    setState(() {
+      _availability = avail;
+      _loadingAvailability = false;
+
+      if (_selectedProstorijaId != null &&
+          (avail == null ||
+              !avail.freeRooms.any((r) => r.id == _selectedProstorijaId))) {
+        _selectedProstorijaId = null;
+      }
+
+      if (avail != null) {
+        final remainingMap = {
+          for (final e in avail.equipment) e.opremaId: e.remaining
+        };
+        for (final entry in _opremaQty.entries.toList()) {
+          final max = remainingMap[entry.key];
+          if (max == null) continue;
+          if (entry.value > max) _opremaQty[entry.key] = max;
+          if (_opremaQty[entry.key] == 0) _opremaQty.remove(entry.key);
+        }
+      }
     });
   }
 
@@ -271,11 +307,15 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 isExpanded: true,
-                hint: _prostorije.isEmpty
-                    ? const Text('Nema prostorija')
-                    : const Text('Odaberite prostoriju'),
+                hint: _loadingAvailability
+                    ? const Text('Učitavam dostupnost...')
+                    : (_availability != null && _availability!.freeRooms.isEmpty)
+                        ? const Text('Nema slobodnih prostorija')
+                        : (_prostorije.isEmpty
+                            ? const Text('Nema prostorija')
+                            : const Text('Odaberite prostoriju')),
                 value: _selectedProstorijaId,
-                items: _prostorije
+                items: (_availability?.freeRooms ?? _prostorije)
                     .map(
                       (p) => DropdownMenuItem<int>(
                         value: p.id,
@@ -283,9 +323,11 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: _prostorije.isEmpty
+                onChanged: _loadingAvailability
                     ? null
-                    : (v) => setState(() => _selectedProstorijaId = v),
+                    : ((_availability?.freeRooms ?? _prostorije).isEmpty
+                        ? null
+                        : (v) => setState(() => _selectedProstorijaId = v)),
               ),
             ),
           ),
@@ -293,6 +335,8 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           _EquipmentPicker(
             oprema: _oprema,
             qty: _opremaQty,
+            availability: _availability,
+            loadingAvailability: _loadingAvailability,
             onChanged: () => setState(() {}),
           ),
         ],
@@ -408,8 +452,9 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           child: FilterChip(
             label: Text(label),
             selected: selected,
-            onSelected: (_) {
+            onSelected: (_) async {
               setState(() => _selectedSlot = slot);
+              await _loadAvailability();
             },
           ),
         );
@@ -608,15 +653,22 @@ class _EquipmentPicker extends StatelessWidget {
   const _EquipmentPicker({
     required this.oprema,
     required this.qty,
+    required this.availability,
+    required this.loadingAvailability,
     required this.onChanged,
   });
 
   final List<Oprema> oprema;
   final Map<int, int> qty;
+  final ResourceAvailability? availability;
+  final bool loadingAvailability;
   final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final remainingMap = availability == null
+        ? <int, int>{}
+        : {for (final e in availability!.equipment) e.opremaId: e.remaining};
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -628,12 +680,14 @@ class _EquipmentPicker extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 10),
-            if (oprema.isEmpty)
+            if (loadingAvailability)
+              const Text('Učitavam dostupnost opreme...')
+            else if (oprema.isEmpty)
               const Text('Nema opreme.')
             else
               ...oprema.map((e) {
                 final current = qty[e.id] ?? 0;
-                final max = e.kolicina;
+                final max = remainingMap[e.id] ?? e.kolicina;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Row(
@@ -645,7 +699,7 @@ class _EquipmentPicker extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text('max $max'),
+                      Text('preostalo $max'),
                       const SizedBox(width: 10),
                       IconButton(
                         tooltip: 'Smanji',
