@@ -10,6 +10,7 @@ import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
+import '../../models/admin/prostorija.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
@@ -25,6 +26,7 @@ class AdminSuiteScreen extends StatefulWidget {
 
 enum _AdminSuiteTab { overview, therapists, finance, clients, resources, manage }
 enum _TherapistsView { availability, calendar }
+enum _CalendarAxis { therapists, rooms }
 
 class _AdminSuiteState {
   const _AdminSuiteState({
@@ -62,9 +64,11 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
 
   // Calendar (admin)
   Future<List<RezervacijaCalendarItem>>? _calendarFuture;
+  Future<List<Prostorija>>? _roomsFuture;
   bool _includeCancelledInCalendar = false;
   bool _autoRefreshCalendar = true;
   Timer? _calendarTimer;
+  _CalendarAxis _calendarAxis = _CalendarAxis.therapists;
 
   @override
   void initState() {
@@ -73,6 +77,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     _reloadClients();
     _reloadTherapists();
     _reloadCalendar();
+    _reloadRooms();
     _startCalendarTimerIfNeeded();
   }
 
@@ -111,6 +116,12 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   void _reloadTherapists() {
     setState(() {
       _therapistsFuture = _api.getZaposlenici();
+    });
+  }
+
+  void _reloadRooms() {
+    setState(() {
+      _roomsFuture = _api.getProstorije();
     });
   }
 
@@ -492,6 +503,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _freeCountCache.clear();
                   _reloadTherapists();
                   _reloadCalendar();
+                  _reloadRooms();
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Osvježi'),
@@ -513,19 +525,28 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               }
 
               if (_therapistsView == _TherapistsView.calendar) {
-                return _AdminCalendarView(
-                  therapists: list,
-                  days: days,
-                  calendarFuture: _calendarFuture,
-                  includeCancelled: _includeCancelledInCalendar,
-                  autoRefresh: _autoRefreshCalendar,
-                  onToggleCancelled: (v) {
-                    setState(() => _includeCancelledInCalendar = v);
-                    _reloadCalendar();
-                  },
-                  onToggleAutoRefresh: (v) {
-                    setState(() => _autoRefreshCalendar = v);
-                    _startCalendarTimerIfNeeded();
+                return FutureBuilder<List<Prostorija>>(
+                  future: _roomsFuture,
+                  builder: (context, roomsSnap) {
+                    final rooms = roomsSnap.data ?? const <Prostorija>[];
+                    return _AdminCalendarView(
+                      axis: _calendarAxis,
+                      onAxisChanged: (a) => setState(() => _calendarAxis = a),
+                      therapists: list,
+                      rooms: rooms,
+                      days: days,
+                      calendarFuture: _calendarFuture,
+                      includeCancelled: _includeCancelledInCalendar,
+                      autoRefresh: _autoRefreshCalendar,
+                      onToggleCancelled: (v) {
+                        setState(() => _includeCancelledInCalendar = v);
+                        _reloadCalendar();
+                      },
+                      onToggleAutoRefresh: (v) {
+                        setState(() => _autoRefreshCalendar = v);
+                        _startCalendarTimerIfNeeded();
+                      },
+                    );
                   },
                 );
               }
@@ -865,7 +886,10 @@ class _MiniWeekGrid extends StatelessWidget {
 
 class _AdminCalendarView extends StatelessWidget {
   const _AdminCalendarView({
+    required this.axis,
+    required this.onAxisChanged,
     required this.therapists,
+    required this.rooms,
     required this.days,
     required this.calendarFuture,
     required this.includeCancelled,
@@ -874,7 +898,10 @@ class _AdminCalendarView extends StatelessWidget {
     required this.onToggleAutoRefresh,
   });
 
+  final _CalendarAxis axis;
+  final ValueChanged<_CalendarAxis> onAxisChanged;
   final List<Zaposlenik> therapists;
+  final List<Prostorija> rooms;
   final List<DateTime> days;
   final Future<List<RezervacijaCalendarItem>>? calendarFuture;
   final bool includeCancelled;
@@ -889,10 +916,32 @@ class _AdminCalendarView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final roomRows = <({int? id, String name})>[
+      (id: null, name: 'Bez prostorije'),
+      ...rooms.map((r) => (id: r.id, name: r.naziv)),
+    ];
+
     return Column(
       children: [
         Row(
           children: [
+            SegmentedButton<_CalendarAxis>(
+              segments: const [
+                ButtonSegment(
+                  value: _CalendarAxis.therapists,
+                  label: Text('Terapeuti'),
+                  icon: Icon(Icons.groups_2_outlined),
+                ),
+                ButtonSegment(
+                  value: _CalendarAxis.rooms,
+                  label: Text('Prostorije'),
+                  icon: Icon(Icons.meeting_room_outlined),
+                ),
+              ],
+              selected: {axis},
+              onSelectionChanged: (s) => onAxisChanged(s.first),
+            ),
+            const SizedBox(width: 10),
             FilterChip(
               label: const Text('Uključi otkazane'),
               selected: includeCancelled,
@@ -916,8 +965,10 @@ class _AdminCalendarView extends StatelessWidget {
               }
               final items = snap.data ?? const <RezervacijaCalendarItem>[];
               final byTherapist = <int, List<RezervacijaCalendarItem>>{};
+              final byRoomKey = <int?, List<RezervacijaCalendarItem>>{};
               for (final it in items) {
                 byTherapist.putIfAbsent(it.zaposlenikId, () => []).add(it);
+                byRoomKey.putIfAbsent(it.prostorijaId, () => []).add(it);
               }
 
               return Card(
@@ -926,25 +977,39 @@ class _AdminCalendarView extends StatelessWidget {
                   child: DataTable(
                     columnSpacing: 18,
                     columns: [
-                      const DataColumn(label: Text('Terapeut')),
+                      DataColumn(
+                        label: Text(axis == _CalendarAxis.rooms ? 'Prostorija' : 'Terapeut'),
+                      ),
                       for (final d in days)
                         DataColumn(label: Text(_dayHeader(d), textAlign: TextAlign.center)),
                     ],
                     rows: [
-                      for (final t in therapists)
-                        DataRow(
-                          cells: [
-                            DataCell(
-                              Text('${t.ime} ${t.prezime}'),
-                            ),
-                            for (final d in days)
-                              _buildCalendarCell(
-                                context,
-                                day: d,
-                                items: byTherapist[t.id] ?? const [],
-                              ),
-                          ],
-                        ),
+                      if (axis == _CalendarAxis.therapists)
+                        for (final t in therapists)
+                          DataRow(
+                            cells: [
+                              DataCell(Text('${t.ime} ${t.prezime}')),
+                              for (final d in days)
+                                _buildCalendarCell(
+                                  context,
+                                  day: d,
+                                  items: byTherapist[t.id] ?? const [],
+                                ),
+                            ],
+                          )
+                      else
+                        for (final r in roomRows)
+                          DataRow(
+                            cells: [
+                              DataCell(Text(r.name)),
+                              for (final d in days)
+                                _buildCalendarCell(
+                                  context,
+                                  day: d,
+                                  items: byRoomKey[r.id] ?? const [],
+                                ),
+                            ],
+                          ),
                     ],
                   ),
                 ),
