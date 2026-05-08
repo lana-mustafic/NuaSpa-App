@@ -251,6 +251,38 @@ class ApiService {
     }
   }
 
+  Future<Rezervacija?> editRezervacija({
+    required int rezervacijaId,
+    required DateTime datumRezervacije,
+    required int uslugaId,
+    required int zaposlenikId,
+    int? prostorijaId,
+    List<RezervacijaOpremaItem>? oprema,
+  }) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Rezervacija/$rezervacijaId',
+        data: {
+          'datumRezervacije': datumRezervacije.toIso8601String(),
+          'uslugaId': uslugaId,
+          'zaposlenikId': zaposlenikId,
+          'prostorijaId': prostorijaId,
+          'oprema': (oprema ?? const [])
+              .where((x) => x.opremaId > 0 && x.kolicina > 0)
+              .map((x) => x.toJson())
+              .toList(),
+        },
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Rezervacija.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.editRezervacija: $e');
+      return null;
+    }
+  }
+
   Future<List<Recenzija>> getRecenzijeByUsluga(int uslugaId) async {
     try {
       final response = await _dio.get<dynamic>(

@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/rezervacija.dart';
+import '../../models/rezervacija_oprema_item.dart';
 import '../../models/usluga.dart';
+import '../../models/zaposlenik.dart';
+import '../../models/admin/prostorija.dart';
+import '../../models/admin/oprema.dart';
 import '../../ui/widgets/page_header.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -512,10 +516,13 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   Future<List<Rezervacija>>? _future;
   final ScrollController _scrollController = ScrollController();
   bool _includeOtkazane = false;
+  List<Prostorija> _prostorije = [];
+  List<Oprema> _oprema = [];
 
   @override
   void initState() {
     super.initState();
+    _loadResources();
     _reload();
   }
 
@@ -528,6 +535,16 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   void _reload() {
     setState(() {
       _future = _api.getRezervacijeFiltered(includeOtkazane: _includeOtkazane);
+    });
+  }
+
+  Future<void> _loadResources() async {
+    final rooms = await _api.getProstorije();
+    final eq = await _api.getOprema();
+    if (!mounted) return;
+    setState(() {
+      _prostorije = rooms;
+      _oprema = eq;
     });
   }
 
@@ -587,6 +604,229 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       ),
     );
     _reload();
+  }
+
+  Future<void> _edit(Rezervacija r) async {
+    final selectedDate = DateTime(
+      r.datumRezervacije.year,
+      r.datumRezervacije.month,
+      r.datumRezervacije.day,
+    );
+    final dateCtrl = ValueNotifier<DateTime>(selectedDate);
+
+    final slotCtrl = ValueNotifier<DateTime>(r.datumRezervacije);
+    final therapistCtrl = ValueNotifier<int?>(null);
+    final serviceCtrl = ValueNotifier<int?>(null);
+    final roomCtrl = ValueNotifier<int?>(r.prostorijaId);
+
+    // equipment qty
+    final qty = <int, int>{};
+    for (final it in r.oprema) {
+      qty[it.opremaId] = it.kolicina;
+    }
+
+    // Fetch therapists/services lazily (same API used elsewhere)
+    final therapists = await _api.getZaposlenici();
+    final services = await _api.getUsluge();
+    if (!mounted) return;
+
+    therapistCtrl.value = _findTherapistIdFromName(therapists, r.zaposlenikIme);
+    serviceCtrl.value = _findServiceIdFromName(services, r.uslugaNaziv);
+
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: dateCtrl.value,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      );
+      if (picked == null || !context.mounted) return;
+      dateCtrl.value = DateTime(picked.year, picked.month, picked.day);
+    }
+
+    Future<void> pickTime() async {
+      final base = TimeOfDay.fromDateTime(slotCtrl.value);
+      final t = await showTimePicker(context: context, initialTime: base);
+      if (t == null || !context.mounted) return;
+      final d = dateCtrl.value;
+      slotCtrl.value = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Uredi rezervaciju'),
+        content: SizedBox(
+          width: 720,
+          child: StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await pickDate();
+                          if (!ctx.mounted) return;
+                          setLocal(() {});
+                        },
+                        icon: const Icon(Icons.date_range_outlined),
+                        label: Text(
+                          '${dateCtrl.value.year}-${dateCtrl.value.month.toString().padLeft(2, '0')}-${dateCtrl.value.day.toString().padLeft(2, '0')}',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await pickTime();
+                          if (!ctx.mounted) return;
+                          setLocal(() {});
+                        },
+                        icon: const Icon(Icons.schedule_outlined),
+                        label: Text(
+                          '${slotCtrl.value.hour.toString().padLeft(2, '0')}:${slotCtrl.value.minute.toString().padLeft(2, '0')}',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Usluga',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: serviceCtrl.value,
+                        hint: const Text('Odaberite uslugu'),
+                        items: services
+                            .map(
+                              (s) => DropdownMenuItem(
+                                value: s.id,
+                                child: Text(s.naziv),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => setLocal(() => serviceCtrl.value = v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Terapeut',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: therapistCtrl.value,
+                        hint: const Text('Odaberite terapeuta'),
+                        items: therapists
+                            .map(
+                              (t) => DropdownMenuItem(
+                                value: t.id,
+                                child: Text('${t.ime} ${t.prezime}'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => setLocal(() => therapistCtrl.value = v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Prostorija',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int?>(
+                        isExpanded: true,
+                        value: roomCtrl.value,
+                        hint: const Text('— bez prostorije —'),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('— bez prostorije —'),
+                          ),
+                          ..._prostorije.map(
+                            (p) => DropdownMenuItem<int?>(
+                              value: p.id,
+                              child: Text('${p.naziv} (kap: ${p.kapacitet})'),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setLocal(() => roomCtrl.value = v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditEquipmentPicker(
+                    oprema: _oprema,
+                    qty: qty,
+                    onChanged: () => setLocal(() {}),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Otkaži')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sačuvaj')),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+    if (therapistCtrl.value == null || serviceCtrl.value == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Terapeut i usluga su obavezni.')),
+      );
+      return;
+    }
+
+    final updated = await _api.editRezervacija(
+      rezervacijaId: r.id,
+      datumRezervacije: slotCtrl.value,
+      uslugaId: serviceCtrl.value!,
+      zaposlenikId: therapistCtrl.value!,
+      prostorijaId: roomCtrl.value,
+      oprema: qty.entries
+          .where((e) => e.value > 0)
+          .map((e) => RezervacijaOpremaItem(opremaId: e.key, kolicina: e.value))
+          .toList(),
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(updated != null ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+    );
+    _reload();
+  }
+
+  int? _findTherapistIdFromName(List<Zaposlenik> list, String? ime) {
+    if (ime == null) return null;
+    final norm = ime.trim().toLowerCase();
+    for (final t in list) {
+      final label = '${t.ime} ${t.prezime}'.trim().toLowerCase();
+      if (label == norm) return t.id;
+    }
+    return null;
+  }
+
+  int? _findServiceIdFromName(List<Usluga> list, String? naziv) {
+    if (naziv == null) return null;
+    final norm = naziv.trim().toLowerCase();
+    for (final s in list) {
+      if (s.naziv.trim().toLowerCase() == norm) return s.id;
+    }
+    return null;
   }
 
   @override
@@ -655,6 +895,14 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                           children: [
                             if (!r.isOtkazana)
                               Tooltip(
+                                message: 'Uredi',
+                                child: IconButton(
+                                  onPressed: r.isPlacena ? null : () => _edit(r),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                              ),
+                            if (!r.isOtkazana)
+                              Tooltip(
                                 message: 'Otkazivanje',
                                 child: IconButton(
                                   onPressed: r.isPlacena ? null : () => _cancel(r),
@@ -712,6 +960,71 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _EditEquipmentPicker extends StatelessWidget {
+  const _EditEquipmentPicker({
+    required this.oprema,
+    required this.qty,
+    required this.onChanged,
+  });
+
+  final List<Oprema> oprema;
+  final Map<int, int> qty;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Oprema', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 10),
+            if (oprema.isEmpty)
+              const Text('Nema opreme.')
+            else
+              ...oprema.map((e) {
+                final current = qty[e.id] ?? 0;
+                final max = e.kolicina;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(e.naziv, overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 10),
+                      Text('max $max'),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        onPressed: current <= 0
+                            ? null
+                            : () {
+                                qty[e.id] = current - 1;
+                                onChanged();
+                              },
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text('$current'),
+                      IconButton(
+                        onPressed: current >= max
+                            ? null
+                            : () {
+                                qty[e.id] = current + 1;
+                                onChanged();
+                              },
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
     );
   }
 }
