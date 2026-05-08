@@ -7,6 +7,7 @@ import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
+import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
 
@@ -47,11 +48,17 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   Future<List<AdminClientRow>>? _clientsFuture;
   AdminClientRow? _selectedClient;
 
+  // Therapists module
+  Future<List<Zaposlenik>>? _therapistsFuture;
+  DateTime _weekStart = _startOfWeek(DateTime.now());
+  final Map<String, Future<int>> _freeCountCache = {};
+
   @override
   void initState() {
     super.initState();
     _reloadOverview();
     _reloadClients();
+    _reloadTherapists();
   }
 
   @override
@@ -83,6 +90,40 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     setState(() {
       _clientsFuture = _api.getAdminClients(q: _clientSearch.text, take: 400);
     });
+  }
+
+  void _reloadTherapists() {
+    setState(() {
+      _therapistsFuture = _api.getZaposlenici();
+    });
+  }
+
+  static DateTime _startOfWeek(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    // Monday-based week
+    final delta = (day.weekday - DateTime.monday) % 7;
+    return day.subtract(Duration(days: delta));
+  }
+
+  List<DateTime> _weekDays() =>
+      List.generate(7, (i) => _weekStart.add(Duration(days: i)));
+
+  String _freeKey(int therapistId, DateTime day) =>
+      '$therapistId-${day.year}-${day.month}-${day.day}';
+
+  Future<int> _getFreeSlotsCount(int therapistId, DateTime day) {
+    final key = _freeKey(therapistId, day);
+    final cached = _freeCountCache[key];
+    if (cached != null) return cached;
+    final fut = () async {
+      final slots = await _api.getDostupniTermini(
+        zaposlenikId: therapistId,
+        datum: day,
+      );
+      return slots.length;
+    }();
+    _freeCountCache[key] = fut;
+    return fut;
   }
 
   Future<void> _pickRange() async {
@@ -140,7 +181,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                 index: _tab.index,
                 children: [
                   _buildOverview(context),
-                  _buildTherapistsPlaceholder(context),
+                  _buildTherapists(context),
                   _buildFinance(context),
                   _buildClients(context),
                   const AdminDashboardScreen(),
@@ -347,25 +388,370 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     );
   }
 
-  Widget _buildTherapistsPlaceholder(BuildContext context) {
+  Widget _buildTherapists(BuildContext context) {
+    final days = _weekDays();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         PageHeader(
-          title: 'Terapeuti',
+          title: 'Terapeuti i raspored',
           subtitle:
-              'Sljedeće: kartice terapeuta + mini-kalendar dostupnosti po sedmici.',
-        ),
-        SizedBox(height: 14),
-        Expanded(
-          child: Center(
-            child: Text(
-              'Terapeuti i raspored su već dostupni pod “Raspored” (za terapeute).\n'
-              'Za admin overview kartice + mini-kalendar, dodajemo u sljedećem iteraciji.',
-              textAlign: TextAlign.center,
-            ),
+              'Kartice terapeuta + sedmična dostupnost (broj slobodnih termina).',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _weekStart = _weekStart.subtract(const Duration(days: 7));
+                }),
+                icon: const Icon(Icons.chevron_left_rounded),
+                label: const Text('Prethodna'),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _weekStart = _weekStart.add(const Duration(days: 7));
+                }),
+                icon: const Icon(Icons.chevron_right_rounded),
+                label: const Text('Sljedeća'),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: () {
+                  _freeCountCache.clear();
+                  _reloadTherapists();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Osvježi'),
+              ),
+            ],
           ),
         ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: FutureBuilder<List<Zaposlenik>>(
+            future: _therapistsFuture,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final list = snap.data ?? [];
+              if (list.isEmpty) {
+                return const Center(child: Text('Nema terapeuta.'));
+              }
+
+              return LayoutBuilder(
+                builder: (context, c) {
+                  final w = c.maxWidth;
+                  final crossAxisCount = w >= 1400
+                      ? 3
+                      : (w >= 980 ? 2 : 1);
+                  return GridView.builder(
+                    primary: false,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.9,
+                    ),
+                    itemCount: list.length,
+                    itemBuilder: (context, i) {
+                      return _TherapistCard(
+                        therapist: list[i],
+                        days: days,
+                        getFreeSlotsCount: _getFreeSlotsCount,
+                        onOpenDay: (t, d) async {
+                          final slots = await _api.getDostupniTermini(
+                            zaposlenikId: t.id,
+                            datum: d,
+                          );
+                          if (!context.mounted) return;
+                          showDialog<void>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(
+                                '${t.ime} ${t.prezime} · '
+                                '${d.toLocal().toString().split(' ').first}',
+                              ),
+                              content: SizedBox(
+                                width: 520,
+                                child: slots.isEmpty
+                                    ? const Text('Nema slobodnih termina.')
+                                    : Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: slots
+                                            .map((s) => Chip(
+                                                  label: Text(
+                                                    s.toLocal()
+                                                        .toString()
+                                                        .split(' ')
+                                                        .last
+                                                        .substring(0, 5),
+                                                  ),
+                                                ))
+                                            .toList(),
+                                      ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Zatvori'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TherapistCard extends StatelessWidget {
+  const _TherapistCard({
+    required this.therapist,
+    required this.days,
+    required this.getFreeSlotsCount,
+    required this.onOpenDay,
+  });
+
+  final Zaposlenik therapist;
+  final List<DateTime> days;
+  final Future<int> Function(int therapistId, DateTime day) getFreeSlotsCount;
+  final Future<void> Function(Zaposlenik therapist, DateTime day) onOpenDay;
+
+  List<String> _tags(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return const [];
+    return t
+        .split(RegExp(r'[,;/]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(4)
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = '${therapist.ime} ${therapist.prezime}'.trim();
+    final tags = _tags(therapist.specijalizacija);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: scheme.primary.withValues(alpha: 0.12),
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: scheme.primary.withValues(alpha: 0.9),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.10),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_border_rounded, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              '—',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final t in tags)
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: scheme.secondary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: scheme.secondary.withValues(alpha: 0.22),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              t,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (tags.isEmpty)
+                        Text(
+                          'Specijalizacija nije postavljena.',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.65),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_month_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Dostupnost (sedmica)',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _MiniWeekGrid(
+                    therapistId: therapist.id,
+                    days: days,
+                    getFreeSlotsCount: getFreeSlotsCount,
+                    onOpenDay: (d) => onOpenDay(therapist, d),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniWeekGrid extends StatelessWidget {
+  const _MiniWeekGrid({
+    required this.therapistId,
+    required this.days,
+    required this.getFreeSlotsCount,
+    required this.onOpenDay,
+  });
+
+  final int therapistId;
+  final List<DateTime> days;
+  final Future<int> Function(int therapistId, DateTime day) getFreeSlotsCount;
+  final Future<void> Function(DateTime day) onOpenDay;
+
+  String _dayLabel(DateTime d) {
+    const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+    return names[(d.weekday - 1).clamp(0, 6)];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final d in days)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InkWell(
+                onTap: () => onOpenDay(d),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _dayLabel(d),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.70),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      FutureBuilder<int>(
+                        future: getFreeSlotsCount(therapistId, d),
+                        builder: (context, snap) {
+                          final v = snap.data;
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            );
+                          }
+                          return Text(
+                            v == null ? '—' : '$v',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'slots',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
