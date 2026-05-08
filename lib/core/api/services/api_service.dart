@@ -112,6 +112,7 @@ class ApiService {
   Future<List<Rezervacija>> getRezervacijeFiltered({
     DateTime? datum,
     bool? isPotvrdjena,
+    bool includeOtkazane = false,
   }) async {
     try {
       final query = <String, dynamic>{};
@@ -122,6 +123,9 @@ class ApiService {
       }
       if (isPotvrdjena != null) {
         query['IsPotvrdjena'] = isPotvrdjena;
+      }
+      if (includeOtkazane) {
+        query['IncludeOtkazane'] = true;
       }
 
       final response = await _dio.get<dynamic>(
@@ -136,6 +140,25 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
       return [];
+    }
+  }
+
+  Future<bool> cancelRezervacija(
+    int id, {
+    String? razlogOtkaza,
+  }) async {
+    try {
+      await _dio.patch<void>(
+        'Rezervacija/$id/cancel',
+        data: {
+          if (razlogOtkaza != null && razlogOtkaza.trim().isNotEmpty)
+            'razlogOtkaza': razlogOtkaza.trim(),
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.cancelRezervacija: $e');
+      return false;
     }
   }
 
