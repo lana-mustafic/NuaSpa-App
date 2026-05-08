@@ -349,7 +349,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         return Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'Nema slobodnih termina za ovaj datum.',
+            'Nema slobodnih termina za ovaj datum (možda je spa zatvoren ili je van radnog vremena).',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
           ),
         );
