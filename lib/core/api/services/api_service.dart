@@ -19,6 +19,7 @@ import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 import '../../../models/admin/prostorija.dart';
 import '../../../models/admin/oprema.dart';
+import '../../../models/admin/resource_availability.dart';
 import '../api_client.dart';
 import '../../../models/rezervacija_oprema_item.dart';
 
@@ -821,6 +822,27 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.deleteOprema: $e');
       return false;
+    }
+  }
+
+  Future<ResourceAvailability?> getResourceAvailability({
+    required DateTime slot,
+    int? excludeRezervacijaId,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Resursi/availability',
+        queryParameters: {
+          'slot': slot.toIso8601String(),
+          'excludeRezervacijaId': excludeRezervacijaId,
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return ResourceAvailability.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getResourceAvailability: $e');
+      return null;
     }
   }
 }
