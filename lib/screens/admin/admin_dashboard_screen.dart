@@ -511,6 +511,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   final ApiService _api = ApiService();
   Future<List<Rezervacija>>? _future;
   final ScrollController _scrollController = ScrollController();
+  bool _includeOtkazane = false;
 
   @override
   void initState() {
@@ -526,8 +527,66 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
 
   void _reload() {
     setState(() {
-      _future = _api.getRezervacije();
+      _future = _api.getRezervacijeFiltered(includeOtkazane: _includeOtkazane);
     });
+  }
+
+  Future<void> _cancel(Rezervacija r) async {
+    final reasonCtrl = TextEditingController(text: r.razlogOtkaza ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Otkazivanje rezervacije'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(r.uslugaNaziv ?? 'Usluga'),
+            const SizedBox(height: 6),
+            Text(
+              r.datumRezervacije.toLocal().toString().split('.').first,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: reasonCtrl,
+              maxLength: 400,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Razlog otkaza (opcionalno)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nazad'),
+          ),
+          FilledButton.icon(
+            onPressed: r.isPlacena
+                ? null
+                : () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Otkaži'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final success = await _api.cancelRezervacija(
+      r.id,
+      razlogOtkaza: reasonCtrl.text,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? 'Rezervacija otkazana.' : 'Neuspjelo otkazivanje.'),
+      ),
+    );
+    _reload();
   }
 
   @override
@@ -541,45 +600,115 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
         final list = snap.data ?? [];
         return RefreshIndicator(
           onRefresh: () async => _reload(),
-          child: Scrollbar(
-            controller: _scrollController,
-            child: ListView.builder(
-              controller: _scrollController,
-              primary: false,
-              padding: const EdgeInsets.only(bottom: 88),
-              itemCount: list.length,
-              itemBuilder: (context, i) {
-                final r = list[i];
-                return SwitchListTile(
-                  secondary: Icon(
-                    r.isPotvrdjena ? Icons.check_circle : Icons.schedule,
-                    color: r.isPotvrdjena ? Colors.green : Colors.orange,
-                  ),
-                  title: Text(r.uslugaNaziv ?? 'Usluga'),
-                  subtitle: Text(
-                    '${r.datumRezervacije.toLocal().toString().split(".").first} · '
-                    '${r.korisnikIme ?? ''} · ${r.zaposlenikIme ?? ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.70),
-                    ),
-                  ),
-                  value: r.isPotvrdjena,
-                  onChanged: (v) async {
-                    final ok = await _api.updateRezervacijaPotvrdjena(r.id, v);
-                    if (!context.mounted) return;
-                    if (!ok) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Nije moguće ažurirati rezervaciju.'),
+          child: Column(
+            children: [
+              SwitchListTile(
+                title: const Text('Prikaži otkazane'),
+                value: _includeOtkazane,
+                onChanged: (v) {
+                  setState(() => _includeOtkazane = v);
+                  _reload();
+                },
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: Scrollbar(
+                  controller: _scrollController,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    primary: false,
+                    padding: const EdgeInsets.only(bottom: 88),
+                    itemCount: list.length,
+                    itemBuilder: (context, i) {
+                      final r = list[i];
+                      final statusIcon = r.isOtkazana
+                          ? Icons.cancel_outlined
+                          : (r.isPotvrdjena
+                              ? Icons.check_circle
+                              : Icons.schedule);
+                      final statusColor = r.isOtkazana
+                          ? Colors.redAccent
+                          : (r.isPotvrdjena ? Colors.green : Colors.orange);
+
+                      return ListTile(
+                        leading: Icon(statusIcon, color: statusColor),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(r.uslugaNaziv ?? 'Usluga')),
+                            if (r.isOtkazana)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 10),
+                                child: Chip(label: Text('Otkazana')),
+                              ),
+                          ],
                         ),
+                        subtitle: Text(
+                          '${r.datumRezervacije.toLocal().toString().split(".").first} · '
+                          '${r.korisnikIme ?? ''} · ${r.zaposlenikIme ?? ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.70),
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!r.isOtkazana)
+                              Tooltip(
+                                message: 'Otkazivanje',
+                                child: IconButton(
+                                  onPressed: r.isPlacena ? null : () => _cancel(r),
+                                  icon: const Icon(Icons.cancel_outlined),
+                                ),
+                              ),
+                            Tooltip(
+                              message: 'Potvrdi/odbij',
+                              child: Switch(
+                                value: r.isPotvrdjena,
+                                onChanged: (r.isOtkazana)
+                                    ? null
+                                    : (v) async {
+                                        final ok = await _api
+                                            .updateRezervacijaPotvrdjena(r.id, v);
+                                        if (!context.mounted) return;
+                                        if (!ok) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Nije moguće ažurirati rezervaciju.'),
+                                            ),
+                                          );
+                                        }
+                                        _reload();
+                                      },
+                              ),
+                            ),
+                          ],
+                        ),
+                        onTap: () async {
+                          if (!r.isOtkazana) return;
+                          final reason = r.razlogOtkaza?.trim();
+                          if (reason == null || reason.isEmpty) return;
+                          if (!context.mounted) return;
+                          showDialog<void>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Razlog otkaza'),
+                              content: Text(reason),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Zatvori'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       );
-                    }
-                    _reload();
-                  },
-                );
-              },
-            ),
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
