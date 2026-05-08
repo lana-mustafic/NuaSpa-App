@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +9,7 @@ import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
+import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
@@ -19,6 +22,7 @@ class AdminSuiteScreen extends StatefulWidget {
 }
 
 enum _AdminSuiteTab { overview, therapists, finance, clients, manage }
+enum _TherapistsView { availability, calendar }
 
 class _AdminSuiteState {
   const _AdminSuiteState({
@@ -49,9 +53,16 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   AdminClientRow? _selectedClient;
 
   // Therapists module
+  _TherapistsView _therapistsView = _TherapistsView.availability;
   Future<List<Zaposlenik>>? _therapistsFuture;
   DateTime _weekStart = _startOfWeek(DateTime.now());
   final Map<String, Future<int>> _freeCountCache = {};
+
+  // Calendar (admin)
+  Future<List<RezervacijaCalendarItem>>? _calendarFuture;
+  bool _includeCancelledInCalendar = false;
+  bool _autoRefreshCalendar = true;
+  Timer? _calendarTimer;
 
   @override
   void initState() {
@@ -59,10 +70,13 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     _reloadOverview();
     _reloadClients();
     _reloadTherapists();
+    _reloadCalendar();
+    _startCalendarTimerIfNeeded();
   }
 
   @override
   void dispose() {
+    _calendarTimer?.cancel();
     _clientSearch.dispose();
     super.dispose();
   }
@@ -95,6 +109,30 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   void _reloadTherapists() {
     setState(() {
       _therapistsFuture = _api.getZaposlenici();
+    });
+  }
+
+  void _reloadCalendar() {
+    final from = _weekStart;
+    final to = _weekStart.add(const Duration(days: 6));
+    setState(() {
+      _calendarFuture = _api.getRezervacijeCalendar(
+        from: from,
+        to: to,
+        includeOtkazane: _includeCancelledInCalendar,
+      );
+    });
+  }
+
+  void _startCalendarTimerIfNeeded() {
+    _calendarTimer?.cancel();
+    if (!_autoRefreshCalendar) return;
+    // “Real-time” MVP: refresh every 20 seconds while screen is open.
+    _calendarTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      if (_tab != _AdminSuiteTab.therapists) return;
+      if (_therapistsView != _TherapistsView.calendar) return;
+      _reloadCalendar();
     });
   }
 
@@ -395,14 +433,39 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
       children: [
         PageHeader(
           title: 'Terapeuti i raspored',
-          subtitle:
-              'Kartice terapeuta + sedmična dostupnost (broj slobodnih termina).',
+          subtitle: _therapistsView == _TherapistsView.availability
+              ? 'Kartice terapeuta + sedmična dostupnost (slobodni slotovi).'
+              : 'Kalendar zauzetosti (rezervisani termini) u realnom vremenu.',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              SegmentedButton<_TherapistsView>(
+                segments: const [
+                  ButtonSegment(
+                    value: _TherapistsView.availability,
+                    label: Text('Dostupnost'),
+                    icon: Icon(Icons.grid_view_rounded),
+                  ),
+                  ButtonSegment(
+                    value: _TherapistsView.calendar,
+                    label: Text('Kalendar'),
+                    icon: Icon(Icons.calendar_month_outlined),
+                  ),
+                ],
+                selected: {_therapistsView},
+                onSelectionChanged: (s) {
+                  setState(() => _therapistsView = s.first);
+                  if (_therapistsView == _TherapistsView.calendar) {
+                    _reloadCalendar();
+                  }
+                  _startCalendarTimerIfNeeded();
+                },
+              ),
+              const SizedBox(width: 10),
               OutlinedButton.icon(
                 onPressed: () => setState(() {
                   _weekStart = _weekStart.subtract(const Duration(days: 7));
+                  _reloadCalendar();
                 }),
                 icon: const Icon(Icons.chevron_left_rounded),
                 label: const Text('Prethodna'),
@@ -411,6 +474,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               OutlinedButton.icon(
                 onPressed: () => setState(() {
                   _weekStart = _weekStart.add(const Duration(days: 7));
+                  _reloadCalendar();
                 }),
                 icon: const Icon(Icons.chevron_right_rounded),
                 label: const Text('Sljedeća'),
@@ -420,6 +484,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                 onPressed: () {
                   _freeCountCache.clear();
                   _reloadTherapists();
+                  _reloadCalendar();
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Osvježi'),
@@ -438,6 +503,24 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               final list = snap.data ?? [];
               if (list.isEmpty) {
                 return const Center(child: Text('Nema terapeuta.'));
+              }
+
+              if (_therapistsView == _TherapistsView.calendar) {
+                return _AdminCalendarView(
+                  therapists: list,
+                  days: days,
+                  calendarFuture: _calendarFuture,
+                  includeCancelled: _includeCancelledInCalendar,
+                  autoRefresh: _autoRefreshCalendar,
+                  onToggleCancelled: (v) {
+                    setState(() => _includeCancelledInCalendar = v);
+                    _reloadCalendar();
+                  },
+                  onToggleAutoRefresh: (v) {
+                    setState(() => _autoRefreshCalendar = v);
+                    _startCalendarTimerIfNeeded();
+                  },
+                );
               }
 
               return LayoutBuilder(
@@ -753,6 +836,190 @@ class _MiniWeekGrid extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _AdminCalendarView extends StatelessWidget {
+  const _AdminCalendarView({
+    required this.therapists,
+    required this.days,
+    required this.calendarFuture,
+    required this.includeCancelled,
+    required this.autoRefresh,
+    required this.onToggleCancelled,
+    required this.onToggleAutoRefresh,
+  });
+
+  final List<Zaposlenik> therapists;
+  final List<DateTime> days;
+  final Future<List<RezervacijaCalendarItem>>? calendarFuture;
+  final bool includeCancelled;
+  final bool autoRefresh;
+  final ValueChanged<bool> onToggleCancelled;
+  final ValueChanged<bool> onToggleAutoRefresh;
+
+  String _dayHeader(DateTime d) {
+    const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+    return '${names[(d.weekday - 1).clamp(0, 6)]}\n${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            FilterChip(
+              label: const Text('Uključi otkazane'),
+              selected: includeCancelled,
+              onSelected: onToggleCancelled,
+            ),
+            const SizedBox(width: 10),
+            FilterChip(
+              label: const Text('Auto refresh (20s)'),
+              selected: autoRefresh,
+              onSelected: onToggleAutoRefresh,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: FutureBuilder<List<RezervacijaCalendarItem>>(
+            future: calendarFuture,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final items = snap.data ?? const <RezervacijaCalendarItem>[];
+              final byTherapist = <int, List<RezervacijaCalendarItem>>{};
+              for (final it in items) {
+                byTherapist.putIfAbsent(it.zaposlenikId, () => []).add(it);
+              }
+
+              return Card(
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: DataTable(
+                    columnSpacing: 18,
+                    columns: [
+                      const DataColumn(label: Text('Terapeut')),
+                      for (final d in days)
+                        DataColumn(label: Text(_dayHeader(d), textAlign: TextAlign.center)),
+                    ],
+                    rows: [
+                      for (final t in therapists)
+                        DataRow(
+                          cells: [
+                            DataCell(
+                              Text('${t.ime} ${t.prezime}'),
+                            ),
+                            for (final d in days)
+                              _buildCalendarCell(
+                                context,
+                                day: d,
+                                items: byTherapist[t.id] ?? const [],
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  DataCell _buildCalendarCell(
+    BuildContext context, {
+    required DateTime day,
+    required List<RezervacijaCalendarItem> items,
+  }) {
+    final list = items
+        .where((e) =>
+            e.datumRezervacije.year == day.year &&
+            e.datumRezervacije.month == day.month &&
+            e.datumRezervacije.day == day.day)
+        .toList()
+      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+
+    final count = list.length;
+
+    Color color;
+    if (count == 0) {
+      color = Colors.white.withValues(alpha: 0.04);
+    } else if (count <= 2) {
+      color = Colors.green.withValues(alpha: 0.12);
+    } else if (count <= 4) {
+      color = Colors.orange.withValues(alpha: 0.14);
+    } else {
+      color = Colors.redAccent.withValues(alpha: 0.14);
+    }
+
+    return DataCell(
+      InkWell(
+        onTap: count == 0
+            ? null
+            : () {
+                showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text(
+                      '${day.toLocal().toString().split(' ').first} · $count termina',
+                    ),
+                    content: SizedBox(
+                      width: 680,
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: list.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final r = list[i];
+                          final time = r.datumRezervacije
+                              .toLocal()
+                              .toString()
+                              .split(' ')
+                              .last
+                              .substring(0, 5);
+                          final status = r.isOtkazana
+                              ? 'Otkazana'
+                              : (r.isPotvrdjena ? 'Potvrđena' : 'Na čekanju');
+                          return ListTile(
+                            dense: true,
+                            title: Text('$time · ${r.uslugaNaziv ?? 'Usluga'}'),
+                            subtitle: Text(r.korisnikIme ?? ''),
+                            trailing: Chip(label: Text(status)),
+                          );
+                        },
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Zatvori'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Text(
+            count == 0 ? '—' : '$count',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
     );
   }
 }
