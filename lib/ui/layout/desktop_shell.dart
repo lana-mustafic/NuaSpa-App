@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
-import '../../screens/admin/admin_dashboard_screen.dart';
+import '../../screens/admin/admin_suite_screen.dart';
 import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
@@ -82,7 +82,7 @@ class _DesktopShellState extends State<DesktopShell> {
         key: DesktopRouteKey.admin,
         label: 'Admin',
         icon: Icons.admin_panel_settings_outlined,
-        builder: () => const AdminDashboardScreen(),
+        builder: () => const AdminSuiteScreen(),
         visible: auth.isAdmin,
       ),
     ].where((e) => e.visible).toList();

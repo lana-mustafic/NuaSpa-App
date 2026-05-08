@@ -56,12 +56,19 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     super.didChangeDependencies();
     if (_bootstrapStarted) return;
     _bootstrapStarted = true;
-    final sp = context.read<ServiceProvider>();
-    _bootstrapFuture = () async {
-      await sp.fetchServices();
-      final therapists = await _apiService.getZaposlenici();
-      return _ReservationBootstrap(therapists);
-    }();
+    // Ne pozivati fetchServices (notifyListeners) iz didChangeDependencies —
+    // Provider bi se označio tijekom build faze. Odgodi do post-frame + Future.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sp = context.read<ServiceProvider>();
+      setState(() {
+        _bootstrapFuture = Future(() async {
+          await sp.fetchServices();
+          final therapists = await _apiService.getZaposlenici();
+          return _ReservationBootstrap(therapists);
+        });
+      });
+    });
   }
 
   Future<void> _pickDate() async {

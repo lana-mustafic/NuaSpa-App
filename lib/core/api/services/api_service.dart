@@ -8,6 +8,11 @@ import '../../../models/zaposlenik.dart';
 import '../../../models/rezervacija.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
+import '../../../models/admin/admin_client_row.dart';
+import '../../../models/admin/admin_kpi.dart';
+import '../../../models/admin/revenue_point.dart';
+import '../../../models/admin/service_popularity.dart';
+import '../../../models/admin/top_spender.dart';
 import '../api_client.dart';
 
 class ApiService {
@@ -411,6 +416,123 @@ class ApiService {
       await OpenFile.open(filePath);
     } catch (e) {
       debugPrint('Greška pri downloadu: $e');
+    }
+  }
+
+  Future<AdminKpi?> getAdminKpis({DateTime? date}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/kpi',
+        queryParameters: {
+          if (date != null) 'date': date.toIso8601String(),
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return AdminKpi.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminKpis: $e');
+      return null;
+    }
+  }
+
+  Future<List<RevenuePoint>> getRevenueSeries({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/revenue',
+        queryParameters: {
+          'from': from.toIso8601String(),
+          'to': to.toIso8601String(),
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => RevenuePoint.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRevenueSeries: $e');
+      return [];
+    }
+  }
+
+  Future<List<ServicePopularity>> getServicePopularity({
+    required DateTime from,
+    required DateTime to,
+    int take = 8,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/service-popularity',
+        queryParameters: {
+          'from': from.toIso8601String(),
+          'to': to.toIso8601String(),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => ServicePopularity.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getServicePopularity: $e');
+      return [];
+    }
+  }
+
+  Future<List<TopSpender>> getTopSpenders({
+    required DateTime from,
+    required DateTime to,
+    int take = 10,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/top-spenders',
+        queryParameters: {
+          'from': from.toIso8601String(),
+          'to': to.toIso8601String(),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => TopSpender.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTopSpenders: $e');
+      return [];
+    }
+  }
+
+  Future<List<AdminClientRow>> getAdminClients({
+    String? q,
+    int take = 200,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'AdminKlijent',
+        queryParameters: {
+          if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => AdminClientRow.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminClients: $e');
+      return [];
     }
   }
 }
