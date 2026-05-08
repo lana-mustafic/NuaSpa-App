@@ -15,6 +15,10 @@ import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
+import '../../../models/admin/spa_centar.dart';
+import '../../../models/admin/radno_vrijeme.dart';
+import '../../../models/admin/prostorija.dart';
+import '../../../models/admin/oprema.dart';
 import '../api_client.dart';
 
 class ApiService {
@@ -609,6 +613,174 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeCalendar: $e');
       return [];
+    }
+  }
+
+  Future<SpaCentar?> getSpaCentar() async {
+    try {
+      final response = await _dio.get<dynamic>('Resursi/spa-centar');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return SpaCentar.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getSpaCentar: $e');
+      return null;
+    }
+  }
+
+  Future<SpaCentar?> updateSpaCentar(SpaCentar dto) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Resursi/spa-centar',
+        data: dto.toJson(),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return SpaCentar.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateSpaCentar: $e');
+      return null;
+    }
+  }
+
+  Future<List<RadnoVrijeme>> getRadnoVrijeme() async {
+    try {
+      final response = await _dio.get<dynamic>('Resursi/radno-vrijeme');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => RadnoVrijeme.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRadnoVrijeme: $e');
+      return [];
+    }
+  }
+
+  Future<List<RadnoVrijeme>> updateRadnoVrijeme(
+    List<RadnoVrijeme> items,
+  ) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Resursi/radno-vrijeme',
+        data: items.map((e) => e.toJson()).toList(),
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => RadnoVrijeme.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateRadnoVrijeme: $e');
+      return [];
+    }
+  }
+
+  Future<List<Prostorija>> getProstorije() async {
+    try {
+      final response = await _dio.get<dynamic>('Resursi/prostorije');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => Prostorija.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getProstorije: $e');
+      return [];
+    }
+  }
+
+  Future<Prostorija?> createProstorija(Prostorija dto) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Resursi/prostorije',
+        data: dto.toJson(),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Prostorija.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createProstorija: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateProstorija(Prostorija dto) async {
+    try {
+      await _dio.put<void>(
+        'Resursi/prostorije/${dto.id}',
+        data: dto.toJson(),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateProstorija: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteProstorija(int id) async {
+    try {
+      await _dio.delete<void>('Resursi/prostorije/$id');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.deleteProstorija: $e');
+      return false;
+    }
+  }
+
+  Future<List<Oprema>> getOprema() async {
+    try {
+      final response = await _dio.get<dynamic>('Resursi/oprema');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => Oprema.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getOprema: $e');
+      return [];
+    }
+  }
+
+  Future<Oprema?> createOprema(Oprema dto) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Resursi/oprema',
+        data: dto.toJson(),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Oprema.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createOprema: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateOprema(Oprema dto) async {
+    try {
+      await _dio.put<void>(
+        'Resursi/oprema/${dto.id}',
+        data: dto.toJson(),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateOprema: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteOprema(int id) async {
+    try {
+      await _dio.delete<void>('Resursi/oprema/$id');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.deleteOprema: $e');
+      return false;
     }
   }
 }

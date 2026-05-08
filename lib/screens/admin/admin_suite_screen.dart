@@ -13,6 +13,7 @@ import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
+import 'admin_resources_screen.dart';
 import 'admin_therapist_profile_screen.dart';
 
 class AdminSuiteScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class AdminSuiteScreen extends StatefulWidget {
   State<AdminSuiteScreen> createState() => _AdminSuiteScreenState();
 }
 
-enum _AdminSuiteTab { overview, therapists, finance, clients, manage }
+enum _AdminSuiteTab { overview, therapists, finance, clients, resources, manage }
 enum _TherapistsView { availability, calendar }
 
 class _AdminSuiteState {
@@ -209,6 +210,10 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   label: Text('Klijenti'),
                 ),
                 NavigationRailDestination(
+                  icon: Icon(Icons.apartment_outlined),
+                  label: Text('Resursi'),
+                ),
+                NavigationRailDestination(
                   icon: Icon(Icons.admin_panel_settings_outlined),
                   label: Text('Upravljanje'),
                 ),
@@ -223,6 +228,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _buildTherapists(context),
                   _buildFinance(context),
                   _buildClients(context),
+                  const AdminResourcesScreen(),
                   const AdminDashboardScreen(),
                 ],
               ),

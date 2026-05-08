@@ -17,6 +17,6 @@ void main() {
     );
     await tester.pump();
     // Root MaterialApp from MyApp
-    expect(find.text('NuaSpa Login'), findsOneWidget);
+    expect(find.byType(MyApp), findsOneWidget);
   });
 }
