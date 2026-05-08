@@ -14,6 +14,7 @@ import '../../../models/admin/revenue_point.dart';
 import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
+import '../../../models/admin/therapist_kpi.dart';
 import '../api_client.dart';
 
 class ApiService {
@@ -91,6 +92,28 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.getZaposlenici: $e');
       return [];
+    }
+  }
+
+  Future<TherapistKpi?> getTherapistKpis({
+    required int zaposlenikId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/$zaposlenikId/kpi',
+        queryParameters: {
+          'from': from.toIso8601String(),
+          'to': to.toIso8601String(),
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return TherapistKpi.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistKpis: $e');
+      return null;
     }
   }
 

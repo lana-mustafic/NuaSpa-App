@@ -13,6 +13,7 @@ import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
+import 'admin_therapist_profile_screen.dart';
 
 class AdminSuiteScreen extends StatefulWidget {
   const AdminSuiteScreen({super.key});
@@ -658,6 +659,22 @@ class _TherapistCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      Tooltip(
+                        message: 'Otvori profil terapeuta',
+                        child: IconButton(
+                          onPressed: () {
+                            Navigator.push<void>(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => AdminTherapistProfileScreen(
+                                  therapist: therapist,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded),
+                        ),
+                      ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
