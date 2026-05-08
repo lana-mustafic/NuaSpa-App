@@ -13,6 +13,7 @@ import '../../../models/admin/admin_kpi.dart';
 import '../../../models/admin/revenue_point.dart';
 import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
+import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../api_client.dart';
 
 class ApiService {
@@ -555,6 +556,35 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getAdminClients: $e');
+      return [];
+    }
+  }
+
+  Future<List<RezervacijaCalendarItem>> getRezervacijeCalendar({
+    required DateTime from,
+    required DateTime to,
+    int? zaposlenikId,
+    bool includeOtkazane = false,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Rezervacija/calendar',
+        queryParameters: {
+          'from': from.toIso8601String(),
+          'to': to.toIso8601String(),
+          'zaposlenikId': zaposlenikId,
+          if (includeOtkazane) 'includeOtkazane': true,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) =>
+              RezervacijaCalendarItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacijeCalendar: $e');
       return [];
     }
   }
