@@ -8,8 +8,16 @@ class RezervacijaCalendarItem {
   final String? zaposlenikIme;
   final int? prostorijaId;
   final String? prostorijaNaziv;
+
+  final int korisnikId;
   final String? korisnikIme;
+  final String? korisnikTelefon;
+  final String? korisnikEmail;
+
   final String? uslugaNaziv;
+  final int uslugaTrajanjeMinuta;
+  final double uslugaCijena;
+  final String? razlogOtkaza;
 
   const RezervacijaCalendarItem({
     required this.id,
@@ -21,8 +29,14 @@ class RezervacijaCalendarItem {
     required this.zaposlenikIme,
     required this.prostorijaId,
     required this.prostorijaNaziv,
+    required this.korisnikId,
     required this.korisnikIme,
+    required this.korisnikTelefon,
+    required this.korisnikEmail,
     required this.uslugaNaziv,
+    required this.uslugaTrajanjeMinuta,
+    required this.uslugaCijena,
+    required this.razlogOtkaza,
   });
 
   factory RezervacijaCalendarItem.fromJson(Map<String, dynamic> json) {
@@ -36,9 +50,14 @@ class RezervacijaCalendarItem {
       zaposlenikIme: json['zaposlenikIme'] as String?,
       prostorijaId: (json['prostorijaId'] as num?)?.toInt(),
       prostorijaNaziv: json['prostorijaNaziv'] as String?,
+      korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
+      korisnikTelefon: json['korisnikTelefon'] as String?,
+      korisnikEmail: json['korisnikEmail'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
+      uslugaTrajanjeMinuta: (json['uslugaTrajanjeMinuta'] as num?)?.toInt() ?? 0,
+      uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,
+      razlogOtkaza: json['razlogOtkaza'] as String?,
     );
   }
 }
-
