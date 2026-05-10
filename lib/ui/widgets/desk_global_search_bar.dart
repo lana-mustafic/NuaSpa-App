@@ -68,7 +68,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar>
               context.read<DesktopNav>().goToCatalogWithSearch(q);
             },
             decoration: InputDecoration(
-              hintText: 'Brza pretraga usluga (Enter → Katalog)…',
+              hintText: 'Search services & treatments (Enter → Services)…',
               prefixIcon: const Icon(Icons.search_rounded, size: 22),
               border: InputBorder.none,
               filled: true,
