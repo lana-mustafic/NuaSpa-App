@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -24,9 +25,549 @@ class AdminSuiteScreen extends StatefulWidget {
   State<AdminSuiteScreen> createState() => _AdminSuiteScreenState();
 }
 
-enum _AdminSuiteTab { overview, therapists, finance, clients, resources, manage }
+enum _AdminSuiteTab {
+  overview,
+  therapists,
+  finance,
+  clients,
+  resources,
+  manage,
+}
+
 enum _TherapistsView { availability, calendar }
+
 enum _CalendarAxis { therapists, rooms }
+
+String _calendarDialogDayCaption(DateTime day) {
+  const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+  final loc = day.toLocal();
+  final w = names[(loc.weekday - 1).clamp(0, 6)];
+  final dd = loc.day.toString().padLeft(2, '0');
+  final mm = loc.month.toString().padLeft(2, '0');
+  return '$w · $dd.$mm.${loc.year}';
+}
+
+bool _rezCalMatchesSearch(RezervacijaCalendarItem e, String q) {
+  if (q.isEmpty) return true;
+  bool hay(String? s) => s?.toLowerCase().contains(q) ?? false;
+  return hay(e.korisnikIme) ||
+      hay(e.korisnikTelefon) ||
+      hay(e.korisnikEmail) ||
+      hay(e.zaposlenikIme) ||
+      hay(e.prostorijaNaziv) ||
+      hay(e.uslugaNaziv) ||
+      hay(e.razlogOtkaza) ||
+      e.id.toString().contains(q) ||
+      e.korisnikId.toString().contains(q);
+}
+
+String _formatTimeHm(DateTime d) {
+  final loc = d.toLocal();
+  return '${loc.hour.toString().padLeft(2, '0')}:${loc.minute.toString().padLeft(2, '0')}';
+}
+
+String _rezCalBookingStatsLine(List<RezervacijaCalendarItem> xs) {
+  if (xs.isEmpty) return '';
+  final otk = xs.where((x) => x.isOtkazana).length;
+  final pot = xs.where((x) => !x.isOtkazana && x.isPotvrdjena).length;
+  final cek = xs.where((x) => !x.isOtkazana && !x.isPotvrdjena).length;
+  final plac = xs.where((x) => x.isPlacena && !x.isOtkazana).length;
+  final bespr = xs.where((x) => x.prostorijaId == null).length;
+  final tot = xs.length;
+  final parts = <String>[
+    'Ukupno $tot',
+    'Potvrđene $pot',
+    if (cek > 0) 'Čekanje $cek',
+    'Plaćene $plac',
+    if (otk > 0) 'Otkazane $otk',
+    if (bespr > 0) 'Bez prostorije $bespr',
+  ];
+  return parts.join(' · ');
+}
+
+class _CalendarDayBookingDialog extends StatefulWidget {
+  const _CalendarDayBookingDialog({
+    required this.day,
+    required this.rowLabel,
+    required this.calendarAxis,
+    required this.items,
+    required this.dismissContext,
+  });
+
+  final DateTime day;
+  final String rowLabel;
+  final _CalendarAxis calendarAxis;
+
+  /// Bookings already filtered and sorted for this calendar cell/day.
+  final List<RezervacijaCalendarItem> items;
+
+  /// `Navigator`/`Theme` ancestor from opener (not the overlay).
+  final BuildContext dismissContext;
+
+  @override
+  State<_CalendarDayBookingDialog> createState() =>
+      _CalendarDayBookingDialogState();
+}
+
+class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
+  bool _onlyNoRoom = false;
+  late TextEditingController _query;
+
+  @override
+  void initState() {
+    super.initState();
+    _query = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.maybeOf(widget.dismissContext)?.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        width: 360,
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mq = MediaQuery.sizeOf(context);
+    final paneH = (mq.height * 0.55).clamp(280.0, 480.0);
+    final paneW = (mq.width - 96).clamp(300.0, 720.0);
+    final cap = _calendarDialogDayCaption(widget.day);
+    final baseCount = widget.items.length;
+
+    final filteredNoRoom =
+        widget.calendarAxis != _CalendarAxis.therapists || !_onlyNoRoom
+        ? widget.items
+        : widget.items.where((e) => e.prostorijaId == null).toList();
+
+    final qq = _query.text.trim().toLowerCase();
+    final visible = qq.isEmpty
+        ? filteredNoRoom
+        : filteredNoRoom.where((e) => _rezCalMatchesSearch(e, qq)).toList();
+
+    final statsLine = _rezCalBookingStatsLine(visible);
+    final titleExtra = [
+      if (_onlyNoRoom && filteredNoRoom.length != baseCount)
+        'filtrirano: ${filteredNoRoom.length}/$baseCount',
+      if (qq.isNotEmpty && visible.length != filteredNoRoom.length)
+        'pretraga: ${visible.length}/${filteredNoRoom.length}',
+    ].join(', ');
+
+    return AlertDialog(
+      icon: Icon(
+        Icons.event_available_outlined,
+        color: theme.colorScheme.primary,
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            cap,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(
+                widget.calendarAxis == _CalendarAxis.therapists
+                    ? Icons.person_outline
+                    : Icons.meeting_room_outlined,
+                size: 16,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  widget.rowLabel,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$baseCount termina za odabrani dan'
+            '${titleExtra.isEmpty ? '' : ' · $titleExtra'}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: paneW,
+        height: paneH,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.calendarAxis == _CalendarAxis.therapists)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilterChip(
+                  avatar: Icon(
+                    Icons.no_meeting_room_outlined,
+                    size: 18,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                  label: const Text('Samo bez dodijeljene prostorije'),
+                  selected: _onlyNoRoom,
+                  onSelected: (v) => setState(() => _onlyNoRoom = v),
+                ),
+              ),
+            if (widget.calendarAxis == _CalendarAxis.therapists)
+              const SizedBox(height: 10),
+            TextField(
+              controller: _query,
+              onChanged: (_) => setState(() {}),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText:
+                    'Pretraži: klijent, telefon, email, usluga, terapeut, prostorija, ID…',
+                prefixIcon: const Icon(Icons.search, size: 22),
+                isDense: true,
+                filled: true,
+                suffixIcon: qq.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Očisti pretragu',
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _query.clear();
+                          setState(() {});
+                        },
+                      ),
+              ),
+            ),
+            if (statsLine.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                statsLine,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  height: 1.35,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const Divider(height: 22),
+            Expanded(
+              child: visible.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.event_busy_rounded,
+                            size: 40,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.35,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            () {
+                              if (qq.isNotEmpty) {
+                                return 'Nema pogodaka za ovaj upit pretrage.';
+                              }
+                              if (widget.calendarAxis ==
+                                      _CalendarAxis.therapists &&
+                                  _onlyNoRoom) {
+                                return 'Nema termina bez dodijeljene prostorije.';
+                              }
+                              return 'Nema rezervacija za ovaj prikaz.';
+                            }(),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.64,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Scrollbar(
+                      thumbVisibility: true,
+                      child: ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: visible.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final r = visible[i];
+                          final startLoc = r.datumRezervacije.toLocal();
+                          final timeHm = _formatTimeHm(startLoc);
+                          final dur = r.uslugaTrajanjeMinuta;
+                          final endLoc = dur > 0
+                              ? startLoc.add(Duration(minutes: dur))
+                              : null;
+                          final cijenaStr = r.uslugaCijena > 0
+                              ? '${r.uslugaCijena.toStringAsFixed(2)} KM'
+                              : '—';
+                          final spanLine = (dur > 0 && endLoc != null)
+                              ? '$timeHm–${_formatTimeHm(endLoc)} · $dur min · $cijenaStr'
+                              : '$timeHm · $cijenaStr';
+                          final roomLine =
+                              r.prostorijaNaziv ?? 'Bez prostorije';
+                          final subMuted = theme.textTheme.bodySmall?.copyWith(
+                            height: 1.35,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.74,
+                            ),
+                          );
+                          final klijent = r.korisnikIme?.trim();
+                          final klijentLabel =
+                              (klijent == null || klijent.isEmpty)
+                                  ? '—'
+                                  : klijent;
+                          final ter = r.zaposlenikIme?.trim();
+                          final terLabel =
+                              (ter == null || ter.isEmpty) ? '—' : ter;
+                          final tel = r.korisnikTelefon?.trim();
+                          final telLabel =
+                              (tel == null || tel.isEmpty) ? '—' : tel;
+                          final mail = r.korisnikEmail?.trim();
+                          final mailLabel =
+                              (mail == null || mail.isEmpty) ? '—' : mail;
+
+                          final chips = Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (r.isPlacena)
+                                Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  label: const Text('Plaćeno'),
+                                  backgroundColor: Colors.green.withValues(
+                                    alpha: 0.22,
+                                  ),
+                                ),
+                              if (r.isOtkazana)
+                                Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  label: const Text('Otkazana'),
+                                  backgroundColor: Colors.redAccent.withValues(
+                                    alpha: 0.22,
+                                  ),
+                                )
+                              else if (r.isPotvrdjena)
+                                Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  label: const Text('Potvrđena'),
+                                  backgroundColor: Colors.green.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                )
+                              else
+                                Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  label: const Text('Čekanje'),
+                                  backgroundColor: Colors.orange.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                ),
+                              IconButton(
+                                tooltip:
+                                    'Kopiraj ID rezervacije u međuspremnik',
+                                icon: const Icon(Icons.copy_outlined, size: 18),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  await Clipboard.setData(
+                                    ClipboardData(text: '${r.id}'),
+                                  );
+                                  _toast('Kopiran ID rezervacije ${r.id}');
+                                },
+                              ),
+                            ],
+                          );
+
+                          final titleStyle = theme.textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                height: 1.25,
+                              );
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Tooltip(
+                                  message:
+                                      dur > 0
+                                          ? 'Početak $timeHm (trajanje $dur min)'
+                                          : 'Početak termina $timeHm',
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: theme
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.92),
+                                      child: Text(
+                                        timeHm,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        r.uslugaNaziv ?? 'Usluga',
+                                        style: titleStyle,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        spanLine,
+                                        style:
+                                            theme.textTheme.labelMedium
+                                                ?.copyWith(
+                                              color:
+                                                  theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withValues(
+                                                        alpha: 0.72,
+                                                      ),
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      chips,
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Klijent: $klijentLabel\n'
+                                        'Tel: $telLabel · Mail: $mailLabel\n'
+                                        'Terapeut: $terLabel\n'
+                                        'Prostorija: $roomLine · Korisnik #${r.korisnikId} · Rezerv. #${r.id}',
+                                        style: subMuted,
+                                      ),
+                                      if (r.isOtkazana &&
+                                          (r.razlogOtkaza
+                                                  ?.trim()
+                                                  .isNotEmpty ??
+                                              false))
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 6),
+                                          child: Text(
+                                            'Razlog otkaza: ${r.razlogOtkaza}',
+                                            style: subMuted?.copyWith(
+                                              color: theme.colorScheme.error
+                                                  .withValues(alpha: 0.92),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      actionsAlignment: MainAxisAlignment.end,
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: visible.isEmpty
+              ? null
+              : () async {
+                  final lines = visible
+                      .map((r) {
+                        final s = r.datumRezervacije.toLocal();
+                        final tl = _formatTimeHm(s);
+                        final room = r.prostorijaNaziv ?? 'Bez prostorije';
+                        final st = r.isOtkazana
+                            ? 'otk'
+                            : (r.isPotvrdjena ? 'potvrd' : 'ček');
+                        final plac = r.isPlacena ? ' plaćeno' : '';
+                        final tel = r.korisnikTelefon ?? '—';
+                        final em = r.korisnikEmail ?? '—';
+                        final rz = r.isOtkazana
+                            ? (r.razlogOtkaza ?? '—')
+                            : '';
+                        final end = r.uslugaTrajanjeMinuta > 0
+                            ? _formatTimeHm(
+                              s.add(
+                                Duration(minutes: r.uslugaTrajanjeMinuta),
+                              ),
+                            )
+                            : '—';
+                        return '$tl–$end | ${r.uslugaTrajanjeMinuta} min | '
+                            '${r.uslugaCijena.toStringAsFixed(2)} KM | '
+                            'ID ${r.id} | kor ${r.korisnikId} | '
+                            '${r.uslugaNaziv ?? "usluga"} | '
+                            '${r.korisnikIme ?? "—"} | tel $tel | mail $em | '
+                            '${r.zaposlenikIme ?? "—"} | $room | '
+                            '$st$plac'
+                            '${rz.isEmpty ? "" : " | razlog: $rz"}';
+                      })
+                      .join('\n');
+                  final header =
+                      '${_calendarDialogDayCaption(widget.day)}\n'
+                      '${widget.rowLabel}\n'
+                      '---\n';
+                  await Clipboard.setData(ClipboardData(text: '$header$lines'));
+                  _toast(
+                    'U međuspremnik je kopirano ${visible.length} '
+                    'stavki (tekstualna lista).',
+                  );
+                },
+          icon: const Icon(Icons.content_copy_outlined, size: 18),
+          label: Text('Kopiraj listu (${visible.length})'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Zatvori'),
+        ),
+      ],
+    );
+  }
+}
 
 class _AdminSuiteState {
   const _AdminSuiteState({
@@ -89,13 +630,21 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   }
 
   void _reloadOverview() {
-    final from = DateTime(_range.start.year, _range.start.month, _range.start.day);
+    final from = DateTime(
+      _range.start.year,
+      _range.start.month,
+      _range.start.day,
+    );
     final to = DateTime(_range.end.year, _range.end.month, _range.end.day);
     setState(() {
       _overviewFuture = () async {
         final kpi = await _api.getAdminKpis(date: DateTime.now());
         final revenue = await _api.getRevenueSeries(from: from, to: to);
-        final popularity = await _api.getServicePopularity(from: from, to: to, take: 8);
+        final popularity = await _api.getServicePopularity(
+          from: from,
+          to: to,
+          take: 8,
+        );
         final top = await _api.getTopSpenders(from: from, to: to, take: 10);
         return _AdminSuiteState(
           kpi: kpi,
@@ -402,20 +951,28 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                                 DataCell(Text(c.punoIme)),
                                 DataCell(
                                   c.isVip
-                                      ? const Icon(Icons.workspace_premium_outlined)
+                                      ? const Icon(
+                                          Icons.workspace_premium_outlined,
+                                        )
                                       : const SizedBox.shrink(),
                                 ),
                                 DataCell(Text('${c.ukupnoPosjeta}')),
-                                DataCell(Text('${c.ukupnoPotroseno.toStringAsFixed(0)} KM')),
-                                DataCell(Text(
-                                  c.zadnjaPosjeta == null
-                                      ? '—'
-                                      : c.zadnjaPosjeta!
-                                          .toLocal()
-                                          .toString()
-                                          .split('.')
-                                          .first,
-                                )),
+                                DataCell(
+                                  Text(
+                                    '${c.ukupnoPotroseno.toStringAsFixed(0)} KM',
+                                  ),
+                                ),
+                                DataCell(
+                                  Text(
+                                    c.zadnjaPosjeta == null
+                                        ? '—'
+                                        : c.zadnjaPosjeta!
+                                              .toLocal()
+                                              .toString()
+                                              .split('.')
+                                              .first,
+                                  ),
+                                ),
                               ],
                             );
                           }).toList(),
@@ -554,9 +1111,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               return LayoutBuilder(
                 builder: (context, c) {
                   final w = c.maxWidth;
-                  final crossAxisCount = w >= 1400
-                      ? 3
-                      : (w >= 980 ? 2 : 1);
+                  final crossAxisCount = w >= 1400 ? 3 : (w >= 980 ? 2 : 1);
                   return GridView.builder(
                     primary: false,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -592,15 +1147,18 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                                         spacing: 8,
                                         runSpacing: 8,
                                         children: slots
-                                            .map((s) => Chip(
-                                                  label: Text(
-                                                    s.toLocal()
-                                                        .toString()
-                                                        .split(' ')
-                                                        .last
-                                                        .substring(0, 5),
-                                                  ),
-                                                ))
+                                            .map(
+                                              (s) => Chip(
+                                                label: Text(
+                                                  s
+                                                      .toLocal()
+                                                      .toString()
+                                                      .split(' ')
+                                                      .last
+                                                      .substring(0, 5),
+                                                ),
+                                              ),
+                                            )
                                             .toList(),
                                       ),
                               ),
@@ -833,7 +1391,9 @@ class _MiniWeekGrid extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.10),
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -963,6 +1523,43 @@ class _AdminCalendarView extends StatelessWidget {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
+              if (snap.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_off_rounded,
+                          size: 48,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.error.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Ne možemo učitati kalendar',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          '${snap.error}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.75),
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               final items = snap.data ?? const <RezervacijaCalendarItem>[];
               final byTherapist = <int, List<RezervacijaCalendarItem>>{};
               final byRoomKey = <int?, List<RezervacijaCalendarItem>>{};
@@ -978,10 +1575,19 @@ class _AdminCalendarView extends StatelessWidget {
                     columnSpacing: 18,
                     columns: [
                       DataColumn(
-                        label: Text(axis == _CalendarAxis.rooms ? 'Prostorija' : 'Terapeut'),
+                        label: Text(
+                          axis == _CalendarAxis.rooms
+                              ? 'Prostorija'
+                              : 'Terapeut',
+                        ),
                       ),
                       for (final d in days)
-                        DataColumn(label: Text(_dayHeader(d), textAlign: TextAlign.center)),
+                        DataColumn(
+                          label: Text(
+                            _dayHeader(d),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                     ],
                     rows: [
                       if (axis == _CalendarAxis.therapists)
@@ -992,6 +1598,8 @@ class _AdminCalendarView extends StatelessWidget {
                               for (final d in days)
                                 _buildCalendarCell(
                                   context,
+                                  calendarAxis: axis,
+                                  rowLabel: '${t.ime} ${t.prezime}'.trim(),
                                   day: d,
                                   items: byTherapist[t.id] ?? const [],
                                 ),
@@ -1005,6 +1613,8 @@ class _AdminCalendarView extends StatelessWidget {
                               for (final d in days)
                                 _buildCalendarCell(
                                   context,
+                                  calendarAxis: axis,
+                                  rowLabel: r.name,
                                   day: d,
                                   items: byRoomKey[r.id] ?? const [],
                                 ),
@@ -1023,16 +1633,21 @@ class _AdminCalendarView extends StatelessWidget {
 
   DataCell _buildCalendarCell(
     BuildContext context, {
+    required _CalendarAxis calendarAxis,
+    required String rowLabel,
     required DateTime day,
     required List<RezervacijaCalendarItem> items,
   }) {
-    final list = items
-        .where((e) =>
-            e.datumRezervacije.year == day.year &&
-            e.datumRezervacije.month == day.month &&
-            e.datumRezervacije.day == day.day)
-        .toList()
-      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+    final list =
+        items
+            .where(
+              (e) =>
+                  e.datumRezervacije.year == day.year &&
+                  e.datumRezervacije.month == day.month &&
+                  e.datumRezervacije.day == day.day,
+            )
+            .toList()
+          ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
 
     final count = list.length;
 
@@ -1047,64 +1662,49 @@ class _AdminCalendarView extends StatelessWidget {
       color = Colors.redAccent.withValues(alpha: 0.14);
     }
 
+    final dayCap = _calendarDialogDayCaption(day);
+
     return DataCell(
-      InkWell(
-        onTap: count == 0
-            ? null
-            : () {
-                showDialog<void>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(
-                      '${day.toLocal().toString().split(' ').first} · $count termina',
-                    ),
-                    content: SizedBox(
-                      width: 680,
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: list.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final r = list[i];
-                          final time = r.datumRezervacije
-                              .toLocal()
-                              .toString()
-                              .split(' ')
-                              .last
-                              .substring(0, 5);
-                          final status = r.isOtkazana
-                              ? 'Otkazana'
-                              : (r.isPotvrdjena ? 'Potvrđena' : 'Na čekanju');
-                          return ListTile(
-                            dense: true,
-                            title: Text('$time · ${r.uslugaNaziv ?? 'Usluga'}'),
-                            subtitle: Text(r.korisnikIme ?? ''),
-                            trailing: Chip(label: Text(status)),
-                          );
-                        },
+      Tooltip(
+        message: count == 0
+            ? 'Nema termina za $dayCap'
+            : '$count termina za $dayCap — klik za detalje, pretragu i izvoz',
+        waitDuration: const Duration(milliseconds: 400),
+        child: Semantics(
+          button: true,
+          enabled: count > 0,
+          label: count == 0
+              ? 'Ćelija kalendara, nema termina'
+              : '$count termina, $rowLabel, $dayCap',
+          child: InkWell(
+            onTap: count == 0
+                ? null
+                : () {
+                    showDialog<void>(
+                      context: context,
+                      builder: (_) => _CalendarDayBookingDialog(
+                        day: day,
+                        rowLabel: rowLabel,
+                        calendarAxis: calendarAxis,
+                        items: list,
+                        dismissContext: context,
                       ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Zatvori'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color,
+                    );
+                  },
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Text(
-            count == 0 ? '—' : '$count',
-            style: const TextStyle(fontWeight: FontWeight.w800),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Text(
+                count == 0 ? '—' : '$count',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
           ),
         ),
       ),
@@ -1156,7 +1756,9 @@ class _KpiRow extends StatelessWidget {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: items.map((it) => SizedBox(width: tileW, child: it)).toList(),
+          children: items
+              .map((it) => SizedBox(width: tileW, child: it))
+              .toList(),
         );
       },
     );
@@ -1198,8 +1800,8 @@ class _KpiTile extends StatelessWidget {
                   Text(
                     value,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -1273,10 +1875,7 @@ class _RevenueCard extends StatelessWidget {
 }
 
 class _PopularityCard extends StatelessWidget {
-  const _PopularityCard({
-    required this.items,
-    required this.topSpenders,
-  });
+  const _PopularityCard({required this.items, required this.topSpenders});
 
   final List<ServicePopularity> items;
   final List<TopSpender> topSpenders;
@@ -1348,21 +1947,25 @@ class _PopularityCard extends StatelessWidget {
             if (topSpenders.isEmpty)
               const Text('Nema podataka.')
             else
-              ...topSpenders.take(6).map((t) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            t.imePrezime,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+              ...topSpenders
+                  .take(6)
+                  .map(
+                    (t) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              t.imePrezime,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        Text('${t.ukupnoPotroseno.toStringAsFixed(0)} KM'),
-                      ],
+                          Text('${t.ukupnoPotroseno.toStringAsFixed(0)} KM'),
+                        ],
+                      ),
                     ),
-                  )),
+                  ),
           ],
         ),
       ),
@@ -1383,10 +1986,15 @@ class _ClientDetails extends StatelessWidget {
       children: [
         Text(client.punoIme, style: tt.titleLarge),
         const SizedBox(height: 8),
-        Text(client.email, style: TextStyle(color: Colors.white.withValues(alpha: 0.75))),
+        Text(
+          client.email,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+        ),
         const SizedBox(height: 4),
-        Text(client.telefon.isEmpty ? '—' : client.telefon,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.75))),
+        Text(
+          client.telefon.isEmpty ? '—' : client.telefon,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+        ),
         const SizedBox(height: 18),
         Wrap(
           spacing: 10,
@@ -1438,7 +2046,10 @@ class _InfoChip extends StatelessWidget {
           children: [
             Text(
               label,
-              style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.70)),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.70),
+              ),
             ),
             const SizedBox(height: 4),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -1448,4 +2059,3 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
-
