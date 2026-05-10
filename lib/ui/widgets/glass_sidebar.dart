@@ -3,10 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class GlassSidebar extends StatelessWidget {
-  const GlassSidebar({
-    super.key,
-    required this.child,
-  });
+  const GlassSidebar({super.key, required this.child});
 
   final Widget child;
 
@@ -15,10 +12,12 @@ class GlassSidebar extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+            color: Theme.of(
+              context,
+            ).colorScheme.surface.withValues(alpha: 0.68),
             border: Border.all(
               color: Colors.white.withValues(alpha: 0.10),
               width: 0.8,
@@ -30,4 +29,3 @@ class GlassSidebar extends StatelessWidget {
     );
   }
 }
-
