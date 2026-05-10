@@ -11,9 +11,15 @@ class Rezervacija {
   final int? prostorijaId;
   final String? prostorijaNaziv;
   final List<RezervacijaOpremaItem> oprema;
+  final int korisnikId;
   final String? korisnikIme;
+  final String? korisnikTelefon;
+  final String? napomenaZaTerapeuta;
   final String? uslugaNaziv;
+  final int uslugaTrajanjeMinuta;
+  final double uslugaCijena;
   final String? zaposlenikIme;
+  final bool premiumKlijent;
 
   Rezervacija({
     required this.id,
@@ -26,15 +32,21 @@ class Rezervacija {
     required this.prostorijaId,
     required this.prostorijaNaziv,
     required this.oprema,
+    this.korisnikId = 0,
     this.korisnikIme,
+    this.korisnikTelefon,
+    this.napomenaZaTerapeuta,
     this.uslugaNaziv,
+    this.uslugaTrajanjeMinuta = 0,
+    this.uslugaCijena = 0,
     this.zaposlenikIme,
+    this.premiumKlijent = false,
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
     final opremaJson = json['oprema'];
     return Rezervacija(
-      id: json['id'] as int,
+      id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
       isPotvrdjena: json['isPotvrdjena'] as bool,
       isPlacena: (json['isPlacena'] as bool?) ?? false,
@@ -52,10 +64,16 @@ class Rezervacija {
                   RezervacijaOpremaItem.fromJson(Map<String, dynamic>.from(e)))
               .toList()
           : const [],
+      korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
+      korisnikTelefon: json['korisnikTelefon'] as String?,
+      napomenaZaTerapeuta: json['napomenaZaTerapeuta'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
+      uslugaTrajanjeMinuta:
+          (json['uslugaTrajanjeMinuta'] as num?)?.toInt() ?? 0,
+      uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
+      premiumKlijent: json['premiumKlijent'] as bool? ?? false,
     );
   }
 }
-

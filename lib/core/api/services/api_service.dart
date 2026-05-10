@@ -6,6 +6,8 @@ import '../../../models/usluga.dart';
 import '../../../models/kategorija_usluga.dart';
 import '../../../models/zaposlenik.dart';
 import '../../../models/rezervacija.dart';
+import '../../../models/desktop_home_overview.dart';
+import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/admin/admin_client_row.dart';
@@ -169,6 +171,59 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
+      return [];
+    }
+  }
+
+  Future<DesktopHomeOverview?> getDesktopHomeOverview({
+    DateTime? day,
+  }) async {
+    try {
+      final query = <String, dynamic>{};
+      if (day != null) {
+        final d = DateTime(day.year, day.month, day.day);
+        query['day'] =
+            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      }
+      final response = await _dio.get<dynamic>(
+        'Portal/desktop-home-overview',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return DesktopHomeOverview.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getDesktopHomeOverview: $e');
+      return null;
+    }
+  }
+
+  /// Povijest termina klijenta (admin / terapeut s vezu prema klijentu).
+  Future<List<RezervacijaPovijestItem>> getRezervacijaPovijestZaKlijenta({
+    required int korisnikId,
+    int? excludeRezervacijaId,
+    int take = 20,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'korisnikId': korisnikId,
+        'take': take,
+      };
+      if (excludeRezervacijaId != null) {
+        query['excludeRezervacijaId'] = excludeRezervacijaId;
+      }
+      final response = await _dio.get<dynamic>(
+        'Rezervacija/povijest-za-klijenta',
+        queryParameters: query,
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) =>
+              RezervacijaPovijestItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacijaPovijestZaKlijenta: $e');
       return [];
     }
   }

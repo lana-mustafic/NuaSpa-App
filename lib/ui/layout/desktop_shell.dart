@@ -8,13 +8,11 @@ import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
 import '../widgets/glass_sidebar.dart';
+import '../widgets/desk_global_search_bar.dart';
 import '../navigation/desktop_nav.dart';
 
 class DesktopShell extends StatefulWidget {
-  const DesktopShell({
-    super.key,
-    required this.home,
-  });
+  const DesktopShell({super.key, required this.home});
 
   final Widget home;
 
@@ -103,7 +101,7 @@ class _DesktopShellState extends State<DesktopShell> {
         child: Row(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+              padding: const EdgeInsets.fromLTRB(24, 24, 12, 24),
               child: SizedBox(
                 width: isWide ? 260 : 88,
                 child: GlassSidebar(
@@ -119,9 +117,7 @@ class _DesktopShellState extends State<DesktopShell> {
                               const SizedBox(width: 10),
                               Text(
                                 'NuaSpa',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                             ],
@@ -137,13 +133,18 @@ class _DesktopShellState extends State<DesktopShell> {
                           selectedIndex: safeIndex,
                           onDestinationSelected: (i) =>
                               context.read<DesktopNav>().goTo(items[i].key),
-                          labelType: isWide ? null : NavigationRailLabelType.all,
+                          labelType: isWide
+                              ? null
+                              : NavigationRailLabelType.all,
                           minExtendedWidth: 260,
                           destinations: [
                             for (final it in items)
                               NavigationRailDestination(
                                 icon: Icon(it.icon),
-                                selectedIcon: Icon(it.icon, color: Theme.of(context).colorScheme.primary),
+                                selectedIcon: Icon(
+                                  it.icon,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                                 label: Text(it.label),
                               ),
                           ],
@@ -155,7 +156,8 @@ class _DesktopShellState extends State<DesktopShell> {
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
-                            onPressed: () => context.read<AuthProvider>().logout(),
+                            onPressed: () =>
+                                context.read<AuthProvider>().logout(),
                             icon: const Icon(Icons.logout),
                             label: Text(isWide ? 'Odjava' : ''),
                           ),
@@ -169,35 +171,44 @@ class _DesktopShellState extends State<DesktopShell> {
             const SizedBox(width: 4),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                padding: const EdgeInsets.fromLTRB(0, 24, 32, 32),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: Material(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withValues(alpha: 0.45),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, anim) {
-                      return FadeTransition(
-                        opacity: anim,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0.02, 0),
-                            end: Offset.zero,
-                          ).animate(anim),
-                          child: child,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.45),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const DeskGlobalSearchBar(),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 240),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, anim) {
+                              return FadeTransition(
+                                opacity: anim,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0.018, 0),
+                                    end: Offset.zero,
+                                  ).animate(anim),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: KeyedSubtree(
+                              key: ValueKey(
+                                '${currentItem.label}-${currentItem.key.name}',
+                              ),
+                              child: page,
+                            ),
+                          ),
                         ),
-                      );
-                    },
-                    child: KeyedSubtree(
-                      key: ValueKey('${currentItem.label}-${currentItem.key.name}'),
-                      child: page,
+                      ],
                     ),
-                  ),
                   ),
                 ),
               ),
@@ -208,4 +219,3 @@ class _DesktopShellState extends State<DesktopShell> {
     );
   }
 }
-
