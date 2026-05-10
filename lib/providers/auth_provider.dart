@@ -13,6 +13,7 @@ class AuthProvider extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   List<String> _roles = [];
   int? _zaposlenikId;
+  String? _loggedInUsername;
   StreamSubscription<AuthEvent>? _authEventsSub;
   String? _infoMessage;
 
@@ -37,6 +38,20 @@ class AuthProvider extends ChangeNotifier {
   /// Iz JWT claim-a `ZaposlenikId` (samo ako je korisnik vezan za zaposlenika).
   int? get zaposlenikId => _zaposlenikId;
 
+  String? get displayName => _loggedInUsername;
+
+  String? get userInitials {
+    final u = _loggedInUsername?.trim();
+    if (u == null || u.isEmpty) return null;
+    final parts = u.split(RegExp(r'[\s._@]+')).where((e) => e.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
+    }
+    return u.length >= 2 ? u.substring(0, 2).toUpperCase() : u.toUpperCase();
+  }
+
+  String? get userAvatarUrl => null;
+
   Future<void> _refreshRolesFromToken() async {
     final token = await _storage.read(key: 'jwt_token');
     _roles = parseJwtRoles(token);
@@ -59,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
         await _storage.write(key: 'jwt_token', value: token);
         await _refreshRolesFromToken();
 
+        _loggedInUsername = username.trim();
         _status = AuthStatus.authenticated;
         notifyListeners();
         return true;
@@ -66,6 +82,7 @@ class AuthProvider extends ChangeNotifier {
         debugPrint("Login uspio, ali token nije pronađen u odgovoru.");
         _roles = [];
         _zaposlenikId = null;
+        _loggedInUsername = null;
         _status = AuthStatus.error;
         notifyListeners();
         return false;
@@ -74,6 +91,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint("Login Error: $e"); // Ovo će ti reći ako je Connection Refused
       _roles = [];
       _zaposlenikId = null;
+      _loggedInUsername = null;
       _status = AuthStatus.error;
       notifyListeners();
       return false;
@@ -103,6 +121,7 @@ class AuthProvider extends ChangeNotifier {
     await _storage.delete(key: 'jwt_token');
     _roles = [];
     _zaposlenikId = null;
+    _loggedInUsername = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
   }

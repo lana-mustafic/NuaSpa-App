@@ -17,9 +17,13 @@ import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_resources_screen.dart';
 import 'admin_therapist_profile_screen.dart';
+import 'admin_suite_route.dart';
 
 class AdminSuiteScreen extends StatefulWidget {
-  const AdminSuiteScreen({super.key});
+  const AdminSuiteScreen({super.key, required this.initialRoute});
+
+  /// Shell-controlled deep link (fresh state per sidebar jump).
+  final AdminSuiteRoute initialRoute;
 
   @override
   State<AdminSuiteScreen> createState() => _AdminSuiteScreenState();
@@ -611,9 +615,38 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   Timer? _calendarTimer;
   _CalendarAxis _calendarAxis = _CalendarAxis.therapists;
 
+  void _applyInitialRoute() {
+    switch (widget.initialRoute) {
+      case AdminSuiteRoute.overview:
+        _tab = _AdminSuiteTab.overview;
+        break;
+      case AdminSuiteRoute.therapists:
+        _tab = _AdminSuiteTab.therapists;
+        _therapistsView = _TherapistsView.availability;
+        break;
+      case AdminSuiteRoute.therapistsCalendar:
+        _tab = _AdminSuiteTab.therapists;
+        _therapistsView = _TherapistsView.calendar;
+        break;
+      case AdminSuiteRoute.finance:
+        _tab = _AdminSuiteTab.finance;
+        break;
+      case AdminSuiteRoute.clients:
+        _tab = _AdminSuiteTab.clients;
+        break;
+      case AdminSuiteRoute.resources:
+        _tab = _AdminSuiteTab.resources;
+        break;
+      case AdminSuiteRoute.manage:
+        _tab = _AdminSuiteTab.manage;
+        break;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _applyInitialRoute();
     _reloadOverview();
     _reloadClients();
     _reloadTherapists();
