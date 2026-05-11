@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../screens/admin/admin_appointments_management_screen.dart';
 import '../../screens/admin/admin_command_center_screen.dart';
 import '../../screens/admin/admin_revenue_analytics_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
@@ -221,7 +222,9 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.catalog:
           return const ServiceCatalogScreen();
         case DesktopRouteKey.reservations:
-          return const ReservationListScreen();
+          return auth.isAdmin
+              ? const AdminAppointmentsManagementScreen()
+              : const ReservationListScreen();
         case DesktopRouteKey.favorites:
           return const FavoritesScreen();
         case DesktopRouteKey.schedule:
@@ -473,7 +476,10 @@ class _LuxuryRail extends StatelessWidget {
                 const SizedBox(height: 12),
                 nav.route == DesktopRouteKey.revenueAnalytics
                     ? _UpgradePremiumCard()
-                    : _QuickActionsCard(),
+                    : _QuickActionsCard(
+                        appointmentsMode:
+                            nav.route == DesktopRouteKey.reservations,
+                      ),
                 const SizedBox(height: 12),
               ],
               _SidebarTile(
@@ -493,6 +499,10 @@ class _LuxuryRail extends StatelessWidget {
 }
 
 class _QuickActionsCard extends StatelessWidget {
+  const _QuickActionsCard({this.appointmentsMode = false});
+
+  final bool appointmentsMode;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -536,7 +546,7 @@ class _QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _QuickActionButton(
-                label: 'New Appointment',
+                label: appointmentsMode ? 'New Appointment' : 'New Appointment',
                 icon: Icons.add_circle_outline_rounded,
                 onTap: () => context.read<DesktopNav>().goTo(
                   DesktopRouteKey.reservations,
@@ -544,10 +554,15 @@ class _QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _QuickActionButton(
-                label: 'Add Therapist',
-                icon: Icons.person_add_alt_1_outlined,
-                onTap: () =>
-                    context.read<DesktopNav>().goTo(DesktopRouteKey.therapists),
+                label: appointmentsMode ? 'Walk-in Client' : 'Add Therapist',
+                icon: appointmentsMode
+                    ? Icons.directions_walk_outlined
+                    : Icons.person_add_alt_1_outlined,
+                onTap: () => context.read<DesktopNav>().goTo(
+                  appointmentsMode
+                      ? DesktopRouteKey.reservations
+                      : DesktopRouteKey.therapists,
+                ),
               ),
             ],
           ),

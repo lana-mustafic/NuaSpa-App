@@ -72,6 +72,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final day = selectedDay ?? DateTime.now();
     final isTherapists = nav.route == DesktopRouteKey.therapists;
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
+    final isAppointments = nav.route == DesktopRouteKey.reservations;
 
     final roleLabel = auth.isAdmin
         ? 'Administrator'
@@ -91,6 +92,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 Text(
                   isRevenue
                       ? 'Revenue Analytics'
+                      : isAppointments
+                      ? 'Appointments'
                       : isTherapists
                       ? 'Therapists'
                       : auth.isAdmin
@@ -106,6 +109,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 Text(
                   isRevenue
                       ? "Track your spa's financial performance and insights."
+                      : isAppointments
+                      ? 'Manage, view and organize all spa appointments.'
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : auth.isAdmin
@@ -141,16 +146,26 @@ class LuxuryDesktopHeader extends StatelessWidget {
                     child: DeskGlobalSearchBar(
                       hintText: isTherapists
                           ? 'Search therapists…'
+                          : isAppointments
+                          ? 'Search clients, appointments…'
                           : 'Search services & treatments (Enter → Services)…',
                       onChanged: isTherapists
                           ? (q) => context
                                 .read<DesktopNav>()
                                 .setTherapistSearchQuery(q)
+                          : isAppointments
+                          ? (q) => context
+                                .read<DesktopNav>()
+                                .setAppointmentSearchQuery(q)
                           : null,
                       onSubmitted: isTherapists
                           ? (q) => context
                                 .read<DesktopNav>()
                                 .setTherapistSearchQuery(q)
+                          : isAppointments
+                          ? (q) => context
+                                .read<DesktopNav>()
+                                .setAppointmentSearchQuery(q)
                           : null,
                     ),
                   ),
