@@ -5,6 +5,8 @@ import '../../screens/admin/admin_suite_route.dart';
 enum DesktopRouteKey {
   commandCenter,
   marketing,
+  packages,
+  reviews,
   settings,
   home,
   catalog,
