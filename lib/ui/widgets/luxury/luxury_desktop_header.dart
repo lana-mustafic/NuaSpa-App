@@ -71,6 +71,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final day = selectedDay ?? DateTime.now();
     final isTherapists = nav.route == DesktopRouteKey.therapists;
+    final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
 
     final roleLabel = auth.isAdmin
         ? 'Administrator'
@@ -88,7 +89,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isTherapists
+                  isRevenue
+                      ? 'Revenue Analytics'
+                      : isTherapists
                       ? 'Therapists'
                       : auth.isAdmin
                       ? 'Welcome back, Admin'
@@ -101,7 +104,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isTherapists
+                  isRevenue
+                      ? "Track your spa's financial performance and insights."
+                      : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
@@ -117,31 +122,46 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 22),
-          SizedBox(
-            width: 340,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.052),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.11),
-                      width: 0.85,
+          if (!isRevenue) ...[
+            SizedBox(
+              width: 340,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.052),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.11),
+                        width: 0.85,
+                      ),
                     ),
-                  ),
-                  child: DeskGlobalSearchBar(
-                    hintText: isTherapists
-                        ? 'Search therapists…'
-                        : 'Search services & treatments (Enter → Services)…',
+                    child: DeskGlobalSearchBar(
+                      hintText: isTherapists
+                          ? 'Search therapists…'
+                          : 'Search services & treatments (Enter → Services)…',
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 14),
+            const SizedBox(width: 14),
+          ] else ...[
+            _HeaderPill(
+              icon: Icons.date_range_outlined,
+              label: 'May 12 — Jun 11, 2025',
+              onTap: () => _pickDate(context),
+            ),
+            const SizedBox(width: 10),
+            _HeaderPill(
+              icon: Icons.tune_rounded,
+              label: 'Filters',
+              onTap: () {},
+            ),
+            const SizedBox(width: 14),
+          ],
           _HeaderIconGlass(
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -155,8 +175,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
               );
             },
             child: Badge(
-              isLabelVisible: notificationCount > 0,
-              label: Text('$notificationCount'),
+              isLabelVisible: isRevenue || notificationCount > 0,
+              label: Text('${isRevenue ? 3 : notificationCount}'),
               backgroundColor: NuaLuxuryTokens.softPurpleGlow,
               child: Icon(
                 Icons.notifications_none_rounded,
@@ -164,41 +184,46 @@ class LuxuryDesktopHeader extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          InkWell(
-            borderRadius: BorderRadius.circular(NuaLuxuryTokens.radiusMd + 6),
-            onTap: () => _pickDate(context),
-            child: LuxuryGlassPanel(
-              blurSigma: 18,
-              opacity: 0.28,
-              borderRadius: NuaLuxuryTokens.radiusMd + 6,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_month_outlined,
-                    size: 20,
-                    color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                      alpha: 0.9,
+          if (!isRevenue) ...[
+            const SizedBox(width: 10),
+            InkWell(
+              borderRadius: BorderRadius.circular(NuaLuxuryTokens.radiusMd + 6),
+              onTap: () => _pickDate(context),
+              child: LuxuryGlassPanel(
+                blurSigma: 18,
+                opacity: 0.28,
+                borderRadius: NuaLuxuryTokens.radiusMd + 6,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.calendar_month_outlined,
+                      size: 20,
+                      color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                        alpha: 0.9,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    _fmtDay(day),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(width: 10),
+                    Text(
+                      _fmtDay(day),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.expand_more_rounded,
-                    color: Colors.white.withValues(alpha: 0.5),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.expand_more_rounded,
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(width: 12),
           LuxuryGlassPanel(
             blurSigma: 18,
@@ -253,6 +278,55 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderPill extends StatelessWidget {
+  const _HeaderPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(NuaLuxuryTokens.radiusMd + 6),
+      onTap: onTap,
+      child: LuxuryGlassPanel(
+        blurSigma: 18,
+        opacity: 0.28,
+        borderRadius: NuaLuxuryTokens.radiusMd + 6,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFF5F3FA),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.expand_more_rounded,
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ],
+        ),
       ),
     );
   }
