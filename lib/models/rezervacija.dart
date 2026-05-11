@@ -14,6 +14,7 @@ class Rezervacija {
   final int korisnikId;
   final String? korisnikIme;
   final String? korisnikTelefon;
+  final String? korisnikEmail;
   final String? napomenaZaTerapeuta;
   final String? uslugaNaziv;
   final int uslugaTrajanjeMinuta;
@@ -35,6 +36,7 @@ class Rezervacija {
     this.korisnikId = 0,
     this.korisnikIme,
     this.korisnikTelefon,
+    this.korisnikEmail,
     this.napomenaZaTerapeuta,
     this.uslugaNaziv,
     this.uslugaTrajanjeMinuta = 0,
@@ -59,14 +61,18 @@ class Rezervacija {
       prostorijaNaziv: json['prostorijaNaziv'] as String?,
       oprema: opremaJson is List
           ? opremaJson
-              .whereType<Map>()
-              .map((e) =>
-                  RezervacijaOpremaItem.fromJson(Map<String, dynamic>.from(e)))
-              .toList()
+                .whereType<Map>()
+                .map(
+                  (e) => RezervacijaOpremaItem.fromJson(
+                    Map<String, dynamic>.from(e),
+                  ),
+                )
+                .toList()
           : const [],
       korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
       korisnikTelefon: json['korisnikTelefon'] as String?,
+      korisnikEmail: json['korisnikEmail'] as String?,
       napomenaZaTerapeuta: json['napomenaZaTerapeuta'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
       uslugaTrajanjeMinuta:
