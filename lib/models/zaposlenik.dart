@@ -22,5 +22,30 @@ class Zaposlenik {
       telefon: json['telefon'] as String?,
     );
   }
-}
 
+  Map<String, dynamic> toJson({bool includeId = true}) {
+    return {
+      if (includeId) 'id': id,
+      'ime': ime,
+      'prezime': prezime,
+      'specijalizacija': specijalizacija,
+      'telefon': telefon,
+    };
+  }
+
+  Zaposlenik copyWith({
+    int? id,
+    String? ime,
+    String? prezime,
+    String? specijalizacija,
+    String? telefon,
+  }) {
+    return Zaposlenik(
+      id: id ?? this.id,
+      ime: ime ?? this.ime,
+      prezime: prezime ?? this.prezime,
+      specijalizacija: specijalizacija ?? this.specijalizacija,
+      telefon: telefon ?? this.telefon,
+    );
+  }
+}

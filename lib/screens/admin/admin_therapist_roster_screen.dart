@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../models/admin/rezervacija_calendar_item.dart';
+import '../../models/admin/therapist_kpi.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
+import 'admin_therapist_profile_screen.dart';
 
 class AdminTherapistRosterScreen extends StatefulWidget {
   const AdminTherapistRosterScreen({super.key});
@@ -15,15 +20,18 @@ class AdminTherapistRosterScreen extends StatefulWidget {
 
 class _AdminTherapistRosterScreenState
     extends State<AdminTherapistRosterScreen> {
+  static const _pageSize = 5;
+
   final ApiService _api = ApiService();
   final TextEditingController _specialty = TextEditingController();
-  late Future<List<Zaposlenik>> _future;
+  late Future<_TherapistRosterData> _future;
   String _status = 'All Status';
+  int _page = 0;
 
   @override
   void initState() {
     super.initState();
-    _future = _api.getZaposlenici();
+    _future = _loadRoster();
   }
 
   @override
@@ -34,17 +42,39 @@ class _AdminTherapistRosterScreenState
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Zaposlenik>>(
+    final navQuery = context.watch<DesktopNav>().therapistSearchQuery;
+    return FutureBuilder<_TherapistRosterData>(
       future: _future,
       builder: (context, snap) {
-        final therapists = _rosterFromApi(snap.data ?? const <Zaposlenik>[]);
+        final data = snap.data ?? _TherapistRosterData.empty();
+        final therapists = data.therapists;
         final filtered = therapists.where((t) {
+          final q = navQuery.trim().toLowerCase();
           final s = _specialty.text.trim().toLowerCase();
+          final matchesSearch =
+              q.isEmpty ||
+              t.name.toLowerCase().contains(q) ||
+              t.specializations.any((x) => x.toLowerCase().contains(q));
           final matchesSpecialty =
               s.isEmpty ||
               t.specializations.any((x) => x.toLowerCase().contains(s));
-          return matchesSpecialty;
+          final matchesStatus =
+              _status == 'All Status' || t.rosterStatus == _status;
+          return matchesSearch && matchesSpecialty && matchesStatus;
         }).toList();
+        final maxPage = filtered.isEmpty
+            ? 0
+            : ((filtered.length - 1) / _pageSize).floor();
+        final page = _page.clamp(0, maxPage);
+        if (page != _page) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _page = page);
+          });
+        }
+        final visible = filtered
+            .skip(page * _pageSize)
+            .take(_pageSize)
+            .toList();
 
         return Stack(
           children: [
@@ -72,8 +102,12 @@ class _AdminTherapistRosterScreenState
                   _TherapistActionBar(
                     status: _status,
                     specialty: _specialty,
-                    onStatusChanged: (value) => setState(() => _status = value),
-                    onChanged: () => setState(() {}),
+                    onStatusChanged: (value) => setState(() {
+                      _status = value;
+                      _page = 0;
+                    }),
+                    onChanged: () => setState(() => _page = 0),
+                    onAdd: () => _editTherapist(null),
                   ),
                   const SizedBox(height: 18),
                   Expanded(
@@ -81,7 +115,18 @@ class _AdminTherapistRosterScreenState
                         ? const Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : _TherapistRosterList(therapists: filtered),
+                        : _TherapistRosterList(
+                            therapists: visible,
+                            totalCount: filtered.length,
+                            page: page,
+                            pageSize: _pageSize,
+                            onPageChanged: (next) =>
+                                setState(() => _page = next.clamp(0, maxPage)),
+                            onEdit: _editTherapist,
+                            onDelete: _deleteTherapist,
+                            onOpenProfile: _openProfile,
+                            onOpenDay: _openDaySlots,
+                          ),
                   ),
                 ],
               ),
@@ -92,51 +137,210 @@ class _AdminTherapistRosterScreenState
     );
   }
 
-  List<_RosterTherapist> _rosterFromApi(List<Zaposlenik> api) {
-    const fallbackNames = ['Amara', 'Lana', 'Mia', 'Zara', 'Marko'];
-    const fallbackSpecs = [
-      ['Deep Tissue', 'Swedish', 'Aromatherapy'],
-      ['Prenatal', 'Facial', 'Thai Massage'],
-      ['Facial', 'Aromatherapy', 'Stretching'],
-      ['Sports Massage', 'Rehabilitation', 'Deep Tissue'],
-      ['Thai Massage', 'Sports Massage', 'Swedish'],
-    ];
-
-    final rows = <_RosterTherapist>[
-      for (var i = 0; i < api.length && i < 5; i++)
-        _RosterTherapist(
-          name: '${api[i].ime} ${api[i].prezime}'.trim(),
-          role: i == 0 || i == 3 ? 'Senior Therapist' : 'Therapist',
-          rating: (4.75 + (i * 0.04)).clamp(4.7, 4.95),
-          reviews: 128 - (i * 13),
-          specializations: _tags(api[i].specijalizacija, fallbackSpecs[i]),
-          seed: api[i].id + i,
+  Future<_TherapistRosterData> _loadRoster() async {
+    final weekStart = _startOfWeek(DateTime.now());
+    final weekDays = List.generate(7, (i) => weekStart.add(Duration(days: i)));
+    final therapists = await _api.getZaposlenici();
+    final from30 = DateTime.now().subtract(const Duration(days: 30));
+    final kpis = await Future.wait(
+      therapists.map(
+        (t) => _api.getTherapistKpis(
+          zaposlenikId: t.id,
+          from: from30,
+          to: DateTime.now(),
         ),
-    ];
+      ),
+    );
+    final calendar = await _api.getRezervacijeCalendar(
+      from: weekStart,
+      to: weekStart.add(const Duration(days: 6)),
+      includeOtkazane: false,
+    );
 
-    for (var i = rows.length; i < 5; i++) {
-      rows.add(
-        _RosterTherapist(
-          name: fallbackNames[i],
-          role: i == 0 || i == 3 ? 'Senior Therapist' : 'Therapist',
-          rating: [4.9, 4.8, 4.9, 4.7, 4.8][i],
-          reviews: [128, 96, 142, 88, 74][i],
-          specializations: fallbackSpecs[i],
-          seed: i + 1,
-        ),
-      );
+    final kpiById = <int, TherapistKpi?>{};
+    for (var i = 0; i < therapists.length; i++) {
+      kpiById[therapists[i].id] = kpis[i];
     }
-    return rows;
+
+    return _TherapistRosterData(
+      weekDays: weekDays,
+      therapists: [
+        for (final therapist in therapists)
+          _buildRosterTherapist(
+            therapist,
+            kpiById[therapist.id],
+            weekDays,
+            calendar,
+          ),
+      ],
+    );
   }
 
-  List<String> _tags(String raw, List<String> fallback) {
+  _RosterTherapist _buildRosterTherapist(
+    Zaposlenik therapist,
+    TherapistKpi? kpi,
+    List<DateTime> weekDays,
+    List<RezervacijaCalendarItem> calendar,
+  ) {
+    final statuses = [
+      for (final day in weekDays)
+        _statusFromBookings(
+          calendar
+              .where(
+                (r) =>
+                    r.zaposlenikId == therapist.id &&
+                    _sameDay(r.datumRezervacije, day),
+              )
+              .length,
+        ),
+    ];
+    final rating = (kpi?.prosjecnaOcjena ?? 0) <= 0
+        ? null
+        : kpi!.prosjecnaOcjena;
+    final appointmentCount = kpi?.ukupnoRezervacija ?? 0;
+    return _RosterTherapist(
+      zaposlenik: therapist,
+      name: '${therapist.ime} ${therapist.prezime}'.trim(),
+      role: appointmentCount >= 20 ? 'Senior Therapist' : 'Therapist',
+      rating: rating,
+      reviews: appointmentCount,
+      specializations: _tags(therapist.specijalizacija),
+      weekDays: weekDays,
+      weekStatuses: statuses,
+      paidAppointments: kpi?.placeneRezervacije ?? 0,
+      revenue: kpi?.prihod ?? 0,
+    );
+  }
+
+  List<String> _tags(String raw) {
     final tags = raw
         .split(RegExp(r'[,;/]'))
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .take(4)
         .toList();
-    return tags.isEmpty ? fallback : tags;
+    return tags;
+  }
+
+  _AvailabilityStatus _statusFromBookings(int count) {
+    if (count >= 5) return _AvailabilityStatus.unavailable;
+    if (count > 0) return _AvailabilityStatus.partial;
+    return _AvailabilityStatus.available;
+  }
+
+  String _hm(DateTime d) {
+    final loc = d.toLocal();
+    return '${loc.hour.toString().padLeft(2, '0')}:${loc.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime _startOfWeek(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+  }
+
+  void _reload() {
+    setState(() {
+      _future = _loadRoster();
+    });
+  }
+
+  void _openProfile(_RosterTherapist therapist) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            AdminTherapistProfileScreen(therapist: therapist.zaposlenik),
+      ),
+    );
+  }
+
+  Future<void> _openDaySlots(_RosterTherapist therapist, DateTime day) async {
+    final slots = await _api.getDostupniTermini(
+      zaposlenikId: therapist.zaposlenik.id,
+      datum: day,
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          '${therapist.name} · ${day.toLocal().toString().split(' ').first}',
+        ),
+        content: SizedBox(
+          width: 520,
+          child: slots.isEmpty
+              ? const Text('Nema slobodnih termina za ovaj dan.')
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final slot in slots) Chip(label: Text(_hm(slot))),
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Zatvori'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editTherapist(_RosterTherapist? existing) async {
+    final saved = await showDialog<Zaposlenik>(
+      context: context,
+      builder: (_) => _TherapistEditorDialog(existing: existing?.zaposlenik),
+    );
+    if (saved == null || !mounted) return;
+
+    final result = existing == null
+        ? await _api.createZaposlenik(saved)
+        : await _api.updateZaposlenik(saved);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result == null
+              ? 'Greška pri čuvanju terapeuta.'
+              : 'Terapeut sačuvan.',
+        ),
+      ),
+    );
+    if (result != null) _reload();
+  }
+
+  Future<void> _deleteTherapist(_RosterTherapist therapist) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Obrisati terapeuta?'),
+        content: Text(
+          'Ova akcija će pokušati obrisati ${therapist.name}. Terapeuti s postojećim rezervacijama neće biti obrisani.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Odustani'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Obriši'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final error = await _api.deleteZaposlenik(therapist.zaposlenik.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error ?? 'Terapeut obrisan.')));
+    if (error == null) _reload();
   }
 }
 
@@ -146,12 +350,14 @@ class _TherapistActionBar extends StatelessWidget {
     required this.specialty,
     required this.onStatusChanged,
     required this.onChanged,
+    required this.onAdd,
   });
 
   final String status;
   final TextEditingController specialty;
   final ValueChanged<String> onStatusChanged;
   final VoidCallback onChanged;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -178,7 +384,7 @@ class _TherapistActionBar extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        _AddTherapistButton(),
+        _AddTherapistButton(onPressed: onAdd),
       ],
     );
   }
@@ -260,6 +466,10 @@ class _GlassField extends StatelessWidget {
 }
 
 class _AddTherapistButton extends StatefulWidget {
+  const _AddTherapistButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
   @override
   State<_AddTherapistButton> createState() => _AddTherapistButtonState();
 }
@@ -299,7 +509,7 @@ class _AddTherapistButtonState extends State<_AddTherapistButton> {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            onPressed: () {},
+            onPressed: widget.onPressed,
             icon: const Icon(Icons.add_rounded),
             label: const Text(
               'Add New Therapist',
@@ -313,9 +523,27 @@ class _AddTherapistButtonState extends State<_AddTherapistButton> {
 }
 
 class _TherapistRosterList extends StatelessWidget {
-  const _TherapistRosterList({required this.therapists});
+  const _TherapistRosterList({
+    required this.therapists,
+    required this.totalCount,
+    required this.page,
+    required this.pageSize,
+    required this.onPageChanged,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onOpenProfile,
+    required this.onOpenDay,
+  });
 
   final List<_RosterTherapist> therapists;
+  final int totalCount;
+  final int page;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<_RosterTherapist> onEdit;
+  final ValueChanged<_RosterTherapist> onDelete;
+  final ValueChanged<_RosterTherapist> onOpenProfile;
+  final void Function(_RosterTherapist therapist, DateTime day) onOpenDay;
 
   @override
   Widget build(BuildContext context) {
@@ -326,21 +554,40 @@ class _TherapistRosterList extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 18),
             itemCount: therapists.length,
             separatorBuilder: (_, _) => const SizedBox(height: 14),
-            itemBuilder: (context, i) =>
-                _TherapistRosterCard(therapist: therapists[i], index: i),
+            itemBuilder: (context, i) => _TherapistRosterCard(
+              therapist: therapists[i],
+              onEdit: onEdit,
+              onDelete: onDelete,
+              onOpenProfile: onOpenProfile,
+              onOpenDay: onOpenDay,
+            ),
           ),
         ),
-        const _RosterPagination(),
+        _RosterPagination(
+          totalCount: totalCount,
+          page: page,
+          pageSize: pageSize,
+          onPageChanged: onPageChanged,
+        ),
       ],
     );
   }
 }
 
 class _TherapistRosterCard extends StatefulWidget {
-  const _TherapistRosterCard({required this.therapist, required this.index});
+  const _TherapistRosterCard({
+    required this.therapist,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onOpenProfile,
+    required this.onOpenDay,
+  });
 
   final _RosterTherapist therapist;
-  final int index;
+  final ValueChanged<_RosterTherapist> onEdit;
+  final ValueChanged<_RosterTherapist> onDelete;
+  final ValueChanged<_RosterTherapist> onOpenProfile;
+  final void Function(_RosterTherapist therapist, DateTime day) onOpenDay;
 
   @override
   State<_TherapistRosterCard> createState() => _TherapistRosterCardState();
@@ -379,10 +626,18 @@ class _TherapistRosterCardState extends State<_TherapistRosterCard> {
                   const SizedBox(width: 30),
                   SizedBox(
                     width: 360,
-                    child: _WeeklyAvailability(seed: t.seed + widget.index),
+                    child: _WeeklyAvailability(
+                      weekDays: t.weekDays,
+                      statuses: t.weekStatuses,
+                      onOpenDay: (day) => widget.onOpenDay(t, day),
+                    ),
                   ),
                   const SizedBox(width: 18),
-                  const _RosterActions(),
+                  _RosterActions(
+                    onEdit: () => widget.onEdit(t),
+                    onDelete: () => widget.onDelete(t),
+                    onOpenProfile: () => widget.onOpenProfile(t),
+                  ),
                 ],
               ),
             ),
@@ -477,7 +732,7 @@ class _TherapistProfile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                t.role,
+                '${t.role} · ${t.paidAppointments} paid · ${t.revenue.toStringAsFixed(0)} KM',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: NuaLuxuryTokens.lavenderWhisper.withValues(
                     alpha: 0.62,
@@ -494,14 +749,14 @@ class _TherapistProfile extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    t.rating.toStringAsFixed(1),
+                    t.rating == null ? '—' : t.rating!.toStringAsFixed(1),
                     style: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '(${t.reviews} reviews)',
+                    '(${t.reviews} appointments)',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: Colors.white.withValues(alpha: 0.5),
                     ),
@@ -582,14 +837,15 @@ class _Specializations extends StatelessWidget {
 }
 
 class _WeeklyAvailability extends StatelessWidget {
-  const _WeeklyAvailability({required this.seed});
+  const _WeeklyAvailability({
+    required this.weekDays,
+    required this.statuses,
+    required this.onOpenDay,
+  });
 
-  final int seed;
-
-  static final _week = List.generate(
-    7,
-    (i) => DateTime(2025, 5, 19).add(Duration(days: i)),
-  );
+  final List<DateTime> weekDays;
+  final List<_AvailabilityStatus> statuses;
+  final ValueChanged<DateTime> onOpenDay;
 
   @override
   Widget build(BuildContext context) {
@@ -609,7 +865,7 @@ class _WeeklyAvailability extends StatelessWidget {
               ),
             ),
             Text(
-              'May 19 – May 25, 2025',
+              '${_dateLabel(weekDays.first)} – ${_dateLabel(weekDays.last)}',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
                 fontWeight: FontWeight.w700,
@@ -620,9 +876,13 @@ class _WeeklyAvailability extends StatelessWidget {
         const SizedBox(height: 15),
         Row(
           children: [
-            for (var i = 0; i < _week.length; i++)
+            for (var i = 0; i < weekDays.length; i++)
               Expanded(
-                child: _DayStatus(day: _week[i], status: _statusFor(seed, i)),
+                child: _DayStatus(
+                  day: weekDays[i],
+                  status: statuses[i],
+                  onTap: () => onOpenDay(weekDays[i]),
+                ),
               ),
           ],
         ),
@@ -630,19 +890,35 @@ class _WeeklyAvailability extends StatelessWidget {
     );
   }
 
-  _AvailabilityStatus _statusFor(int seed, int index) {
-    final value = (seed + index) % 5;
-    if (value == 0) return _AvailabilityStatus.unavailable;
-    if (value == 2 || value == 4) return _AvailabilityStatus.partial;
-    return _AvailabilityStatus.available;
+  String _dateLabel(DateTime day) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[day.month - 1]} ${day.day}';
   }
 }
 
 class _DayStatus extends StatelessWidget {
-  const _DayStatus({required this.day, required this.status});
+  const _DayStatus({
+    required this.day,
+    required this.status,
+    required this.onTap,
+  });
 
   final DateTime day;
   final _AvailabilityStatus status;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -652,59 +928,87 @@ class _DayStatus extends StatelessWidget {
       _AvailabilityStatus.partial => NuaLuxuryTokens.champagneGold,
       _AvailabilityStatus.unavailable => NuaLuxuryTokens.softPurpleGlow,
     };
-    return Column(
-      children: [
-        Text(
-          names[day.weekday - 1],
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.56),
-            fontWeight: FontWeight.w800,
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Column(
+        children: [
+          Text(
+            names[day.weekday - 1],
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.56),
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          '${day.day}',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.8),
-            fontWeight: FontWeight.w900,
+          const SizedBox(height: 2),
+          Text(
+            '${day.day}',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w900,
+            ),
           ),
-        ),
-        const SizedBox(height: 11),
-        Container(
-          width: 15,
-          height: 15,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            boxShadow: [
-              BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 12),
-            ],
+          const SizedBox(height: 11),
+          Container(
+            width: 15,
+            height: 15,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              boxShadow: [
+                BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 12),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _RosterActions extends StatelessWidget {
-  const _RosterActions();
+  const _RosterActions({
+    required this.onEdit,
+    required this.onDelete,
+    required this.onOpenProfile,
+  });
+
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: const [
-        _RosterActionButton(icon: Icons.edit_outlined),
-        SizedBox(height: 10),
-        _RosterActionButton(icon: Icons.more_horiz_rounded),
+      children: [
+        _RosterActionButton(icon: Icons.edit_outlined, onTap: onEdit),
+        const SizedBox(height: 10),
+        PopupMenuButton<String>(
+          tooltip: 'Akcije',
+          color: NuaLuxuryTokens.voidViolet,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          onSelected: (value) {
+            if (value == 'profile') onOpenProfile();
+            if (value == 'delete') onDelete();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'profile', child: Text('View profile')),
+            PopupMenuItem(value: 'delete', child: Text('Delete therapist')),
+          ],
+          child: const _RosterActionButton(icon: Icons.more_horiz_rounded),
+        ),
       ],
     );
   }
 }
 
 class _RosterActionButton extends StatefulWidget {
-  const _RosterActionButton({required this.icon});
+  const _RosterActionButton({required this.icon, this.onTap});
 
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   State<_RosterActionButton> createState() => _RosterActionButtonState();
@@ -719,100 +1023,132 @@ class _RosterActionButtonState extends State<_RosterActionButton> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.045),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: NuaLuxuryTokens.lavenderWhisper.withValues(
-              alpha: _hover ? 0.3 : 0.12,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.045),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                alpha: _hover ? 0.3 : 0.12,
+              ),
             ),
-          ),
-          boxShadow: _hover
-              ? [
-                  BoxShadow(
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.18,
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                        alpha: 0.18,
+                      ),
+                      blurRadius: 16,
                     ),
-                    blurRadius: 16,
-                  ),
-                ]
-              : null,
+                  ]
+                : null,
+          ),
+          child: Icon(widget.icon, size: 20),
         ),
-        child: Icon(widget.icon, size: 20),
       ),
     );
   }
 }
 
 class _RosterPagination extends StatelessWidget {
-  const _RosterPagination();
+  const _RosterPagination({
+    required this.totalCount,
+    required this.page,
+    required this.pageSize,
+    required this.onPageChanged,
+  });
+
+  final int totalCount;
+  final int page;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
 
   @override
   Widget build(BuildContext context) {
+    final from = totalCount == 0 ? 0 : page * pageSize + 1;
+    final to = (from + pageSize - 1).clamp(0, totalCount);
+    final pages = totalCount == 0
+        ? 1
+        : ((totalCount - 1) / pageSize).floor() + 1;
     return Row(
       children: [
         Text(
-          'Showing 1 to 5 of 15 therapists',
+          'Showing $from to $to of $totalCount therapists',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.58),
             fontWeight: FontWeight.w700,
           ),
         ),
         const Spacer(),
-        _PageButton(label: '<'),
+        _PageButton(label: '<', onTap: () => onPageChanged(page - 1)),
         const SizedBox(width: 8),
-        _PageButton(label: '1', active: true),
-        const SizedBox(width: 8),
-        _PageButton(label: '2'),
-        const SizedBox(width: 8),
-        _PageButton(label: '3'),
-        const SizedBox(width: 8),
-        _PageButton(label: '>'),
+        for (var i = 0; i < pages; i++) ...[
+          _PageButton(
+            label: '${i + 1}',
+            active: i == page,
+            onTap: () => onPageChanged(i),
+          ),
+          const SizedBox(width: 8),
+        ],
+        _PageButton(label: '>', onTap: () => onPageChanged(page + 1)),
       ],
     );
   }
 }
 
 class _PageButton extends StatelessWidget {
-  const _PageButton({required this.label, this.active = false});
+  const _PageButton({
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
 
   final String label;
+  final VoidCallback onTap;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: active
-            ? NuaLuxuryTokens.softPurpleGlow
-            : Colors.white.withValues(alpha: 0.045),
-        border: Border.all(
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
           color: active
-              ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.88)
-              : Colors.white.withValues(alpha: 0.1),
+              ? NuaLuxuryTokens.softPurpleGlow
+              : Colors.white.withValues(alpha: 0.045),
+          border: Border.all(
+            color: active
+                ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.88)
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                      alpha: 0.28,
+                    ),
+                    blurRadius: 16,
+                  ),
+                ]
+              : null,
         ),
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.28),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w900,
-          color: const Color(0xFFF5F3FA),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFFF5F3FA),
+          ),
         ),
       ),
     );
@@ -841,22 +1177,167 @@ class _AmbientOrb extends StatelessWidget {
   }
 }
 
+class _TherapistEditorDialog extends StatefulWidget {
+  const _TherapistEditorDialog({this.existing});
+
+  final Zaposlenik? existing;
+
+  @override
+  State<_TherapistEditorDialog> createState() => _TherapistEditorDialogState();
+}
+
+class _TherapistEditorDialogState extends State<_TherapistEditorDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _ime = TextEditingController(
+    text: widget.existing?.ime ?? '',
+  );
+  late final TextEditingController _prezime = TextEditingController(
+    text: widget.existing?.prezime ?? '',
+  );
+  late final TextEditingController _specijalizacija = TextEditingController(
+    text: widget.existing?.specijalizacija ?? '',
+  );
+  late final TextEditingController _telefon = TextEditingController(
+    text: widget.existing?.telefon ?? '',
+  );
+
+  @override
+  void dispose() {
+    _ime.dispose();
+    _prezime.dispose();
+    _specijalizacija.dispose();
+    _telefon.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Add therapist' : 'Edit therapist'),
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _ime,
+                decoration: const InputDecoration(labelText: 'Ime'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Ime je obavezno.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _prezime,
+                decoration: const InputDecoration(labelText: 'Prezime'),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Prezime je obavezno.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _specijalizacija,
+                decoration: const InputDecoration(
+                  labelText: 'Specijalizacije',
+                  helperText: 'Odvojite tagove zarezom, npr. Swedish, Facial',
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Specijalizacija je obavezna.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _telefon,
+                decoration: const InputDecoration(
+                  labelText: 'Telefon (opcionalno)',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Otkaži'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(
+              context,
+              Zaposlenik(
+                id: widget.existing?.id ?? 0,
+                ime: _ime.text.trim(),
+                prezime: _prezime.text.trim(),
+                specijalizacija: _specijalizacija.text.trim(),
+                telefon: _telefon.text.trim().isEmpty
+                    ? null
+                    : _telefon.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Sačuvaj'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TherapistRosterData {
+  const _TherapistRosterData({
+    required this.weekDays,
+    required this.therapists,
+  });
+
+  final List<DateTime> weekDays;
+  final List<_RosterTherapist> therapists;
+
+  factory _TherapistRosterData.empty() {
+    final start = DateTime.now();
+    return _TherapistRosterData(
+      weekDays: List.generate(7, (i) => start.add(Duration(days: i))),
+      therapists: const [],
+    );
+  }
+}
+
 class _RosterTherapist {
   const _RosterTherapist({
+    required this.zaposlenik,
     required this.name,
     required this.role,
     required this.rating,
     required this.reviews,
     required this.specializations,
-    required this.seed,
+    required this.weekDays,
+    required this.weekStatuses,
+    required this.paidAppointments,
+    required this.revenue,
   });
 
+  final Zaposlenik zaposlenik;
   final String name;
   final String role;
-  final double rating;
+  final double? rating;
   final int reviews;
   final List<String> specializations;
-  final int seed;
+  final List<DateTime> weekDays;
+  final List<_AvailabilityStatus> weekStatuses;
+  final int paidAppointments;
+  final double revenue;
+
+  String get rosterStatus {
+    if (weekStatuses.every((x) => x == _AvailabilityStatus.available)) {
+      return 'Available';
+    }
+    if (weekStatuses.every((x) => x == _AvailabilityStatus.unavailable)) {
+      return 'Offline';
+    }
+    return 'Partially Booked';
+  }
 }
 
 enum _AvailabilityStatus { available, partial, unavailable }

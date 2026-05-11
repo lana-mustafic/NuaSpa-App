@@ -142,6 +142,16 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       hintText: isTherapists
                           ? 'Search therapists…'
                           : 'Search services & treatments (Enter → Services)…',
+                      onChanged: isTherapists
+                          ? (q) => context
+                                .read<DesktopNav>()
+                                .setTherapistSearchQuery(q)
+                          : null,
+                      onSubmitted: isTherapists
+                          ? (q) => context
+                                .read<DesktopNav>()
+                                .setTherapistSearchQuery(q)
+                          : null,
                     ),
                   ),
                 ),

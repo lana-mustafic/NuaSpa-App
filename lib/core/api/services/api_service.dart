@@ -103,6 +103,50 @@ class ApiService {
     }
   }
 
+  Future<Zaposlenik?> createZaposlenik(Zaposlenik zaposlenik) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Zaposlenik',
+        data: zaposlenik.toJson(includeId: false),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Zaposlenik.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.createZaposlenik: $e');
+      return null;
+    }
+  }
+
+  Future<Zaposlenik?> updateZaposlenik(Zaposlenik zaposlenik) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Zaposlenik/${zaposlenik.id}',
+        data: zaposlenik.toJson(),
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Zaposlenik.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.updateZaposlenik: $e');
+      return null;
+    }
+  }
+
+  Future<String?> deleteZaposlenik(int id) async {
+    try {
+      await _dio.delete<void>('Zaposlenik/$id');
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      debugPrint('Greška u ApiService.deleteZaposlenik: $e');
+      return e.message;
+    }
+  }
+
   Future<TherapistKpi?> getTherapistKpis({
     required int zaposlenikId,
     required DateTime from,
@@ -175,9 +219,7 @@ class ApiService {
     }
   }
 
-  Future<DesktopHomeOverview?> getDesktopHomeOverview({
-    DateTime? day,
-  }) async {
+  Future<DesktopHomeOverview?> getDesktopHomeOverview({DateTime? day}) async {
     try {
       final query = <String, dynamic>{};
       if (day != null) {
@@ -205,10 +247,7 @@ class ApiService {
     int take = 20,
   }) async {
     try {
-      final query = <String, dynamic>{
-        'korisnikId': korisnikId,
-        'take': take,
-      };
+      final query = <String, dynamic>{'korisnikId': korisnikId, 'take': take};
       if (excludeRezervacijaId != null) {
         query['excludeRezervacijaId'] = excludeRezervacijaId;
       }
@@ -219,8 +258,9 @@ class ApiService {
       final data = response.data;
       if (data is! List) return [];
       return data
-          .map((e) =>
-              RezervacijaPovijestItem.fromJson(e as Map<String, dynamic>))
+          .map(
+            (e) => RezervacijaPovijestItem.fromJson(e as Map<String, dynamic>),
+          )
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijaPovijestZaKlijenta: $e');
@@ -228,10 +268,7 @@ class ApiService {
     }
   }
 
-  Future<bool> cancelRezervacija(
-    int id, {
-    String? razlogOtkaza,
-  }) async {
+  Future<bool> cancelRezervacija(int id, {String? razlogOtkaza}) async {
     try {
       await _dio.patch<void>(
         'Rezervacija/$id/cancel',
@@ -257,10 +294,7 @@ class ApiService {
           '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       final response = await _dio.get<dynamic>(
         'Rezervacija/dostupni-termini',
-        queryParameters: {
-          'zaposlenikId': zaposlenikId,
-          'datum': dateStr,
-        },
+        queryParameters: {'zaposlenikId': zaposlenikId, 'datum': dateStr},
       );
       final data = response.data;
       if (data is! List) return [];
@@ -364,11 +398,7 @@ class ApiService {
     try {
       final response = await _dio.post<dynamic>(
         'Recenzija',
-        data: {
-          'uslugaId': uslugaId,
-          'ocjena': ocjena,
-          'komentar': komentar,
-        },
+        data: {'uslugaId': uslugaId, 'ocjena': ocjena, 'komentar': komentar},
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
@@ -570,9 +600,7 @@ class ApiService {
     try {
       final response = await _dio.get<dynamic>(
         'Izvjestaj/kpi',
-        queryParameters: {
-          if (date != null) 'date': date.toIso8601String(),
-        },
+        queryParameters: {if (date != null) 'date': date.toIso8601String()},
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
@@ -703,8 +731,10 @@ class ApiService {
       if (data is! List) return [];
       return data
           .whereType<Map>()
-          .map((e) =>
-              RezervacijaCalendarItem.fromJson(Map<String, dynamic>.from(e)))
+          .map(
+            (e) =>
+                RezervacijaCalendarItem.fromJson(Map<String, dynamic>.from(e)),
+          )
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeCalendar: $e');
@@ -806,10 +836,7 @@ class ApiService {
 
   Future<bool> updateProstorija(Prostorija dto) async {
     try {
-      await _dio.put<void>(
-        'Resursi/prostorije/${dto.id}',
-        data: dto.toJson(),
-      );
+      await _dio.put<void>('Resursi/prostorije/${dto.id}', data: dto.toJson());
       return true;
     } catch (e) {
       debugPrint('Greška u ApiService.updateProstorija: $e');
@@ -859,10 +886,7 @@ class ApiService {
 
   Future<bool> updateOprema(Oprema dto) async {
     try {
-      await _dio.put<void>(
-        'Resursi/oprema/${dto.id}',
-        data: dto.toJson(),
-      );
+      await _dio.put<void>('Resursi/oprema/${dto.id}', data: dto.toJson());
       return true;
     } catch (e) {
       debugPrint('Greška u ApiService.updateOprema: $e');
