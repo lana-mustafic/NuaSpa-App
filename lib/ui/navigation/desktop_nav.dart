@@ -26,12 +26,15 @@ class DesktopNav extends ChangeNotifier {
 
   /// Jednokratni upit za [ServiceCatalogScreen] nakon navigacije iz globalne tračice.
   String? _pendingCatalogSearch;
+  String _therapistSearchQuery = '';
 
   DesktopRouteKey get route => _route;
 
   int get adminSuiteMount => _adminSuiteMount;
 
   AdminSuiteRoute get adminSuiteTarget => _adminSuiteTarget;
+
+  String get therapistSearchQuery => _therapistSearchQuery;
 
   /// Postavi defaultnu landing stranicu za admina (Command Center).
   void seedAdminLandingIfNeeded(bool isAdmin) {
@@ -62,6 +65,16 @@ class DesktopNav extends ChangeNotifier {
     final t = raw.trim();
     _pendingCatalogSearch = t.isEmpty ? null : t;
     goTo(DesktopRouteKey.catalog);
+  }
+
+  void setTherapistSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_therapistSearchQuery == value) return;
+    _therapistSearchQuery = value;
+    if (_route != DesktopRouteKey.therapists) {
+      _route = DesktopRouteKey.therapists;
+    }
+    notifyListeners();
   }
 
   String? takePendingCatalogSearch() {

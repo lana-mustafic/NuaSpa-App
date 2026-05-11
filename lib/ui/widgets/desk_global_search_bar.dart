@@ -8,11 +8,15 @@ class DeskGlobalSearchBar extends StatefulWidget {
   const DeskGlobalSearchBar({
     super.key,
     this.hintText = 'Search services & treatments (Enter → Services)…',
+    this.onSubmitted,
+    this.onChanged,
   });
 
   static const desktopHorizontalPadding = 32.0;
 
   final String hintText;
+  final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<DeskGlobalSearchBar> createState() => _DeskGlobalSearchBarState();
@@ -69,7 +73,12 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar>
           child: TextField(
             focusNode: _node,
             textInputAction: TextInputAction.search,
+            onChanged: widget.onChanged,
             onSubmitted: (q) {
+              if (widget.onSubmitted != null) {
+                widget.onSubmitted!(q);
+                return;
+              }
               context.read<DesktopNav>().goToCatalogWithSearch(q);
             },
             decoration: InputDecoration(
