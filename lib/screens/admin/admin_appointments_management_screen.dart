@@ -369,57 +369,75 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _FilterPill(
-          icon: Icons.date_range_outlined,
-          label: _dateLabel(selectedDate),
-          onTap: onPickDate,
-        ),
-        const SizedBox(width: 10),
-        _DropdownPill<int?>(
-          value: therapistId,
-          hint: 'All Therapists',
-          items: [
-            const DropdownMenuItem(value: null, child: Text('All Therapists')),
-            for (final t in therapists)
-              DropdownMenuItem(
-                value: t.id,
-                child: Text('${t.ime} ${t.prezime}'),
-              ),
+    final filters = <Widget>[
+      _FilterPill(
+        icon: Icons.date_range_outlined,
+        label: _dateLabel(selectedDate),
+        onTap: onPickDate,
+      ),
+      _DropdownPill<int?>(
+        value: therapistId,
+        hint: 'All Therapists',
+        items: [
+          const DropdownMenuItem(value: null, child: Text('All Therapists')),
+          for (final t in therapists)
+            DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
+        ],
+        onChanged: onTherapistChanged,
+      ),
+      _DropdownPill<int?>(
+        value: serviceId,
+        hint: 'All Services',
+        items: [
+          const DropdownMenuItem(value: null, child: Text('All Services')),
+          for (final s in services)
+            DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+        ],
+        onChanged: onServiceChanged,
+      ),
+      _DropdownPill<String>(
+        value: status,
+        hint: 'All Status',
+        items: const [
+          DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+          DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+          DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+          DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+        ],
+        onChanged: (v) {
+          if (v != null) onStatusChanged(v);
+        },
+      ),
+    ];
+    final actions = <Widget>[
+      _ViewSwitcher(value: view, onChanged: onViewChanged),
+      _GradientButton(label: '+ New Appointment', onTap: onNew),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [...filters, ...actions],
+          );
+        }
+
+        return Row(
+          children: [
+            for (final filter in filters) ...[
+              filter,
+              const SizedBox(width: 10),
+            ],
+            const Spacer(),
+            actions.first,
+            const SizedBox(width: 14),
+            actions.last,
           ],
-          onChanged: onTherapistChanged,
-        ),
-        const SizedBox(width: 10),
-        _DropdownPill<int?>(
-          value: serviceId,
-          hint: 'All Services',
-          items: [
-            const DropdownMenuItem(value: null, child: Text('All Services')),
-            for (final s in services)
-              DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-          ],
-          onChanged: onServiceChanged,
-        ),
-        const SizedBox(width: 10),
-        _DropdownPill<String>(
-          value: status,
-          hint: 'All Status',
-          items: const [
-            DropdownMenuItem(value: 'All Status', child: Text('All Status')),
-            DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
-            DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-            DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-          ],
-          onChanged: (v) {
-            if (v != null) onStatusChanged(v);
-          },
-        ),
-        const Spacer(),
-        _ViewSwitcher(value: view, onChanged: onViewChanged),
-        const SizedBox(width: 14),
-        _GradientButton(label: '+ New Appointment', onTap: onNew),
-      ],
+        );
+      },
     );
   }
 
