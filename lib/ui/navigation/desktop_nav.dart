@@ -28,6 +28,7 @@ class DesktopNav extends ChangeNotifier {
   String? _pendingCatalogSearch;
   String _therapistSearchQuery = '';
   String _appointmentSearchQuery = '';
+  int _appointmentCreateRequest = 0;
 
   DesktopRouteKey get route => _route;
 
@@ -38,6 +39,8 @@ class DesktopNav extends ChangeNotifier {
   String get therapistSearchQuery => _therapistSearchQuery;
 
   String get appointmentSearchQuery => _appointmentSearchQuery;
+
+  int get appointmentCreateRequest => _appointmentCreateRequest;
 
   /// Postavi defaultnu landing stranicu za admina (Command Center).
   void seedAdminLandingIfNeeded(bool isAdmin) {
@@ -84,6 +87,14 @@ class DesktopNav extends ChangeNotifier {
     final value = raw.trim();
     if (_appointmentSearchQuery == value) return;
     _appointmentSearchQuery = value;
+    if (_route != DesktopRouteKey.reservations) {
+      _route = DesktopRouteKey.reservations;
+    }
+    notifyListeners();
+  }
+
+  void requestAppointmentCreate() {
+    _appointmentCreateRequest++;
     if (_route != DesktopRouteKey.reservations) {
       _route = DesktopRouteKey.reservations;
     }

@@ -311,6 +311,7 @@ class ApiService {
   }
 
   Future<Rezervacija?> createRezervacija({
+    int? korisnikId,
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
@@ -318,19 +319,20 @@ class ApiService {
     List<RezervacijaOpremaItem>? oprema,
   }) async {
     try {
-      final response = await _dio.post<dynamic>(
-        'Rezervacija',
-        data: {
-          'datumRezervacije': datumRezervacije.toIso8601String(),
-          'uslugaId': uslugaId,
-          'zaposlenikId': zaposlenikId,
-          'prostorijaId': prostorijaId,
-          'oprema': (oprema ?? const [])
-              .where((x) => x.opremaId > 0 && x.kolicina > 0)
-              .map((x) => x.toJson())
-              .toList(),
-        },
-      );
+      final body = <String, dynamic>{
+        'datumRezervacije': datumRezervacije.toIso8601String(),
+        'uslugaId': uslugaId,
+        'zaposlenikId': zaposlenikId,
+        'prostorijaId': prostorijaId,
+        'oprema': (oprema ?? const [])
+            .where((x) => x.opremaId > 0 && x.kolicina > 0)
+            .map((x) => x.toJson())
+            .toList(),
+      };
+      if (korisnikId != null) {
+        body['korisnikId'] = korisnikId;
+      }
+      final response = await _dio.post<dynamic>('Rezervacija', data: body);
 
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;

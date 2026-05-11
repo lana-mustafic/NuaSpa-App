@@ -548,9 +548,8 @@ class _QuickActionsCard extends StatelessWidget {
               _QuickActionButton(
                 label: appointmentsMode ? 'New Appointment' : 'New Appointment',
                 icon: Icons.add_circle_outline_rounded,
-                onTap: () => context.read<DesktopNav>().goTo(
-                  DesktopRouteKey.reservations,
-                ),
+                onTap: () =>
+                    context.read<DesktopNav>().requestAppointmentCreate(),
               ),
               const SizedBox(height: 8),
               _QuickActionButton(
@@ -558,11 +557,11 @@ class _QuickActionsCard extends StatelessWidget {
                 icon: appointmentsMode
                     ? Icons.directions_walk_outlined
                     : Icons.person_add_alt_1_outlined,
-                onTap: () => context.read<DesktopNav>().goTo(
-                  appointmentsMode
-                      ? DesktopRouteKey.reservations
-                      : DesktopRouteKey.therapists,
-                ),
+                onTap: () => appointmentsMode
+                    ? context.read<DesktopNav>().requestAppointmentCreate()
+                    : context.read<DesktopNav>().goTo(
+                        DesktopRouteKey.therapists,
+                      ),
               ),
             ],
           ),
