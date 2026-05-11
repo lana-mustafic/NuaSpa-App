@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_command_center_screen.dart';
+import '../../screens/admin/admin_revenue_analytics_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
 import '../../screens/admin/admin_suite_route.dart';
+import '../../screens/admin/admin_therapist_roster_screen.dart';
 import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/desktop/luxury_placeholder_screen.dart';
 import '../../screens/desktop/luxury_settings_screen.dart';
@@ -28,6 +30,7 @@ class LuxurySideItem {
   final DesktopRouteKey route;
   final String label;
   final IconData icon;
+
   /// When set together with [route] == admin, selects inner Admin Suite tab/view.
   final AdminSuiteRoute? suite;
 }
@@ -42,8 +45,11 @@ class DesktopShell extends StatefulWidget {
 }
 
 class _DesktopShellState extends State<DesktopShell> {
-  DateTime _filterDay =
-      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+  DateTime _filterDay = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -79,8 +85,7 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.people_outline,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.admin,
-        suite: AdminSuiteRoute.therapists,
+        route: DesktopRouteKey.therapists,
         label: 'Therapists',
         icon: Icons.spa_outlined,
       ),
@@ -90,14 +95,23 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
+        route: DesktopRouteKey.packages,
+        label: 'Packages',
+        icon: Icons.card_giftcard_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.reviews,
+        label: 'Reviews',
+        icon: Icons.reviews_outlined,
+      ),
+      LuxurySideItem(
         route: DesktopRouteKey.admin,
         suite: AdminSuiteRoute.finance,
         label: 'Payments',
         icon: Icons.payments_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.admin,
-        suite: AdminSuiteRoute.overview,
+        route: DesktopRouteKey.revenueAnalytics,
         label: 'Reports',
         icon: Icons.area_chart_rounded,
       ),
@@ -157,14 +171,40 @@ class _DesktopShellState extends State<DesktopShell> {
     final items = auth.isAdmin
         ? adminItems
         : auth.isZaposlenik
-            ? therapistItems
-            : clientItems;
+        ? therapistItems
+        : clientItems;
 
     Widget buildPage() {
       switch (nav.route) {
         case DesktopRouteKey.commandCenter:
           if (!auth.isAdmin) return widget.home;
           return AdminCommandCenterScreen(filterDay: _filterDay);
+        case DesktopRouteKey.therapists:
+          return auth.isAdmin
+              ? const AdminTherapistRosterScreen()
+              : widget.home;
+        case DesktopRouteKey.revenueAnalytics:
+          return auth.isAdmin
+              ? const AdminRevenueAnalyticsScreen()
+              : widget.home;
+        case DesktopRouteKey.packages:
+          return auth.isAdmin
+              ? const LuxuryPlaceholderScreen(
+                  title: 'Package atelier',
+                  subtitle:
+                      'Curated rituals, couple journeys, membership bundles, and seasonal spa collections.',
+                  icon: Icons.card_giftcard_outlined,
+                )
+              : widget.home;
+        case DesktopRouteKey.reviews:
+          return auth.isAdmin
+              ? const LuxuryPlaceholderScreen(
+                  title: 'Guest sentiment',
+                  subtitle:
+                      'Review intelligence, satisfaction recovery, public replies, and premium service signals.',
+                  icon: Icons.reviews_outlined,
+                )
+              : widget.home;
         case DesktopRouteKey.marketing:
           return auth.isAdmin
               ? const LuxuryPlaceholderScreen(
@@ -226,8 +266,9 @@ class _DesktopShellState extends State<DesktopShell> {
                       borderRadius: BorderRadius.circular(26),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color:
-                              NuaLuxuryTokens.voidViolet.withValues(alpha: 0.22),
+                          color: NuaLuxuryTokens.voidViolet.withValues(
+                            alpha: 0.22,
+                          ),
                           borderRadius: BorderRadius.circular(26),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.088),
@@ -244,21 +285,20 @@ class _DesktopShellState extends State<DesktopShell> {
                             ),
                             Expanded(
                               child: AnimatedSwitcher(
-                                duration:
-                                    const Duration(milliseconds: 280),
+                                duration: const Duration(milliseconds: 280),
                                 switchInCurve: Curves.easeOutCubic,
                                 switchOutCurve: Curves.easeInCubic,
                                 transitionBuilder: (child, anim) =>
                                     FadeTransition(
-                                  opacity: anim,
-                                  child: SlideTransition(
-                                    position: Tween<Offset>(
-                                      begin: const Offset(0.01, 0.015),
-                                      end: Offset.zero,
-                                    ).animate(anim),
-                                    child: child,
-                                  ),
-                                ),
+                                      opacity: anim,
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: const Offset(0.01, 0.015),
+                                          end: Offset.zero,
+                                        ).animate(anim),
+                                        child: child,
+                                      ),
+                                    ),
                                 child: KeyedSubtree(
                                   key: ValueKey(
                                     '${nav.route.name}'
@@ -314,8 +354,13 @@ class _LuxuryRail extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 38, sigmaY: 38),
         child: Container(
-          width: expanded ? 250 : 86,
-          padding: EdgeInsets.fromLTRB(expanded ? 14 : 8, 20, expanded ? 14 : 8, 16),
+          width: expanded ? 258 : 86,
+          padding: EdgeInsets.fromLTRB(
+            expanded ? 14 : 8,
+            20,
+            expanded ? 14 : 8,
+            16,
+          ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.055),
             borderRadius: BorderRadius.circular(24),
@@ -325,8 +370,7 @@ class _LuxuryRail extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color:
-                    NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.07),
+                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.07),
                 blurRadius: 36,
               ),
             ],
@@ -337,8 +381,9 @@ class _LuxuryRail extends StatelessWidget {
                 : CrossAxisAlignment.center,
             children: [
               Row(
-                mainAxisAlignment:
-                    expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -346,7 +391,9 @@ class _LuxuryRail extends StatelessWidget {
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.55),
+                          NuaLuxuryTokens.softPurpleGlow.withValues(
+                            alpha: 0.55,
+                          ),
                           NuaLuxuryTokens.deepIndigo.withValues(alpha: 0),
                         ],
                       ),
@@ -359,13 +406,29 @@ class _LuxuryRail extends StatelessWidget {
                   ),
                   if (expanded) ...[
                     const SizedBox(width: 11),
-                    Text(
-                      'NuaSpa',
-                      style:
-                          Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'NuaSpa',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w900,
                                 letterSpacing: -0.3,
                               ),
+                        ),
+                        Text(
+                          'ADMIN PANEL',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: NuaLuxuryTokens.champagneGold.withValues(
+                                  alpha: 0.84,
+                                ),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.4,
+                              ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -385,6 +448,13 @@ class _LuxuryRail extends StatelessWidget {
                   itemBuilder: (_, i) {
                     final it = items[i];
                     final sel = _selected(nav, it);
+                    if (expanded && it.label == 'Reports') {
+                      return _ReportsMenu(
+                        item: it,
+                        selected: sel,
+                        onPick: () => onPick(it),
+                      );
+                    }
                     return _SidebarTile(
                       expanded: expanded,
                       label: it.label,
@@ -399,6 +469,13 @@ class _LuxuryRail extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.08),
                 thickness: 0.5,
               ),
+              if (expanded) ...[
+                const SizedBox(height: 12),
+                nav.route == DesktopRouteKey.revenueAnalytics
+                    ? _UpgradePremiumCard()
+                    : _QuickActionsCard(),
+                const SizedBox(height: 12),
+              ],
               _SidebarTile(
                 expanded: expanded,
                 label: 'Sign out',
@@ -406,6 +483,373 @@ class _LuxuryRail extends StatelessWidget {
                 selected: false,
                 danger: true,
                 onTap: () => context.read<AuthProvider>().logout(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionsCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.07),
+                NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.1),
+              width: 0.85,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Quick Actions',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _QuickActionButton(
+                label: 'New Appointment',
+                icon: Icons.add_circle_outline_rounded,
+                onTap: () => context.read<DesktopNav>().goTo(
+                  DesktopRouteKey.reservations,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _QuickActionButton(
+                label: 'Add Therapist',
+                icon: Icons.person_add_alt_1_outlined,
+                onTap: () =>
+                    context.read<DesktopNav>().goTo(DesktopRouteKey.therapists),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpgradePremiumCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.18),
+                NuaLuxuryTokens.voidViolet.withValues(alpha: 0.35),
+                NuaLuxuryTokens.champagneGold.withValues(alpha: 0.08),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 0.85,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.18),
+                blurRadius: 30,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.16),
+                  border: Border.all(
+                    color: NuaLuxuryTokens.champagneGold.withValues(
+                      alpha: 0.34,
+                    ),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_outlined,
+                  color: NuaLuxuryTokens.champagneGold,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Upgrade to Premium',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Unlock advanced insights and reports.',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                    alpha: 0.58,
+                  ),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: NuaLuxuryTokens.champagneGold,
+                    foregroundColor: const Color(0xFF120B24),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () {},
+                  child: const Text(
+                    'Upgrade Now',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportsMenu extends StatelessWidget {
+  const _ReportsMenu({
+    required this.item,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final LuxurySideItem item;
+  final bool selected;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final subItems = const [
+      'Revenue Analytics',
+      'Sales Overview',
+      'Service Performance',
+      'Therapist Performance',
+      'Client Retention',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SidebarTile(
+          expanded: true,
+          label: item.label,
+          icon: item.icon,
+          selected: selected,
+          onTap: onPick,
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(left: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final label in subItems)
+                _ReportsSubTile(
+                  label: label,
+                  active: label == 'Revenue Analytics',
+                  onTap: label == 'Revenue Analytics'
+                      ? () => context.read<DesktopNav>().goTo(
+                          DesktopRouteKey.revenueAnalytics,
+                        )
+                      : () {},
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportsSubTile extends StatefulWidget {
+  const _ReportsSubTile({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  State<_ReportsSubTile> createState() => _ReportsSubTileState();
+}
+
+class _ReportsSubTileState extends State<_ReportsSubTile> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: widget.active
+                ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.16)
+                : _hover
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.transparent,
+            border: Border.all(
+              color: widget.active
+                  ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35)
+                  : Colors.transparent,
+            ),
+            boxShadow: widget.active
+                ? [
+                    BoxShadow(
+                      color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                        alpha: 0.18,
+                      ),
+                      blurRadius: 18,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.active
+                      ? NuaLuxuryTokens.softPurpleGlow
+                      : Colors.white.withValues(alpha: 0.24),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: widget.active
+                        ? FontWeight.w900
+                        : FontWeight.w700,
+                    color: widget.active
+                        ? const Color(0xFFF5F3FA)
+                        : NuaLuxuryTokens.lavenderWhisper.withValues(
+                            alpha: 0.64,
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatefulWidget {
+  const _QuickActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
+}
+
+class _QuickActionButtonState extends State<_QuickActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white.withValues(alpha: _hover ? 0.095 : 0.045),
+            border: Border.all(
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                alpha: _hover ? 0.32 : 0.14,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 18, color: NuaLuxuryTokens.champagneGold),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
@@ -451,8 +895,7 @@ class _SidebarTileState extends State<_SidebarTile> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: borderRadius,
-          splashColor:
-              NuaLuxuryTokens.champagneGold.withValues(alpha: 0.08),
+          splashColor: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.08),
           onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -466,8 +909,8 @@ class _SidebarTileState extends State<_SidebarTile> {
               color: widget.selected
                   ? Colors.white.withValues(alpha: 0.11)
                   : _hover
-                      ? Colors.white.withValues(alpha: 0.058)
-                      : Colors.transparent,
+                  ? Colors.white.withValues(alpha: 0.058)
+                  : Colors.transparent,
               border: Border.all(
                 color: widget.selected
                     ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.82)
@@ -476,8 +919,9 @@ class _SidebarTileState extends State<_SidebarTile> {
               boxShadow: widget.selected
                   ? [
                       BoxShadow(
-                        color:
-                            NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.32),
+                        color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                          alpha: 0.32,
+                        ),
                         blurRadius: 22,
                         spreadRadius: -2,
                       ),
@@ -495,8 +939,8 @@ class _SidebarTileState extends State<_SidebarTile> {
                   color: widget.danger
                       ? const Color(0xFFFF8A80)
                       : widget.selected || _hover
-                          ? NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.98)
-                          : Colors.white.withValues(alpha: 0.62),
+                      ? NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.98)
+                      : Colors.white.withValues(alpha: 0.62),
                 ),
                 if (widget.expanded) ...[
                   const SizedBox(width: 13),
@@ -506,12 +950,12 @@ class _SidebarTileState extends State<_SidebarTile> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.06,
-                            color: widget.danger
-                                ? const Color(0xFFFF8A80)
-                                : Colors.white.withValues(alpha: 0.92),
-                          ),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.06,
+                        color: widget.danger
+                            ? const Color(0xFFFF8A80)
+                            : Colors.white.withValues(alpha: 0.92),
+                      ),
                     ),
                   ),
                 ],

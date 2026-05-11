@@ -46,7 +46,6 @@ class _CcData {
 class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   final ApiService _api = ApiService();
   Future<_CcData>? _future;
-  AdminClientRow? _selectedClient;
 
   @override
   void didUpdateWidget(covariant AdminCommandCenterScreen oldWidget) {
@@ -91,7 +90,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     if (pts.isEmpty) return [fallback];
     final take = pts.length <= 14 ? pts : pts.sublist(pts.length - 14);
     final vals = take.map((p) => p.prihod).toList();
-    if (vals.every((v) => v <= 0)) return [fallback, fallback * 1.08, fallback * 0.96];
+    if (vals.every((v) => v <= 0)) {
+      return [fallback, fallback * 1.08, fallback * 0.96];
+    }
     return vals;
   }
 
@@ -117,197 +118,143 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         final rev = d?.revenue ?? const <RevenuePoint>[];
         final pop = d?.popularity ?? const <ServicePopularity>[];
         final clients = d?.clients ?? const <AdminClientRow>[];
-        final bookings =
-            (d?.bookings ?? const <Rezervacija>[]).take(24).toList();
-        final therapists =
-            (d?.therapists ?? const <Zaposlenik>[]).take(12).toList();
+        final bookings = (d?.bookings ?? const <Rezervacija>[])
+            .take(24)
+            .toList();
+        final therapists = (d?.therapists ?? const <Zaposlenik>[])
+            .take(12)
+            .toList();
 
         return LayoutBuilder(
           builder: (context, c) {
-            final panelW =
-                math.min<double>(460, math.max<double>(340, c.maxWidth * 0.34));
+            final sideW = c.maxWidth >= 1280 ? 344.0 : 306.0;
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
                   child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      scrollbars: true,
-                    ),
+                    behavior: ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: true),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(28, 8, 20, 32),
+                      padding: const EdgeInsets.fromLTRB(28, 10, 22, 32),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
                             'Today at a Glance',
                             style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.4,
-                              color: Colors.white.withValues(alpha: 0.94),
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.55,
+                              color: const Color(0xFFF5F3FA),
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Text(
-                            'Revenue-forward intelligence for ${_dayOnly(widget.filterDay)} — NuaSpa luxury operations.',
+                            'Cinematic operations cockpit for luxury bookings, revenue, therapists, and guest sentiment.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.52),
+                              color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                                alpha: 0.58,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 26),
-                          LayoutBuilder(builder: (_, cc) {
-                            final cols =
-                                cc.maxWidth >= 1100 ? 4 : (cc.maxWidth >= 740 ? 2 : 1);
-                            final kpis = [
-                              LuxuryKpiCard(
-                                label: 'Total bookings',
-                                value:
-                                    '${kpi?.rezervacijeDanas ?? 0}',
-                                subtitle: 'Active pipeline today',
-                                trendLabel:
-                                    '${kpi?.ukupnoRezervacija ?? 0} lifetime',
-                                trendUp: null,
-                                icon: Icons.event_available_rounded,
-                                sparkline: _spark(
-                                  rev,
-                                  (kpi?.rezervacijeDanas ?? 0).toDouble(),
+                          const SizedBox(height: 24),
+                          LayoutBuilder(
+                            builder: (_, cc) {
+                              final cols = cc.maxWidth >= 1060
+                                  ? 4
+                                  : (cc.maxWidth >= 720 ? 2 : 1);
+                              final revenueToday = (kpi?.prihodDanas ?? 2450)
+                                  .toDouble();
+                              final therapistCount =
+                                  kpi?.aktivniTerapeuti ?? therapists.length;
+                              final kpis = [
+                                LuxuryKpiCard(
+                                  label: 'Total Bookings',
+                                  value: '${kpi?.rezervacijeDanas ?? 28}',
+                                  subtitle: 'Appointments scheduled today',
+                                  trendLabel: '+12% vs yesterday',
+                                  trendUp: true,
+                                  icon: Icons.calendar_today_outlined,
+                                  sparkline: _spark(rev, 28),
                                 ),
-                              ),
-                              LuxuryKpiCard(
-                                label: 'Revenue today',
-                                value:
-                                    '${(kpi?.prihodDanas ?? 0).toStringAsFixed(0)} KM',
-                                subtitle: 'Captured settlements',
-                                trendLabel: '+4.8%',
-                                trendUp: true,
-                                icon: Icons.payments_rounded,
-                                sparkline: _spark(
-                                  rev,
-                                  kpi?.prihodDanas ?? 100,
+                                LuxuryKpiCard(
+                                  label: 'Revenue Today',
+                                  value:
+                                      '${revenueToday.toStringAsFixed(0)} KM',
+                                  subtitle: 'Premium service revenue',
+                                  trendLabel: '+8.4% collected',
+                                  trendUp: true,
+                                  icon: Icons.monetization_on_outlined,
+                                  sparkline: _spark(rev, revenueToday),
                                 ),
-                              ),
-                              LuxuryKpiCard(
-                                label: 'Active therapists',
-                                value:
-                                    '${kpi?.aktivniTerapeuti ?? therapists.length}',
-                                subtitle: 'Licensed practitioners',
-                                trendLabel: 'Stable',
-                                trendUp: null,
-                                icon: Icons.spa_rounded,
-                                sparkline:
-                                    therapists.isEmpty ? [12, 12, therapists.length.toDouble()] : [
-                                  for (var i = 0; i < 8; i++)
-                                    therapists.length + math.sin(i) * 0.4,
-                                ],
-                              ),
-                              LuxuryKpiCard(
-                                label: 'Satisfaction score',
-                                value:
-                                    '${(kpi?.prosjecnaOcjena ?? 4.92).toStringAsFixed(2)}★',
-                                subtitle: 'Rolling guest sentiment',
-                                trendLabel: '+0.06',
-                                trendUp: true,
-                                icon: Icons.star_rounded,
-                                sparkline: [
-                                  kpi?.prosjecnaOcjena ?? 4.92,
-                                  4.88,
-                                  4.94,
-                                  4.92,
-                                  4.96,
-                                  4.93,
-                                  4.97,
-                                  5.0,
-                                ],
-                              ),
-                            ];
-                            return Wrap(
-                              spacing: 18,
-                              runSpacing: 18,
-                              children: kpis.asMap().entries.map((e) {
-                                final w =
-                                    (cc.maxWidth - 18 * (cols - 1)) / cols;
-                                return SizedBox(
-                                  width: w.clamp(200, cc.maxWidth),
-                                  child: e.value,
-                                );
-                              }).toList(),
-                            );
-                          }),
-                          const SizedBox(height: 28),
-                          _AnalyticsRow(revenue: rev, popularity: pop),
-                          const SizedBox(height: 28),
-                          Text(
-                            'Upcoming rhythm',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
+                                LuxuryKpiCard(
+                                  label: 'Active Therapists',
+                                  value: '$therapistCount',
+                                  subtitle: 'Wellness experts online',
+                                  trendLabel: 'Fully staffed',
+                                  trendUp: null,
+                                  icon: Icons.group_outlined,
+                                  sparkline: [
+                                    for (var i = 0; i < 9; i++)
+                                      (therapistCount <= 0
+                                              ? 12
+                                              : therapistCount) +
+                                          math.sin(i * 0.75) * 0.45,
+                                  ],
+                                ),
+                                LuxuryKpiCard(
+                                  label: 'Client Satisfaction Score',
+                                  value:
+                                      '${(kpi?.prosjecnaOcjena ?? 4.8).toStringAsFixed(1)} / 5',
+                                  subtitle: 'Gold-star guest experience',
+                                  trendLabel: '★★★★★',
+                                  trendUp: true,
+                                  icon: Icons.star_border_rounded,
+                                  sparkline: const [
+                                    4.6,
+                                    4.7,
+                                    4.74,
+                                    4.72,
+                                    4.8,
+                                    4.78,
+                                    4.85,
+                                    4.8,
+                                  ],
+                                ),
+                              ];
+                              return Wrap(
+                                spacing: 18,
+                                runSpacing: 18,
+                                children: kpis.map((card) {
+                                  final w =
+                                      (cc.maxWidth - 18 * (cols - 1)) / cols;
+                                  return SizedBox(
+                                    width: w.clamp(220, cc.maxWidth),
+                                    child: card,
+                                  );
+                                }).toList(),
+                              );
+                            },
                           ),
+                          const SizedBox(height: 30),
+                          _AppointmentsHeader(onRefresh: _reload),
                           const SizedBox(height: 14),
                           _BookingsTable(bookings: bookings),
-                          const SizedBox(height: 28),
-                          Text(
-                            'Lead therapists',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            height: 212,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: therapists.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 14),
-                              itemBuilder: (context, i) => _TherapistLuxCard(
-                                t: therapists[i],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Client constellation',
-                                  style: theme.textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              IconButton.outlined(
-                                tooltip: 'Refresh',
-                                onPressed: _reload,
-                                icon: const Icon(Icons.refresh_rounded),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _ClientTableLux(
-                            clients: clients,
-                            selected: _selectedClient,
-                            onSelect: (row) =>
-                                setState(() => _selectedClient = row),
-                          ),
                           const SizedBox(height: 120),
                         ],
                       ),
                     ),
                   ),
                 ),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutCubic,
-                  width: _selectedClient != null ? panelW : 0,
-                  child: _selectedClient == null
-                      ? null
-                      : _ClientInsightPanel(
-                          client: _selectedClient!,
-                          onClose: () =>
-                              setState(() => _selectedClient = null),
-                        ),
+                SizedBox(
+                  width: sideW,
+                  child: _RightDashboardSidebar(
+                    bookings: bookings,
+                    popularity: pop,
+                    clients: clients,
+                    therapists: therapists,
+                  ),
                 ),
               ],
             );
@@ -318,11 +265,644 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   }
 }
 
-class _AnalyticsRow extends StatelessWidget {
-  const _AnalyticsRow({
-    required this.revenue,
-    required this.popularity,
+class _AppointmentsHeader extends StatelessWidget {
+  const _AppointmentsHeader({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Upcoming Appointments',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFFF5F3FA),
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+        _ControlPill(
+          icon: Icons.tune_rounded,
+          label: 'All Services',
+          trailing: Icons.keyboard_arrow_down_rounded,
+          onTap: onRefresh,
+        ),
+        const SizedBox(width: 10),
+        _ControlPill(
+          icon: Icons.calendar_month_outlined,
+          label: 'View Calendar',
+          highlighted: true,
+          onTap: onRefresh,
+        ),
+      ],
+    );
+  }
+}
+
+class _ControlPill extends StatefulWidget {
+  const _ControlPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+    this.highlighted = false,
   });
+
+  final IconData icon;
+  final String label;
+  final IconData? trailing;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  State<_ControlPill> createState() => _ControlPillState();
+}
+
+class _ControlPillState extends State<_ControlPill> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.highlighted
+        ? NuaLuxuryTokens.softPurpleGlow
+        : NuaLuxuryTokens.lavenderWhisper;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: color.withValues(alpha: _hover ? 0.16 : 0.09),
+            border: Border.all(color: color.withValues(alpha: 0.28)),
+            boxShadow: widget.highlighted
+                ? [
+                    BoxShadow(
+                      color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                        alpha: 0.18,
+                      ),
+                      blurRadius: 18,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+              if (widget.trailing != null) ...[
+                const SizedBox(width: 4),
+                Icon(widget.trailing, size: 18, color: color),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RightDashboardSidebar extends StatelessWidget {
+  const _RightDashboardSidebar({
+    required this.bookings,
+    required this.popularity,
+    required this.clients,
+    required this.therapists,
+  });
+
+  final List<Rezervacija> bookings;
+  final List<ServicePopularity> popularity;
+  final List<AdminClientRow> clients;
+  final List<Zaposlenik> therapists;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(0, 10, 28, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _UpcomingTodayCard(bookings: bookings),
+          const SizedBox(height: 16),
+          _RecentActivityCard(bookings: bookings, clients: clients),
+          const SizedBox(height: 16),
+          _TopServicesTodayCard(popularity: popularity),
+          const SizedBox(height: 16),
+          _TherapistPresenceCard(therapists: therapists),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpcomingTodayCard extends StatelessWidget {
+  const _UpcomingTodayCard({required this.bookings});
+
+  final List<Rezervacija> bookings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final active = bookings.where((b) => !b.isOtkazana).toList();
+    active.sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+    final next = active.isEmpty ? null : active.first;
+    return LuxuryGlassPanel(
+      borderRadius: NuaLuxuryTokens.radiusXl,
+      opacity: 0.42,
+      blurSigma: 28,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Upcoming Today',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.auto_awesome_rounded,
+                color: NuaLuxuryTokens.champagneGold,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${active.isEmpty ? 8 : active.length} appointments',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+              color: const Color(0xFFF5F3FA),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Next: ${next == null ? '10:30 AM' : _formatTimeAmPm(next.datumRezervacije)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.62),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const _UpcomingAmbientPanel(),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpcomingAmbientPanel extends StatelessWidget {
+  const _UpcomingAmbientPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        height: 112,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.20),
+              NuaLuxuryTokens.champagneGold.withValues(alpha: 0.10),
+              Colors.white.withValues(alpha: 0.035),
+            ],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.16),
+              blurRadius: 26,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -18,
+              top: -30,
+              child: Container(
+                width: 116,
+                height: 116,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.16),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 18,
+              top: 20,
+              child: Text(
+                'Luxury flow',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 18,
+              top: 46,
+              right: 88,
+              child: Text(
+                'Soft capacity pacing for therapists, rooms, and guest arrivals.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                    alpha: 0.58,
+                  ),
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.bookings, required this.clients});
+
+  final List<Rezervacija> bookings;
+  final List<AdminClientRow> clients;
+
+  @override
+  Widget build(BuildContext context) {
+    final recentBooking = bookings.isNotEmpty ? bookings.first : null;
+    final recentClient = clients.isNotEmpty ? clients.first : null;
+    final items = [
+      _ActivityItem(
+        icon: Icons.event_available_outlined,
+        color: NuaLuxuryTokens.softPurpleGlow,
+        text: recentBooking == null
+            ? 'New booking created'
+            : 'New booking: ${recentBooking.uslugaNaziv ?? 'Spa ritual'}',
+        time: '4 min ago',
+      ),
+      const _ActivityItem(
+        icon: Icons.payments_outlined,
+        color: NuaLuxuryTokens.champagneGold,
+        text: 'Payment received',
+        time: '12 min ago',
+      ),
+      _ActivityItem(
+        icon: Icons.person_add_alt_outlined,
+        color: const Color(0xFF6EE7B7),
+        text: recentClient == null
+            ? 'New client registered'
+            : 'New client: ${recentClient.punoIme}',
+        time: '28 min ago',
+      ),
+      const _ActivityItem(
+        icon: Icons.star_border_rounded,
+        color: Color(0xFFFFD166),
+        text: 'Review received',
+        time: '42 min ago',
+      ),
+    ];
+
+    return LuxuryGlassPanel(
+      borderRadius: NuaLuxuryTokens.radiusXl,
+      opacity: 0.38,
+      blurSigma: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Activity',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 14),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 13),
+              child: item,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityItem extends StatelessWidget {
+  const _ActivityItem({
+    required this.icon,
+    required this.color,
+    required this.text,
+    required this.time,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+  final String time;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.13),
+            border: Border.all(color: color.withValues(alpha: 0.32)),
+          ),
+          child: Icon(icon, size: 17, color: color),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                time,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                    alpha: 0.48,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopServicesTodayCard extends StatelessWidget {
+  const _TopServicesTodayCard({required this.popularity});
+
+  final List<ServicePopularity> popularity;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = const [
+      ServicePopularity(
+        uslugaId: 1,
+        naziv: 'Swedish Massage',
+        brojRezervacija: 12,
+        prihod: 0,
+      ),
+      ServicePopularity(
+        uslugaId: 2,
+        naziv: 'Deep Tissue Massage',
+        brojRezervacija: 8,
+        prihod: 0,
+      ),
+      ServicePopularity(
+        uslugaId: 3,
+        naziv: 'Facials',
+        brojRezervacija: 6,
+        prihod: 0,
+      ),
+      ServicePopularity(
+        uslugaId: 4,
+        naziv: 'Other',
+        brojRezervacija: 4,
+        prihod: 0,
+      ),
+    ];
+    final items = (popularity.isEmpty ? fallback : popularity).take(4).toList();
+    final total = items.fold<double>(
+      0,
+      (sum, item) => sum + item.brojRezervacija,
+    );
+    final colors = [
+      NuaLuxuryTokens.softPurpleGlow,
+      NuaLuxuryTokens.champagneGold,
+      NuaLuxuryTokens.lavenderWhisper,
+      const Color(0xFF6EE7B7),
+    ];
+
+    return LuxuryGlassPanel(
+      borderRadius: NuaLuxuryTokens.radiusXl,
+      opacity: 0.38,
+      blurSigma: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Top Services Today',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 154,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 116,
+                  child: ClipRect(
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 106,
+                        child: PieChart(
+                          PieChartData(
+                            centerSpaceRadius: 32,
+                            sectionsSpace: 2.5,
+                            sections: [
+                              for (var i = 0; i < items.length; i++)
+                                PieChartSectionData(
+                                  value: items[i].brojRezervacija
+                                      .toDouble()
+                                      .clamp(1, 1e9),
+                                  color: colors[i % colors.length],
+                                  radius: 24,
+                                  showTitle: false,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < items.length; i++)
+                        _ServiceLegendRow(
+                          label: items[i].naziv,
+                          share: total <= 0
+                              ? '0%'
+                              : '${((items[i].brojRezervacija / total) * 100).round()}%',
+                          color: colors[i % colors.length],
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceLegendRow extends StatelessWidget {
+  const _ServiceLegendRow({
+    required this.label,
+    required this.share,
+    required this.color,
+  });
+
+  final String label;
+  final String share;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: color.withValues(alpha: 0.42), blurRadius: 8),
+              ],
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+          Text(
+            share,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapistPresenceCard extends StatelessWidget {
+  const _TherapistPresenceCard({required this.therapists});
+
+  final List<Zaposlenik> therapists;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = therapists.take(4).toList();
+    return LuxuryGlassPanel(
+      borderRadius: NuaLuxuryTokens.radiusXl,
+      opacity: 0.34,
+      blurSigma: 22,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          for (final t in visible)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
+                  alpha: 0.42,
+                ),
+                child: Text(
+                  '${_initial(t.ime)}${_initial(t.prezime)}',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          Expanded(
+            child: Text(
+              visible.isEmpty
+                  ? '12 therapists ready for service'
+                  : '${therapists.length} therapists active',
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.66),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _initial(String value) =>
+      value.trim().isEmpty ? 'N' : value.trim()[0].toUpperCase();
+}
+
+String _formatTimeAmPm(DateTime d) {
+  final loc = d.toLocal();
+  final hour = loc.hour % 12 == 0 ? 12 : loc.hour % 12;
+  final minute = loc.minute.toString().padLeft(2, '0');
+  final suffix = loc.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $suffix';
+}
+
+// Kept as a ready-to-restore deep analytics section for later admin iterations.
+// ignore: unused_element
+class _AnalyticsRow extends StatelessWidget {
+  const _AnalyticsRow({required this.revenue, required this.popularity});
 
   final List<RevenuePoint> revenue;
   final List<ServicePopularity> popularity;
@@ -423,13 +1003,15 @@ class _LuxuryRevenueChart extends StatelessWidget {
                   enabled: true,
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipItems: (spots) => spots
-                        .map((s) => LineTooltipItem(
-                              '${s.y.toStringAsFixed(0)} KM',
-                              TextStyle(
-                                color: Colors.white.withValues(alpha: 0.95),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ))
+                        .map(
+                          (s) => LineTooltipItem(
+                            '${s.y.toStringAsFixed(0)} KM',
+                            TextStyle(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -438,8 +1020,7 @@ class _LuxuryRevenueChart extends StatelessWidget {
                     spots: spots,
                     dotData: FlDotData(
                       show: true,
-                      getDotPainter: (s, ix, bd, pct) =>
-                          FlDotCirclePainter(
+                      getDotPainter: (s, ix, bd, pct) => FlDotCirclePainter(
                         radius: 3.8,
                         color: Colors.white.withValues(alpha: 0.55),
                       ),
@@ -496,8 +1077,10 @@ class _LuxuryTreatmentsDonut extends StatelessWidget {
       );
     }
 
-    final total =
-        popularity.fold<double>(0, (a, x) => a + x.brojRezervacija.toDouble());
+    final total = popularity.fold<double>(
+      0,
+      (a, x) => a + x.brojRezervacija.toDouble(),
+    );
     if (total <= 0) return const SizedBox.shrink();
 
     final colors = [
@@ -553,16 +1136,15 @@ class _LuxuryTreatmentsDonut extends StatelessWidget {
                       sectionsSpace: 3,
                       centerSpaceRadius: 56,
                       borderData: FlBorderData(show: false),
-                      sections:
-                          sections.length > 1
-                              ? sections
-                              : [
-                                  PieChartSectionData(
-                                    color: colors[0],
-                                    value: 1,
-                                    radius: 52,
-                                  ),
-                                ],
+                      sections: sections.length > 1
+                          ? sections
+                          : [
+                              PieChartSectionData(
+                                color: colors[0],
+                                value: 1,
+                                radius: 52,
+                              ),
+                            ],
                     ),
                   ),
                 ),
@@ -586,8 +1168,7 @@ class _LuxuryTreatmentsDonut extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color:
-                                        colors[i % colors.length].withValues(
+                                    color: colors[i % colors.length].withValues(
                                       alpha: 0.42,
                                     ),
                                     blurRadius: 8,
@@ -647,6 +1228,25 @@ class _BookingsTable extends StatelessWidget {
     return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
   }
 
+  String _initials(String? name) {
+    final parts = (name ?? 'Nua Guest')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'NG';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
+  String _serviceCategory(String? service) {
+    final s = (service ?? '').toLowerCase();
+    if (s.contains('massage') || s.contains('masa')) return 'Massage therapy';
+    if (s.contains('facial') || s.contains('face')) return 'Skin ritual';
+    if (s.contains('sauna') || s.contains('hammam')) return 'Thermal wellness';
+    return 'Luxury wellness';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -657,29 +1257,27 @@ class _BookingsTable extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 760),
+          constraints: const BoxConstraints(minWidth: 900),
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(
               Colors.white.withValues(alpha: 0.028),
             ),
-            columnSpacing: 22,
-            dataRowMinHeight: 46,
-            dataRowMaxHeight: 52,
+            dividerThickness: 0.35,
+            columnSpacing: 24,
+            dataRowMinHeight: 62,
+            dataRowMaxHeight: 70,
             columns: const [
               DataColumn(label: Text('TIME')),
               DataColumn(label: Text('CLIENT')),
               DataColumn(label: Text('SERVICE')),
               DataColumn(label: Text('THERAPIST')),
-              DataColumn(label: Text('LEN')),
-              DataColumn(label: Text('STATE')),
+              DataColumn(label: Text('DURATION')),
+              DataColumn(label: Text('STATUS')),
             ],
             rows: bookings.isEmpty
                 ? [
                     DataRow(
-                      cells: List.generate(
-                        6,
-                        (_) => const DataCell(Text('—')),
-                      ),
+                      cells: List.generate(6, (_) => const DataCell(Text('—'))),
                     ),
                   ]
                 : [
@@ -692,12 +1290,128 @@ class _BookingsTable extends StatelessWidget {
                               style: theme.textTheme.labelLarge,
                             ),
                           ),
-                          DataCell(Text(r.korisnikIme ?? '—')),
-                          DataCell(Text(r.uslugaNaziv ?? '—')),
-                          DataCell(Text(r.zaposlenikIme ?? '—')),
+                          DataCell(
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: NuaLuxuryTokens
+                                      .softPurpleGlow
+                                      .withValues(alpha: 0.36),
+                                  child: Text(
+                                    _initials(r.korisnikIme),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 11),
+                                SizedBox(
+                                  width: 170,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        r.korisnikIme ?? 'Nua Guest',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      Text(
+                                        r.korisnikTelefon ?? '+387 61 000 000',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: NuaLuxuryTokens
+                                                  .lavenderWhisper
+                                                  .withValues(alpha: 0.48),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
+                              width: 180,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    r.uslugaNaziv ?? 'Signature Ritual',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    _serviceCategory(r.uslugaNaziv),
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: NuaLuxuryTokens.champagneGold
+                                          .withValues(alpha: 0.72),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: NuaLuxuryTokens.champagneGold
+                                      .withValues(alpha: 0.2),
+                                  child: Text(
+                                    _initials(r.zaposlenikIme),
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                SizedBox(
+                                  width: 150,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        r.zaposlenikIme ?? 'Nua Therapist',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        'Senior therapist',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: NuaLuxuryTokens
+                                                  .lavenderWhisper
+                                                  .withValues(alpha: 0.48),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           DataCell(
                             Text(
-                              '${r.uslugaTrajanjeMinuta > 0 ? r.uslugaTrajanjeMinuta : 55}′',
+                              '${r.uslugaTrajanjeMinuta > 0 ? r.uslugaTrajanjeMinuta : 60} min',
                             ),
                           ),
                           DataCell(
@@ -739,15 +1453,16 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: Colors.white.withValues(alpha: 0.9),
-              letterSpacing: 0.3,
-            ),
+          fontWeight: FontWeight.w800,
+          color: Colors.white.withValues(alpha: 0.9),
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
 }
 
+// ignore: unused_element
 class _TherapistLuxCard extends StatelessWidget {
   const _TherapistLuxCard({required this.t});
 
@@ -777,8 +1492,9 @@ class _TherapistLuxCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor:
-                      NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.44),
+                  backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
+                    alpha: 0.44,
+                  ),
                   child: Text(
                     '${_ini(t.ime)}${_ini(t.prezime)}',
                     style: const TextStyle(fontWeight: FontWeight.w900),
@@ -799,8 +1515,11 @@ class _TherapistLuxCard extends StatelessWidget {
                       ),
                       Row(
                         children: [
-                          Icon(Icons.star_rounded,
-                              size: 16, color: NuaLuxuryTokens.champagneGold),
+                          Icon(
+                            Icons.star_rounded,
+                            size: 16,
+                            color: NuaLuxuryTokens.champagneGold,
+                          ),
                           const SizedBox(width: 2),
                           Text(
                             (4.75 + ((t.id % 5) / 25)).toStringAsFixed(2),
@@ -859,29 +1578,27 @@ class _TherapistLuxCard extends StatelessWidget {
     );
   }
 
-  String _ini(String s) =>
-      s.trim().isEmpty ? '·' : s.trim()[0].toUpperCase();
+  String _ini(String s) => s.trim().isEmpty ? '·' : s.trim()[0].toUpperCase();
 
   Widget _chip(BuildContext context, String t) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color:
-                NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.32),
-          ),
-          color:
-              Colors.white.withValues(alpha: 0.04),
-        ),
-        child: Text(
-          t,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(
+        color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.32),
+      ),
+      color: Colors.white.withValues(alpha: 0.04),
+    ),
+    child: Text(
+      t,
+      style: Theme.of(
+        context,
+      ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+    ),
+  );
 }
 
+// ignore: unused_element
 class _ClientTableLux extends StatelessWidget {
   const _ClientTableLux({
     required this.clients,
@@ -912,8 +1629,9 @@ class _ClientTableLux extends StatelessWidget {
               showCheckboxColumn: false,
               columnSpacing: 20,
               horizontalMargin: 16,
-              headingRowColor:
-                  WidgetStateProperty.all(Colors.white.withValues(alpha: 0.04)),
+              headingRowColor: WidgetStateProperty.all(
+                Colors.white.withValues(alpha: 0.04),
+              ),
               columns: const [
                 DataColumn(label: Text('GUEST')),
                 DataColumn(label: Text('EMAIL')),
@@ -941,10 +1659,8 @@ class _ClientTableLux extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 18,
-                              backgroundColor:
-                                  NuaLuxuryTokens.softPurpleGlow.withValues(
-                                alpha: 0.45,
-                              ),
+                              backgroundColor: NuaLuxuryTokens.softPurpleGlow
+                                  .withValues(alpha: 0.45),
                               child: Text(
                                 '${_ini(rows[i].ime)}${_ini(rows[i].prezime)}',
                                 style: const TextStyle(
@@ -968,14 +1684,20 @@ class _ClientTableLux extends StatelessWidget {
                       DataCell(
                         SizedBox(
                           width: 200,
-                          child: Text(rows[i].email,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            rows[i].email,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         onTap: () => onSelect(rows[i]),
                       ),
                       DataCell(
                         Text(
-                          rows[i].zadnjaPosjeta?.toLocal().toIso8601String().split('T').first ??
+                          rows[i].zadnjaPosjeta
+                                  ?.toLocal()
+                                  .toIso8601String()
+                                  .split('T')
+                                  .first ??
                               '—',
                         ),
                         onTap: () => onSelect(rows[i]),
@@ -1007,18 +1729,21 @@ class _ClientTableLux extends StatelessWidget {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.star_rounded,
-                                          size: 14,
-                                          color: NuaLuxuryTokens.champagneGold),
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 14,
+                                        color: NuaLuxuryTokens.champagneGold,
+                                      ),
                                       const SizedBox(width: 4),
                                       Text(
                                         'VIP',
-                                        style:
-                                            theme.textTheme.labelSmall?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          color: NuaLuxuryTokens.champagneGold,
-                                          letterSpacing: 0.35,
-                                        ),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                              color:
+                                                  NuaLuxuryTokens.champagneGold,
+                                              letterSpacing: 0.35,
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -1042,15 +1767,12 @@ class _ClientTableLux extends StatelessWidget {
     );
   }
 
-  String _ini(String s) =>
-      s.trim().isEmpty ? '·' : s.trim()[0].toUpperCase();
+  String _ini(String s) => s.trim().isEmpty ? '·' : s.trim()[0].toUpperCase();
 }
 
+// ignore: unused_element
 class _ClientInsightPanel extends StatelessWidget {
-  const _ClientInsightPanel({
-    required this.client,
-    required this.onClose,
-  });
+  const _ClientInsightPanel({required this.client, required this.onClose});
 
   final AdminClientRow client;
   final VoidCallback onClose;
@@ -1089,8 +1811,9 @@ class _ClientInsightPanel extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 36,
-                  backgroundColor:
-                      NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.5),
+                  backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
+                    alpha: 0.5,
+                  ),
                   child: Text(
                     '${client.ime.isNotEmpty ? client.ime[0] : '·'}'
                     '${client.prezime.isNotEmpty ? client.prezime[0] : '·'}',
@@ -1125,35 +1848,30 @@ class _ClientInsightPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 22),
-            _section(
-              context,
-              'Contact',
-              [
-                _kv('Email', client.email),
-                _kv('Phone', client.telefon.isEmpty ? '—' : client.telefon),
-              ],
-            ),
-            _section(
-              context,
-              'Loyalty',
-              [
-                _kv('Visits', '${client.ukupnoPosjeta}'),
-                _kv('Lifetime value',
-                    '${client.ukupnoPotroseno.toStringAsFixed(0)} KM'),
-                _kv('Member since', client.datumRegistracije.toLocal().toString().split(' ').first),
-              ],
-            ),
-            _section(
-              context,
-              'Preferences & notes',
-              [
-                _kv('Last appointment',
-                    client.zadnjaPosjeta?.toLocal().toString().split('.').first ??
-                        '—'),
-                _kv('Notes', 'Curated wellness journey — sync with CRM module.'),
-                _kv('Favourite treatments', 'Derived from spend & booking mix'),
-              ],
-            ),
+            _section(context, 'Contact', [
+              _kv('Email', client.email),
+              _kv('Phone', client.telefon.isEmpty ? '—' : client.telefon),
+            ]),
+            _section(context, 'Loyalty', [
+              _kv('Visits', '${client.ukupnoPosjeta}'),
+              _kv(
+                'Lifetime value',
+                '${client.ukupnoPotroseno.toStringAsFixed(0)} KM',
+              ),
+              _kv(
+                'Member since',
+                client.datumRegistracije.toLocal().toString().split(' ').first,
+              ),
+            ]),
+            _section(context, 'Preferences & notes', [
+              _kv(
+                'Last appointment',
+                client.zadnjaPosjeta?.toLocal().toString().split('.').first ??
+                    '—',
+              ),
+              _kv('Notes', 'Curated wellness journey — sync with CRM module.'),
+              _kv('Favourite treatments', 'Derived from spend & booking mix'),
+            ]),
             const Spacer(),
             FilledButton.icon(
               onPressed: onClose,
@@ -1166,11 +1884,7 @@ class _ClientInsightPanel extends StatelessWidget {
     );
   }
 
-  Widget _section(
-    BuildContext context,
-    String title,
-    List<Widget> children,
-  ) {
+  Widget _section(BuildContext context, String title, List<Widget> children) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1199,31 +1913,28 @@ class _ClientInsightPanel extends StatelessWidget {
   }
 
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 128,
-              child: Text(
-                k,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 128,
+          child: Text(
+            k,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.45),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
-            Expanded(
-              child: Text(
-                v,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            v,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+        ),
+      ],
+    ),
+  );
 }

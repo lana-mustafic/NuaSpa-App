@@ -5,9 +5,14 @@ import '../navigation/desktop_nav.dart';
 
 /// Brza pretraga usluga: šalje upit u katalog pri navigaciji.
 class DeskGlobalSearchBar extends StatefulWidget {
-  const DeskGlobalSearchBar({super.key});
+  const DeskGlobalSearchBar({
+    super.key,
+    this.hintText = 'Search services & treatments (Enter → Services)…',
+  });
 
   static const desktopHorizontalPadding = 32.0;
+
+  final String hintText;
 
   @override
   State<DeskGlobalSearchBar> createState() => _DeskGlobalSearchBarState();
@@ -68,7 +73,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar>
               context.read<DesktopNav>().goToCatalogWithSearch(q);
             },
             decoration: InputDecoration(
-              hintText: 'Search services & treatments (Enter → Services)…',
+              hintText: widget.hintText,
               prefixIcon: const Icon(Icons.search_rounded, size: 22),
               border: InputBorder.none,
               filled: true,

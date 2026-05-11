@@ -4,7 +4,11 @@ import '../../screens/admin/admin_suite_route.dart';
 
 enum DesktopRouteKey {
   commandCenter,
+  therapists,
+  revenueAnalytics,
   marketing,
+  packages,
+  reviews,
   settings,
   home,
   catalog,
