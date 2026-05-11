@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_command_center_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
 import '../../screens/admin/admin_suite_route.dart';
+import '../../screens/admin/admin_therapist_roster_screen.dart';
 import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/desktop/luxury_placeholder_screen.dart';
 import '../../screens/desktop/luxury_settings_screen.dart';
@@ -83,8 +84,7 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.people_outline,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.admin,
-        suite: AdminSuiteRoute.therapists,
+        route: DesktopRouteKey.therapists,
         label: 'Therapists',
         icon: Icons.spa_outlined,
       ),
@@ -179,6 +179,10 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.commandCenter:
           if (!auth.isAdmin) return widget.home;
           return AdminCommandCenterScreen(filterDay: _filterDay);
+        case DesktopRouteKey.therapists:
+          return auth.isAdmin
+              ? const AdminTherapistRosterScreen()
+              : widget.home;
         case DesktopRouteKey.packages:
           return auth.isAdmin
               ? const LuxuryPlaceholderScreen(
@@ -529,9 +533,8 @@ class _QuickActionsCard extends StatelessWidget {
               _QuickActionButton(
                 label: 'Add Therapist',
                 icon: Icons.person_add_alt_1_outlined,
-                onTap: () => context.read<DesktopNav>().goToAdminSuite(
-                  AdminSuiteRoute.therapists,
-                ),
+                onTap: () =>
+                    context.read<DesktopNav>().goTo(DesktopRouteKey.therapists),
               ),
             ],
           ),

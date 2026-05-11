@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../navigation/desktop_nav.dart';
 import '../desk_global_search_bar.dart';
 import '../../theme/nua_luxury_tokens.dart';
 import 'luxury_glass_panel.dart';
@@ -66,8 +67,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final nav = context.watch<DesktopNav>();
     final theme = Theme.of(context);
     final day = selectedDay ?? DateTime.now();
+    final isTherapists = nav.route == DesktopRouteKey.therapists;
 
     final roleLabel = auth.isAdmin
         ? 'Administrator'
@@ -85,7 +88,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  auth.isAdmin
+                  isTherapists
+                      ? 'Therapists'
+                      : auth.isAdmin
                       ? 'Welcome back, Admin'
                       : 'Welcome back, ${auth.displayName ?? 'NuaSpa'}',
                   style: theme.textTheme.headlineMedium?.copyWith(
@@ -96,7 +101,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  auth.isAdmin
+                  isTherapists
+                      ? 'Manage your spa therapists, specialties and schedules.'
+                      : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
                   style: theme.textTheme.bodyMedium?.copyWith(
@@ -125,7 +132,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       width: 0.85,
                     ),
                   ),
-                  child: const DeskGlobalSearchBar(),
+                  child: DeskGlobalSearchBar(
+                    hintText: isTherapists
+                        ? 'Search therapists…'
+                        : 'Search services & treatments (Enter → Services)…',
+                  ),
                 ),
               ),
             ),
