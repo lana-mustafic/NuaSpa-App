@@ -73,6 +73,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isTherapists = nav.route == DesktopRouteKey.therapists;
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
     final isAppointments = nav.route == DesktopRouteKey.reservations;
+    final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
 
     final roleLabel = auth.isAdmin
         ? 'Super Admin'
@@ -94,6 +95,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Revenue Analytics'
                       : isAppointments
                       ? 'Appointments'
+                      : isCalendar
+                      ? 'Calendar'
                       : isTherapists
                       ? 'Therapists'
                       : auth.isAdmin
@@ -111,6 +114,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? "Track your spa's financial performance and insights."
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
+                      : isCalendar
+                      ? 'Manage appointments, therapist schedules and availability.'
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : auth.isAdmin

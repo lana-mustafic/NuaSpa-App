@@ -13,6 +13,7 @@ enum DesktopRouteKey {
   home,
   catalog,
   reservations,
+  adminCalendar,
   favorites,
   schedule,
   admin,
