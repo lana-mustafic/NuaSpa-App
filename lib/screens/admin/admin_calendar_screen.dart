@@ -289,96 +289,112 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
             children: [
               Expanded(
                 flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _Toolbar(
-                      caption: caption,
-                      view: _view,
-                      onView: (v) {
-                        setState(() => _view = v);
-                        _reloadCalendar();
-                        _reloadOverview();
-                      },
-                      axis: _axis,
-                      onAxis: (a) => setState(() => _axis = a),
-                      includeCancelled: _includeCancelled,
-                      onToggleCancelled: (v) {
-                        setState(() => _includeCancelled = v);
-                        _reloadCalendar();
-                      },
-                      autoRefresh: _autoRefresh,
-                      onToggleAuto: (v) {
-                        setState(() => _autoRefresh = v);
-                        _startTimer();
-                        if (v) _reloadCalendar();
-                      },
-                      therapists: _therapists,
-                      usluge: _usluge,
-                      filterZaposlenikId: _filterZaposlenikId,
-                      onTherapist: (id) {
-                        setState(() => _filterZaposlenikId = id);
-                        _reloadCalendar();
-                      },
-                      filterUslugaId: _filterUslugaId,
-                      onUsluga: (id) {
-                        setState(() => _filterUslugaId = id);
-                        _reloadCalendar();
-                      },
-                      searchCtrl: _searchCtrl,
-                      onPrev: () => _shiftPeriod(-1),
-                      onNext: () => _shiftPeriod(1),
-                      onToday: _goToday,
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.04),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
+                child: LayoutBuilder(
+                  builder: (context, lc) {
+                    const bottomBlock = 56.0 + 12.0 + 12.0;
+                    final head =
+                        (lc.maxHeight - bottomBlock).clamp(0.0, double.infinity);
+                    final maxToolbar = head <= 0
+                        ? 0.0
+                        : (head * 0.42).clamp(48.0, 280.0).clamp(0.0, head);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: maxToolbar),
+                          child: SingleChildScrollView(
+                            child: _Toolbar(
+                              caption: caption,
+                              view: _view,
+                              onView: (v) {
+                                setState(() => _view = v);
+                                _reloadCalendar();
+                                _reloadOverview();
+                              },
+                              axis: _axis,
+                              onAxis: (a) => setState(() => _axis = a),
+                              includeCancelled: _includeCancelled,
+                              onToggleCancelled: (v) {
+                                setState(() => _includeCancelled = v);
+                                _reloadCalendar();
+                              },
+                              autoRefresh: _autoRefresh,
+                              onToggleAuto: (v) {
+                                setState(() => _autoRefresh = v);
+                                _startTimer();
+                                if (v) _reloadCalendar();
+                              },
+                              therapists: _therapists,
+                              usluge: _usluge,
+                              filterZaposlenikId: _filterZaposlenikId,
+                              onTherapist: (id) {
+                                setState(() => _filterZaposlenikId = id);
+                                _reloadCalendar();
+                              },
+                              filterUslugaId: _filterUslugaId,
+                              onUsluga: (id) {
+                                setState(() => _filterUslugaId = id);
+                                _reloadCalendar();
+                              },
+                              searchCtrl: _searchCtrl,
+                              onPrev: () => _shiftPeriod(-1),
+                              onNext: () => _shiftPeriod(1),
+                              onToday: _goToday,
                             ),
                           ),
-                          child: _view == _CalViewMode.month
-                              ? _MonthOverview(
-                                  anchor: _anchor,
-                                  itemsFuture: _calendarFuture,
-                                  onPickDay: (d) {
-                                    setState(() {
-                                      _anchor = d;
-                                      _view = _CalViewMode.week;
-                                    });
-                                    _reloadCalendar();
-                                    _reloadOverview();
-                                  },
-                                  filterFn: _calendarPassThrough,
-                                )
-                              : _WeekTimeline(
-                                  days: _headerDays(),
-                                  axis: _axis,
-                                  itemsFuture: _calendarFuture,
-                                  filterFn: _calendarPassThrough,
-                                  selected: _selected,
-                                  onSelect: (e) => setState(() => _selected = e),
-                                  startHour: _startHour,
-                                  endHour: _endHour,
-                                  pxPerMinute: _pxPerMinute,
-                                ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _BottomBar(
-                      onNew: () {
-                        context.read<DesktopNav>().requestAppointmentCreate(
-                              zaposlenikId: _filterZaposlenikId,
-                            );
-                      },
-                    ),
-                  ],
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: _view == _CalViewMode.month
+                                  ? _MonthOverview(
+                                      anchor: _anchor,
+                                      itemsFuture: _calendarFuture,
+                                      onPickDay: (d) {
+                                        setState(() {
+                                          _anchor = d;
+                                          _view = _CalViewMode.week;
+                                        });
+                                        _reloadCalendar();
+                                        _reloadOverview();
+                                      },
+                                      filterFn: _calendarPassThrough,
+                                    )
+                                  : _WeekTimeline(
+                                      days: _headerDays(),
+                                      axis: _axis,
+                                      itemsFuture: _calendarFuture,
+                                      filterFn: _calendarPassThrough,
+                                      selected: _selected,
+                                      onSelect: (e) =>
+                                          setState(() => _selected = e),
+                                      startHour: _startHour,
+                                      endHour: _endHour,
+                                      pxPerMinute: _pxPerMinute,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _BottomBar(
+                          onNew: () {
+                            context.read<DesktopNav>().requestAppointmentCreate(
+                                  zaposlenikId: _filterZaposlenikId,
+                                );
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 18),
@@ -631,8 +647,6 @@ class _WeekTimeline extends StatelessWidget {
   final int endHour;
   final double pxPerMinute;
 
-  double get _totalH => (endHour - startHour) * 60 * pxPerMinute;
-
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -641,47 +655,62 @@ class _WeekTimeline extends StatelessWidget {
       builder: (context, snap) {
         final raw = snap.data ?? const <RezervacijaCalendarItem>[];
         final items = filterFn(raw);
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: 72.0 + days.length * 148.0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TimeRuler(
-                  startHour: startHour,
-                  endHour: endHour,
-                  height: _totalH,
-                  pxPerMinute: pxPerMinute,
-                ),
-                for (final day in days)
-                  SizedBox(
-                    width: 148,
-                    child: _DayColumn(
-                      day: day,
-                      axis: axis,
-                      items: () {
-                        final d = items
-                            .where((e) => _sameDay(e.datumRezervacije, day))
-                            .toList();
-                        d.sort(
-                          (a, b) =>
-                              a.datumRezervacije.compareTo(b.datumRezervacije),
-                        );
-                        return d;
-                      }(),
-                      height: _totalH,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            const headerH = 40.0;
+            final maxBody = constraints.maxHeight - headerH;
+            final bodyCap = maxBody.clamp(32.0, double.infinity);
+            final slotMinutes = (endHour - startHour) * 60.0;
+            final naturalH = slotMinutes * pxPerMinute;
+            final scale = naturalH > bodyCap
+                ? (bodyCap / naturalH).clamp(0.18, 1.0)
+                : 1.0;
+            final effectivePx = pxPerMinute * scale;
+            final totalH = slotMinutes * effectivePx;
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: 72.0 + days.length * 148.0,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TimeRuler(
                       startHour: startHour,
                       endHour: endHour,
-                      pxPerMinute: pxPerMinute,
-                      now: now,
-                      selected: selected,
-                      onSelect: onSelect,
+                      height: totalH,
+                      pxPerMinute: effectivePx,
                     ),
-                  ),
-              ],
-            ),
-          ),
+                    for (final day in days)
+                      SizedBox(
+                        width: 148,
+                        child: _DayColumn(
+                          day: day,
+                          axis: axis,
+                          items: () {
+                            final d = items
+                                .where((e) => _sameDay(e.datumRezervacije, day))
+                                .toList();
+                            d.sort(
+                              (a, b) => a.datumRezervacije
+                                  .compareTo(b.datumRezervacije),
+                            );
+                            return d;
+                          }(),
+                          height: totalH,
+                          startHour: startHour,
+                          endHour: endHour,
+                          pxPerMinute: effectivePx,
+                          now: now,
+                          selected: selected,
+                          onSelect: onSelect,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1137,7 +1166,7 @@ class _RightRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.only(right: 4, bottom: 16),
+      padding: const EdgeInsets.only(right: 4, bottom: 28),
       children: [
         FilledButton.icon(
           style: FilledButton.styleFrom(
@@ -1252,6 +1281,7 @@ class _RightRail extends StatelessWidget {
             day: day,
           ),
         ),
+        const SizedBox(height: 20),
       ],
     );
   }
