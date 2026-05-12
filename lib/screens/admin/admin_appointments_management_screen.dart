@@ -369,46 +369,44 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filters = <Widget>[
-      _FilterPill(
-        icon: Icons.date_range_outlined,
-        label: _dateLabel(selectedDate),
-        onTap: onPickDate,
-      ),
-      _DropdownPill<int?>(
-        value: therapistId,
-        hint: 'All Therapists',
-        items: [
-          const DropdownMenuItem(value: null, child: Text('All Therapists')),
-          for (final t in therapists)
-            DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
-        ],
-        onChanged: onTherapistChanged,
-      ),
-      _DropdownPill<int?>(
-        value: serviceId,
-        hint: 'All Services',
-        items: [
-          const DropdownMenuItem(value: null, child: Text('All Services')),
-          for (final s in services)
-            DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-        ],
-        onChanged: onServiceChanged,
-      ),
-      _DropdownPill<String>(
-        value: status,
-        hint: 'All Status',
-        items: const [
-          DropdownMenuItem(value: 'All Status', child: Text('All Status')),
-          DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
-          DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-          DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-        ],
-        onChanged: (v) {
-          if (v != null) onStatusChanged(v);
-        },
-      ),
-    ];
+    final datePill = _FilterPill(
+      icon: Icons.date_range_outlined,
+      label: _dateLabel(selectedDate),
+      onTap: onPickDate,
+    );
+    final therapistPill = _DropdownPill<int?>(
+      value: therapistId,
+      hint: 'All Therapists',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Therapists')),
+        for (final t in therapists)
+          DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
+      ],
+      onChanged: onTherapistChanged,
+    );
+    final servicePill = _DropdownPill<int?>(
+      value: serviceId,
+      hint: 'All Services',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Services')),
+        for (final s in services)
+          DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+      ],
+      onChanged: onServiceChanged,
+    );
+    final statusPill = _DropdownPill<String>(
+      value: status,
+      hint: 'All Status',
+      items: const [
+        DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+        DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+        DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+        DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+      ],
+      onChanged: (v) {
+        if (v != null) onStatusChanged(v);
+      },
+    );
     final viewAndNew = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -418,28 +416,39 @@ class _FilterBar extends StatelessWidget {
       ],
     );
 
-    // Filters can exceed row width (especially with the 360px detail rail).
-    // Scroll the filter strip; keep Day/Week/Month + New Appointment visible together.
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    // Row 1: date, therapist, service (three controls, scroll if needed).
+    // Row 2: All Status + Day / Week / Month + New (status stays accessible).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final filter in filters) ...[
-                  filter,
-                  const SizedBox(width: 10),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: viewAndNew,
+          child: Row(
+            children: [
+              datePill,
+              const SizedBox(width: 10),
+              therapistPill,
+              const SizedBox(width: 10),
+              servicePill,
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            statusPill,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: viewAndNew,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
