@@ -418,28 +418,30 @@ class _FilterBar extends StatelessWidget {
       ],
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
-          return Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [...filters, viewAndNew],
-          );
-        }
-
-        return Row(
-          children: [
-            for (final filter in filters) ...[
-              filter,
-              const SizedBox(width: 10),
-            ],
-            const Spacer(),
-            viewAndNew,
-          ],
-        );
-      },
+    // Filters can exceed row width (especially with the 360px detail rail).
+    // Scroll the filter strip; keep Day/Week/Month + New Appointment visible together.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final filter in filters) ...[
+                  filter,
+                  const SizedBox(width: 10),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: viewAndNew,
+        ),
+      ],
     );
   }
 
@@ -511,7 +513,11 @@ class _KpiCards extends StatelessWidget {
       builder: (context, c) {
         const gap = 14.0;
         const minCard = 168.0;
-        final needScroll = c.maxWidth < minCard * 4 + gap * 3;
+        final rawW = c.maxWidth;
+        final layoutW = rawW.isFinite && rawW > 0
+            ? rawW
+            : MediaQuery.sizeOf(context).width;
+        final needScroll = layoutW < minCard * 4 + gap * 3;
         if (needScroll) {
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -529,14 +535,17 @@ class _KpiCards extends StatelessWidget {
             ),
           );
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: gap),
-              Expanded(child: _KpiCard(spec: cards[i])),
+        return SizedBox(
+          width: layoutW,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: gap),
+                Expanded(child: _KpiCard(spec: cards[i])),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
