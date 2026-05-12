@@ -17,6 +17,7 @@ import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
+import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 import '../../../models/admin/prostorija.dart';
@@ -169,6 +170,45 @@ class ApiService {
     }
   }
 
+  Future<TherapistAdminProfile?> getTherapistAdminProfile({
+    required int zaposlenikId,
+    int maxReviews = 20,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/$zaposlenikId/admin-profile',
+        queryParameters: {'maxReviews': maxReviews},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return TherapistAdminProfile.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistAdminProfile: $e');
+      return null;
+    }
+  }
+
+  /// `true` — spremljeno; `false` — terapeut nema povezan korisnički nalog; `null` — mreža / greška.
+  Future<bool?> patchTherapistInternaNapomena({
+    required int zaposlenikId,
+    String? napomena,
+  }) async {
+    try {
+      await _dio.patch<dynamic>(
+        'Zaposlenik/$zaposlenikId/interna-napomena',
+        data: {'napomena': napomena},
+      );
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 400) return false;
+      debugPrint('Greška u ApiService.patchTherapistInternaNapomena: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.patchTherapistInternaNapomena: $e');
+      return null;
+    }
+  }
+
   Future<List<Rezervacija>> getRezervacije() async {
     try {
       final response = await _dio.get<dynamic>('Rezervacija');
@@ -189,6 +229,7 @@ class ApiService {
     DateTime? datum,
     bool? isPotvrdjena,
     bool includeOtkazane = false,
+    int? zaposlenikId,
   }) async {
     try {
       final query = <String, dynamic>{};
@@ -202,6 +243,9 @@ class ApiService {
       }
       if (includeOtkazane) {
         query['IncludeOtkazane'] = true;
+      }
+      if (zaposlenikId != null) {
+        query['ZaposlenikId'] = zaposlenikId;
       }
 
       final response = await _dio.get<dynamic>(

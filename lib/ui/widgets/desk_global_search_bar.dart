@@ -10,6 +10,7 @@ class DeskGlobalSearchBar extends StatefulWidget {
     this.hintText = 'Search services & treatments (Enter → Services)…',
     this.onSubmitted,
     this.onChanged,
+    this.showShortcutHint = false,
   });
 
   static const desktopHorizontalPadding = 32.0;
@@ -17,6 +18,8 @@ class DeskGlobalSearchBar extends StatefulWidget {
   final String hintText;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  /// Premium header: subtle ⌘ K affordance (decorative on Windows).
+  final bool showShortcutHint;
 
   @override
   State<DeskGlobalSearchBar> createState() => _DeskGlobalSearchBarState();
@@ -84,6 +87,35 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar>
             decoration: InputDecoration(
               hintText: widget.hintText,
               prefixIcon: const Icon(Icons.search_rounded, size: 22),
+              suffixIcon: widget.showShortcutHint
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Center(
+                        widthFactor: 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.white.withValues(alpha: 0.06),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.1),
+                            ),
+                          ),
+                          child: Text(
+                            '⌘ K',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              color: Colors.white.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
               border: InputBorder.none,
               filled: true,
               fillColor: Colors.transparent,

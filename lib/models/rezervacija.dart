@@ -17,8 +17,10 @@ class Rezervacija {
   final String? korisnikEmail;
   final String? napomenaZaTerapeuta;
   final String? uslugaNaziv;
+  final int uslugaId;
   final int uslugaTrajanjeMinuta;
   final double uslugaCijena;
+  final int zaposlenikId;
   final String? zaposlenikIme;
   final bool premiumKlijent;
 
@@ -39,8 +41,10 @@ class Rezervacija {
     this.korisnikEmail,
     this.napomenaZaTerapeuta,
     this.uslugaNaziv,
+    this.uslugaId = 0,
     this.uslugaTrajanjeMinuta = 0,
     this.uslugaCijena = 0,
+    this.zaposlenikId = 0,
     this.zaposlenikIme,
     this.premiumKlijent = false,
   });
@@ -75,9 +79,11 @@ class Rezervacija {
       korisnikEmail: json['korisnikEmail'] as String?,
       napomenaZaTerapeuta: json['napomenaZaTerapeuta'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
+      uslugaId: (json['uslugaId'] as num?)?.toInt() ?? 0,
       uslugaTrajanjeMinuta:
           (json['uslugaTrajanjeMinuta'] as num?)?.toInt() ?? 0,
       uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,
+      zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
       premiumKlijent: json['premiumKlijent'] as bool? ?? false,
     );

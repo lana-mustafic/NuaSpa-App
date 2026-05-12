@@ -479,6 +479,8 @@ class _LuxuryRail extends StatelessWidget {
                     : _QuickActionsCard(
                         appointmentsMode:
                             nav.route == DesktopRouteKey.reservations,
+                        therapistsMode:
+                            nav.route == DesktopRouteKey.therapists,
                       ),
                 const SizedBox(height: 12),
               ],
@@ -499,9 +501,13 @@ class _LuxuryRail extends StatelessWidget {
 }
 
 class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({this.appointmentsMode = false});
+  const _QuickActionsCard({
+    this.appointmentsMode = false,
+    this.therapistsMode = false,
+  });
 
   final bool appointmentsMode;
+  final bool therapistsMode;
 
   @override
   Widget build(BuildContext context) {
@@ -546,22 +552,31 @@ class _QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _QuickActionButton(
-                label: appointmentsMode ? 'New Appointment' : 'New Appointment',
+                label: 'New Appointment',
                 icon: Icons.add_circle_outline_rounded,
-                onTap: () =>
-                    context.read<DesktopNav>().requestAppointmentCreate(),
+                onTap: () {
+                  context.read<DesktopNav>().requestAppointmentCreate();
+                },
               ),
               const SizedBox(height: 8),
               _QuickActionButton(
-                label: appointmentsMode ? 'Walk-in Client' : 'Add Therapist',
+                label: appointmentsMode
+                    ? 'Walk-in Client'
+                    : 'Add Therapist',
                 icon: appointmentsMode
                     ? Icons.directions_walk_outlined
                     : Icons.person_add_alt_1_outlined,
-                onTap: () => appointmentsMode
-                    ? context.read<DesktopNav>().requestAppointmentCreate()
-                    : context.read<DesktopNav>().goTo(
-                        DesktopRouteKey.therapists,
-                      ),
+                onTap: () {
+                  if (appointmentsMode) {
+                    context.read<DesktopNav>().requestAppointmentCreate();
+                  } else if (therapistsMode) {
+                    context.read<DesktopNav>().requestTherapistAdd();
+                  } else {
+                    context.read<DesktopNav>().goTo(
+                          DesktopRouteKey.therapists,
+                        );
+                  }
+                },
               ),
             ],
           ),

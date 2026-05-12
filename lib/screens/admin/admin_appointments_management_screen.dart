@@ -221,9 +221,14 @@ class _AdminAppointmentsManagementScreenState
   }
 
   Future<void> _openCreate(_AppointmentsData data) async {
+    final prefillZaposlenikId =
+        context.read<DesktopNav>().takeAppointmentPrefillZaposlenikId();
     final draft = await showDialog<_AdminAppointmentDraft>(
       context: context,
-      builder: (_) => _AdminAppointmentCreateDialog(data: data),
+      builder: (_) => _AdminAppointmentCreateDialog(
+        data: data,
+        initialZaposlenikId: prefillZaposlenikId,
+      ),
     );
     if (draft == null || !mounted) return;
     final created = await _api.createRezervacija(
@@ -369,75 +374,82 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filters = <Widget>[
-      _FilterPill(
-        icon: Icons.date_range_outlined,
-        label: _dateLabel(selectedDate),
-        onTap: onPickDate,
-      ),
-      _DropdownPill<int?>(
-        value: therapistId,
-        hint: 'All Therapists',
-        items: [
-          const DropdownMenuItem(value: null, child: Text('All Therapists')),
-          for (final t in therapists)
-            DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
-        ],
-        onChanged: onTherapistChanged,
-      ),
-      _DropdownPill<int?>(
-        value: serviceId,
-        hint: 'All Services',
-        items: [
-          const DropdownMenuItem(value: null, child: Text('All Services')),
-          for (final s in services)
-            DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-        ],
-        onChanged: onServiceChanged,
-      ),
-      _DropdownPill<String>(
-        value: status,
-        hint: 'All Status',
-        items: const [
-          DropdownMenuItem(value: 'All Status', child: Text('All Status')),
-          DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
-          DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-          DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-        ],
-        onChanged: (v) {
-          if (v != null) onStatusChanged(v);
-        },
-      ),
-    ];
-    final actions = <Widget>[
-      _ViewSwitcher(value: view, onChanged: onViewChanged),
-      _GradientButton(label: '+ New Appointment', onTap: onNew),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
-          return Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [...filters, ...actions],
-          );
-        }
-
-        return Row(
-          children: [
-            for (final filter in filters) ...[
-              filter,
-              const SizedBox(width: 10),
-            ],
-            const Spacer(),
-            actions.first,
-            const SizedBox(width: 14),
-            actions.last,
-          ],
-        );
+    final datePill = _FilterPill(
+      icon: Icons.date_range_outlined,
+      label: _dateLabel(selectedDate),
+      onTap: onPickDate,
+    );
+    final therapistPill = _DropdownPill<int?>(
+      value: therapistId,
+      hint: 'All Therapists',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Therapists')),
+        for (final t in therapists)
+          DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
+      ],
+      onChanged: onTherapistChanged,
+    );
+    final servicePill = _DropdownPill<int?>(
+      value: serviceId,
+      hint: 'All Services',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Services')),
+        for (final s in services)
+          DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+      ],
+      onChanged: onServiceChanged,
+    );
+    final statusPill = _DropdownPill<String>(
+      value: status,
+      hint: 'All Status',
+      items: const [
+        DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+        DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+        DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+        DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+      ],
+      onChanged: (v) {
+        if (v != null) onStatusChanged(v);
       },
+    );
+    final viewSwitcher = _ViewSwitcher(value: view, onChanged: onViewChanged);
+    final newAppointmentButton = _GradientButton(
+      label: '+ New Appointment',
+      onTap: onNew,
+    );
+
+    // Row 1: all filters including All Status (horizontal scroll).
+    // Row 2: Day / Week / Month left, + New Appointment right (unchanged end position).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              datePill,
+              const SizedBox(width: 10),
+              therapistPill,
+              const SizedBox(width: 10),
+              servicePill,
+              const SizedBox(width: 10),
+              statusPill,
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: viewSwitcher,
+            ),
+            const Spacer(),
+            newAppointmentButton,
+          ],
+        ),
+      ],
     );
   }
 
@@ -507,17 +519,41 @@ class _KpiCards extends StatelessWidget {
     ];
     return LayoutBuilder(
       builder: (context, c) {
-        final width = (c.maxWidth - 54) / 4;
-        return Wrap(
-          spacing: 18,
-          runSpacing: 18,
-          children: [
-            for (final card in cards)
-              SizedBox(
-                width: width.clamp(190, 360),
-                child: _KpiCard(spec: card),
-              ),
-          ],
+        const gap = 14.0;
+        const minCard = 168.0;
+        final rawW = c.maxWidth;
+        final layoutW = rawW.isFinite && rawW > 0
+            ? rawW
+            : MediaQuery.sizeOf(context).width;
+        final needScroll = layoutW < minCard * 4 + gap * 3;
+        if (needScroll) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: gap),
+                  SizedBox(
+                    width: minCard,
+                    child: _KpiCard(spec: cards[i]),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+        return SizedBox(
+          width: layoutW,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: gap),
+                Expanded(child: _KpiCard(spec: cards[i])),
+              ],
+            ],
+          ),
         );
       },
     );
@@ -767,12 +803,13 @@ class _AppointmentDetailsContent extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    const _StatusBadge(
-                      label: 'VIP',
-                      color: NuaLuxuryTokens.champagneGold,
-                    ),
-                    const SizedBox(height: 8),
+                    if (appointment.premiumKlijent) ...[
+                      const SizedBox(height: 6),
+                      const _StatusBadge(
+                        label: 'VIP',
+                        color: NuaLuxuryTokens.champagneGold,
+                      ),
+                    ],
                     Text(
                       appointment.korisnikTelefon ?? '+387 61 000 000',
                       style: TextStyle(
@@ -1433,9 +1470,13 @@ class _AdminAppointmentDraft {
 }
 
 class _AdminAppointmentCreateDialog extends StatefulWidget {
-  const _AdminAppointmentCreateDialog({required this.data});
+  const _AdminAppointmentCreateDialog({
+    required this.data,
+    this.initialZaposlenikId,
+  });
 
   final _AppointmentsData data;
+  final int? initialZaposlenikId;
 
   @override
   State<_AdminAppointmentCreateDialog> createState() =>
@@ -1445,15 +1486,23 @@ class _AdminAppointmentCreateDialog extends StatefulWidget {
 class _AdminAppointmentCreateDialogState
     extends State<_AdminAppointmentCreateDialog> {
   late DateTime _dateTime = DateTime.now().add(const Duration(hours: 1));
-  late int? _clientId = widget.data.clients.isEmpty
-      ? null
-      : widget.data.clients.first.id;
-  late int? _serviceId = widget.data.services.isEmpty
-      ? null
-      : widget.data.services.first.id;
-  late int? _therapistId = widget.data.therapists.isEmpty
-      ? null
-      : widget.data.therapists.first.id;
+  late int? _clientId;
+  late int? _serviceId;
+  late int? _therapistId;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.data;
+    _clientId = d.clients.isEmpty ? null : d.clients.first.id;
+    _serviceId = d.services.isEmpty ? null : d.services.first.id;
+    final pre = widget.initialZaposlenikId;
+    if (pre != null && d.therapists.any((t) => t.id == pre)) {
+      _therapistId = pre;
+    } else {
+      _therapistId = d.therapists.isEmpty ? null : d.therapists.first.id;
+    }
+  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -1464,7 +1513,7 @@ class _AdminAppointmentCreateDialogState
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<int>(
-            initialValue: _clientId,
+            value: _clientId,
             decoration: const InputDecoration(labelText: 'Client'),
             items: [
               for (final client in widget.data.clients)
@@ -1486,7 +1535,7 @@ class _AdminAppointmentCreateDialogState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
-            initialValue: _serviceId,
+            value: _serviceId,
             decoration: const InputDecoration(labelText: 'Service'),
             items: [
               for (final s in widget.data.services)
@@ -1499,7 +1548,7 @@ class _AdminAppointmentCreateDialogState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
-            initialValue: _therapistId,
+            value: _therapistId,
             decoration: const InputDecoration(labelText: 'Therapist'),
             items: [
               for (final t in widget.data.therapists)
@@ -1612,7 +1661,7 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
             onTap: _pickDateTime,
           ),
           DropdownButtonFormField<int>(
-            initialValue: _serviceId,
+            value: _serviceId,
             decoration: const InputDecoration(labelText: 'Service'),
             items: [
               for (final s in widget.services)
@@ -1622,7 +1671,7 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
-            initialValue: _therapistId,
+            value: _therapistId,
             decoration: const InputDecoration(labelText: 'Therapist'),
             items: [
               for (final t in widget.therapists)
@@ -1658,6 +1707,11 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
   );
 
   int? _initialServiceId() {
+    if (widget.appointment.uslugaId > 0) {
+      for (final service in widget.services) {
+        if (service.id == widget.appointment.uslugaId) return service.id;
+      }
+    }
     for (final service in widget.services) {
       if (service.naziv == widget.appointment.uslugaNaziv) return service.id;
     }
@@ -1665,6 +1719,13 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
   }
 
   int? _initialTherapistId() {
+    if (widget.appointment.zaposlenikId > 0) {
+      for (final therapist in widget.therapists) {
+        if (therapist.id == widget.appointment.zaposlenikId) {
+          return therapist.id;
+        }
+      }
+    }
     for (final therapist in widget.therapists) {
       if (widget.appointment.zaposlenikIme?.contains(therapist.ime) == true) {
         return therapist.id;
