@@ -409,10 +409,14 @@ class _FilterBar extends StatelessWidget {
         },
       ),
     ];
-    final actions = <Widget>[
-      _ViewSwitcher(value: view, onChanged: onViewChanged),
-      _GradientButton(label: '+ New Appointment', onTap: onNew),
-    ];
+    final viewAndNew = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ViewSwitcher(value: view, onChanged: onViewChanged),
+        const SizedBox(width: 12),
+        _GradientButton(label: '+ New Appointment', onTap: onNew),
+      ],
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -421,7 +425,7 @@ class _FilterBar extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
-            children: [...filters, ...actions],
+            children: [...filters, viewAndNew],
           );
         }
 
@@ -432,9 +436,7 @@ class _FilterBar extends StatelessWidget {
               const SizedBox(width: 10),
             ],
             const Spacer(),
-            actions.first,
-            const SizedBox(width: 14),
-            actions.last,
+            viewAndNew,
           ],
         );
       },
@@ -507,16 +509,33 @@ class _KpiCards extends StatelessWidget {
     ];
     return LayoutBuilder(
       builder: (context, c) {
-        final width = (c.maxWidth - 54) / 4;
-        return Wrap(
-          spacing: 18,
-          runSpacing: 18,
+        const gap = 14.0;
+        const minCard = 168.0;
+        final needScroll = c.maxWidth < minCard * 4 + gap * 3;
+        if (needScroll) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: gap),
+                  SizedBox(
+                    width: minCard,
+                    child: _KpiCard(spec: cards[i]),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final card in cards)
-              SizedBox(
-                width: width.clamp(190, 360),
-                child: _KpiCard(spec: card),
-              ),
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: gap),
+              Expanded(child: _KpiCard(spec: cards[i])),
+            ],
           ],
         );
       },
