@@ -407,17 +407,14 @@ class _FilterBar extends StatelessWidget {
         if (v != null) onStatusChanged(v);
       },
     );
-    final viewAndNew = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ViewSwitcher(value: view, onChanged: onViewChanged),
-        const SizedBox(width: 12),
-        _GradientButton(label: '+ New Appointment', onTap: onNew),
-      ],
+    final viewSwitcher = _ViewSwitcher(value: view, onChanged: onViewChanged);
+    final newAppointmentButton = _GradientButton(
+      label: '+ New Appointment',
+      onTap: onNew,
     );
 
-    // Row 1: date, therapist, service (three controls, scroll if needed).
-    // Row 2: All Status + Day / Week / Month + New (status stays accessible).
+    // Row 1: all filters including All Status (horizontal scroll).
+    // Row 2: Day / Week / Month left, + New Appointment right (unchanged end position).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -430,6 +427,8 @@ class _FilterBar extends StatelessWidget {
               therapistPill,
               const SizedBox(width: 10),
               servicePill,
+              const SizedBox(width: 10),
+              statusPill,
             ],
           ),
         ),
@@ -437,17 +436,12 @@ class _FilterBar extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            statusPill,
-            const SizedBox(width: 12),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: viewAndNew,
-                ),
-              ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: viewSwitcher,
             ),
+            const Spacer(),
+            newAppointmentButton,
           ],
         ),
       ],
