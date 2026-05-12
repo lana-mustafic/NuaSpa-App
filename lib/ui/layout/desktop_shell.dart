@@ -479,6 +479,8 @@ class _LuxuryRail extends StatelessWidget {
                     : _QuickActionsCard(
                         appointmentsMode:
                             nav.route == DesktopRouteKey.reservations,
+                        therapistsMode:
+                            nav.route == DesktopRouteKey.therapists,
                       ),
                 const SizedBox(height: 12),
               ],
@@ -499,9 +501,13 @@ class _LuxuryRail extends StatelessWidget {
 }
 
 class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({this.appointmentsMode = false});
+  const _QuickActionsCard({
+    this.appointmentsMode = false,
+    this.therapistsMode = false,
+  });
 
   final bool appointmentsMode;
+  final bool therapistsMode;
 
   @override
   Widget build(BuildContext context) {
@@ -546,22 +552,59 @@ class _QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _QuickActionButton(
-                label: appointmentsMode ? 'New Appointment' : 'New Appointment',
-                icon: Icons.add_circle_outline_rounded,
-                onTap: () =>
-                    context.read<DesktopNav>().requestAppointmentCreate(),
+                label: therapistsMode
+                    ? 'Add Therapist'
+                    : 'New Appointment',
+                icon: therapistsMode
+                    ? Icons.person_add_alt_1_outlined
+                    : Icons.add_circle_outline_rounded,
+                onTap: () {
+                  if (therapistsMode) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Add from roster toolbar or HR module (coming soon).',
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        width: 400,
+                      ),
+                    );
+                  } else {
+                    context.read<DesktopNav>().requestAppointmentCreate();
+                  }
+                },
               ),
               const SizedBox(height: 8),
               _QuickActionButton(
-                label: appointmentsMode ? 'Walk-in Client' : 'Add Therapist',
+                label: appointmentsMode
+                    ? 'Walk-in Client'
+                    : therapistsMode
+                        ? 'Import Therapists'
+                        : 'Add Therapist',
                 icon: appointmentsMode
                     ? Icons.directions_walk_outlined
-                    : Icons.person_add_alt_1_outlined,
-                onTap: () => appointmentsMode
-                    ? context.read<DesktopNav>().requestAppointmentCreate()
-                    : context.read<DesktopNav>().goTo(
-                        DesktopRouteKey.therapists,
+                    : therapistsMode
+                        ? Icons.upload_file_outlined
+                        : Icons.person_add_alt_1_outlined,
+                onTap: () {
+                  if (appointmentsMode) {
+                    context.read<DesktopNav>().requestAppointmentCreate();
+                  } else if (therapistsMode) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Bulk import (.csv) connects in a later release.',
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        width: 400,
                       ),
+                    );
+                  } else {
+                    context.read<DesktopNav>().goTo(
+                          DesktopRouteKey.therapists,
+                        );
+                  }
+                },
               ),
             ],
           ),

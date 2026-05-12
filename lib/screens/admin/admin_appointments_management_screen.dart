@@ -767,12 +767,13 @@ class _AppointmentDetailsContent extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    const _StatusBadge(
-                      label: 'VIP',
-                      color: NuaLuxuryTokens.champagneGold,
-                    ),
-                    const SizedBox(height: 8),
+                    if (appointment.premiumKlijent) ...[
+                      const SizedBox(height: 6),
+                      const _StatusBadge(
+                        label: 'VIP',
+                        color: NuaLuxuryTokens.champagneGold,
+                      ),
+                    ],
                     Text(
                       appointment.korisnikTelefon ?? '+387 61 000 000',
                       style: TextStyle(

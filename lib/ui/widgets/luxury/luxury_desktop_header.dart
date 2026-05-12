@@ -75,10 +75,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isAppointments = nav.route == DesktopRouteKey.reservations;
 
     final roleLabel = auth.isAdmin
-        ? 'Administrator'
+        ? 'Super Admin'
         : auth.isZaposlenik
-        ? 'Therapist'
-        : 'Client';
+            ? 'Therapist'
+            : 'Client';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 18, 28, 8),
@@ -144,6 +144,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ),
                     ),
                     child: DeskGlobalSearchBar(
+                      showShortcutHint: auth.isAdmin,
                       hintText: isTherapists
                           ? 'Search therapists…'
                           : isAppointments
@@ -282,7 +283,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      auth.displayName ?? 'NuaSpa',
+                      auth.isAdmin ? 'Admin' : (auth.displayName ?? 'NuaSpa'),
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
