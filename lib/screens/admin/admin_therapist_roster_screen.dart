@@ -9,6 +9,7 @@ import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import 'admin_therapist_profile_screen.dart';
+import 'widgets/admin_therapist_editor_dialog.dart';
 
 class AdminTherapistRosterScreen extends StatefulWidget {
   const AdminTherapistRosterScreen({super.key});
@@ -27,6 +28,7 @@ class _AdminTherapistRosterScreenState
   late Future<_TherapistRosterData> _future;
   String _status = 'All Status';
   int _page = 0;
+  int _handledTherapistAddRequest = 0;
 
   @override
   void initState() {
@@ -42,10 +44,18 @@ class _AdminTherapistRosterScreenState
 
   @override
   Widget build(BuildContext context) {
-    final navQuery = context.watch<DesktopNav>().therapistSearchQuery;
+    final nav = context.watch<DesktopNav>();
+    final navQuery = nav.therapistSearchQuery;
     return FutureBuilder<_TherapistRosterData>(
       future: _future,
       builder: (context, snap) {
+        if (nav.therapistAddRequest != _handledTherapistAddRequest &&
+            snap.connectionState == ConnectionState.done) {
+          _handledTherapistAddRequest = nav.therapistAddRequest;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _editTherapist(null);
+          });
+        }
         final data = snap.data ?? _TherapistRosterData.empty();
         final therapists = data.therapists;
         final filtered = therapists.where((t) {
@@ -292,9 +302,9 @@ class _AdminTherapistRosterScreenState
   }
 
   Future<void> _editTherapist(_RosterTherapist? existing) async {
-    final saved = await showDialog<Zaposlenik>(
-      context: context,
-      builder: (_) => _TherapistEditorDialog(existing: existing?.zaposlenik),
+    final saved = await showAdminTherapistEditorDialog(
+      context,
+      existing: existing?.zaposlenik,
     );
     if (saved == null || !mounted) return;
 
@@ -1173,115 +1183,6 @@ class _AmbientOrb extends StatelessWidget {
           boxShadow: [BoxShadow(color: color, blurRadius: size * 0.42)],
         ),
       ),
-    );
-  }
-}
-
-class _TherapistEditorDialog extends StatefulWidget {
-  const _TherapistEditorDialog({this.existing});
-
-  final Zaposlenik? existing;
-
-  @override
-  State<_TherapistEditorDialog> createState() => _TherapistEditorDialogState();
-}
-
-class _TherapistEditorDialogState extends State<_TherapistEditorDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _ime = TextEditingController(
-    text: widget.existing?.ime ?? '',
-  );
-  late final TextEditingController _prezime = TextEditingController(
-    text: widget.existing?.prezime ?? '',
-  );
-  late final TextEditingController _specijalizacija = TextEditingController(
-    text: widget.existing?.specijalizacija ?? '',
-  );
-  late final TextEditingController _telefon = TextEditingController(
-    text: widget.existing?.telefon ?? '',
-  );
-
-  @override
-  void dispose() {
-    _ime.dispose();
-    _prezime.dispose();
-    _specijalizacija.dispose();
-    _telefon.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? 'Add therapist' : 'Edit therapist'),
-      content: SizedBox(
-        width: 520,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _ime,
-                decoration: const InputDecoration(labelText: 'Ime'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Ime je obavezno.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _prezime,
-                decoration: const InputDecoration(labelText: 'Prezime'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Prezime je obavezno.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _specijalizacija,
-                decoration: const InputDecoration(
-                  labelText: 'Specijalizacije',
-                  helperText: 'Odvojite tagove zarezom, npr. Swedish, Facial',
-                ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Specijalizacija je obavezna.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _telefon,
-                decoration: const InputDecoration(
-                  labelText: 'Telefon (opcionalno)',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Otkaži'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
-            Navigator.pop(
-              context,
-              Zaposlenik(
-                id: widget.existing?.id ?? 0,
-                ime: _ime.text.trim(),
-                prezime: _prezime.text.trim(),
-                specijalizacija: _specijalizacija.text.trim(),
-                telefon: _telefon.text.trim().isEmpty
-                    ? null
-                    : _telefon.text.trim(),
-              ),
-            );
-          },
-          child: const Text('Sačuvaj'),
-        ),
-      ],
     );
   }
 }

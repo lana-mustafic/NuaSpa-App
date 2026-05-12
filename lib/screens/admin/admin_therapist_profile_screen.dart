@@ -1,12 +1,15 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/admin/therapist_kpi.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
+import 'widgets/admin_therapist_editor_dialog.dart';
 
 /// High-fidelity therapist profile — matches NuaSpa luxury admin mockup.
 class AdminTherapistProfileScreen extends StatefulWidget {
@@ -33,6 +36,7 @@ enum _ProfileTab {
 class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScreen> {
   final ApiService _api = ApiService();
   _ProfileTab _tab = _ProfileTab.overview;
+  late Zaposlenik _therapist = widget.therapist;
 
   Future<TherapistKpi?>? _kpiFuture;
   Future<List<RezervacijaCalendarItem>>? _weekFuture;
@@ -41,6 +45,38 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
   void initState() {
     super.initState();
     _reload();
+  }
+
+  Future<void> _editProfile() async {
+    final saved = await showAdminTherapistEditorDialog(
+      context,
+      existing: _therapist,
+    );
+    if (!mounted || saved == null) return;
+    final result = await _api.updateZaposlenik(saved);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result == null
+              ? 'Greška pri čuvanju profila.'
+              : 'Profil terapeuta je ažuriran.',
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _therapist = result);
+      _reload();
+    }
+  }
+
+  void _newAppointmentForTherapist() {
+    context.read<DesktopNav>().requestAppointmentCreate(
+          zaposlenikId: _therapist.id,
+        );
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   DateTime _mondayOf(DateTime d) {
@@ -58,14 +94,14 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
 
     setState(() {
       _kpiFuture = _api.getTherapistKpis(
-        zaposlenikId: widget.therapist.id,
+        zaposlenikId: _therapist.id,
         from: fromD,
         to: toD,
       );
       _weekFuture = _api.getRezervacijeCalendar(
         from: w0,
         to: w1.subtract(const Duration(seconds: 1)),
-        zaposlenikId: widget.therapist.id,
+        zaposlenikId: _therapist.id,
         includeOtkazane: true,
       );
     });
@@ -91,7 +127,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.therapist;
+    final t = _therapist;
     final name = '${t.ime} ${t.prezime}'.trim();
     final theme = Theme.of(context);
 
@@ -126,8 +162,10 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       therapist: t,
                       tags: _tags(t.specijalizacija),
                       kpi: kpi,
-                      onEdit: () {},
-                      onSchedule: () => setState(() => _tab = _ProfileTab.schedule),
+                      onEdit: _editProfile,
+                      onSchedule: () =>
+                          setState(() => _tab = _ProfileTab.schedule),
+                      onNewAppointment: _newAppointmentForTherapist,
                       onReload: _reload,
                     ),
                     const SizedBox(height: 22),
@@ -138,7 +176,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                     const SizedBox(height: 22),
                     if (_tab == _ProfileTab.overview)
                       _OverviewBody(
-                        therapist: t,
+                        therapist: _therapist,
                         kpi: kpi,
                         weekItems: weekItems,
                       )
@@ -206,6 +244,7 @@ class _HeroCard extends StatelessWidget {
     required this.kpi,
     required this.onEdit,
     required this.onSchedule,
+    required this.onNewAppointment,
     required this.onReload,
   });
 
@@ -215,6 +254,7 @@ class _HeroCard extends StatelessWidget {
   final TherapistKpi? kpi;
   final VoidCallback onEdit;
   final VoidCallback onSchedule;
+  final VoidCallback onNewAppointment;
   final VoidCallback onReload;
 
   @override
@@ -384,6 +424,19 @@ class _HeroCard extends StatelessWidget {
                 onPressed: onSchedule,
                 icon: const Icon(Icons.calendar_month_outlined, size: 20),
                 label: const Text('View Schedule'),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  foregroundColor: Colors.white.withValues(alpha: 0.9),
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.22),
+                  ),
+                ),
+                onPressed: onNewAppointment,
+                icon: const Icon(Icons.event_note_outlined, size: 20),
+                label: const Text('New appointment'),
               ),
               PopupMenuButton<String>(
                 tooltip: 'More actions',
