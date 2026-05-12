@@ -14,6 +14,7 @@ class RezervacijaCalendarItem {
   final String? korisnikTelefon;
   final String? korisnikEmail;
 
+  final int uslugaId;
   final String? uslugaNaziv;
   final int uslugaTrajanjeMinuta;
   final double uslugaCijena;
@@ -33,6 +34,7 @@ class RezervacijaCalendarItem {
     required this.korisnikIme,
     required this.korisnikTelefon,
     required this.korisnikEmail,
+    required this.uslugaId,
     required this.uslugaNaziv,
     required this.uslugaTrajanjeMinuta,
     required this.uslugaCijena,
@@ -54,6 +56,7 @@ class RezervacijaCalendarItem {
       korisnikIme: json['korisnikIme'] as String?,
       korisnikTelefon: json['korisnikTelefon'] as String?,
       korisnikEmail: json['korisnikEmail'] as String?,
+      uslugaId: (json['uslugaId'] as num?)?.toInt() ?? 0,
       uslugaNaziv: json['uslugaNaziv'] as String?,
       uslugaTrajanjeMinuta: (json['uslugaTrajanjeMinuta'] as num?)?.toInt() ?? 0,
       uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,

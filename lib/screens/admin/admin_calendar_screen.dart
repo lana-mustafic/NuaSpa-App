@@ -29,19 +29,10 @@ bool _sameDay(DateTime a, DateTime b) {
   return x.year == y.year && x.month == y.month && x.day == y.day;
 }
 
-bool _rezCalMatchesSearch(RezervacijaCalendarItem e, String qLower) {
-  if (qLower.isEmpty) return true;
-  bool hay(String? s) => s?.toLowerCase().contains(qLower) ?? false;
-  return hay(e.korisnikIme) ||
-      hay(e.korisnikTelefon) ||
-      hay(e.korisnikEmail) ||
-      hay(e.zaposlenikIme) ||
-      hay(e.prostorijaNaziv) ||
-      hay(e.uslugaNaziv) ||
-      hay(e.razlogOtkaza) ||
-      e.id.toString().contains(qLower) ||
-      e.korisnikId.toString().contains(qLower);
-}
+List<RezervacijaCalendarItem> _calendarPassThrough(
+  List<RezervacijaCalendarItem> xs,
+) =>
+    xs;
 
 String _hm(DateTime d) {
   final l = d.toLocal();
@@ -54,7 +45,7 @@ String _weekdayShort(DateTime d) {
 }
 
 Color _serviceAccent(RezervacijaCalendarItem e) {
-  final key = e.uslugaNaziv ?? '';
+  final key = e.uslugaId > 0 ? e.uslugaId : (e.uslugaNaziv ?? '').hashCode;
   const palette = <Color>[
     Color(0xFF7B4DFF),
     Color(0xFF22C55E),
@@ -63,7 +54,7 @@ Color _serviceAccent(RezervacijaCalendarItem e) {
     Color(0xFF38BDF8),
     Color(0xFFEC4899),
   ];
-  return palette[key.hashCode.abs() % palette.length];
+  return palette[key.abs() % palette.length];
 }
 
 /// Admin calendar — week timeline mockup + postojeći filteri (terapeuti/prostorije, otkazani, auto-refresh, pretraga).
@@ -86,12 +77,13 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   _CalColumnAxis _axis = _CalColumnAxis.therapists;
 
   int? _filterZaposlenikId;
-  String? _filterUslugaNaziv;
+  int? _filterUslugaId;
   final TextEditingController _searchCtrl = TextEditingController();
 
   bool _includeCancelled = false;
   bool _autoRefresh = true;
   Timer? _timer;
+  Timer? _searchDebounce;
 
   List<Zaposlenik> _therapists = [];
   List<Usluga> _usluge = [];
@@ -105,6 +97,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   void initState() {
     super.initState();
     _bootstrapLists();
+    _searchCtrl.addListener(_onSearchChanged);
     _reloadCalendar();
     _reloadOverview();
     _startTimer();
@@ -112,9 +105,19 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   @override
   void dispose() {
+    _searchCtrl.removeListener(_onSearchChanged);
+    _searchDebounce?.cancel();
     _timer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _reloadCalendar();
+    });
   }
 
   Future<void> _bootstrapLists() async {
@@ -175,11 +178,14 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   void _reloadCalendar() {
     final r = _visibleRange();
+    final qq = _searchCtrl.text.trim();
     setState(() {
       _calendarFuture = _api.getRezervacijeCalendar(
         from: r.from,
         to: r.to,
         zaposlenikId: _filterZaposlenikId,
+        uslugaId: _filterUslugaId,
+        q: qq.isEmpty ? null : qq,
         includeOtkazane: _includeCancelled,
       );
     });
@@ -198,22 +204,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     setState(() {
       _overviewFuture = _api.getDesktopHomeOverview(day: _summaryDay());
     });
-  }
-
-  List<RezervacijaCalendarItem> _filtered(List<RezervacijaCalendarItem> raw) {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    var xs = List<RezervacijaCalendarItem>.from(raw);
-    if (!_includeCancelled) {
-      xs = xs.where((e) => !e.isOtkazana).toList();
-    }
-    if (_filterUslugaNaziv != null && _filterUslugaNaziv!.trim().isNotEmpty) {
-      final un = _filterUslugaNaziv!.trim().toLowerCase();
-      xs = xs.where((e) => (e.uslugaNaziv ?? '').toLowerCase() == un).toList();
-    }
-    if (q.isNotEmpty) {
-      xs = xs.where((e) => _rezCalMatchesSearch(e, q)).toList();
-    }
-    return xs;
   }
 
   void _shiftPeriod(int delta) {
@@ -326,16 +316,16 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                       therapists: _therapists,
                       usluge: _usluge,
                       filterZaposlenikId: _filterZaposlenikId,
-                      filterUsluga: _filterUslugaNaziv,
                       onTherapist: (id) {
                         setState(() => _filterZaposlenikId = id);
                         _reloadCalendar();
                       },
-                      onUsluga: (n) {
-                        setState(() => _filterUslugaNaziv = n);
+                      filterUslugaId: _filterUslugaId,
+                      onUsluga: (id) {
+                        setState(() => _filterUslugaId = id);
+                        _reloadCalendar();
                       },
                       searchCtrl: _searchCtrl,
-                      onSearchChanged: () => setState(() {}),
                       onPrev: () => _shiftPeriod(-1),
                       onNext: () => _shiftPeriod(1),
                       onToday: _goToday,
@@ -364,13 +354,13 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                                     _reloadCalendar();
                                     _reloadOverview();
                                   },
-                                  filterFn: _filtered,
+                                  filterFn: _calendarPassThrough,
                                 )
                               : _WeekTimeline(
                                   days: _headerDays(),
                                   axis: _axis,
                                   itemsFuture: _calendarFuture,
-                                  filterFn: _filtered,
+                                  filterFn: _calendarPassThrough,
                                   selected: _selected,
                                   onSelect: (e) => setState(() => _selected = e),
                                   startHour: _startHour,
@@ -398,7 +388,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                   selected: _selected,
                   overviewFuture: _overviewFuture,
                   itemsFuture: _calendarFuture,
-                  filterFn: _filtered,
+                  filterFn: _calendarPassThrough,
                   day: _summaryDay(),
                   therapists: _therapists,
                   onNew: () {
@@ -430,11 +420,10 @@ class _Toolbar extends StatelessWidget {
     required this.therapists,
     required this.usluge,
     required this.filterZaposlenikId,
-    required this.filterUsluga,
     required this.onTherapist,
+    required this.filterUslugaId,
     required this.onUsluga,
     required this.searchCtrl,
-    required this.onSearchChanged,
     required this.onPrev,
     required this.onNext,
     required this.onToday,
@@ -452,11 +441,10 @@ class _Toolbar extends StatelessWidget {
   final List<Zaposlenik> therapists;
   final List<Usluga> usluge;
   final int? filterZaposlenikId;
-  final String? filterUsluga;
   final ValueChanged<int?> onTherapist;
-  final ValueChanged<String?> onUsluga;
+  final int? filterUslugaId;
+  final ValueChanged<int?> onUsluga;
   final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onToday;
@@ -563,17 +551,17 @@ class _Toolbar extends StatelessWidget {
               ),
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
-                child: DropdownButtonFormField<String?>(
-                  value: filterUsluga,
+                child: DropdownButtonFormField<int?>(
+                  value: filterUslugaId,
                   decoration: _dropDecoration('All services'),
                   items: [
-                    const DropdownMenuItem<String?>(
+                    const DropdownMenuItem<int?>(
                       value: null,
                       child: Text('All services'),
                     ),
                     ...usluge.map(
                       (u) => DropdownMenuItem(
-                        value: u.naziv,
+                        value: u.id,
                         child: Text(u.naziv, overflow: TextOverflow.ellipsis),
                       ),
                     ),
@@ -585,7 +573,6 @@ class _Toolbar extends StatelessWidget {
                 width: 260,
                 child: TextField(
                   controller: searchCtrl,
-                  onChanged: (_) => onSearchChanged(),
                   style: theme.textTheme.bodyMedium,
                   decoration: InputDecoration(
                     isDense: true,

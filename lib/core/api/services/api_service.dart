@@ -761,17 +761,25 @@ class ApiService {
     required DateTime from,
     required DateTime to,
     int? zaposlenikId,
+    int? uslugaId,
+    int? prostorijaId,
+    String? q,
     bool includeOtkazane = false,
   }) async {
     try {
+      final query = <String, dynamic>{
+        'from': from.toIso8601String(),
+        'to': to.toIso8601String(),
+        if (zaposlenikId != null) 'zaposlenikId': zaposlenikId,
+        if (uslugaId != null) 'uslugaId': uslugaId,
+        if (prostorijaId != null) 'prostorijaId': prostorijaId,
+        if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+        if (includeOtkazane) 'includeOtkazane': true,
+      };
+
       final response = await _dio.get<dynamic>(
         'Rezervacija/calendar',
-        queryParameters: {
-          'from': from.toIso8601String(),
-          'to': to.toIso8601String(),
-          'zaposlenikId': zaposlenikId,
-          if (includeOtkazane) 'includeOtkazane': true,
-        },
+        queryParameters: query,
       );
       final data = response.data;
       if (data is! List) return [];
