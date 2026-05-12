@@ -233,7 +233,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final range = _visibleRange();
     const months = <String>[
       'January',
@@ -260,29 +259,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Calendar',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.4,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Manage appointments, therapist schedules and availability.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
-                ),
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -296,7 +272,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                         (lc.maxHeight - bottomBlock).clamp(0.0, double.infinity);
                     final maxToolbar = head <= 0
                         ? 0.0
-                        : (head * 0.42).clamp(48.0, 280.0).clamp(0.0, head);
+                        : (head * 0.30).clamp(52.0, 200.0).clamp(0.0, head);
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -472,37 +448,55 @@ class _Toolbar extends StatelessWidget {
       borderRadius: 20,
       blurSigma: 22,
       opacity: 0.28,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 6,
+            runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               IconButton(
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 onPressed: onPrev,
-                icon: const Icon(Icons.chevron_left_rounded),
+                icon: const Icon(Icons.chevron_left_rounded, size: 26),
                 color: Colors.white.withValues(alpha: 0.85),
               ),
-              Text(
-                caption,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: Text(
+                  caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               IconButton(
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 onPressed: onNext,
-                icon: const Icon(Icons.chevron_right_rounded),
+                icon: const Icon(Icons.chevron_right_rounded, size: 26),
                 color: Colors.white.withValues(alpha: 0.85),
               ),
               TextButton(
                 onPressed: onToday,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
                 child: const Text('Today'),
               ),
-              const SizedBox(width: 8),
               SegmentedButton<_CalViewMode>(
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 segments: const [
                   ButtonSegment(value: _CalViewMode.day, label: Text('Day')),
                   ButtonSegment(value: _CalViewMode.week, label: Text('Week')),
@@ -511,45 +505,72 @@ class _Toolbar extends StatelessWidget {
                 selected: {view},
                 onSelectionChanged: (s) => onView(s.first),
               ),
-              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                tooltip: 'More options',
+                icon: Icon(
+                  Icons.tune_rounded,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+                position: PopupMenuPosition.under,
+                onSelected: (id) {
+                  if (id == 'c') onToggleCancelled(!includeCancelled);
+                  if (id == 'a') onToggleAuto(!autoRefresh);
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'c',
+                    child: Text(
+                      includeCancelled
+                          ? '✓ Include cancelled'
+                          : 'Include cancelled',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'a',
+                    child: Text(
+                      autoRefresh
+                          ? '✓ Auto refresh (20s)'
+                          : 'Auto refresh (20s)',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               SegmentedButton<_CalColumnAxis>(
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 segments: const [
                   ButtonSegment(
                     value: _CalColumnAxis.therapists,
-                    label: Text('Therapists'),
-                    icon: Icon(Icons.groups_2_outlined, size: 18),
+                    label: Text('Staff'),
+                    icon: Icon(Icons.groups_2_outlined, size: 16),
                   ),
                   ButtonSegment(
                     value: _CalColumnAxis.rooms,
                     label: Text('Rooms'),
-                    icon: Icon(Icons.meeting_room_outlined, size: 18),
+                    icon: Icon(Icons.meeting_room_outlined, size: 16),
                   ),
                 ],
                 selected: {axis},
                 onSelectionChanged: (s) => onAxis(s.first),
               ),
-              FilterChip(
-                label: const Text('Include cancelled'),
-                selected: includeCancelled,
-                onSelected: onToggleCancelled,
-              ),
-              FilterChip(
-                label: const Text('Auto refresh (20s)'),
-                selected: autoRefresh,
-                onSelected: onToggleAuto,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 180, maxWidth: 240),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
                 child: DropdownButtonFormField<int?>(
                   value: filterZaposlenikId,
-                  decoration: _dropDecoration('All therapists'),
+                  isExpanded: true,
+                  decoration: _dropDecoration('Therapist'),
                   items: [
                     const DropdownMenuItem<int?>(
                       value: null,
@@ -558,18 +579,23 @@ class _Toolbar extends StatelessWidget {
                     ...therapists.map(
                       (t) => DropdownMenuItem(
                         value: t.id,
-                        child: Text('${t.ime} ${t.prezime}'.trim()),
+                        child: Text(
+                          '${t.ime} ${t.prezime}'.trim(),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ],
                   onChanged: onTherapist,
                 ),
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
                 child: DropdownButtonFormField<int?>(
                   value: filterUslugaId,
-                  decoration: _dropDecoration('All services'),
+                  isExpanded: true,
+                  decoration: _dropDecoration('Service'),
                   items: [
                     const DropdownMenuItem<int?>(
                       value: null,
@@ -585,22 +611,27 @@ class _Toolbar extends StatelessWidget {
                   onChanged: onUsluga,
                 ),
               ),
-              SizedBox(
-                width: 260,
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
                 child: TextField(
                   controller: searchCtrl,
-                  style: theme.textTheme.bodyMedium,
+                  style: theme.textTheme.bodySmall,
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Search appointments…',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    hintText: 'Search…',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.06),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
                         color: Colors.white.withValues(alpha: 0.1),
                       ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
                     ),
                   ),
                 ),
@@ -659,7 +690,7 @@ class _WeekTimeline extends StatelessWidget {
           builder: (context, constraints) {
             const headerH = 40.0;
             final maxBody = constraints.maxHeight - headerH;
-            final bodyCap = maxBody.clamp(32.0, double.infinity);
+            final bodyCap = (maxBody - 2).clamp(32.0, double.infinity);
             final slotMinutes = (endHour - startHour) * 60.0;
             final naturalH = slotMinutes * pxPerMinute;
             final scale = naturalH > bodyCap
@@ -944,85 +975,105 @@ class _ApptCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: accent.withValues(alpha: item.isOtkazana ? 0.12 : 0.32),
-            border: Border.all(
-              color: selected
-                  ? NuaLuxuryTokens.champagneGold.withValues(alpha: 0.95)
-                  : Colors.white.withValues(alpha: 0.12),
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_hm(item.datumRezervacije)}–${_hm(end)}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white.withValues(alpha: 0.9),
-                    ),
-                  ),
-                  Text(
-                    item.uslugaNaziv ?? 'Service',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    item.korisnikIme ?? 'Client',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.65),
-                    ),
-                  ),
-                  Text(
-                    () {
-                      final a = axis == _CalColumnAxis.rooms
-                          ? (item.prostorijaNaziv ?? 'Room TBD')
-                          : (item.zaposlenikIme ?? 'Therapist');
-                      final b = axis == _CalColumnAxis.rooms
-                          ? (item.zaposlenikIme ?? '')
-                          : (item.prostorijaNaziv ?? '');
-                      final bb = b.trim();
-                      return bb.isEmpty ? a : '$a · $b';
-                    }(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.48),
-                      fontSize: 10,
-                    ),
-                  ),
-                  Text(
-                    '${item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta} min',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-              if (item.isOtkazana)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Icon(
-                    Icons.cancel_rounded,
-                    size: 18,
-                    color: Colors.redAccent.withValues(alpha: 0.9),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: item.isOtkazana ? 0.12 : 0.32),
+                  border: Border.all(
+                    color: selected
+                        ? NuaLuxuryTokens.champagneGold.withValues(alpha: 0.95)
+                        : Colors.white.withValues(alpha: 0.12),
+                    width: selected ? 2 : 1,
                   ),
                 ),
-            ],
-          ),
+                child: FittedBox(
+                  alignment: Alignment.topLeft,
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: c.maxWidth,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_hm(item.datumRezervacije)}–${_hm(end)}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                              Text(
+                                item.uslugaNaziv ?? 'Service',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                item.korisnikIme ?? 'Client',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                ),
+                              ),
+                              Text(
+                                () {
+                                  final a = axis == _CalColumnAxis.rooms
+                                      ? (item.prostorijaNaziv ?? 'Room TBD')
+                                      : (item.zaposlenikIme ?? 'Therapist');
+                                  final b = axis == _CalColumnAxis.rooms
+                                      ? (item.zaposlenikIme ?? '')
+                                      : (item.prostorijaNaziv ?? '');
+                                  final bb = b.trim();
+                                  return bb.isEmpty ? a : '$a · $b';
+                                }(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.48),
+                                  fontSize: 10,
+                                ),
+                              ),
+                              Text(
+                                '${item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta} min',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (item.isOtkazana)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Icon(
+                                Icons.cancel_rounded,
+                                size: 18,
+                                color: Colors.redAccent.withValues(alpha: 0.9),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
