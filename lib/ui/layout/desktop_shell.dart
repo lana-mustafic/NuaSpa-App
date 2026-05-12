@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_appointments_management_screen.dart';
 import '../../screens/admin/admin_calendar_screen.dart';
+import '../../screens/admin/admin_command_center_screen.dart';
 import '../../screens/admin/admin_revenue_analytics_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
 import '../../screens/admin/admin_suite_route.dart';
