@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -10,6 +11,7 @@ import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/rezervacija.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import '../../ui/widgets/luxury/luxury_kpi_card.dart';
@@ -238,7 +240,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                             },
                           ),
                           const SizedBox(height: 30),
-                          _AppointmentsHeader(onRefresh: _reload),
+                          _AppointmentsHeader(
+                            onRefresh: _reload,
+                            onOpenCalendar: () => context
+                                .read<DesktopNav>()
+                                .goTo(DesktopRouteKey.adminCalendar),
+                          ),
                           const SizedBox(height: 14),
                           _BookingsTable(bookings: bookings),
                           const SizedBox(height: 120),
@@ -266,9 +273,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
 }
 
 class _AppointmentsHeader extends StatelessWidget {
-  const _AppointmentsHeader({required this.onRefresh});
+  const _AppointmentsHeader({
+    required this.onRefresh,
+    required this.onOpenCalendar,
+  });
 
   final VoidCallback onRefresh;
+  final VoidCallback onOpenCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +307,7 @@ class _AppointmentsHeader extends StatelessWidget {
           icon: Icons.calendar_month_outlined,
           label: 'View Calendar',
           highlighted: true,
-          onTap: onRefresh,
+          onTap: onOpenCalendar,
         ),
       ],
     );

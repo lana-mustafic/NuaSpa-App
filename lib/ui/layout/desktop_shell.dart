@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_appointments_management_screen.dart';
+import '../../screens/admin/admin_calendar_screen.dart';
 import '../../screens/admin/admin_command_center_screen.dart';
 import '../../screens/admin/admin_revenue_analytics_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
@@ -74,8 +75,7 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.calendar_today_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.admin,
-        suite: AdminSuiteRoute.therapistsCalendar,
+        route: DesktopRouteKey.adminCalendar,
         label: 'Calendar',
         icon: Icons.date_range_rounded,
       ),
@@ -225,6 +225,8 @@ class _DesktopShellState extends State<DesktopShell> {
           return auth.isAdmin
               ? const AdminAppointmentsManagementScreen()
               : const ReservationListScreen();
+        case DesktopRouteKey.adminCalendar:
+          return auth.isAdmin ? const AdminCalendarScreen() : widget.home;
         case DesktopRouteKey.favorites:
           return const FavoritesScreen();
         case DesktopRouteKey.schedule:
@@ -305,7 +307,8 @@ class _DesktopShellState extends State<DesktopShell> {
                                 child: KeyedSubtree(
                                   key: ValueKey(
                                     '${nav.route.name}'
-                                    '${auth.isAdmin ? '_${nav.adminSuiteMount}_${nav.route == DesktopRouteKey.admin ? nav.adminSuiteTarget.name : ''}' : ''}',
+                                    '${auth.isAdmin ? '_${nav.adminSuiteMount}_${nav.route == DesktopRouteKey.admin ? nav.adminSuiteTarget.name : ''}' : ''}'
+                                    '${nav.route == DesktopRouteKey.adminCalendar ? '_cal' : ''}',
                                   ),
                                   child: Material(
                                     color: Colors.transparent,
@@ -481,6 +484,8 @@ class _LuxuryRail extends StatelessWidget {
                             nav.route == DesktopRouteKey.reservations,
                         therapistsMode:
                             nav.route == DesktopRouteKey.therapists,
+                        calendarMode:
+                            nav.route == DesktopRouteKey.adminCalendar,
                       ),
                 const SizedBox(height: 12),
               ],
@@ -504,10 +509,12 @@ class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     this.appointmentsMode = false,
     this.therapistsMode = false,
+    this.calendarMode = false,
   });
 
   final bool appointmentsMode;
   final bool therapistsMode;
+  final bool calendarMode;
 
   @override
   Widget build(BuildContext context) {
@@ -560,14 +567,20 @@ class _QuickActionsCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _QuickActionButton(
-                label: appointmentsMode
+                label: calendarMode
+                    ? 'View Availability'
+                    : appointmentsMode
                     ? 'Walk-in Client'
                     : 'Add Therapist',
-                icon: appointmentsMode
+                icon: calendarMode
+                    ? Icons.event_available_outlined
+                    : appointmentsMode
                     ? Icons.directions_walk_outlined
                     : Icons.person_add_alt_1_outlined,
                 onTap: () {
-                  if (appointmentsMode) {
+                  if (calendarMode) {
+                    context.read<DesktopNav>().goTo(DesktopRouteKey.therapists);
+                  } else if (appointmentsMode) {
                     context.read<DesktopNav>().requestAppointmentCreate();
                   } else if (therapistsMode) {
                     context.read<DesktopNav>().requestTherapistAdd();
