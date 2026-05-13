@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
@@ -13,6 +12,7 @@ import '../../models/admin/top_spender.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
+import 'admin_clients_desktop_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_resources_screen.dart';
 import 'admin_therapist_profile_screen.dart';
@@ -26,15 +26,6 @@ class AdminSuiteScreen extends StatefulWidget {
 
   @override
   State<AdminSuiteScreen> createState() => _AdminSuiteScreenState();
-}
-
-enum _AdminSuiteTab {
-  overview,
-  therapists,
-  finance,
-  clients,
-  resources,
-  manage,
 }
 
 enum _TherapistsView { availability, calendar }
@@ -547,17 +538,12 @@ class _AdminSuiteState {
 
 class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   final ApiService _api = ApiService();
-  _AdminSuiteTab _tab = _AdminSuiteTab.overview;
   DateTimeRange _range = DateTimeRange(
     start: DateTime.now().subtract(const Duration(days: 30)),
     end: DateTime.now(),
   );
 
   Future<_AdminSuiteState>? _overviewFuture;
-
-  final TextEditingController _clientSearch = TextEditingController();
-  Future<List<AdminClientRow>>? _clientsFuture;
-  AdminClientRow? _selectedClient;
 
   // Therapists module
   _TherapistsView _therapistsView = _TherapistsView.availability;
@@ -571,30 +557,15 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   bool _autoRefreshCalendar = true;
   Timer? _calendarTimer;
 
-  void _applyInitialRoute() {
+  void _syncTherapistsViewFromRoute() {
     switch (widget.initialRoute) {
-      case AdminSuiteRoute.overview:
-        _tab = _AdminSuiteTab.overview;
-        break;
       case AdminSuiteRoute.therapists:
-        _tab = _AdminSuiteTab.therapists;
         _therapistsView = _TherapistsView.availability;
         break;
       case AdminSuiteRoute.therapistsCalendar:
-        _tab = _AdminSuiteTab.therapists;
         _therapistsView = _TherapistsView.calendar;
         break;
-      case AdminSuiteRoute.finance:
-        _tab = _AdminSuiteTab.finance;
-        break;
-      case AdminSuiteRoute.clients:
-        _tab = _AdminSuiteTab.clients;
-        break;
-      case AdminSuiteRoute.resources:
-        _tab = _AdminSuiteTab.resources;
-        break;
-      case AdminSuiteRoute.manage:
-        _tab = _AdminSuiteTab.manage;
+      default:
         break;
     }
   }
@@ -602,18 +573,29 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   @override
   void initState() {
     super.initState();
-    _applyInitialRoute();
+    _syncTherapistsViewFromRoute();
     _reloadOverview();
-    _reloadClients();
     _reloadTherapists();
     _reloadCalendar();
     _startCalendarTimerIfNeeded();
   }
 
   @override
+  void didUpdateWidget(covariant AdminSuiteScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialRoute != widget.initialRoute) {
+      _syncTherapistsViewFromRoute();
+      if (widget.initialRoute == AdminSuiteRoute.therapists ||
+          widget.initialRoute == AdminSuiteRoute.therapistsCalendar) {
+        _reloadCalendar();
+      }
+      _startCalendarTimerIfNeeded();
+    }
+  }
+
+  @override
   void dispose() {
     _calendarTimer?.cancel();
-    _clientSearch.dispose();
     super.dispose();
   }
 
@@ -644,12 +626,6 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     });
   }
 
-  void _reloadClients() {
-    setState(() {
-      _clientsFuture = _api.getAdminClients(q: _clientSearch.text, take: 400);
-    });
-  }
-
   void _reloadTherapists() {
     setState(() {
       _therapistsFuture = _api.getZaposlenici();
@@ -674,8 +650,14 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     // “Real-time” MVP: refresh every 20 seconds while screen is open.
     _calendarTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!mounted) return;
-      if (_tab != _AdminSuiteTab.therapists) return;
-      if (_therapistsView != _TherapistsView.calendar) return;
+      final inTherapists = widget.initialRoute == AdminSuiteRoute.therapists ||
+          widget.initialRoute == AdminSuiteRoute.therapistsCalendar;
+      if (!inTherapists) return;
+      final calendarMode =
+          widget.initialRoute == AdminSuiteRoute.therapistsCalendar ||
+              (widget.initialRoute == AdminSuiteRoute.therapists &&
+                  _therapistsView == _TherapistsView.calendar);
+      if (!calendarMode) return;
       _reloadCalendar();
     });
   }
@@ -725,60 +707,27 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(26, 22, 26, 26),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            NavigationRail(
-              selectedIndex: _tab.index,
-              onDestinationSelected: (i) =>
-                  setState(() => _tab = _AdminSuiteTab.values[i]),
-              labelType: NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.space_dashboard_outlined),
-                  label: Text('Dashboard'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.groups_2_outlined),
-                  label: Text('Terapeuti'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.show_chart_rounded),
-                  label: Text('Finansije'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.people_outline),
-                  label: Text('Klijenti'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.apartment_outlined),
-                  label: Text('Resursi'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.admin_panel_settings_outlined),
-                  label: Text('Upravljanje'),
-                ),
-              ],
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: IndexedStack(
-                index: _tab.index,
-                children: [
-                  _buildOverview(context),
-                  _buildTherapists(context),
-                  _buildFinance(context),
-                  _buildClients(context),
-                  const AdminResourcesScreen(),
-                  const AdminDashboardScreen(),
-                ],
-              ),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+        child: _buildRouteBody(context),
       ),
     );
+  }
+
+  Widget _buildRouteBody(BuildContext context) {
+    switch (widget.initialRoute) {
+      case AdminSuiteRoute.overview:
+      case AdminSuiteRoute.finance:
+        return _buildOverview(context);
+      case AdminSuiteRoute.therapists:
+      case AdminSuiteRoute.therapistsCalendar:
+        return _buildTherapists(context);
+      case AdminSuiteRoute.clients:
+        return AdminClientsDesktopScreen(api: _api);
+      case AdminSuiteRoute.resources:
+        return const AdminResourcesScreen();
+      case AdminSuiteRoute.manage:
+        return const AdminDashboardScreen();
+    }
   }
 
   Widget _buildOverview(BuildContext context) {
@@ -864,119 +813,6 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                 },
               );
             },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFinance(BuildContext context) {
-    return _buildOverview(context);
-  }
-
-  Widget _buildClients(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        PageHeader(
-          title: 'Klijenti',
-          subtitle: 'Pretraga, posjete i VIP status.',
-          trailing: SizedBox(
-            width: 380,
-            child: TextField(
-              controller: _clientSearch,
-              onChanged: (_) => _reloadClients(),
-              decoration: const InputDecoration(
-                hintText: 'Pretraži klijente (ime, email, username)…',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 7,
-                child: FutureBuilder<List<AdminClientRow>>(
-                  future: _clientsFuture,
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final list = snap.data ?? [];
-                    if (list.isEmpty) {
-                      return const Center(child: Text('Nema rezultata.'));
-                    }
-                    _selectedClient ??= list.first;
-
-                    return Card(
-                      child: SingleChildScrollView(
-                        primary: false,
-                        child: DataTable(
-                          showCheckboxColumn: false,
-                          columns: const [
-                            DataColumn(label: Text('Klijent')),
-                            DataColumn(label: Text('VIP')),
-                            DataColumn(label: Text('Posjete')),
-                            DataColumn(label: Text('Potrošnja')),
-                            DataColumn(label: Text('Zadnja posjeta')),
-                          ],
-                          rows: list.map((c) {
-                            final selected = _selectedClient?.id == c.id;
-                            return DataRow(
-                              selected: selected,
-                              onSelectChanged: (_) =>
-                                  setState(() => _selectedClient = c),
-                              cells: [
-                                DataCell(Text(c.punoIme)),
-                                DataCell(
-                                  c.isVip
-                                      ? const Icon(
-                                          Icons.workspace_premium_outlined,
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                                DataCell(Text('${c.ukupnoPosjeta}')),
-                                DataCell(
-                                  Text(
-                                    '${c.ukupnoPotroseno.toStringAsFixed(0)} KM',
-                                  ),
-                                ),
-                                DataCell(
-                                  Text(
-                                    c.zadnjaPosjeta == null
-                                        ? '—'
-                                        : c.zadnjaPosjeta!
-                                              .toLocal()
-                                              .toString()
-                                              .split('.')
-                                              .first,
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                flex: 4,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _selectedClient == null
-                        ? const Center(child: Text('Odaberi klijenta.'))
-                        : _ClientDetails(client: _selectedClient!),
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -1883,93 +1719,6 @@ class _PopularityCard extends StatelessWidget {
                       ),
                     ),
                   ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ClientDetails extends StatelessWidget {
-  const _ClientDetails({required this.client});
-
-  final AdminClientRow client;
-
-  @override
-  Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(client.punoIme, style: tt.titleLarge),
-        const SizedBox(height: 8),
-        Text(
-          client.email,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          client.telefon.isEmpty ? '—' : client.telefon,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
-        ),
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _InfoChip(label: 'VIP', value: client.isVip ? 'Da' : 'Ne'),
-            _InfoChip(label: 'Posjete', value: '${client.ukupnoPosjeta}'),
-            _InfoChip(
-              label: 'Potrošnja',
-              value: '${client.ukupnoPotroseno.toStringAsFixed(0)} KM',
-            ),
-            _InfoChip(
-              label: 'Zadnja posjeta',
-              value: client.zadnjaPosjeta == null
-                  ? '—'
-                  : client.zadnjaPosjeta!.toLocal().toString().split('.').first,
-            ),
-          ],
-        ),
-        const Spacer(),
-        FilledButton.icon(
-          onPressed: () {},
-          icon: const Icon(Icons.notes_outlined),
-          label: const Text('Preference (uskoro)'),
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.white.withValues(alpha: 0.70),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
       ),
