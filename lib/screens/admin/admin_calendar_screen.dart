@@ -335,6 +335,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                                     startHour: _startHour,
                                     endHour: _endHour,
                                     pxPerMinute: _pxPerMinute,
+                                    dayColumnWidth: _view == _CalViewMode.day ? null : 148.0,
                                   ),
                           ),
                         ),
@@ -630,6 +631,8 @@ class _WeekTimeline extends StatefulWidget {
     required this.startHour,
     required this.endHour,
     required this.pxPerMinute,
+    /// Fixed width per day column (week view). When null and [days] has one entry, width fills viewport.
+    this.dayColumnWidth,
   });
 
   final List<DateTime> days;
@@ -640,6 +643,7 @@ class _WeekTimeline extends StatefulWidget {
   final int startHour;
   final int endHour;
   final double pxPerMinute;
+  final double? dayColumnWidth;
 
   @override
   State<_WeekTimeline> createState() => _WeekTimelineState();
@@ -671,13 +675,24 @@ class _WeekTimelineState extends State<_WeekTimeline> {
             final effectivePx = widget.pxPerMinute;
             final totalH = slotMinutes * effectivePx;
             final contentH = headerH + totalH;
-            final contentW = 72.0 + widget.days.length * 148.0;
+            const rulerW = 72.0;
+            final n = widget.days.length;
+            final minCol = widget.dayColumnWidth ?? 148.0;
             final viewportH = constraints.maxHeight.isFinite
                 ? constraints.maxHeight
                 : 480.0;
             final viewportW = constraints.maxWidth.isFinite
                 ? constraints.maxWidth
-                : contentW;
+                : (rulerW + n * minCol);
+
+            final availDays = (viewportW - rulerW).clamp(0.0, double.infinity);
+            final double colW;
+            if (n == 1 && widget.dayColumnWidth == null) {
+              colW = availDays < minCol ? minCol : availDays;
+            } else {
+              colW = minCol;
+            }
+            final contentW = rulerW + n * colW;
 
             return Listener(
               onPointerSignal: (signal) {
@@ -728,7 +743,7 @@ class _WeekTimelineState extends State<_WeekTimeline> {
                                 ),
                                 for (final day in widget.days)
                                   SizedBox(
-                                    width: 148,
+                                    width: colW,
                                     child: _DayColumn(
                                       day: day,
                                       items: () {
