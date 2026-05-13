@@ -16,11 +16,14 @@ class LuxuryDesktopHeader extends StatelessWidget {
     required this.onDateChanged,
     this.selectedDay,
     this.notificationCount = 0,
+    this.compactChrome = false,
   });
 
   final ValueChanged<DateTime> onDateChanged;
   final DateTime? selectedDay;
   final int notificationCount;
+  /// Tighter header + narrower search (Calendar screen).
+  final bool compactChrome;
 
   String _fmtDay(DateTime d) {
     const months = [
@@ -74,6 +77,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
     final isAppointments = nav.route == DesktopRouteKey.reservations;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
+    final compact = compactChrome || isCalendar;
 
     final roleLabel = auth.isAdmin
         ? 'Super Admin'
@@ -82,13 +86,19 @@ class LuxuryDesktopHeader extends StatelessWidget {
             : 'Client';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 18, 28, 8),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 16 : 28,
+        compact ? 8 : 18,
+        compact ? 16 : 28,
+        compact ? 4 : 8,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   isRevenue
@@ -102,13 +112,16 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : auth.isAdmin
                       ? 'Welcome back, Admin'
                       : 'Welcome back, ${auth.displayName ?? 'NuaSpa'}',
-                  style: theme.textTheme.headlineMedium?.copyWith(
+                  style: (compact
+                          ? theme.textTheme.titleLarge
+                          : theme.textTheme.headlineMedium)
+                      ?.copyWith(
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.65,
+                    letterSpacing: compact ? -0.4 : -0.65,
                     color: const Color(0xFFF5F3FA),
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: compact ? 2 : 4),
                 Text(
                   isRevenue
                       ? "Track your spa's financial performance and insights."
@@ -121,9 +134,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
+                  maxLines: compact ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: compact ? 12.5 : null,
                     color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                      alpha: 0.62,
+                      alpha: compact ? 0.55 : 0.62,
                     ),
                     letterSpacing: 0.05,
                   ),
@@ -131,10 +147,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 22),
+          SizedBox(width: compact ? 12 : 22),
           if (!isRevenue) ...[
-            SizedBox(
-              width: 340,
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: compact ? 360 : 340),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(999),
                 child: BackdropFilter(
@@ -183,7 +199,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: compact ? 10 : 14),
           ] else ...[
             _HeaderPill(
               icon: Icons.date_range_outlined,
@@ -221,7 +237,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
           if (!isRevenue) ...[
-            const SizedBox(width: 10),
+            SizedBox(width: compact ? 8 : 10),
             InkWell(
               borderRadius: BorderRadius.circular(NuaLuxuryTokens.radiusMd + 6),
               onTap: () => _pickDate(context),
@@ -229,25 +245,26 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 blurSigma: 18,
                 opacity: 0.28,
                 borderRadius: NuaLuxuryTokens.radiusMd + 6,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                  vertical: compact ? 8 : 12,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       Icons.calendar_month_outlined,
-                      size: 20,
+                      size: compact ? 18 : 20,
                       color: NuaLuxuryTokens.lavenderWhisper.withValues(
                         alpha: 0.9,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: compact ? 6 : 10),
                     Text(
                       _fmtDay(day),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w600,
+                        fontSize: compact ? 12.5 : null,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -260,17 +277,22 @@ class LuxuryDesktopHeader extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(width: 12),
+          SizedBox(width: compact ? 8 : 12),
           LuxuryGlassPanel(
             blurSigma: 18,
             opacity: 0.32,
             borderRadius: NuaLuxuryTokens.radiusMd + 8,
-            padding: const EdgeInsets.fromLTRB(8, 6, 16, 6),
+            padding: EdgeInsets.fromLTRB(
+              compact ? 6 : 8,
+              compact ? 4 : 6,
+              compact ? 12 : 16,
+              compact ? 4 : 6,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: 20,
+                  radius: compact ? 17 : 20,
                   backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
                     alpha: 0.35,
                   ),
