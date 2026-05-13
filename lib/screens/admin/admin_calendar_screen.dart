@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
@@ -618,7 +620,7 @@ class _Toolbar extends StatelessWidget {
       );
 }
 
-class _WeekTimeline extends StatelessWidget {
+class _WeekTimeline extends StatefulWidget {
   const _WeekTimeline({
     required this.days,
     required this.itemsFuture,
@@ -640,70 +642,122 @@ class _WeekTimeline extends StatelessWidget {
   final double pxPerMinute;
 
   @override
+  State<_WeekTimeline> createState() => _WeekTimelineState();
+}
+
+class _WeekTimelineState extends State<_WeekTimeline> {
+  final ScrollController _verticalCtrl = ScrollController();
+  final ScrollController _horizontalCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _verticalCtrl.dispose();
+    _horizontalCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     return FutureBuilder<List<RezervacijaCalendarItem>>(
-      future: itemsFuture,
+      future: widget.itemsFuture,
       builder: (context, snap) {
         final raw = snap.data ?? const <RezervacijaCalendarItem>[];
-        final items = filterFn(raw);
+        final items = widget.filterFn(raw);
         return LayoutBuilder(
           builder: (context, constraints) {
             const headerH = 40.0;
-            final slotMinutes = (endHour - startHour) * 60.0;
-            final effectivePx = pxPerMinute;
+            final slotMinutes = (widget.endHour - widget.startHour) * 60.0;
+            final effectivePx = widget.pxPerMinute;
             final totalH = slotMinutes * effectivePx;
             final contentH = headerH + totalH;
-            final contentW = 72.0 + days.length * 148.0;
+            final contentW = 72.0 + widget.days.length * 148.0;
             final viewportH = constraints.maxHeight.isFinite
                 ? constraints.maxHeight
                 : 480.0;
+            final viewportW = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : contentW;
 
-            return SizedBox(
-              height: viewportH,
-              width: constraints.maxWidth.isFinite ? constraints.maxWidth : contentW,
-              child: SingleChildScrollView(
-                primary: true,
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: contentW,
-                    height: contentH,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _TimeRuler(
-                          startHour: startHour,
-                          endHour: endHour,
-                          height: totalH,
-                          pxPerMinute: effectivePx,
-                        ),
-                        for (final day in days)
-                          SizedBox(
-                            width: 148,
-                            child: _DayColumn(
-                              day: day,
-                              items: () {
-                                final d = items
-                                    .where((e) => _sameDay(e.datumRezervacije, day))
-                                    .toList();
-                                d.sort(
-                                  (a, b) => a.datumRezervacije
-                                      .compareTo(b.datumRezervacije),
-                                );
-                                return d;
-                              }(),
-                              height: totalH,
-                              startHour: startHour,
-                              endHour: endHour,
-                              pxPerMinute: effectivePx,
-                              now: now,
-                              selected: selected,
-                              onSelect: onSelect,
+            return Listener(
+              onPointerSignal: (signal) {
+                if (signal is! PointerScrollEvent) return;
+                if (!_horizontalCtrl.hasClients) return;
+                final shift = HardwareKeyboard.instance.logicalKeysPressed
+                    .contains(LogicalKeyboardKey.shiftLeft) ||
+                    HardwareKeyboard.instance.logicalKeysPressed
+                        .contains(LogicalKeyboardKey.shiftRight);
+                if (!shift) return;
+                final delta = signal.scrollDelta.dy;
+                if (delta == 0) return;
+                final p = _horizontalCtrl.position;
+                final next = (p.pixels + delta)
+                    .clamp(p.minScrollExtent, p.maxScrollExtent)
+                    .toDouble();
+                _horizontalCtrl.jumpTo(next);
+              },
+              child: SizedBox(
+                height: viewportH,
+                width: viewportW,
+                child: Scrollbar(
+                  controller: _horizontalCtrl,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: _horizontalCtrl,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: contentW,
+                      height: viewportH,
+                      child: Scrollbar(
+                        controller: _verticalCtrl,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _verticalCtrl,
+                          scrollDirection: Axis.vertical,
+                          child: SizedBox(
+                            width: contentW,
+                            height: contentH,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _TimeRuler(
+                                  startHour: widget.startHour,
+                                  endHour: widget.endHour,
+                                  height: totalH,
+                                  pxPerMinute: effectivePx,
+                                ),
+                                for (final day in widget.days)
+                                  SizedBox(
+                                    width: 148,
+                                    child: _DayColumn(
+                                      day: day,
+                                      items: () {
+                                        final d = items
+                                            .where(
+                                              (e) =>
+                                                  _sameDay(e.datumRezervacije, day),
+                                            )
+                                            .toList();
+                                        d.sort(
+                                          (a, b) => a.datumRezervacije
+                                              .compareTo(b.datumRezervacije),
+                                        );
+                                        return d;
+                                      }(),
+                                      height: totalH,
+                                      startHour: widget.startHour,
+                                      endHour: widget.endHour,
+                                      pxPerMinute: effectivePx,
+                                      now: now,
+                                      selected: widget.selected,
+                                      onSelect: widget.onSelect,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
