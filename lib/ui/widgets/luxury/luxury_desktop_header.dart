@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../../screens/admin/admin_suite_route.dart';
 import '../../navigation/desktop_nav.dart';
 import '../desk_global_search_bar.dart';
 import '../../theme/nua_luxury_tokens.dart';
@@ -77,7 +78,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
     final isAppointments = nav.route == DesktopRouteKey.reservations;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
-    final compact = compactChrome || isCalendar;
+    final isAdminClients = nav.route == DesktopRouteKey.admin &&
+        nav.adminSuiteTarget == AdminSuiteRoute.clients;
+    final compact = compactChrome || isCalendar || isAdminClients;
 
     final roleLabel = auth.isAdmin
         ? 'Super Admin'
@@ -169,11 +172,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       controller: isCalendar ? nav.calendarSearchController : null,
                       hintText: isTherapists
                           ? 'Search therapists…'
-                          : isAppointments
-                          ? 'Search clients, appointments…'
-                          : isCalendar
-                          ? 'Search appointments…'
-                          : 'Search services & treatments (Enter → Services)…',
+                          : isAdminClients
+                              ? 'Search services & therapies…'
+                              : isAppointments
+                                  ? 'Search clients, appointments…'
+                                  : isCalendar
+                                      ? 'Search appointments…'
+                                      : 'Search services & treatments (Enter → Services)…',
                       onChanged: isTherapists
                           ? (q) => context
                                 .read<DesktopNav>()
