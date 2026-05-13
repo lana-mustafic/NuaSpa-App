@@ -12,6 +12,7 @@ import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/admin/admin_client_row.dart';
+import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
 import '../../../models/admin/revenue_point.dart';
 import '../../../models/admin/service_popularity.dart';
@@ -753,6 +754,76 @@ class ApiService {
       debugPrint('Greška u ApiService.getAdminClients: $e');
       return [];
     }
+  }
+
+  Future<AdminClientStats?> getAdminClientStats({String? q}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'AdminKlijent/stats',
+        queryParameters: {
+          if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return AdminClientStats.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminClientStats: $e');
+      return null;
+    }
+  }
+
+  Future<AdminClientRow?> createAdminClient({
+    required String ime,
+    required String prezime,
+    required String email,
+    required String userName,
+    required String password,
+    String? telefon,
+    int gradId = 1,
+    int? zaposlenikId,
+    bool isVipKlijent = false,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      'AdminKlijent',
+      data: {
+        'ime': ime,
+        'prezime': prezime,
+        'email': email,
+        'userName': userName,
+        'password': password,
+        'telefon': telefon,
+        'gradId': gradId,
+        'zaposlenikId': zaposlenikId,
+        'isVipKlijent': isVipKlijent,
+      },
+    );
+    final data = response.data;
+    if (data is! Map) return null;
+    return AdminClientRow.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminClientRow?> patchAdminClient({
+    required int id,
+    bool? isVipKlijent,
+    bool setZaposlenik = false,
+    int? zaposlenikId,
+    String? napomenaZaTerapeuta,
+  }) async {
+    final body = <String, dynamic>{};
+    if (isVipKlijent != null) body['isVipKlijent'] = isVipKlijent;
+    if (setZaposlenik) body['zaposlenikId'] = zaposlenikId ?? 0;
+    if (napomenaZaTerapeuta != null) {
+      body['napomenaZaTerapeuta'] = napomenaZaTerapeuta;
+    }
+
+    final response = await _dio.patch<dynamic>(
+      'AdminKlijent/$id',
+      data: body,
+    );
+    final data = response.data;
+    if (data is! Map) return null;
+    return AdminClientRow.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<List<RezervacijaCalendarItem>> getRezervacijeCalendar({

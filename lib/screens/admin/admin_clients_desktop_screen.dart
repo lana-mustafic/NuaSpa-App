@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_client_row.dart';
+import '../../models/admin/admin_client_stats.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
@@ -31,7 +32,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   final TextEditingController _quickSearch = TextEditingController();
   Timer? _searchDebounce;
 
-  Future<List<AdminClientRow>>? _loadFuture;
+  Future<({List<AdminClientRow> clients, AdminClientStats? stats})>? _payloadFuture;
   Future<List<Zaposlenik>>? _therapistsFuture;
 
   String _vipFilter = 'all'; // all | vip | none
@@ -72,14 +73,31 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   void _reloadFromApi() {
+    final q = _apiSearch.text.trim();
     setState(() {
-      _loadFuture = widget.api.getAdminClients(
-        q: _apiSearch.text.trim(),
-        take: 500,
-      );
+      _payloadFuture = () async {
+        final clients = await widget.api.getAdminClients(q: q, take: 500);
+        final stats = await widget.api.getAdminClientStats(q: q.isEmpty ? null : q);
+        return (clients: clients, stats: stats);
+      }();
       _page = 0;
     });
   }
+
+  bool get _useServerStats =>
+      _vipFilter == 'all' &&
+      _therapistFilterIndex == null &&
+      _quickSearch.text.trim().isEmpty;
+
+  String _therapistDisplay(AdminClientRow c, List<Zaposlenik> th) {
+    final api = c.terapeutPunoIme;
+    if (api != null && api.isNotEmpty) return api;
+    final z = _therapistFor(c, th);
+    return z == null ? '—' : _therapistName(z);
+  }
+
+  int? _therapistIdForRow(AdminClientRow c, List<Zaposlenik> th) =>
+      c.terapeutZaposlenikId ?? _therapistFor(c, th)?.id;
 
   Zaposlenik? _therapistFor(AdminClientRow c, List<Zaposlenik> th) {
     if (th.isEmpty) return null;
@@ -143,7 +161,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         therapists.isNotEmpty &&
         _therapistFilterIndex! < therapists.length) {
       final z = therapists[_therapistFilterIndex!];
-      xs = xs.where((c) => _therapistFor(c, therapists)?.id == z.id).toList();
+      xs = xs.where((c) => _therapistIdForRow(c, therapists) == z.id).toList();
     }
 
     int cmp(AdminClientRow a, AdminClientRow b) {
@@ -170,9 +188,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   void _openClientSheet(AdminClientRow c, List<Zaposlenik> th) {
-    final tName = _therapistFor(c, th) != null
-        ? _therapistName(_therapistFor(c, th)!)
-        : '—';
+    final tName = _therapistDisplay(c, th);
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -205,6 +221,237 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     );
   }
 
+  Future<void> _showCreateClientDialog(List<Zaposlenik> therapists) async {
+    final imeC = TextEditingController();
+    final prezC = TextEditingController();
+    final emailC = TextEditingController();
+    final userC = TextEditingController();
+    final passC = TextEditingController(text: 'NuaSpaKlijent1!');
+    final telC = TextEditingController();
+    int? zId;
+    var vip = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          return AlertDialog(
+            backgroundColor: NuaLuxuryTokens.voidViolet,
+            title: const Text('Novi klijent'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: imeC,
+                      decoration: const InputDecoration(labelText: 'Ime'),
+                    ),
+                    TextField(
+                      controller: prezC,
+                      decoration: const InputDecoration(labelText: 'Prezime'),
+                    ),
+                    TextField(
+                      controller: emailC,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    TextField(
+                      controller: userC,
+                      decoration: const InputDecoration(labelText: 'Korisničko ime'),
+                    ),
+                    TextField(
+                      controller: passC,
+                      decoration: const InputDecoration(labelText: 'Lozinka'),
+                      obscureText: true,
+                    ),
+                    TextField(
+                      controller: telC,
+                      decoration: const InputDecoration(labelText: 'Telefon (opcionalno)'),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<int?>(
+                      value: zId,
+                      decoration: const InputDecoration(labelText: 'Preferirani terapeut'),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('—')),
+                        ...therapists.map(
+                          (z) => DropdownMenuItem<int?>(
+                            value: z.id,
+                            child: Text(_therapistName(z)),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setLocal(() => zId = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('VIP klijent'),
+                      value: vip,
+                      onChanged: (v) => setLocal(() => vip = v),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Odustani')),
+              FilledButton(
+                onPressed: () async {
+                  final ime = imeC.text.trim();
+                  final prez = prezC.text.trim();
+                  final email = emailC.text.trim();
+                  final user = userC.text.trim();
+                  final pass = passC.text;
+                  if (ime.isEmpty || prez.isEmpty || email.isEmpty || user.isEmpty || pass.length < 6) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Popuni obavezna polja (lozinka min. 6 znakova).')),
+                    );
+                    return;
+                  }
+                  try {
+                    await widget.api.createAdminClient(
+                      ime: ime,
+                      prezime: prez,
+                      email: email,
+                      userName: user,
+                      password: pass,
+                      telefon: telC.text.trim().isEmpty ? null : telC.text.trim(),
+                      zaposlenikId: zId,
+                      isVipKlijent: vip,
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    _reloadFromApi();
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Klijent je kreiran.')),
+                    );
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Greška: $e')),
+                    );
+                  }
+                },
+                child: const Text('Spremi'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    imeC.dispose();
+    prezC.dispose();
+    emailC.dispose();
+    userC.dispose();
+    passC.dispose();
+    telC.dispose();
+  }
+
+  Future<void> _onClientMore(
+    AdminClientRow row,
+    List<Zaposlenik> therapists,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NuaLuxuryTokens.voidViolet,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: Text(row.isVipKlijent ? 'Ukloni ručni VIP' : 'Postavi ručni VIP'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await widget.api.patchAdminClient(
+                      id: row.id,
+                      isVipKlijent: !row.isVipKlijent,
+                    );
+                    if (!mounted) return;
+                    _reloadFromApi();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          row.isVipKlijent ? 'Ručni VIP uklonjen.' : 'Ručni VIP postavljen.',
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Greška: $e')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Promijeni preferiranog terapeuta'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  int? picked = row.preferiraniZaposlenikId;
+                  await showDialog<void>(
+                    context: context,
+                    builder: (dCtx) => StatefulBuilder(
+                      builder: (dCtx, setL) {
+                        return AlertDialog(
+                          backgroundColor: NuaLuxuryTokens.voidViolet,
+                          title: const Text('Preferirani terapeut'),
+                          content: DropdownButtonFormField<int?>(
+                            value: picked,
+                            items: [
+                              const DropdownMenuItem<int?>(value: null, child: Text('Nema')),
+                              ...therapists.map(
+                                (z) => DropdownMenuItem<int?>(
+                                  value: z.id,
+                                  child: Text(_therapistName(z)),
+                                ),
+                              ),
+                            ],
+                            onChanged: (v) => setL(() => picked = v),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Odustani')),
+                            FilledButton(
+                              onPressed: () async {
+                                try {
+                                  await widget.api.patchAdminClient(
+                                    id: row.id,
+                                    setZaposlenik: true,
+                                    zaposlenikId: picked,
+                                  );
+                                  if (!dCtx.mounted) return;
+                                  Navigator.pop(dCtx);
+                                  if (!mounted) return;
+                                  _reloadFromApi();
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Greška: $e')),
+                                  );
+                                }
+                              },
+                              child: const Text('Spremi'),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final baseText = Theme.of(context).textTheme;
@@ -214,11 +461,13 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       builder: (context, thSnap) {
         final therapists = thSnap.data ?? const <Zaposlenik>[];
 
-        return FutureBuilder<List<AdminClientRow>>(
-          future: _loadFuture,
+        return FutureBuilder<({List<AdminClientRow> clients, AdminClientStats? stats})>(
+          future: _payloadFuture,
           builder: (context, snap) {
             final loading = snap.connectionState == ConnectionState.waiting;
-            final raw = snap.data ?? const <AdminClientRow>[];
+            final payload = snap.data;
+            final raw = payload?.clients ?? const <AdminClientRow>[];
+            final serverStats = payload?.stats;
             final filtered = _applyLocalFilters(raw, therapists);
             final totalFiltered = filtered.length;
             final pageCount = totalFiltered == 0
@@ -234,10 +483,22 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
             final start = safePage * _pageSize;
             final pageSlice = filtered.skip(start).take(_pageSize).toList();
 
-            final vipN = filtered.where((e) => e.isVip).length;
-            final visitsSum = filtered.fold<int>(0, (a, b) => a + b.ukupnoPosjeta);
-            final spendSum =
-                filtered.fold<double>(0, (a, b) => a + b.ukupnoPotroseno);
+            final int vipN;
+            final int visitsSum;
+            final double spendSum;
+            final int totalClientsKpi;
+            if (_useServerStats && serverStats != null) {
+              final st = serverStats;
+              vipN = st.vipKlijenata;
+              visitsSum = st.ukupnoPosjeta;
+              spendSum = st.ukupnaPotrosnja;
+              totalClientsKpi = st.ukupnoKlijenata;
+            } else {
+              vipN = filtered.where((e) => e.isVip).length;
+              visitsSum = filtered.fold<int>(0, (a, b) => a + b.ukupnoPosjeta);
+              spendSum = filtered.fold<double>(0, (a, b) => a + b.ukupnoPotroseno);
+              totalClientsKpi = totalFiltered;
+            }
 
             return LayoutBuilder(
               builder: (context, c) {
@@ -250,7 +511,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   children: [
                     _TitleKpiRow(
                       textTheme: baseText,
-                      totalClients: totalFiltered,
+                      totalClients: totalClientsKpi,
                       vipCount: vipN,
                       visitsSum: visitsSum,
                       spendSum: spendSum,
@@ -281,35 +542,17 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                         _sortKey = s;
                         _page = 0;
                       }),
-                      onAdd: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Dodavanje klijenta — uskoro.'),
-                            behavior: SnackBarBehavior.floating,
-                            width: 380,
-                          ),
-                        );
-                      },
+                      onAdd: () => _showCreateClientDialog(therapists),
                     ),
                     const SizedBox(height: 18),
                     Expanded(
                       child: _ClientsTableCard(
                         loading: loading,
                         rows: pageSlice,
-                        therapists: therapists,
-                        therapistFor: _therapistFor,
-                        therapistName: _therapistName,
+                        therapistLabel: (c) => _therapistDisplay(c, therapists),
                         fmtVisit: _fmtVisit,
                         onView: (row) => _openClientSheet(row, therapists),
-                        onMore: (_) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Više akcija — uskoro.'),
-                              behavior: SnackBarBehavior.floating,
-                              width: 360,
-                            ),
-                          );
-                        },
+                        onMore: (row) => _onClientMore(row, therapists),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -343,7 +586,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                       recent: _recentClients(filtered),
                       therapists: therapists,
                       countsForTherapist: (z) => filtered
-                          .where((c) => _therapistFor(c, therapists)?.id == z.id)
+                          .where((c) => _therapistIdForRow(c, therapists) == z.id)
                           .length,
                       therapistName: _therapistName,
                     )),
@@ -801,9 +1044,7 @@ class _ClientsTableCard extends StatelessWidget {
   const _ClientsTableCard({
     required this.loading,
     required this.rows,
-    required this.therapists,
-    required this.therapistFor,
-    required this.therapistName,
+    required this.therapistLabel,
     required this.fmtVisit,
     required this.onView,
     required this.onMore,
@@ -811,9 +1052,7 @@ class _ClientsTableCard extends StatelessWidget {
 
   final bool loading;
   final List<AdminClientRow> rows;
-  final List<Zaposlenik> therapists;
-  final Zaposlenik? Function(AdminClientRow c, List<Zaposlenik> th) therapistFor;
-  final String Function(Zaposlenik z) therapistName;
+  final String Function(AdminClientRow c) therapistLabel;
   final String Function(DateTime? d) fmtVisit;
   final void Function(AdminClientRow) onView;
   final void Function(AdminClientRow) onMore;
@@ -861,8 +1100,7 @@ class _ClientsTableCard extends StatelessWidget {
               ),
               itemBuilder: (context, i) {
                 final c = rows[i];
-                final z = therapistFor(c, therapists);
-                final tLabel = z == null ? '—' : therapistName(z);
+                final tLabel = therapistLabel(c);
                 return _TableDataRow(
                   client: c,
                   therapistLabel: tLabel,
