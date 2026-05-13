@@ -85,7 +85,8 @@ class AdminCalendarScreen extends StatefulWidget {
 class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   static const int _startHour = 8;
   static const int _endHour = 19;
-  static const double _pxPerMinute = 1.35;
+  /// Natural timeline scale (scroll vertically when viewport is shorter).
+  static const double _pxPerMinute = 1.55;
 
   final ApiService _api = ApiService();
 
@@ -649,54 +650,62 @@ class _WeekTimeline extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             const headerH = 40.0;
-            final maxBody = constraints.maxHeight - headerH;
-            final bodyCap = (maxBody - 2).clamp(32.0, double.infinity);
             final slotMinutes = (endHour - startHour) * 60.0;
-            final naturalH = slotMinutes * pxPerMinute;
-            final scale = naturalH > bodyCap
-                ? (bodyCap / naturalH).clamp(0.18, 1.0)
-                : 1.0;
-            final effectivePx = pxPerMinute * scale;
+            final effectivePx = pxPerMinute;
             final totalH = slotMinutes * effectivePx;
+            final contentH = headerH + totalH;
+            final contentW = 72.0 + days.length * 148.0;
+            final viewportH = constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : 480.0;
 
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: 72.0 + days.length * 148.0,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _TimeRuler(
-                      startHour: startHour,
-                      endHour: endHour,
-                      height: totalH,
-                      pxPerMinute: effectivePx,
-                    ),
-                    for (final day in days)
-                      SizedBox(
-                        width: 148,
-                        child: _DayColumn(
-                          day: day,
-                          items: () {
-                            final d = items
-                                .where((e) => _sameDay(e.datumRezervacije, day))
-                                .toList();
-                            d.sort(
-                              (a, b) => a.datumRezervacije
-                                  .compareTo(b.datumRezervacije),
-                            );
-                            return d;
-                          }(),
-                          height: totalH,
+            return SizedBox(
+              height: viewportH,
+              width: constraints.maxWidth.isFinite ? constraints.maxWidth : contentW,
+              child: SingleChildScrollView(
+                primary: true,
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: contentW,
+                    height: contentH,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TimeRuler(
                           startHour: startHour,
                           endHour: endHour,
+                          height: totalH,
                           pxPerMinute: effectivePx,
-                          now: now,
-                          selected: selected,
-                          onSelect: onSelect,
                         ),
-                      ),
-                  ],
+                        for (final day in days)
+                          SizedBox(
+                            width: 148,
+                            child: _DayColumn(
+                              day: day,
+                              items: () {
+                                final d = items
+                                    .where((e) => _sameDay(e.datumRezervacije, day))
+                                    .toList();
+                                d.sort(
+                                  (a, b) => a.datumRezervacije
+                                      .compareTo(b.datumRezervacije),
+                                );
+                                return d;
+                              }(),
+                              height: totalH,
+                              startHour: startHour,
+                              endHour: endHour,
+                              pxPerMinute: effectivePx,
+                              now: now,
+                              selected: selected,
+                              onSelect: onSelect,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             );
@@ -741,9 +750,10 @@ class _TimeRuler extends StatelessWidget {
                     right: 6,
                     child: Text(
                       '${h.toString().padLeft(2, '0')}:00',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.45),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.52),
                         fontWeight: FontWeight.w700,
+                        fontSize: 12,
                       ),
                     ),
                   ),
@@ -935,6 +945,8 @@ class _ApptCard extends StatelessWidget {
     final end = item.datumRezervacije.add(
       Duration(minutes: item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta),
     );
+    final timeStr = '${_hm(item.datumRezervacije)} – ${_hm(end)}';
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -961,71 +973,119 @@ class _ApptCard extends StatelessWidget {
                       ),
                     ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final h = constraints.maxHeight;
+
+                Widget slotBody({required bool compact}) {
+                  final timeStyle = theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: compact ? 12 : 13,
+                    height: 1.15,
+                    color: Colors.white.withValues(alpha: 0.94),
+                  );
+                  final titleStyle = theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: compact ? 12.5 : 14.5,
+                    height: 1.22,
+                    color: Colors.white.withValues(alpha: 0.98),
+                  );
+                  final subStyle = theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: compact ? 11.5 : 13,
+                    height: 1.2,
+                    color: Colors.white.withValues(alpha: 0.62),
+                  );
+
+                  return Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          10,
+                          compact ? 5 : 8,
+                          16,
+                          compact ? 5 : 8,
+                        ),
+                        child: SizedBox(
+                          width: w,
+                          height: compact ? 56 : h,
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '${_hm(item.datumRezervacije)} – ${_hm(end)}',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item.uslugaNaziv ?? 'Service',
-                                maxLines: 2,
+                                timeStr,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white.withValues(alpha: 0.95),
-                                ),
+                                style: timeStyle,
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: compact ? 2 : 5),
+                              if (compact)
+                                Text(
+                                  item.uslugaNaziv ?? 'Service',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: titleStyle,
+                                )
+                              else
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Text(
+                                      item.uslugaNaziv ?? 'Service',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: titleStyle,
+                                    ),
+                                  ),
+                                ),
+                              SizedBox(height: compact ? 2 : 4),
                               Text(
                                 item.zaposlenikIme ?? 'Therapist',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.52),
-                                  fontSize: 11,
-                                ),
+                                style: subStyle,
                               ),
                             ],
                           ),
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: item.isOtkazana
-                                    ? Colors.redAccent.withValues(alpha: 0.7)
-                                    : _CalUi.accent,
-                                shape: BoxShape.circle,
-                              ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: item.isOtkazana
+                                ? Colors.redAccent.withValues(alpha: 0.78)
+                                : _CalUi.accent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.28),
                             ),
                           ),
-                        ],
+                        ),
                       ),
+                    ],
+                  );
+                }
+
+                if (h < 54) {
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topLeft,
+                    child: SizedBox(
+                      width: w,
+                      height: 58,
+                      child: slotBody(compact: true),
                     ),
                   );
-                },
-              ),
+                }
+
+                return slotBody(compact: false);
+              },
             ),
           ),
         ),
