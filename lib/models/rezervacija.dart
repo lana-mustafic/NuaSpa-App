@@ -1,5 +1,3 @@
-import 'rezervacija_oprema_item.dart';
-
 class Rezervacija {
   final int id;
   final DateTime datumRezervacije;
@@ -8,9 +6,6 @@ class Rezervacija {
   final bool isOtkazana;
   final String? razlogOtkaza;
   final DateTime? otkazanaAt;
-  final int? prostorijaId;
-  final String? prostorijaNaziv;
-  final List<RezervacijaOpremaItem> oprema;
   final int korisnikId;
   final String? korisnikIme;
   final String? korisnikTelefon;
@@ -23,6 +18,8 @@ class Rezervacija {
   final int zaposlenikId;
   final String? zaposlenikIme;
   final bool premiumKlijent;
+  /// VIP tretman na samoj rezervaciji (postavlja admin).
+  final bool isVip;
 
   Rezervacija({
     required this.id,
@@ -32,9 +29,6 @@ class Rezervacija {
     required this.isOtkazana,
     required this.razlogOtkaza,
     required this.otkazanaAt,
-    required this.prostorijaId,
-    required this.prostorijaNaziv,
-    required this.oprema,
     this.korisnikId = 0,
     this.korisnikIme,
     this.korisnikTelefon,
@@ -47,10 +41,10 @@ class Rezervacija {
     this.zaposlenikId = 0,
     this.zaposlenikIme,
     this.premiumKlijent = false,
+    this.isVip = false,
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
-    final opremaJson = json['oprema'];
     return Rezervacija(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
@@ -61,18 +55,6 @@ class Rezervacija {
       otkazanaAt: (json['otkazanaAt'] as String?) == null
           ? null
           : DateTime.parse(json['otkazanaAt'] as String),
-      prostorijaId: (json['prostorijaId'] as num?)?.toInt(),
-      prostorijaNaziv: json['prostorijaNaziv'] as String?,
-      oprema: opremaJson is List
-          ? opremaJson
-                .whereType<Map>()
-                .map(
-                  (e) => RezervacijaOpremaItem.fromJson(
-                    Map<String, dynamic>.from(e),
-                  ),
-                )
-                .toList()
-          : const [],
       korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
       korisnikTelefon: json['korisnikTelefon'] as String?,
@@ -86,6 +68,7 @@ class Rezervacija {
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
       premiumKlijent: json['premiumKlijent'] as bool? ?? false,
+      isVip: json['isVip'] as bool? ?? false,
     );
   }
 }

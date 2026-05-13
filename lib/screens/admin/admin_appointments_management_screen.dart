@@ -311,8 +311,7 @@ class _AdminAppointmentsManagementScreenState
       datumRezervacije: draft.dateTime,
       uslugaId: draft.serviceId,
       zaposlenikId: draft.therapistId,
-      prostorijaId: r.prostorijaId,
-      oprema: r.oprema,
+      isVip: draft.isVip,
     );
     if (!mounted) return;
     _toast(updated == null ? 'Edit failed.' : 'Appointment updated.');
@@ -1624,9 +1623,11 @@ class _AppointmentEditDraft {
     required this.dateTime,
     required this.serviceId,
     required this.therapistId,
+    required this.isVip,
   });
   final DateTime dateTime;
   final int serviceId, therapistId;
+  final bool isVip;
 }
 
 class _AppointmentEditDialog extends StatefulWidget {
@@ -1646,6 +1647,7 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
   late DateTime _dateTime = widget.appointment.datumRezervacije;
   late int? _serviceId = _initialServiceId();
   late int? _therapistId = _initialTherapistId();
+  late bool _isVip = widget.appointment.isVip;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -1682,6 +1684,12 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
             ],
             onChanged: (v) => setState(() => _therapistId = v),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('VIP appointment'),
+            value: _isVip,
+            onChanged: (v) => setState(() => _isVip = v),
+          ),
         ],
       ),
     ),
@@ -1699,6 +1707,7 @@ class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
                   dateTime: _dateTime,
                   serviceId: _serviceId!,
                   therapistId: _therapistId!,
+                  isVip: _isVip,
                 ),
               ),
         child: const Text('Save'),

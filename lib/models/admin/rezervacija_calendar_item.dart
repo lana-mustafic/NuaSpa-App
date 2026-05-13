@@ -4,10 +4,10 @@ class RezervacijaCalendarItem {
   final bool isPotvrdjena;
   final bool isPlacena;
   final bool isOtkazana;
+  /// Optional; when true, calendar shows VIP gold accent (if API sends it).
+  final bool isVip;
   final int zaposlenikId;
   final String? zaposlenikIme;
-  final int? prostorijaId;
-  final String? prostorijaNaziv;
 
   final int korisnikId;
   final String? korisnikIme;
@@ -26,10 +26,9 @@ class RezervacijaCalendarItem {
     required this.isPotvrdjena,
     required this.isPlacena,
     required this.isOtkazana,
+    this.isVip = false,
     required this.zaposlenikId,
     required this.zaposlenikIme,
-    required this.prostorijaId,
-    required this.prostorijaNaziv,
     required this.korisnikId,
     required this.korisnikIme,
     required this.korisnikTelefon,
@@ -48,10 +47,9 @@ class RezervacijaCalendarItem {
       isPotvrdjena: (json['isPotvrdjena'] as bool?) ?? false,
       isPlacena: (json['isPlacena'] as bool?) ?? false,
       isOtkazana: (json['isOtkazana'] as bool?) ?? false,
+      isVip: (json['isVip'] as bool?) ?? (json['vip'] as bool?) ?? false,
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
-      prostorijaId: (json['prostorijaId'] as num?)?.toInt(),
-      prostorijaNaziv: json['prostorijaNaziv'] as String?,
       korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
       korisnikTelefon: json['korisnikTelefon'] as String?,
@@ -61,6 +59,30 @@ class RezervacijaCalendarItem {
       uslugaTrajanjeMinuta: (json['uslugaTrajanjeMinuta'] as num?)?.toInt() ?? 0,
       uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,
       razlogOtkaza: json['razlogOtkaza'] as String?,
+    );
+  }
+
+  RezervacijaCalendarItem copyWith({
+    bool? isVip,
+  }) {
+    return RezervacijaCalendarItem(
+      id: id,
+      datumRezervacije: datumRezervacije,
+      isPotvrdjena: isPotvrdjena,
+      isPlacena: isPlacena,
+      isOtkazana: isOtkazana,
+      isVip: isVip ?? this.isVip,
+      zaposlenikId: zaposlenikId,
+      zaposlenikIme: zaposlenikIme,
+      korisnikId: korisnikId,
+      korisnikIme: korisnikIme,
+      korisnikTelefon: korisnikTelefon,
+      korisnikEmail: korisnikEmail,
+      uslugaId: uslugaId,
+      uslugaNaziv: uslugaNaziv,
+      uslugaTrajanjeMinuta: uslugaTrajanjeMinuta,
+      uslugaCijena: uslugaCijena,
+      razlogOtkaza: razlogOtkaza,
     );
   }
 }

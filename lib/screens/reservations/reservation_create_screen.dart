@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
 
-import '../../models/admin/oprema.dart';
-import '../../models/admin/prostorija.dart';
-import '../../models/admin/resource_availability.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/usluga.dart';
-import '../../models/rezervacija_oprema_item.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/glass_panel.dart';
 
@@ -42,14 +37,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   List<DateTime> _availableSlots = [];
   bool _loadingSlots = false;
 
-  // Admin resources (optional)
-  int? _selectedProstorijaId;
-  List<Prostorija> _prostorije = [];
-  List<Oprema> _oprema = [];
-  final Map<int, int> _opremaQty = {}; // opremaId -> qty
-  ResourceAvailability? _availability;
-  bool _loadingAvailability = false;
-
   Future<_ReservationBootstrap>? _bootstrapFuture;
   bool _bootstrapStarted = false;
   bool _defaultsPostFramePending = false;
@@ -74,18 +61,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final sp = context.read<ServiceProvider>();
-      final auth = context.read<AuthProvider>();
       setState(() {
         _bootstrapFuture = Future(() async {
           await sp.fetchServices();
           final therapists = await _apiService.getZaposlenici();
-          if (auth.isAdmin) {
-            _prostorije = await _apiService.getProstorije();
-            _oprema = await _apiService.getOprema();
-          } else {
-            _prostorije = [];
-            _oprema = [];
-          }
           return _ReservationBootstrap(therapists);
         });
       });
@@ -131,39 +110,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     });
   }
 
-  Future<void> _loadAvailability() async {
-    final slot = _selectedSlot;
-    final isAdmin = context.read<AuthProvider>().isAdmin;
-    if (!isAdmin || slot == null) return;
-
-    setState(() => _loadingAvailability = true);
-    final avail = await _apiService.getResourceAvailability(slot: slot);
-    if (!mounted) return;
-
-    setState(() {
-      _availability = avail;
-      _loadingAvailability = false;
-
-      if (_selectedProstorijaId != null &&
-          (avail == null ||
-              !avail.freeRooms.any((r) => r.id == _selectedProstorijaId))) {
-        _selectedProstorijaId = null;
-      }
-
-      if (avail != null) {
-        final remainingMap = {
-          for (final e in avail.equipment) e.opremaId: e.remaining
-        };
-        for (final entry in _opremaQty.entries.toList()) {
-          final max = remainingMap[entry.key];
-          if (max == null) continue;
-          if (entry.value > max) _opremaQty[entry.key] = max;
-          if (_opremaQty[entry.key] == 0) _opremaQty.remove(entry.key);
-        }
-      }
-    });
-  }
-
   String _formatSlot(DateTime t) {
     final h = t.hour.toString().padLeft(2, '0');
     final m = t.minute.toString().padLeft(2, '0');
@@ -195,12 +141,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       datumRezervacije: _selectedSlot!,
       uslugaId: _selectedServiceId!,
       zaposlenikId: _selectedTherapistId!,
-      prostorijaId: _selectedProstorijaId,
-      oprema: _opremaQty.entries
-          .where((e) => e.value > 0)
-          .map((e) =>
-              RezervacijaOpremaItem(opremaId: e.key, kolicina: e.value))
-          .toList(),
     );
 
     if (!mounted) return;
@@ -227,7 +167,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     List<Usluga> services,
     List<Zaposlenik> therapists,
   ) {
-    final isAdmin = context.watch<AuthProvider>().isAdmin;
     final serviceIds = services.map((s) => s.id).toList();
     final therapistIds = therapists.map((t) => t.id).toList();
 
@@ -297,49 +236,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             ),
           ),
         ),
-        if (isAdmin) ...[
-          const SizedBox(height: 16),
-          InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Prostorija (opcionalno)',
-              border: OutlineInputBorder(),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                isExpanded: true,
-                hint: _loadingAvailability
-                    ? const Text('Učitavam dostupnost...')
-                    : (_availability != null && _availability!.freeRooms.isEmpty)
-                        ? const Text('Nema slobodnih prostorija')
-                        : (_prostorije.isEmpty
-                            ? const Text('Nema prostorija')
-                            : const Text('Odaberite prostoriju')),
-                value: _selectedProstorijaId,
-                items: (_availability?.freeRooms ?? _prostorije)
-                    .map(
-                      (p) => DropdownMenuItem<int>(
-                        value: p.id,
-                        child: Text('${p.naziv} (kap: ${p.kapacitet})'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _loadingAvailability
-                    ? null
-                    : ((_availability?.freeRooms ?? _prostorije).isEmpty
-                        ? null
-                        : (v) => setState(() => _selectedProstorijaId = v)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _EquipmentPicker(
-            oprema: _oprema,
-            qty: _opremaQty,
-            availability: _availability,
-            loadingAvailability: _loadingAvailability,
-            onChanged: () => setState(() {}),
-          ),
-        ],
       ],
     );
   }
@@ -454,7 +350,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             selected: selected,
             onSelected: (_) async {
               setState(() => _selectedSlot = slot);
-              await _loadAvailability();
             },
           ),
         );
@@ -643,90 +538,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _EquipmentPicker extends StatelessWidget {
-  const _EquipmentPicker({
-    required this.oprema,
-    required this.qty,
-    required this.availability,
-    required this.loadingAvailability,
-    required this.onChanged,
-  });
-
-  final List<Oprema> oprema;
-  final Map<int, int> qty;
-  final ResourceAvailability? availability;
-  final bool loadingAvailability;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final remainingMap = availability == null
-        ? <int, int>{}
-        : {for (final e in availability!.equipment) e.opremaId: e.remaining};
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Oprema (opcionalno)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 10),
-            if (loadingAvailability)
-              const Text('Učitavam dostupnost opreme...')
-            else if (oprema.isEmpty)
-              const Text('Nema opreme.')
-            else
-              ...oprema.map((e) {
-                final current = qty[e.id] ?? 0;
-                final max = remainingMap[e.id] ?? e.kolicina;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          e.naziv,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text('preostalo $max'),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        tooltip: 'Smanji',
-                        onPressed: current <= 0
-                            ? null
-                            : () {
-                                qty[e.id] = current - 1;
-                                onChanged();
-                              },
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                      Text('$current'),
-                      IconButton(
-                        tooltip: 'Povećaj',
-                        onPressed: current >= max
-                            ? null
-                            : () {
-                                qty[e.id] = current + 1;
-                                onChanged();
-                              },
-                        icon: const Icon(Icons.add_circle_outline),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
         ),
       ),
     );

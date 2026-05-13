@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../models/admin/oprema.dart';
-import '../../models/admin/prostorija.dart';
 import '../../models/admin/radno_vrijeme.dart';
 import '../../models/admin/spa_centar.dart';
 import '../../ui/widgets/page_header.dart';
@@ -14,7 +12,7 @@ class AdminResourcesScreen extends StatefulWidget {
   State<AdminResourcesScreen> createState() => _AdminResourcesScreenState();
 }
 
-enum _ResTab { spa, workingHours, rooms, equipment }
+enum _ResTab { spa, workingHours }
 
 class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   final ApiService _api = ApiService();
@@ -22,8 +20,6 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
   Future<SpaCentar?>? _spaFuture;
   Future<List<RadnoVrijeme>>? _hoursFuture;
-  Future<List<Prostorija>>? _roomsFuture;
-  Future<List<Oprema>>? _equipmentFuture;
 
   @override
   void initState() {
@@ -35,8 +31,6 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
     setState(() {
       _spaFuture = _api.getSpaCentar();
       _hoursFuture = _api.getRadnoVrijeme();
-      _roomsFuture = _api.getProstorije();
-      _equipmentFuture = _api.getOprema();
     });
   }
 
@@ -47,7 +41,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
       children: [
         PageHeader(
           title: 'Resursi objekta',
-          subtitle: 'Spa centar, radno vrijeme, prostorije i oprema.',
+          subtitle: 'Spa centar i radno vrijeme.',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -62,16 +56,6 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                     value: _ResTab.workingHours,
                     label: Text('Radno vrijeme'),
                     icon: Icon(Icons.schedule_outlined),
-                  ),
-                  ButtonSegment(
-                    value: _ResTab.rooms,
-                    label: Text('Prostorije'),
-                    icon: Icon(Icons.meeting_room_outlined),
-                  ),
-                  ButtonSegment(
-                    value: _ResTab.equipment,
-                    label: Text('Oprema'),
-                    icon: Icon(Icons.handyman_outlined),
                   ),
                 ],
                 selected: {_tab},
@@ -96,12 +80,6 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                 api: _api,
                 future: _hoursFuture,
                 onSaved: _reloadAll,
-              ),
-              _RoomsTab(api: _api, future: _roomsFuture, onChanged: _reloadAll),
-              _EquipmentTab(
-                api: _api,
-                future: _equipmentFuture,
-                onChanged: _reloadAll,
               ),
             ],
           ),
@@ -411,284 +389,3 @@ class _WorkingHourRow extends StatelessWidget {
     );
   }
 }
-
-class _RoomsTab extends StatelessWidget {
-  const _RoomsTab({
-    required this.api,
-    required this.future,
-    required this.onChanged,
-  });
-
-  final ApiService api;
-  final Future<List<Prostorija>>? future;
-  final VoidCallback onChanged;
-
-  Future<void> _edit(BuildContext context, Prostorija? existing) async {
-    final name = TextEditingController(text: existing?.naziv ?? '');
-    final desc = TextEditingController(text: existing?.opis ?? '');
-    final cap = TextEditingController(text: '${existing?.kapacitet ?? 1}');
-    var active = existing?.isAktivna ?? true;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Nova prostorija' : 'Uredi prostoriju'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: name, decoration: const InputDecoration(labelText: 'Naziv')),
-              const SizedBox(height: 10),
-              TextField(controller: cap, decoration: const InputDecoration(labelText: 'Kapacitet')),
-              const SizedBox(height: 10),
-              TextField(controller: desc, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Opis')),
-              const SizedBox(height: 10),
-              SwitchListTile(
-                title: const Text('Aktivna'),
-                value: active,
-                onChanged: (v) => active = v,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Otkaži')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sačuvaj')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    final dto = Prostorija(
-      id: existing?.id ?? 0,
-      spaCentarId: existing?.spaCentarId ?? 1,
-      naziv: name.text.trim(),
-      opis: desc.text.trim().isEmpty ? null : desc.text.trim(),
-      kapacitet: int.tryParse(cap.text.trim()) ?? 1,
-      isAktivna: active,
-    );
-
-    if (existing == null) {
-      await api.createProstorija(dto);
-    } else {
-      await api.updateProstorija(dto);
-    }
-    onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Prostorija>>(
-      future: future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final list = snap.data ?? [];
-        return Stack(
-          children: [
-            Card(
-              child: ListView.separated(
-                primary: false,
-                padding: const EdgeInsets.only(bottom: 72),
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final r = list[i];
-                  return ListTile(
-                    leading: Icon(r.isAktivna ? Icons.meeting_room_outlined : Icons.do_not_disturb_on_outlined),
-                    title: Text(r.naziv),
-                    subtitle: Text('Kapacitet: ${r.kapacitet}${r.opis == null ? '' : ' · ${r.opis}'}'),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (v) async {
-                        if (v == 'edit') {
-                          await _edit(context, r);
-                          if (!context.mounted) return;
-                        }
-                        if (v == 'delete') {
-                          final yes = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Brisanje'),
-                              content: Text('Obrisati „${r.naziv}“?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Ne')),
-                                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Obriši')),
-                              ],
-                            ),
-                          );
-                          if (!context.mounted) return;
-                          if (yes == true) {
-                            await api.deleteProstorija(r.id);
-                            if (!context.mounted) return;
-                            onChanged();
-                          }
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                        PopupMenuItem(value: 'delete', child: Text('Obriši')),
-                      ],
-                    ),
-                    onTap: () => _edit(context, r),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: FloatingActionButton(
-                tooltip: 'Nova prostorija',
-                onPressed: () => _edit(context, null),
-                child: const Icon(Icons.add),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _EquipmentTab extends StatelessWidget {
-  const _EquipmentTab({
-    required this.api,
-    required this.future,
-    required this.onChanged,
-  });
-
-  final ApiService api;
-  final Future<List<Oprema>>? future;
-  final VoidCallback onChanged;
-
-  Future<void> _edit(BuildContext context, Oprema? existing) async {
-    final name = TextEditingController(text: existing?.naziv ?? '');
-    final note = TextEditingController(text: existing?.napomena ?? '');
-    final qty = TextEditingController(text: '${existing?.kolicina ?? 1}');
-    var okState = existing?.isIspravna ?? true;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Nova oprema' : 'Uredi opremu'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: name, decoration: const InputDecoration(labelText: 'Naziv')),
-              const SizedBox(height: 10),
-              TextField(controller: qty, decoration: const InputDecoration(labelText: 'Količina')),
-              const SizedBox(height: 10),
-              TextField(controller: note, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Napomena')),
-              const SizedBox(height: 10),
-              SwitchListTile(
-                title: const Text('Ispravna'),
-                value: okState,
-                onChanged: (v) => okState = v,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Otkaži')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sačuvaj')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    final dto = Oprema(
-      id: existing?.id ?? 0,
-      spaCentarId: existing?.spaCentarId ?? 1,
-      naziv: name.text.trim(),
-      napomena: note.text.trim().isEmpty ? null : note.text.trim(),
-      kolicina: int.tryParse(qty.text.trim()) ?? 1,
-      isIspravna: okState,
-    );
-
-    if (existing == null) {
-      await api.createOprema(dto);
-    } else {
-      await api.updateOprema(dto);
-    }
-    onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Oprema>>(
-      future: future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final list = snap.data ?? [];
-        return Stack(
-          children: [
-            Card(
-              child: ListView.separated(
-                primary: false,
-                padding: const EdgeInsets.only(bottom: 72),
-                itemCount: list.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) {
-                  final e = list[i];
-                  return ListTile(
-                    leading: Icon(e.isIspravna ? Icons.handyman_outlined : Icons.report_problem_outlined),
-                    title: Text(e.naziv),
-                    subtitle: Text('Količina: ${e.kolicina}${e.napomena == null ? '' : ' · ${e.napomena}'}'),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (v) async {
-                        if (v == 'edit') {
-                          await _edit(context, e);
-                          if (!context.mounted) return;
-                        }
-                        if (v == 'delete') {
-                          final yes = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Brisanje'),
-                              content: Text('Obrisati „${e.naziv}“?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Ne')),
-                                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Obriši')),
-                              ],
-                            ),
-                          );
-                          if (!context.mounted) return;
-                          if (yes == true) {
-                            await api.deleteOprema(e.id);
-                            if (!context.mounted) return;
-                            onChanged();
-                          }
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                        PopupMenuItem(value: 'delete', child: Text('Obriši')),
-                      ],
-                    ),
-                    onTap: () => _edit(context, e),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: FloatingActionButton(
-                tooltip: 'Nova oprema',
-                onPressed: () => _edit(context, null),
-                child: const Icon(Icons.add),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-

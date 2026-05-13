@@ -61,7 +61,9 @@ class _DesktopShellState extends State<DesktopShell> {
     nav.seedAdminLandingIfNeeded(auth.isAdmin);
 
     final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 1180;
+    final isWide = width >= 1100;
+    final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
+    final railExpandedW = width < 1450 ? 220.0 : 232.0;
 
     final adminItems = <LuxurySideItem>[
       LuxurySideItem(
@@ -249,11 +251,15 @@ class _DesktopShellState extends State<DesktopShell> {
           DecoratedBox(decoration: NuaLuxuryTokens.ambience()),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 28, 24),
+              padding: isCalendar
+                  ? const EdgeInsets.fromLTRB(10, 8, 12, 10)
+                  : const EdgeInsets.fromLTRB(22, 20, 28, 24),
               child: Row(
                 children: [
                   _LuxuryRail(
                     expanded: isWide,
+                    expandedWidth: railExpandedW,
+                    compact: isCalendar,
                     items: items,
                     onPick: (it) {
                       if (auth.isAdmin &&
@@ -265,7 +271,7 @@ class _DesktopShellState extends State<DesktopShell> {
                       }
                     },
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: isCalendar ? 10 : 16),
                   Expanded(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(26),
@@ -287,6 +293,10 @@ class _DesktopShellState extends State<DesktopShell> {
                               selectedDay: _filterDay,
                               onDateChanged: (d) =>
                                   setState(() => _filterDay = d),
+                              notificationCount:
+                                  nav.route == DesktopRouteKey.adminCalendar
+                                      ? 3
+                                      : 0,
                             ),
                             Expanded(
                               child: AnimatedSwitcher(
@@ -335,11 +345,15 @@ class _DesktopShellState extends State<DesktopShell> {
 class _LuxuryRail extends StatelessWidget {
   const _LuxuryRail({
     required this.expanded,
+    required this.expandedWidth,
+    this.compact = false,
     required this.items,
     required this.onPick,
   });
 
   final bool expanded;
+  final double expandedWidth;
+  final bool compact;
   final List<LuxurySideItem> items;
   final void Function(LuxurySideItem it) onPick;
 
@@ -360,12 +374,12 @@ class _LuxuryRail extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 38, sigmaY: 38),
         child: Container(
-          width: expanded ? 258 : 86,
+          width: expanded ? expandedWidth : 86,
           padding: EdgeInsets.fromLTRB(
-            expanded ? 14 : 8,
-            20,
-            expanded ? 14 : 8,
-            16,
+            expanded ? (compact ? 10 : 14) : 8,
+            compact ? 14 : 20,
+            expanded ? (compact ? 10 : 14) : 8,
+            compact ? 10 : 16,
           ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.055),
@@ -392,7 +406,7 @@ class _LuxuryRail extends StatelessWidget {
                     : MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: EdgeInsets.all(compact ? 8 : 10),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
@@ -406,7 +420,7 @@ class _LuxuryRail extends StatelessWidget {
                     ),
                     child: Icon(
                       Icons.spa_rounded,
-                      size: expanded ? 24 : 20,
+                      size: expanded ? (compact ? 22 : 24) : 20,
                       color: NuaLuxuryTokens.champagneGold,
                     ),
                   ),
@@ -439,18 +453,18 @@ class _LuxuryRail extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: compact ? 12 : 18),
               Divider(
                 color: Colors.white.withValues(alpha: 0.08),
                 thickness: 0.5,
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: compact ? 6 : 10),
               Expanded(
                 child: ListView.separated(
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.zero,
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 4),
+                  separatorBuilder: (_, _) => SizedBox(height: compact ? 2 : 4),
                   itemBuilder: (_, i) {
                     final it = items[i];
                     final sel = _selected(nav, it);
@@ -463,6 +477,7 @@ class _LuxuryRail extends StatelessWidget {
                     }
                     return _SidebarTile(
                       expanded: expanded,
+                      compact: compact,
                       label: it.label,
                       icon: it.icon,
                       selected: sel,
@@ -476,10 +491,11 @@ class _LuxuryRail extends StatelessWidget {
                 thickness: 0.5,
               ),
               if (expanded) ...[
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 8 : 12),
                 nav.route == DesktopRouteKey.revenueAnalytics
                     ? _UpgradePremiumCard()
                     : _QuickActionsCard(
+                        compact: compact,
                         appointmentsMode:
                             nav.route == DesktopRouteKey.reservations,
                         therapistsMode:
@@ -487,10 +503,11 @@ class _LuxuryRail extends StatelessWidget {
                         calendarMode:
                             nav.route == DesktopRouteKey.adminCalendar,
                       ),
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 8 : 12),
               ],
               _SidebarTile(
                 expanded: expanded,
+                compact: compact,
                 label: 'Sign out',
                 icon: Icons.logout_rounded,
                 selected: false,
@@ -507,11 +524,13 @@ class _LuxuryRail extends StatelessWidget {
 
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
+    this.compact = false,
     this.appointmentsMode = false,
     this.therapistsMode = false,
     this.calendarMode = false,
   });
 
+  final bool compact;
   final bool appointmentsMode;
   final bool therapistsMode;
   final bool calendarMode;
@@ -520,13 +539,13 @@ class _QuickActionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(compact ? 16 : 20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: EdgeInsets.all(compact ? 10 : 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(compact ? 16 : 20),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -557,16 +576,18 @@ class _QuickActionsCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.9),
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: compact ? 6 : 10),
               _QuickActionButton(
+                compact: compact,
                 label: 'New Appointment',
                 icon: Icons.add_circle_outline_rounded,
                 onTap: () {
                   context.read<DesktopNav>().requestAppointmentCreate();
                 },
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: compact ? 6 : 8),
               _QuickActionButton(
+                compact: compact,
                 label: calendarMode
                     ? 'View Availability'
                     : appointmentsMode
@@ -844,11 +865,13 @@ class _ReportsSubTileState extends State<_ReportsSubTile> {
 
 class _QuickActionButton extends StatefulWidget {
   const _QuickActionButton({
+    this.compact = false,
     required this.label,
     required this.icon,
     required this.onTap,
   });
 
+  final bool compact;
   final String label;
   final IconData icon;
   final VoidCallback onTap;
@@ -871,7 +894,10 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 9 : 11,
+            vertical: widget.compact ? 7 : 10,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             color: Colors.white.withValues(alpha: _hover ? 0.095 : 0.045),
@@ -883,7 +909,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
           ),
           child: Row(
             children: [
-              Icon(widget.icon, size: 18, color: NuaLuxuryTokens.champagneGold),
+              Icon(widget.icon, size: widget.compact ? 16 : 18, color: NuaLuxuryTokens.champagneGold),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
@@ -904,6 +930,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
 class _SidebarTile extends StatefulWidget {
   const _SidebarTile({
     required this.expanded,
+    this.compact = false,
     required this.label,
     required this.icon,
     required this.selected,
@@ -912,6 +939,7 @@ class _SidebarTile extends StatefulWidget {
   });
 
   final bool expanded;
+  final bool compact;
   final String label;
   final IconData icon;
   final bool selected;
@@ -943,8 +971,8 @@ class _SidebarTileState extends State<_SidebarTile> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             padding: EdgeInsets.symmetric(
-              horizontal: widget.expanded ? 14 : 10,
-              vertical: 13,
+              horizontal: widget.expanded ? (widget.compact ? 10 : 14) : 10,
+              vertical: widget.compact ? 8 : 13,
             ),
             decoration: BoxDecoration(
               borderRadius: borderRadius,
@@ -977,7 +1005,7 @@ class _SidebarTileState extends State<_SidebarTile> {
               children: [
                 Icon(
                   widget.icon,
-                  size: 22,
+                  size: widget.compact ? 20 : 22,
                   color: widget.danger
                       ? const Color(0xFFFF8A80)
                       : widget.selected || _hover
@@ -985,7 +1013,7 @@ class _SidebarTileState extends State<_SidebarTile> {
                       : Colors.white.withValues(alpha: 0.62),
                 ),
                 if (widget.expanded) ...[
-                  const SizedBox(width: 13),
+                  SizedBox(width: widget.compact ? 10 : 13),
                   Expanded(
                     child: Text(
                       widget.label,
@@ -994,6 +1022,7 @@ class _SidebarTileState extends State<_SidebarTile> {
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.06,
+                        fontSize: widget.compact ? 12.5 : null,
                         color: widget.danger
                             ? const Color(0xFFFF8A80)
                             : Colors.white.withValues(alpha: 0.92),
