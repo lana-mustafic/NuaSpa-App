@@ -287,6 +287,10 @@ class _DesktopShellState extends State<DesktopShell> {
                               selectedDay: _filterDay,
                               onDateChanged: (d) =>
                                   setState(() => _filterDay = d),
+                              notificationCount:
+                                  nav.route == DesktopRouteKey.adminCalendar
+                                      ? 3
+                                      : 0,
                             ),
                             Expanded(
                               child: AnimatedSwitcher(

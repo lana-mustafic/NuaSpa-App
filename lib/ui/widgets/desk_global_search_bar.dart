@@ -5,12 +5,14 @@ import '../navigation/desktop_nav.dart';
 
 /// Brza pretraga usluga: šalje upit u katalog pri navigaciji.
 class DeskGlobalSearchBar extends StatefulWidget {
+  final TextEditingController? controller;
   const DeskGlobalSearchBar({
     super.key,
     this.hintText = 'Search services & treatments (Enter → Services)…',
     this.onSubmitted,
     this.onChanged,
     this.showShortcutHint = false,
+    this.controller,
   });
 
   static const desktopHorizontalPadding = 32.0;
@@ -74,6 +76,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar>
           ),
           borderRadius: BorderRadius.circular(14),
           child: TextField(
+            controller: widget.controller,
             focusNode: _node,
             textInputAction: TextInputAction.search,
             onChanged: widget.onChanged,

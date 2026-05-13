@@ -33,6 +33,12 @@ class DesktopNav extends ChangeNotifier {
   int? _appointmentPrefillZaposlenikId;
   int _therapistAddRequest = 0;
 
+  /// Shared with [LuxuryDesktopHeader] + [AdminCalendarScreen] (single search field).
+  TextEditingController? _calendarSearchCtrl;
+
+  TextEditingController get calendarSearchController =>
+      _calendarSearchCtrl ??= TextEditingController();
+
   DesktopRouteKey get route => _route;
 
   int get adminSuiteMount => _adminSuiteMount;
@@ -59,11 +65,18 @@ class DesktopNav extends ChangeNotifier {
 
   void goTo(DesktopRouteKey r) {
     if (_route == r) return;
+    if (_route == DesktopRouteKey.adminCalendar &&
+        r != DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     _route = r;
     notifyListeners();
   }
 
   void goToAdminSuite(AdminSuiteRoute target) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     _adminSuiteTarget = target;
     _adminSuiteMount++;
     if (_route != DesktopRouteKey.admin) {
@@ -79,6 +92,9 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void setTherapistSearchQuery(String raw) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     final value = raw.trim();
     if (_therapistSearchQuery == value) return;
     _therapistSearchQuery = value;
@@ -89,6 +105,9 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void setAppointmentSearchQuery(String raw) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     final value = raw.trim();
     if (_appointmentSearchQuery == value) return;
     _appointmentSearchQuery = value;
@@ -99,6 +118,9 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void requestAppointmentCreate({int? zaposlenikId}) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     _appointmentPrefillZaposlenikId = zaposlenikId;
     _appointmentCreateRequest++;
     if (_route != DesktopRouteKey.reservations) {
@@ -115,6 +137,9 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void requestTherapistAdd() {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
     _therapistAddRequest++;
     if (_route != DesktopRouteKey.therapists) {
       _route = DesktopRouteKey.therapists;

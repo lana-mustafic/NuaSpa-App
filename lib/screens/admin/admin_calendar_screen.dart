@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../providers/auth_provider.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
@@ -92,12 +91,11 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   DateTime _anchor = _dateOnly(DateTime.now());
   _CalViewMode _view = _CalViewMode.week;
-  /// Month shown in the right-rail mini calendar (can differ while browsing).
-  DateTime _miniDisplayMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   int? _filterZaposlenikId;
   int? _filterUslugaId;
-  final TextEditingController _searchCtrl = TextEditingController();
+
+  late final DesktopNav _nav;
 
   bool _includeCancelled = false;
   bool _autoRefresh = true;
@@ -114,19 +112,18 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
+    _nav = context.read<DesktopNav>();
+    _nav.calendarSearchController.addListener(_onSearchChanged);
     _bootstrapLists();
-    _searchCtrl.addListener(_onSearchChanged);
     _reloadCalendar();
     _startTimer();
   }
 
   @override
   void dispose() {
-    _searchCtrl.removeListener(_onSearchChanged);
+    _nav.calendarSearchController.removeListener(_onSearchChanged);
     _searchDebounce?.cancel();
     _timer?.cancel();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -196,7 +193,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   void _reloadCalendar() {
     final r = _visibleRange();
-    final qq = _searchCtrl.text.trim();
+    final qq = _nav.calendarSearchController.text.trim();
     setState(() {
       _calendarFuture = _api.getRezervacijeCalendar(
         from: r.from,
@@ -229,7 +226,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
           _anchor = DateTime(_anchor.year, _anchor.month + delta);
       }
       _selected = null;
-      _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
     });
     _reloadCalendar();
   }
@@ -238,7 +234,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     setState(() {
       _anchor = _dateOnly(DateTime.now());
       _selected = null;
-      _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
     });
     _reloadCalendar();
   }
@@ -247,169 +242,12 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   Widget build(BuildContext context) {
     final range = _visibleRange();
     final rangeLabel = _rangeCaption(_view, _anchor, range);
-    final auth = context.watch<AuthProvider>();
-    final displayName = auth.displayName ?? 'Admin';
-    final roleLabel = auth.isAdmin ? 'Super Admin' : 'Staff';
-    final initials = auth.userInitials ?? 'A';
-
-    final weekStart = switch (_view) {
-      _CalViewMode.week => _mondayOf(_anchor),
-      _CalViewMode.day => _dateOnly(_anchor),
-      _CalViewMode.month => _mondayOf(_anchor),
-    };
 
     return DecoratedBox(
       decoration: const BoxDecoration(color: _CalUi.bg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Calendar',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: -0.5,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Manage your spa schedule and appointments.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.52),
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: 340,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Search appointments...',
-                      hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.38),
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search_rounded,
-                        color: Colors.white.withValues(alpha: 0.45),
-                      ),
-                      isDense: true,
-                      filled: true,
-                      fillColor: _CalUi.surface,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: _CalUi.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: _CalUi.accent, width: 1.4),
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      tooltip: 'Notifications',
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Notifications — uskoro.')),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.notifications_none_rounded,
-                        color: Colors.white.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _CalUi.accent,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            '3',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 4),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: _CalUi.accent.withValues(alpha: 0.35),
-                      child: Text(
-                        initials.length > 2 ? initials.substring(0, 2) : initials,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          displayName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          roleLabel,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white.withValues(alpha: 0.45),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -425,7 +263,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                         onView: (v) {
                           setState(() {
                             _view = v;
-                            _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
                           });
                           _reloadCalendar();
                         },
@@ -481,7 +318,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                                       setState(() {
                                         _anchor = d;
                                         _view = _CalViewMode.week;
-                                        _miniDisplayMonth = DateTime(d.year, d.month);
                                       });
                                       _reloadCalendar();
                                     },
@@ -511,33 +347,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                     itemsFuture: _calendarFuture,
                     filterFn: _calendarPassThrough,
                     summaryDay: _summaryDay(),
-                    miniDisplayMonth: _miniDisplayMonth,
-                    weekStartMonday: weekStart,
-                    onPrevMiniMonth: () {
-                      setState(() {
-                        _miniDisplayMonth = DateTime(
-                          _miniDisplayMonth.year,
-                          _miniDisplayMonth.month - 1,
-                        );
-                      });
-                    },
-                    onNextMiniMonth: () {
-                      setState(() {
-                        _miniDisplayMonth = DateTime(
-                          _miniDisplayMonth.year,
-                          _miniDisplayMonth.month + 1,
-                        );
-                      });
-                    },
-                    onPickMiniDay: (d) {
-                      setState(() {
-                        _anchor = _dateOnly(d);
-                        _view = _CalViewMode.week;
-                        _miniDisplayMonth = DateTime(d.year, d.month);
-                        _selected = null;
-                      });
-                      _reloadCalendar();
-                    },
                     onViewFullSchedule: _goToday,
                     onNew: () {
                       context.read<DesktopNav>().requestAppointmentCreate(
@@ -1154,57 +963,68 @@ class _ApptCard extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${_hm(item.datumRezervacije)} – ${_hm(end)}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white.withValues(alpha: 0.9),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.uslugaNaziv ?? 'Service',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white.withValues(alpha: 0.95),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.zaposlenikIme ?? 'Therapist',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.52),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: item.isOtkazana
-                            ? Colors.redAccent.withValues(alpha: 0.7)
-                            : _CalUi.accent,
-                        shape: BoxShape.circle,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_hm(item.datumRezervacije)} – ${_hm(end)}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.uslugaNaziv ?? 'Service',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white.withValues(alpha: 0.95),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.zaposlenikIme ?? 'Therapist',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.52),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: item.isOtkazana
+                                    ? Colors.redAccent.withValues(alpha: 0.7)
+                                    : _CalUi.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -1334,11 +1154,6 @@ class _RightRail extends StatelessWidget {
     required this.itemsFuture,
     required this.filterFn,
     required this.summaryDay,
-    required this.miniDisplayMonth,
-    required this.weekStartMonday,
-    required this.onPrevMiniMonth,
-    required this.onNextMiniMonth,
-    required this.onPickMiniDay,
     required this.onViewFullSchedule,
     required this.onNew,
   });
@@ -1347,20 +1162,8 @@ class _RightRail extends StatelessWidget {
   final Future<List<RezervacijaCalendarItem>>? itemsFuture;
   final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
   final DateTime summaryDay;
-  final DateTime miniDisplayMonth;
-  final DateTime weekStartMonday;
-  final VoidCallback onPrevMiniMonth;
-  final VoidCallback onNextMiniMonth;
-  final ValueChanged<DateTime> onPickMiniDay;
   final VoidCallback onViewFullSchedule;
   final VoidCallback onNew;
-
-  bool _inCurrentWeek(DateTime d) {
-    for (var i = 0; i < 7; i++) {
-      if (_sameDay(d, weekStartMonday.add(Duration(days: i)))) return true;
-    }
-    return false;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1368,54 +1171,6 @@ class _RightRail extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(right: 2, bottom: 24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _CalUi.surfaceCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _CalUi.border.withValues(alpha: 0.75)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: onPrevMiniMonth,
-                    icon: Icon(Icons.chevron_left_rounded, color: Colors.white.withValues(alpha: 0.75)),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${_monthLong(miniDisplayMonth.month)} ${miniDisplayMonth.year}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: onNextMiniMonth,
-                    icon: Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.75)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _MiniMonthGrid(
-                month: miniDisplayMonth,
-                summaryDay: summaryDay,
-                weekStartMonday: weekStartMonday,
-                inCurrentWeek: _inCurrentWeek,
-                onPickDay: onPickMiniDay,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
         if (selected != null) ...[
           Container(
             padding: const EdgeInsets.all(14),
@@ -1483,135 +1238,6 @@ class _RightRail extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MiniMonthGrid extends StatelessWidget {
-  const _MiniMonthGrid({
-    required this.month,
-    required this.summaryDay,
-    required this.weekStartMonday,
-    required this.inCurrentWeek,
-    required this.onPickDay,
-  });
-
-  final DateTime month;
-  final DateTime summaryDay;
-  final DateTime weekStartMonday;
-  final bool Function(DateTime d) inCurrentWeek;
-  final ValueChanged<DateTime> onPickDay;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final first = DateTime(month.year, month.month);
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final lead = first.weekday - 1;
-    const wd = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            for (final w in wd)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    w,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.38),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        for (var row = 0; row < 6; row++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              children: [
-                for (var col = 0; col < 7; col++)
-                  Expanded(
-                    child: _MiniDayCell(
-                      index: row * 7 + col,
-                      lead: lead,
-                      daysInMonth: daysInMonth,
-                      monthYear: month,
-                      summaryDay: summaryDay,
-                      inWeek: inCurrentWeek,
-                      onPick: onPickDay,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _MiniDayCell extends StatelessWidget {
-  const _MiniDayCell({
-    required this.index,
-    required this.lead,
-    required this.daysInMonth,
-    required this.monthYear,
-    required this.summaryDay,
-    required this.inWeek,
-    required this.onPick,
-  });
-
-  final int index;
-  final int lead;
-  final int daysInMonth;
-  final DateTime monthYear;
-  final DateTime summaryDay;
-  final bool Function(DateTime d) inWeek;
-  final ValueChanged<DateTime> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dayNum = index - lead + 1;
-    if (index < lead || dayNum < 1 || dayNum > daysInMonth) {
-      return const SizedBox(height: 30);
-    }
-    final d = DateTime(monthYear.year, monthYear.month, dayNum);
-    final isSummary = _sameDay(d, summaryDay);
-    final isToday = _sameDay(d, DateTime.now());
-    final weekTint = inWeek(d);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onPick(d),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          height: 30,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: weekTint ? _CalUi.accent.withValues(alpha: 0.18) : Colors.transparent,
-            border: Border.all(
-              color: isSummary
-                  ? _CalUi.accent
-                  : (isToday ? Colors.white.withValues(alpha: 0.55) : Colors.transparent),
-              width: isSummary || isToday ? 1.5 : 0,
-            ),
-          ),
-          child: Text(
-            '$dayNum',
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: isSummary ? Colors.white : Colors.white.withValues(alpha: 0.82),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

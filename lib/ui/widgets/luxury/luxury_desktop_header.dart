@@ -115,7 +115,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar
-                      ? 'Manage appointments, therapist schedules and availability.'
+                      ? 'Manage your spa schedule and appointments.'
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : auth.isAdmin
@@ -150,10 +150,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
                     ),
                     child: DeskGlobalSearchBar(
                       showShortcutHint: auth.isAdmin,
+                      controller: isCalendar ? nav.calendarSearchController : null,
                       hintText: isTherapists
                           ? 'Search therapists…'
                           : isAppointments
                           ? 'Search clients, appointments…'
+                          : isCalendar
+                          ? 'Search appointments…'
                           : 'Search services & treatments (Enter → Services)…',
                       onChanged: isTherapists
                           ? (q) => context
@@ -172,6 +175,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                           ? (q) => context
                                 .read<DesktopNav>()
                                 .setAppointmentSearchQuery(q)
+                          : isCalendar
+                          ? (_) {}
                           : null,
                     ),
                   ),
