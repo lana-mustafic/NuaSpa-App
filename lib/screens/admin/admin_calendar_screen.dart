@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
@@ -949,8 +951,8 @@ class _DayColumn extends StatelessWidget {
                   ),
                 for (final e in items)
                   Positioned(
-                    left: 4,
-                    right: 4,
+                    left: 6,
+                    right: 6,
                     top: topFor(e).clamp(0, height - 24),
                     height: hFor(e).clamp(28, height),
                     child: _ApptCard(
@@ -997,7 +999,21 @@ class _HourGridPainter extends CustomPainter {
       oldDelegate.pxPerMinute != pxPerMinute;
 }
 
-class _ApptCard extends StatelessWidget {
+enum _ApptCardVisualStatus { confirmed, pending, cancelled }
+
+_ApptCardVisualStatus _apptCardVisualStatus(RezervacijaCalendarItem item) {
+  if (item.isOtkazana) return _ApptCardVisualStatus.cancelled;
+  if (!item.isPotvrdjena) return _ApptCardVisualStatus.pending;
+  return _ApptCardVisualStatus.confirmed;
+}
+
+String _therapistFirstName(String? full) {
+  final t = full?.trim();
+  if (t == null || t.isEmpty) return 'Therapist';
+  return t.split(RegExp(r'\s+')).first;
+}
+
+class _ApptCard extends StatefulWidget {
   const _ApptCard({
     required this.item,
     required this.selected,
@@ -1009,156 +1025,323 @@ class _ApptCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_ApptCard> createState() => _ApptCardState();
+}
+
+class _ApptCardState extends State<_ApptCard> {
+  bool _hover = false;
+
+  static const double _radius = 15;
+
+  TextStyle _txt(
+    double size,
+    FontWeight w,
+    Color color, {
+    double height = 1.2,
+    double letterSpacing = 0,
+  }) =>
+      GoogleFonts.inter(
+        fontSize: size,
+        fontWeight: w,
+        color: color,
+        height: height,
+        letterSpacing: letterSpacing,
+      );
+
+  LinearGradient _statusGradient(_ApptCardVisualStatus s) {
+    switch (s) {
+      case _ApptCardVisualStatus.confirmed:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(123, 77, 255, 0.28),
+            Color.fromRGBO(91, 52, 186, 0.18),
+          ],
+        );
+      case _ApptCardVisualStatus.pending:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(245, 185, 66, 0.25),
+            Color.fromRGBO(180, 120, 20, 0.18),
+          ],
+        );
+      case _ApptCardVisualStatus.cancelled:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(255, 94, 122, 0.25),
+            Color.fromRGBO(180, 40, 60, 0.18),
+          ],
+        );
+    }
+  }
+
+  Color _statusDotColor(_ApptCardVisualStatus s) {
+    switch (s) {
+      case _ApptCardVisualStatus.confirmed:
+        return const Color(0xFFB388FF);
+      case _ApptCardVisualStatus.pending:
+        return const Color(0xFFF5B942);
+      case _ApptCardVisualStatus.cancelled:
+        return const Color(0xFFFF6B8A);
+    }
+  }
+
+  List<BoxShadow> _outerShadows(_ApptCardVisualStatus status, bool vip) {
+    final hover = _hover;
+    final glow = switch (status) {
+      _ApptCardVisualStatus.confirmed => const Color(0xFF7B4DFF),
+      _ApptCardVisualStatus.pending => const Color(0xFFF5B942),
+      _ApptCardVisualStatus.cancelled => const Color(0xFFFF5E7A),
+    };
+
+    final list = <BoxShadow>[
+      if (vip)
+        BoxShadow(
+          color: const Color(0xFFD4AF7A).withValues(alpha: 0.35),
+          blurRadius: 18,
+          offset: Offset.zero,
+        ),
+      BoxShadow(
+        color: glow.withValues(alpha: hover ? 0.28 : 0.18),
+        offset: Offset(0, hover ? 12 : 8),
+        blurRadius: hover ? 28 : 24,
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: hover ? 0.4 : 0.35),
+        offset: Offset(0, hover ? 4 : 2),
+        blurRadius: hover ? 12 : 6,
+      ),
+    ];
+    return list;
+  }
+
+  List<BoxShadow> _innerGlow(_ApptCardVisualStatus status) {
+    final c = switch (status) {
+      _ApptCardVisualStatus.confirmed => const Color(0xFFB388FF),
+      _ApptCardVisualStatus.pending => const Color(0xFFF5C96A),
+      _ApptCardVisualStatus.cancelled => const Color(0xFFFF8A9B),
+    };
+    return [
+      BoxShadow(
+        color: c.withValues(alpha: 0.14),
+        blurRadius: 20,
+        spreadRadius: -10,
+        offset: Offset.zero,
+      ),
+    ];
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final item = widget.item;
+    final status = _apptCardVisualStatus(item);
     final end = item.datumRezervacije.add(
       Duration(minutes: item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta),
     );
     final timeStr = '${_hm(item.datumRezervacije)} – ${_hm(end)}';
+    final durationMin = item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta;
+    final durationStr = '$durationMin min';
+    final service = item.uslugaNaziv ?? 'Service';
+    final client = item.korisnikIme ?? 'Guest';
+    final therapist = _therapistFirstName(item.zaposlenikIme);
+    final dotColor = _statusDotColor(status);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: _CalUi.surfaceCard,
-              border: Border.all(
-                color: selected
-                    ? _CalUi.accent.withValues(alpha: 0.95)
-                    : _CalUi.border.withValues(alpha: 0.65),
-                width: selected ? 2 : 1,
-              ),
-              boxShadow: item.isOtkazana
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+    final borderColor = widget.selected
+        ? const Color(0xFFB388FF).withValues(alpha: 0.5)
+        : const Color.fromRGBO(255, 255, 255, 0.06);
+    final borderW = widget.selected ? 1.5 : 1.0;
+
+    final dotShadow = status == _ApptCardVisualStatus.confirmed
+        ? <BoxShadow>[
+            BoxShadow(
+              color: const Color(0xFFB388FF).withValues(alpha: 0.8),
+              blurRadius: 8,
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final w = constraints.maxWidth;
-                final h = constraints.maxHeight;
+          ]
+        : <BoxShadow>[
+            BoxShadow(
+              color: dotColor.withValues(alpha: 0.55),
+              blurRadius: 6,
+            ),
+          ];
 
-                Widget slotBody({required bool compact}) {
-                  final timeStyle = theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: compact ? 12 : 13,
-                    height: 1.15,
-                    color: Colors.white.withValues(alpha: 0.94),
-                  );
-                  final titleStyle = theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: compact ? 12.5 : 14.5,
-                    height: 1.22,
-                    color: Colors.white.withValues(alpha: 0.98),
-                  );
-                  final subStyle = theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: compact ? 11.5 : 13,
-                    height: 1.2,
-                    color: Colors.white.withValues(alpha: 0.62),
-                  );
+    Widget cardInterior(bool compact, double maxW, double maxH) {
+      final topRow = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              timeStr,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _txt(
+                11,
+                FontWeight.w500,
+                Colors.white.withValues(alpha: 0.72),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(left: 8, top: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: dotColor,
+              boxShadow: dotShadow,
+            ),
+          ),
+        ],
+      );
 
-                  return Stack(
-                    clipBehavior: Clip.hardEdge,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          10,
-                          compact ? 5 : 8,
-                          16,
-                          compact ? 5 : 8,
-                        ),
-                        child: SizedBox(
-                          width: w,
-                          height: compact ? 56 : h,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                timeStr,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: timeStyle,
-                              ),
-                              SizedBox(height: compact ? 2 : 5),
-                              if (compact)
-                                Text(
-                                  item.uslugaNaziv ?? 'Service',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: titleStyle,
-                                )
-                              else
-                                Expanded(
-                                  child: Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Text(
-                                      item.uslugaNaziv ?? 'Service',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: titleStyle,
-                                    ),
-                                  ),
-                                ),
-                              SizedBox(height: compact ? 2 : 4),
-                              Text(
-                                item.zaposlenikIme ?? 'Therapist',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: subStyle,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 6,
-                        top: 6,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: item.isOtkazana
-                                ? Colors.redAccent.withValues(alpha: 0.78)
-                                : _CalUi.accent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.28),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                }
+      final serviceText = Text(
+        service,
+        maxLines: compact ? 1 : 2,
+        overflow: TextOverflow.ellipsis,
+        style: _txt(14, FontWeight.w600, const Color(0xFFF5F3FA), height: 1.2),
+      );
 
-                if (h < 54) {
-                  return FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: w,
-                      height: 58,
-                      child: slotBody(compact: true),
+      final clientText = Text(
+        client,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: _txt(12, FontWeight.w400, Colors.white.withValues(alpha: 0.75)),
+      );
+
+      final footer = Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Text(
+              therapist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _txt(11, FontWeight.w500, const Color(0xFFC8B6E8)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            durationStr,
+            style: _txt(11, FontWeight.w500, Colors.white.withValues(alpha: 0.55)),
+          ),
+        ],
+      );
+
+      if (compact) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            topRow,
+            const SizedBox(height: 4),
+            serviceText,
+            const SizedBox(height: 5),
+            clientText,
+            const SizedBox(height: 5),
+            footer,
+          ],
+        );
+      }
+
+      return SizedBox(
+        height: maxH,
+        width: maxW,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            topRow,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    serviceText,
+                    const SizedBox(height: 5),
+                    clientText,
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: footer,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.ease,
+          transform: Matrix4.translationValues(0, _hover ? -2.0 : 0.0, 0),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.ease,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_radius),
+              boxShadow: [
+                ..._outerShadows(status, item.isVip),
+                ..._innerGlow(status),
+              ],
+            ),
+            child: ClipRRect(
+                borderRadius: BorderRadius.circular(_radius),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: _statusGradient(status),
+                      borderRadius: BorderRadius.circular(_radius),
+                      border: Border.all(color: borderColor, width: borderW),
                     ),
-                  );
-                }
-
-                return slotBody(compact: false);
-              },
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        final h = c.maxHeight;
+                        final w = c.maxWidth;
+                        final compact = h < 92;
+                        if (compact) {
+                          return Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.topLeft,
+                              child: SizedBox(
+                                width: w,
+                                height: 84,
+                                child: cardInterior(true, w, 84),
+                              ),
+                            ),
+                          );
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: cardInterior(false, w, h - 24),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
-      ),
     );
   }
 }
