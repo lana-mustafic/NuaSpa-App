@@ -98,11 +98,6 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.packages,
-        label: 'Packages',
-        icon: Icons.card_giftcard_outlined,
-      ),
-      LuxurySideItem(
         route: DesktopRouteKey.reviews,
         label: 'Reviews',
         icon: Icons.reviews_outlined,
@@ -117,11 +112,6 @@ class _DesktopShellState extends State<DesktopShell> {
         route: DesktopRouteKey.revenueAnalytics,
         label: 'Reports',
         icon: Icons.area_chart_rounded,
-      ),
-      LuxurySideItem(
-        route: DesktopRouteKey.marketing,
-        label: 'Marketing',
-        icon: Icons.campaign_outlined,
       ),
       LuxurySideItem(
         route: DesktopRouteKey.settings,
@@ -490,19 +480,9 @@ class _LuxuryRail extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.08),
                 thickness: 0.5,
               ),
-              if (expanded) ...[
+              if (expanded && nav.route == DesktopRouteKey.revenueAnalytics) ...[
                 SizedBox(height: compact ? 8 : 12),
-                nav.route == DesktopRouteKey.revenueAnalytics
-                    ? _UpgradePremiumCard()
-                    : _QuickActionsCard(
-                        compact: compact,
-                        appointmentsMode:
-                            nav.route == DesktopRouteKey.reservations,
-                        therapistsMode:
-                            nav.route == DesktopRouteKey.therapists,
-                        calendarMode:
-                            nav.route == DesktopRouteKey.adminCalendar,
-                      ),
+                const _UpgradePremiumCard(),
                 SizedBox(height: compact ? 8 : 12),
               ],
               _SidebarTile(
@@ -522,105 +502,8 @@ class _LuxuryRail extends StatelessWidget {
   }
 }
 
-class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({
-    this.compact = false,
-    this.appointmentsMode = false,
-    this.therapistsMode = false,
-    this.calendarMode = false,
-  });
-
-  final bool compact;
-  final bool appointmentsMode;
-  final bool therapistsMode;
-  final bool calendarMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(compact ? 16 : 20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
-        child: Container(
-          padding: EdgeInsets.all(compact ? 10 : 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? 16 : 20),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.07),
-                NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.1),
-              width: 0.85,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Quick Actions',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
-              SizedBox(height: compact ? 6 : 10),
-              _QuickActionButton(
-                compact: compact,
-                label: 'New Appointment',
-                icon: Icons.add_circle_outline_rounded,
-                onTap: () {
-                  context.read<DesktopNav>().requestAppointmentCreate();
-                },
-              ),
-              SizedBox(height: compact ? 6 : 8),
-              _QuickActionButton(
-                compact: compact,
-                label: calendarMode
-                    ? 'View Availability'
-                    : appointmentsMode
-                    ? 'Walk-in Client'
-                    : 'Add Therapist',
-                icon: calendarMode
-                    ? Icons.event_available_outlined
-                    : appointmentsMode
-                    ? Icons.directions_walk_outlined
-                    : Icons.person_add_alt_1_outlined,
-                onTap: () {
-                  if (calendarMode) {
-                    context.read<DesktopNav>().goTo(DesktopRouteKey.therapists);
-                  } else if (appointmentsMode) {
-                    context.read<DesktopNav>().requestAppointmentCreate();
-                  } else if (therapistsMode) {
-                    context.read<DesktopNav>().requestTherapistAdd();
-                  } else {
-                    context.read<DesktopNav>().goTo(
-                          DesktopRouteKey.therapists,
-                        );
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _UpgradePremiumCard extends StatelessWidget {
+  const _UpgradePremiumCard();
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -852,70 +735,6 @@ class _ReportsSubTileState extends State<_ReportsSubTile> {
                         : NuaLuxuryTokens.lavenderWhisper.withValues(
                             alpha: 0.64,
                           ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActionButton extends StatefulWidget {
-  const _QuickActionButton({
-    this.compact = false,
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final bool compact;
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  State<_QuickActionButton> createState() => _QuickActionButtonState();
-}
-
-class _QuickActionButtonState extends State<_QuickActionButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      cursor: SystemMouseCursors.click,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact ? 9 : 11,
-            vertical: widget.compact ? 7 : 10,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withValues(alpha: _hover ? 0.095 : 0.045),
-            border: Border.all(
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                alpha: _hover ? 0.32 : 0.14,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icon, size: widget.compact ? 16 : 18, color: NuaLuxuryTokens.champagneGold),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
