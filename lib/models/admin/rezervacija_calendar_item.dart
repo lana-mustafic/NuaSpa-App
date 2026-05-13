@@ -6,8 +6,6 @@ class RezervacijaCalendarItem {
   final bool isOtkazana;
   final int zaposlenikId;
   final String? zaposlenikIme;
-  final int? prostorijaId;
-  final String? prostorijaNaziv;
 
   final int korisnikId;
   final String? korisnikIme;
@@ -28,8 +26,6 @@ class RezervacijaCalendarItem {
     required this.isOtkazana,
     required this.zaposlenikId,
     required this.zaposlenikIme,
-    required this.prostorijaId,
-    required this.prostorijaNaziv,
     required this.korisnikId,
     required this.korisnikIme,
     required this.korisnikTelefon,
@@ -50,8 +46,6 @@ class RezervacijaCalendarItem {
       isOtkazana: (json['isOtkazana'] as bool?) ?? false,
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
-      prostorijaId: (json['prostorijaId'] as num?)?.toInt(),
-      prostorijaNaziv: json['prostorijaNaziv'] as String?,
       korisnikId: (json['korisnikId'] as num?)?.toInt() ?? 0,
       korisnikIme: json['korisnikIme'] as String?,
       korisnikTelefon: json['korisnikTelefon'] as String?,

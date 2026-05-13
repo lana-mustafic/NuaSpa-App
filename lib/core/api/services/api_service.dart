@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import '../api_client.dart';
 import '../../../models/usluga.dart';
 import '../../../models/kategorija_usluga.dart';
 import '../../../models/zaposlenik.dart';
@@ -20,11 +21,6 @@ import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/radno_vrijeme.dart';
-import '../../../models/admin/prostorija.dart';
-import '../../../models/admin/oprema.dart';
-import '../../../models/admin/resource_availability.dart';
-import '../api_client.dart';
-import '../../../models/rezervacija_oprema_item.dart';
 
 class ApiService {
   final Dio _dio = ApiClient().dio;
@@ -359,19 +355,12 @@ class ApiService {
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
-    int? prostorijaId,
-    List<RezervacijaOpremaItem>? oprema,
   }) async {
     try {
       final body = <String, dynamic>{
         'datumRezervacije': datumRezervacije.toIso8601String(),
         'uslugaId': uslugaId,
         'zaposlenikId': zaposlenikId,
-        'prostorijaId': prostorijaId,
-        'oprema': (oprema ?? const [])
-            .where((x) => x.opremaId > 0 && x.kolicina > 0)
-            .map((x) => x.toJson())
-            .toList(),
       };
       if (korisnikId != null) {
         body['korisnikId'] = korisnikId;
@@ -392,8 +381,6 @@ class ApiService {
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
-    int? prostorijaId,
-    List<RezervacijaOpremaItem>? oprema,
   }) async {
     try {
       final response = await _dio.put<dynamic>(
@@ -402,11 +389,6 @@ class ApiService {
           'datumRezervacije': datumRezervacije.toIso8601String(),
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
-          'prostorijaId': prostorijaId,
-          'oprema': (oprema ?? const [])
-              .where((x) => x.opremaId > 0 && x.kolicina > 0)
-              .map((x) => x.toJson())
-              .toList(),
         },
       );
 
@@ -762,7 +744,6 @@ class ApiService {
     required DateTime to,
     int? zaposlenikId,
     int? uslugaId,
-    int? prostorijaId,
     String? q,
     bool includeOtkazane = false,
   }) async {
@@ -772,7 +753,6 @@ class ApiService {
         'to': to.toIso8601String(),
         if (zaposlenikId != null) 'zaposlenikId': zaposlenikId,
         if (uslugaId != null) 'uslugaId': uslugaId,
-        if (prostorijaId != null) 'prostorijaId': prostorijaId,
         if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
         if (includeOtkazane) 'includeOtkazane': true,
       };
@@ -855,127 +835,6 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.updateRadnoVrijeme: $e');
       return [];
-    }
-  }
-
-  Future<List<Prostorija>> getProstorije() async {
-    try {
-      final response = await _dio.get<dynamic>('Resursi/prostorije');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => Prostorija.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-    } catch (e) {
-      debugPrint('Greška u ApiService.getProstorije: $e');
-      return [];
-    }
-  }
-
-  Future<Prostorija?> createProstorija(Prostorija dto) async {
-    try {
-      final response = await _dio.post<dynamic>(
-        'Resursi/prostorije',
-        data: dto.toJson(),
-      );
-      final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Prostorija.fromJson(data);
-    } catch (e) {
-      debugPrint('Greška u ApiService.createProstorija: $e');
-      return null;
-    }
-  }
-
-  Future<bool> updateProstorija(Prostorija dto) async {
-    try {
-      await _dio.put<void>('Resursi/prostorije/${dto.id}', data: dto.toJson());
-      return true;
-    } catch (e) {
-      debugPrint('Greška u ApiService.updateProstorija: $e');
-      return false;
-    }
-  }
-
-  Future<bool> deleteProstorija(int id) async {
-    try {
-      await _dio.delete<void>('Resursi/prostorije/$id');
-      return true;
-    } catch (e) {
-      debugPrint('Greška u ApiService.deleteProstorija: $e');
-      return false;
-    }
-  }
-
-  Future<List<Oprema>> getOprema() async {
-    try {
-      final response = await _dio.get<dynamic>('Resursi/oprema');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => Oprema.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-    } catch (e) {
-      debugPrint('Greška u ApiService.getOprema: $e');
-      return [];
-    }
-  }
-
-  Future<Oprema?> createOprema(Oprema dto) async {
-    try {
-      final response = await _dio.post<dynamic>(
-        'Resursi/oprema',
-        data: dto.toJson(),
-      );
-      final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Oprema.fromJson(data);
-    } catch (e) {
-      debugPrint('Greška u ApiService.createOprema: $e');
-      return null;
-    }
-  }
-
-  Future<bool> updateOprema(Oprema dto) async {
-    try {
-      await _dio.put<void>('Resursi/oprema/${dto.id}', data: dto.toJson());
-      return true;
-    } catch (e) {
-      debugPrint('Greška u ApiService.updateOprema: $e');
-      return false;
-    }
-  }
-
-  Future<bool> deleteOprema(int id) async {
-    try {
-      await _dio.delete<void>('Resursi/oprema/$id');
-      return true;
-    } catch (e) {
-      debugPrint('Greška u ApiService.deleteOprema: $e');
-      return false;
-    }
-  }
-
-  Future<ResourceAvailability?> getResourceAvailability({
-    required DateTime slot,
-    int? excludeRezervacijaId,
-  }) async {
-    try {
-      final response = await _dio.get<dynamic>(
-        'Resursi/availability',
-        queryParameters: {
-          'slot': slot.toIso8601String(),
-          'excludeRezervacijaId': excludeRezervacijaId,
-        },
-      );
-      final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return ResourceAvailability.fromJson(data);
-    } catch (e) {
-      debugPrint('Greška u ApiService.getResourceAvailability: $e');
-      return null;
     }
   }
 }

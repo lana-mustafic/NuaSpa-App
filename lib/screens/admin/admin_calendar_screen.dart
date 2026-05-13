@@ -4,17 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
-import '../../models/desktop_home_overview.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
-import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 
 enum _CalViewMode { day, week, month }
-
-enum _CalColumnAxis { therapists, rooms }
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -44,20 +41,41 @@ String _weekdayShort(DateTime d) {
   return n[(d.weekday - 1).clamp(0, 6)];
 }
 
-Color _serviceAccent(RezervacijaCalendarItem e) {
-  final key = e.uslugaId > 0 ? e.uslugaId : (e.uslugaNaziv ?? '').hashCode;
-  const palette = <Color>[
-    Color(0xFF7B4DFF),
-    Color(0xFF22C55E),
-    Color(0xFFF59E0B),
-    Color(0xFFB45309),
-    Color(0xFF38BDF8),
-    Color(0xFFEC4899),
-  ];
-  return palette[key.abs() % palette.length];
+/// High-fidelity admin calendar (dark mockup palette).
+abstract final class _CalUi {
+  static const Color bg = Color(0xFF0B0E14);
+  static const Color surface = Color(0xFF161922);
+  static const Color surfaceCard = Color(0xFF1B1D2D);
+  static const Color accent = Color(0xFF6C5CE7);
+  static const Color border = Color(0xFF2A2D3E);
 }
 
-/// Admin calendar — week timeline mockup + postojeći filteri (terapeuti/prostorije, otkazani, auto-refresh, pretraga).
+String _monthLong(int m) {
+  const n = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  return n[(m - 1).clamp(0, 11)];
+}
+
+String _rangeCaption(_CalViewMode view, DateTime anchor, ({DateTime from, DateTime to}) range) {
+  switch (view) {
+    case _CalViewMode.day:
+      final d = _dateOnly(anchor);
+      return '${_monthLong(d.month)} ${d.day}, ${d.year}';
+    case _CalViewMode.week:
+      final a = _dateOnly(range.from);
+      final b = _dateOnly(range.to);
+      if (a.month == b.month && a.year == b.year) {
+        return '${_monthLong(a.month)} ${a.day} – ${b.day}, ${a.year}';
+      }
+      return '${_monthLong(a.month)} ${a.day} – ${_monthLong(b.month)} ${b.day}, ${b.year}';
+    case _CalViewMode.month:
+      return '${_monthLong(anchor.month)} ${anchor.year}';
+  }
+}
+
+/// Admin calendar — week timeline + filteri (terapeuti, otkazani, auto-refresh, pretraga).
 class AdminCalendarScreen extends StatefulWidget {
   const AdminCalendarScreen({super.key});
 
@@ -74,7 +92,8 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   DateTime _anchor = _dateOnly(DateTime.now());
   _CalViewMode _view = _CalViewMode.week;
-  _CalColumnAxis _axis = _CalColumnAxis.therapists;
+  /// Month shown in the right-rail mini calendar (can differ while browsing).
+  DateTime _miniDisplayMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   int? _filterZaposlenikId;
   int? _filterUslugaId;
@@ -89,17 +108,16 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   List<Usluga> _usluge = [];
 
   Future<List<RezervacijaCalendarItem>>? _calendarFuture;
-  Future<DesktopHomeOverview?>? _overviewFuture;
 
   RezervacijaCalendarItem? _selected;
 
   @override
   void initState() {
     super.initState();
+    _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
     _bootstrapLists();
     _searchCtrl.addListener(_onSearchChanged);
     _reloadCalendar();
-    _reloadOverview();
     _startTimer();
   }
 
@@ -200,12 +218,6 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     return from;
   }
 
-  void _reloadOverview() {
-    setState(() {
-      _overviewFuture = _api.getDesktopHomeOverview(day: _summaryDay());
-    });
-  }
-
   void _shiftPeriod(int delta) {
     setState(() {
       switch (_view) {
@@ -217,194 +229,337 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
           _anchor = DateTime(_anchor.year, _anchor.month + delta);
       }
       _selected = null;
+      _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
     });
     _reloadCalendar();
-    _reloadOverview();
   }
 
   void _goToday() {
     setState(() {
       _anchor = _dateOnly(DateTime.now());
       _selected = null;
+      _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
     });
     _reloadCalendar();
-    _reloadOverview();
   }
 
   @override
   Widget build(BuildContext context) {
     final range = _visibleRange();
-    const months = <String>[
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    final caption = switch (_view) {
-      _CalViewMode.day =>
-        '${months[_anchor.month - 1]} ${_anchor.day}, ${_anchor.year}',
-      _CalViewMode.week =>
-        '${months[range.from.month - 1]} ${range.from.year} · week ${_mondayOf(_anchor).day}–${_mondayOf(_anchor).add(const Duration(days: 6)).day}',
-      _CalViewMode.month => '${months[_anchor.month - 1]} ${_anchor.year}',
+    final rangeLabel = _rangeCaption(_view, _anchor, range);
+    final auth = context.watch<AuthProvider>();
+    final displayName = auth.displayName ?? 'Admin';
+    final roleLabel = auth.isAdmin ? 'Super Admin' : 'Staff';
+    final initials = auth.userInitials ?? 'A';
+
+    final weekStart = switch (_view) {
+      _CalViewMode.week => _mondayOf(_anchor),
+      _CalViewMode.day => _dateOnly(_anchor),
+      _CalViewMode.month => _mondayOf(_anchor),
     };
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                flex: 3,
-                child: LayoutBuilder(
-                  builder: (context, lc) {
-                    const bottomBlock = 56.0 + 12.0 + 12.0;
-                    final head =
-                        (lc.maxHeight - bottomBlock).clamp(0.0, double.infinity);
-                    final maxToolbar = head <= 0
-                        ? 0.0
-                        : (head * 0.30).clamp(52.0, 200.0).clamp(0.0, head);
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: _CalUi.bg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Calendar',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.5,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Manage your spa schedule and appointments.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.52),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 340,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search appointments...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.38),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: _CalUi.surface,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: _CalUi.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: _CalUi.accent, width: 1.4),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Notifications — uskoro.')),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.notifications_none_rounded,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _CalUi.accent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            '3',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 4),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: _CalUi.accent.withValues(alpha: 0.35),
+                      child: Text(
+                        initials.length > 2 ? initials.substring(0, 2) : initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ConstrainedBox(
-                          constraints: BoxConstraints(maxHeight: maxToolbar),
-                          child: SingleChildScrollView(
-                            child: _Toolbar(
-                              caption: caption,
-                              view: _view,
-                              onView: (v) {
-                                setState(() => _view = v);
-                                _reloadCalendar();
-                                _reloadOverview();
-                              },
-                              axis: _axis,
-                              onAxis: (a) => setState(() => _axis = a),
-                              includeCancelled: _includeCancelled,
-                              onToggleCancelled: (v) {
-                                setState(() => _includeCancelled = v);
-                                _reloadCalendar();
-                              },
-                              autoRefresh: _autoRefresh,
-                              onToggleAuto: (v) {
-                                setState(() => _autoRefresh = v);
-                                _startTimer();
-                                if (v) _reloadCalendar();
-                              },
-                              therapists: _therapists,
-                              usluge: _usluge,
-                              filterZaposlenikId: _filterZaposlenikId,
-                              onTherapist: (id) {
-                                setState(() => _filterZaposlenikId = id);
-                                _reloadCalendar();
-                              },
-                              filterUslugaId: _filterUslugaId,
-                              onUsluga: (id) {
-                                setState(() => _filterUslugaId = id);
-                                _reloadCalendar();
-                              },
-                              searchCtrl: _searchCtrl,
-                              onPrev: () => _shiftPeriod(-1),
-                              onNext: () => _shiftPeriod(1),
-                              onToday: _goToday,
-                            ),
+                        Text(
+                          displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(22),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.04),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: _view == _CalViewMode.month
-                                  ? _MonthOverview(
-                                      anchor: _anchor,
-                                      itemsFuture: _calendarFuture,
-                                      onPickDay: (d) {
-                                        setState(() {
-                                          _anchor = d;
-                                          _view = _CalViewMode.week;
-                                        });
-                                        _reloadCalendar();
-                                        _reloadOverview();
-                                      },
-                                      filterFn: _calendarPassThrough,
-                                    )
-                                  : _WeekTimeline(
-                                      days: _headerDays(),
-                                      axis: _axis,
-                                      itemsFuture: _calendarFuture,
-                                      filterFn: _calendarPassThrough,
-                                      selected: _selected,
-                                      onSelect: (e) =>
-                                          setState(() => _selected = e),
-                                      startHour: _startHour,
-                                      endHour: _endHour,
-                                      pxPerMinute: _pxPerMinute,
-                                    ),
-                            ),
+                        Text(
+                          roleLabel,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 12,
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        _BottomBar(
-                          onNew: () {
-                            context.read<DesktopNav>().requestAppointmentCreate(
-                                  zaposlenikId: _filterZaposlenikId,
-                                );
-                          },
                         ),
                       ],
-                    );
-                  },
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 18),
-              SizedBox(
-                width: 360,
-                child: _RightRail(
-                  selected: _selected,
-                  overviewFuture: _overviewFuture,
-                  itemsFuture: _calendarFuture,
-                  filterFn: _calendarPassThrough,
-                  day: _summaryDay(),
-                  therapists: _therapists,
-                  onNew: () {
-                    context.read<DesktopNav>().requestAppointmentCreate(
-                          zaposlenikId: _filterZaposlenikId,
-                        );
-                  },
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Toolbar(
+                        rangeLabel: rangeLabel,
+                        view: _view,
+                        onView: (v) {
+                          setState(() {
+                            _view = v;
+                            _miniDisplayMonth = DateTime(_anchor.year, _anchor.month);
+                          });
+                          _reloadCalendar();
+                        },
+                        includeCancelled: _includeCancelled,
+                        onToggleCancelled: (v) {
+                          setState(() => _includeCancelled = v);
+                          _reloadCalendar();
+                        },
+                        autoRefresh: _autoRefresh,
+                        onToggleAuto: (v) {
+                          setState(() => _autoRefresh = v);
+                          _startTimer();
+                          if (v) _reloadCalendar();
+                        },
+                        therapists: _therapists,
+                        usluge: _usluge,
+                        filterZaposlenikId: _filterZaposlenikId,
+                        onTherapist: (id) {
+                          setState(() => _filterZaposlenikId = id);
+                          _reloadCalendar();
+                        },
+                        filterUslugaId: _filterUslugaId,
+                        onUsluga: (id) {
+                          setState(() => _filterUslugaId = id);
+                          _reloadCalendar();
+                        },
+                        onPrev: () => _shiftPeriod(-1),
+                        onNext: () => _shiftPeriod(1),
+                        onToday: _goToday,
+                        onAddAppointment: () {
+                          context.read<DesktopNav>().requestAppointmentCreate(
+                                zaposlenikId: _filterZaposlenikId,
+                              );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _CalUi.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: _CalUi.border.withValues(alpha: 0.85),
+                              ),
+                            ),
+                            child: _view == _CalViewMode.month
+                                ? _MonthOverview(
+                                    anchor: _anchor,
+                                    itemsFuture: _calendarFuture,
+                                    onPickDay: (d) {
+                                      setState(() {
+                                        _anchor = d;
+                                        _view = _CalViewMode.week;
+                                        _miniDisplayMonth = DateTime(d.year, d.month);
+                                      });
+                                      _reloadCalendar();
+                                    },
+                                    filterFn: _calendarPassThrough,
+                                  )
+                                : _WeekTimeline(
+                                    days: _headerDays(),
+                                    itemsFuture: _calendarFuture,
+                                    filterFn: _calendarPassThrough,
+                                    selected: _selected,
+                                    onSelect: (e) => setState(() => _selected = e),
+                                    startHour: _startHour,
+                                    endHour: _endHour,
+                                    pxPerMinute: _pxPerMinute,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 300,
+                  child: _RightRail(
+                    selected: _selected,
+                    itemsFuture: _calendarFuture,
+                    filterFn: _calendarPassThrough,
+                    summaryDay: _summaryDay(),
+                    miniDisplayMonth: _miniDisplayMonth,
+                    weekStartMonday: weekStart,
+                    onPrevMiniMonth: () {
+                      setState(() {
+                        _miniDisplayMonth = DateTime(
+                          _miniDisplayMonth.year,
+                          _miniDisplayMonth.month - 1,
+                        );
+                      });
+                    },
+                    onNextMiniMonth: () {
+                      setState(() {
+                        _miniDisplayMonth = DateTime(
+                          _miniDisplayMonth.year,
+                          _miniDisplayMonth.month + 1,
+                        );
+                      });
+                    },
+                    onPickMiniDay: (d) {
+                      setState(() {
+                        _anchor = _dateOnly(d);
+                        _view = _CalViewMode.week;
+                        _miniDisplayMonth = DateTime(d.year, d.month);
+                        _selected = null;
+                      });
+                      _reloadCalendar();
+                    },
+                    onViewFullSchedule: _goToday,
+                    onNew: () {
+                      context.read<DesktopNav>().requestAppointmentCreate(
+                            zaposlenikId: _filterZaposlenikId,
+                          );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _Toolbar extends StatelessWidget {
   const _Toolbar({
-    required this.caption,
+    required this.rangeLabel,
     required this.view,
     required this.onView,
-    required this.axis,
-    required this.onAxis,
     required this.includeCancelled,
     required this.onToggleCancelled,
     required this.autoRefresh,
@@ -415,17 +570,15 @@ class _Toolbar extends StatelessWidget {
     required this.onTherapist,
     required this.filterUslugaId,
     required this.onUsluga,
-    required this.searchCtrl,
     required this.onPrev,
     required this.onNext,
     required this.onToday,
+    required this.onAddAppointment,
   });
 
-  final String caption;
+  final String rangeLabel;
   final _CalViewMode view;
   final ValueChanged<_CalViewMode> onView;
-  final _CalColumnAxis axis;
-  final ValueChanged<_CalColumnAxis> onAxis;
   final bool includeCancelled;
   final ValueChanged<bool> onToggleCancelled;
   final bool autoRefresh;
@@ -436,66 +589,94 @@ class _Toolbar extends StatelessWidget {
   final ValueChanged<int?> onTherapist;
   final int? filterUslugaId;
   final ValueChanged<int?> onUsluga;
-  final TextEditingController searchCtrl;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onToday;
+  final VoidCallback onAddAppointment;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LuxuryGlassPanel(
-      borderRadius: 20,
-      blurSigma: 22,
-      opacity: 0.28,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _CalUi.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _CalUi.border.withValues(alpha: 0.75)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
+              TextButton(
+                onPressed: onToday,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                child: const Text('Today', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
               IconButton(
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                padding: EdgeInsets.zero,
+                tooltip: 'Previous',
                 onPressed: onPrev,
                 icon: const Icon(Icons.chevron_left_rounded, size: 26),
                 color: Colors.white.withValues(alpha: 0.85),
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
-                child: Text(
-                  caption,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
+              Expanded(
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          rangeLabel,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white.withValues(alpha: 0.35),
+                        size: 20,
+                      ),
+                    ],
                   ),
                 ),
               ),
               IconButton(
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                padding: EdgeInsets.zero,
+                tooltip: 'Next',
                 onPressed: onNext,
                 icon: const Icon(Icons.chevron_right_rounded, size: 26),
                 color: Colors.white.withValues(alpha: 0.85),
               ),
-              TextButton(
-                onPressed: onToday,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: const Text('Today'),
-              ),
+              const SizedBox(width: 4),
               SegmentedButton<_CalViewMode>(
                 showSelectedIcon: false,
                 style: ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: WidgetStateProperty.resolveWith((s) {
+                    if (s.contains(WidgetState.selected)) {
+                      return Colors.white;
+                    }
+                    return Colors.white.withValues(alpha: 0.65);
+                  }),
+                  backgroundColor: WidgetStateProperty.resolveWith((s) {
+                    if (s.contains(WidgetState.selected)) {
+                      return _CalUi.accent;
+                    }
+                    return _CalUi.surface;
+                  }),
+                  side: WidgetStateProperty.all(
+                    const BorderSide(color: _CalUi.border),
+                  ),
                 ),
                 segments: const [
                   ButtonSegment(value: _CalViewMode.day, label: Text('Day')),
@@ -505,13 +686,11 @@ class _Toolbar extends StatelessWidget {
                 selected: {view},
                 onSelectionChanged: (s) => onView(s.first),
               ),
+              const SizedBox(width: 6),
               PopupMenuButton<String>(
-                tooltip: 'More options',
-                icon: Icon(
-                  Icons.tune_rounded,
-                  color: Colors.white.withValues(alpha: 0.75),
-                ),
-                position: PopupMenuPosition.under,
+                tooltip: 'More',
+                icon: Icon(Icons.more_horiz_rounded, color: Colors.white.withValues(alpha: 0.65)),
+                color: _CalUi.surfaceCard,
                 onSelected: (id) {
                   if (id == 'c') onToggleCancelled(!includeCancelled);
                   if (id == 'a') onToggleAuto(!autoRefresh);
@@ -520,56 +699,45 @@ class _Toolbar extends StatelessWidget {
                   PopupMenuItem(
                     value: 'c',
                     child: Text(
-                      includeCancelled
-                          ? '✓ Include cancelled'
-                          : 'Include cancelled',
+                      includeCancelled ? '✓ Include cancelled' : 'Include cancelled',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                   PopupMenuItem(
                     value: 'a',
                     child: Text(
-                      autoRefresh
-                          ? '✓ Auto refresh (20s)'
-                          : 'Auto refresh (20s)',
+                      autoRefresh ? '✓ Auto refresh (20s)' : 'Auto refresh (20s)',
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _CalUi.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: onAddAppointment,
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: const Text(
+                  'Add Appointment',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SegmentedButton<_CalColumnAxis>(
-                showSelectedIcon: false,
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                segments: const [
-                  ButtonSegment(
-                    value: _CalColumnAxis.therapists,
-                    label: Text('Staff'),
-                    icon: Icon(Icons.groups_2_outlined, size: 16),
-                  ),
-                  ButtonSegment(
-                    value: _CalColumnAxis.rooms,
-                    label: Text('Rooms'),
-                    icon: Icon(Icons.meeting_room_outlined, size: 16),
-                  ),
-                ],
-                selected: {axis},
-                onSelectionChanged: (s) => onAxis(s.first),
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                flex: 2,
                 child: DropdownButtonFormField<int?>(
                   value: filterZaposlenikId,
                   isExpanded: true,
+                  dropdownColor: _CalUi.surfaceCard,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: _dropDecoration('Therapist'),
                   items: [
                     const DropdownMenuItem<int?>(
@@ -589,12 +757,13 @@ class _Toolbar extends StatelessWidget {
                   onChanged: onTherapist,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
-                flex: 2,
                 child: DropdownButtonFormField<int?>(
                   value: filterUslugaId,
                   isExpanded: true,
+                  dropdownColor: _CalUi.surfaceCard,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: _dropDecoration('Service'),
                   items: [
                     const DropdownMenuItem<int?>(
@@ -611,31 +780,6 @@ class _Toolbar extends StatelessWidget {
                   onChanged: onUsluga,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: searchCtrl,
-                  style: theme.textTheme.bodySmall,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: 'Search…',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.06),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ],
@@ -646,11 +790,20 @@ class _Toolbar extends StatelessWidget {
   InputDecoration _dropDecoration(String hint) => InputDecoration(
         isDense: true,
         labelText: hint,
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.06),
+        fillColor: _CalUi.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _CalUi.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _CalUi.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _CalUi.accent, width: 1.2),
         ),
       );
 }
@@ -658,7 +811,6 @@ class _Toolbar extends StatelessWidget {
 class _WeekTimeline extends StatelessWidget {
   const _WeekTimeline({
     required this.days,
-    required this.axis,
     required this.itemsFuture,
     required this.filterFn,
     required this.selected,
@@ -669,7 +821,6 @@ class _WeekTimeline extends StatelessWidget {
   });
 
   final List<DateTime> days;
-  final _CalColumnAxis axis;
   final Future<List<RezervacijaCalendarItem>>? itemsFuture;
   final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
   final RezervacijaCalendarItem? selected;
@@ -717,7 +868,6 @@ class _WeekTimeline extends StatelessWidget {
                         width: 148,
                         child: _DayColumn(
                           day: day,
-                          axis: axis,
                           items: () {
                             final d = items
                                 .where((e) => _sameDay(e.datumRezervacije, day))
@@ -800,7 +950,6 @@ class _TimeRuler extends StatelessWidget {
 class _DayColumn extends StatelessWidget {
   const _DayColumn({
     required this.day,
-    required this.axis,
     required this.items,
     required this.height,
     required this.startHour,
@@ -812,7 +961,6 @@ class _DayColumn extends StatelessWidget {
   });
 
   final DateTime day;
-  final _CalColumnAxis axis;
   final List<RezervacijaCalendarItem> items;
   final double height;
   final int startHour;
@@ -861,19 +1009,31 @@ class _DayColumn extends StatelessWidget {
             border: Border(
               bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
             ),
-            color: isToday
-                ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12)
-                : null,
+            color: isToday ? _CalUi.accent.withValues(alpha: 0.08) : null,
           ),
-          child: Text(
-            '${_weekdayShort(day)} ${day.day}',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: isToday
-                  ? NuaLuxuryTokens.softPurpleGlow
-                  : Colors.white.withValues(alpha: 0.88),
-            ),
-          ),
+          child: isToday
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _CalUi.accent, width: 2),
+                    color: _CalUi.accent.withValues(alpha: 0.15),
+                  ),
+                  child: Text(
+                    '${_weekdayShort(day)} ${day.day}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : Text(
+                  '${_weekdayShort(day)} ${day.day}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white.withValues(alpha: 0.88),
+                  ),
+                ),
         ),
         SizedBox(
           height: height,
@@ -896,7 +1056,7 @@ class _DayColumn extends StatelessWidget {
                     top: nowTop,
                     child: Container(
                       height: 2,
-                      color: Colors.redAccent.withValues(alpha: 0.85),
+                      color: _CalUi.accent.withValues(alpha: 0.85),
                     ),
                   ),
                 for (final e in items)
@@ -906,7 +1066,6 @@ class _DayColumn extends StatelessWidget {
                     top: topFor(e).clamp(0, height - 24),
                     height: hFor(e).clamp(28, height),
                     child: _ApptCard(
-                      axis: axis,
                       item: e,
                       selected: selected?.id == e.id,
                       onTap: () => onSelect(selected?.id == e.id ? null : e),
@@ -952,13 +1111,11 @@ class _HourGridPainter extends CustomPainter {
 
 class _ApptCard extends StatelessWidget {
   const _ApptCard({
-    required this.axis,
     required this.item,
     required this.selected,
     required this.onTap,
   });
 
-  final _CalColumnAxis axis;
   final RezervacijaCalendarItem item;
   final bool selected;
   final VoidCallback onTap;
@@ -966,7 +1123,6 @@ class _ApptCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = _serviceAccent(item);
     final end = item.datumRezervacije.add(
       Duration(minutes: item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta),
     );
@@ -974,106 +1130,84 @@ class _ApptCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: item.isOtkazana ? 0.12 : 0.32),
-                  border: Border.all(
-                    color: selected
-                        ? NuaLuxuryTokens.champagneGold.withValues(alpha: 0.95)
-                        : Colors.white.withValues(alpha: 0.12),
-                    width: selected ? 2 : 1,
-                  ),
-                ),
-                child: FittedBox(
-                  alignment: Alignment.topLeft,
-                  fit: BoxFit.contain,
-                  child: SizedBox(
-                    width: c.maxWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
+        borderRadius: BorderRadius.circular(10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _CalUi.surfaceCard,
+              border: Border.all(
+                color: selected
+                    ? _CalUi.accent.withValues(alpha: 0.95)
+                    : _CalUi.border.withValues(alpha: 0.65),
+                width: selected ? 2 : 1,
+              ),
+              boxShadow: item.isOtkazana
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${_hm(item.datumRezervacije)}–${_hm(end)}',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                              ),
-                              Text(
-                                item.uslugaNaziv ?? 'Service',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                item.korisnikIme ?? 'Client',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.65),
-                                ),
-                              ),
-                              Text(
-                                () {
-                                  final a = axis == _CalColumnAxis.rooms
-                                      ? (item.prostorijaNaziv ?? 'Room TBD')
-                                      : (item.zaposlenikIme ?? 'Therapist');
-                                  final b = axis == _CalColumnAxis.rooms
-                                      ? (item.zaposlenikIme ?? '')
-                                      : (item.prostorijaNaziv ?? '');
-                                  final bb = b.trim();
-                                  return bb.isEmpty ? a : '$a · $b';
-                                }(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.48),
-                                  fontSize: 10,
-                                ),
-                              ),
-                              Text(
-                                '${item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta} min',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (item.isOtkazana)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Icon(
-                                Icons.cancel_rounded,
-                                size: 18,
-                                color: Colors.redAccent.withValues(alpha: 0.9),
-                              ),
-                            ),
-                        ],
+                    ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${_hm(item.datumRezervacije)} – ${_hm(end)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.uslugaNaziv ?? 'Service',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withValues(alpha: 0.95),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.zaposlenikIme ?? 'Therapist',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.52),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: item.isOtkazana
+                            ? Colors.redAccent.withValues(alpha: 0.7)
+                            : _CalUi.accent,
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -1197,171 +1331,351 @@ class _MonthOverview extends StatelessWidget {
 class _RightRail extends StatelessWidget {
   const _RightRail({
     required this.selected,
-    required this.overviewFuture,
     required this.itemsFuture,
     required this.filterFn,
-    required this.day,
-    required this.therapists,
+    required this.summaryDay,
+    required this.miniDisplayMonth,
+    required this.weekStartMonday,
+    required this.onPrevMiniMonth,
+    required this.onNextMiniMonth,
+    required this.onPickMiniDay,
+    required this.onViewFullSchedule,
     required this.onNew,
   });
 
   final RezervacijaCalendarItem? selected;
-  final Future<DesktopHomeOverview?>? overviewFuture;
   final Future<List<RezervacijaCalendarItem>>? itemsFuture;
   final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
-  final DateTime day;
-  final List<Zaposlenik> therapists;
+  final DateTime summaryDay;
+  final DateTime miniDisplayMonth;
+  final DateTime weekStartMonday;
+  final VoidCallback onPrevMiniMonth;
+  final VoidCallback onNextMiniMonth;
+  final ValueChanged<DateTime> onPickMiniDay;
+  final VoidCallback onViewFullSchedule;
   final VoidCallback onNew;
+
+  bool _inCurrentWeek(DateTime d) {
+    for (var i = 0; i < 7; i++) {
+      if (_sameDay(d, weekStartMonday.add(Duration(days: i)))) return true;
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.only(right: 4, bottom: 28),
+      padding: const EdgeInsets.only(right: 2, bottom: 24),
       children: [
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _CalUi.surfaceCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _CalUi.border.withValues(alpha: 0.75)),
           ),
-          onPressed: onNew,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'New Appointment',
-            style: TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (selected != null) ...[
-          LuxuryGlassPanel(
-            borderRadius: 20,
-            blurSigma: 22,
-            opacity: 0.3,
-            padding: const EdgeInsets.all(16),
-            child: _DetailCard(item: selected!),
-          ),
-          const SizedBox(height: 14),
-        ],
-        LuxuryGlassPanel(
-          borderRadius: 20,
-          blurSigma: 22,
-          opacity: 0.28,
-          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                _sameDay(day, DateTime.now()) ? 'Today summary' : 'Day summary',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (!_sameDay(day, DateTime.now()))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
+              Row(
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    onPressed: onPrevMiniMonth,
+                    icon: Icon(Icons.chevron_left_rounded, color: Colors.white.withValues(alpha: 0.75)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${_monthLong(miniDisplayMonth.month)} ${miniDisplayMonth.year}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
-              const SizedBox(height: 12),
-              FutureBuilder<List<RezervacijaCalendarItem>>(
-                future: itemsFuture,
-                builder: (context, snap) {
-                  final list = filterFn(snap.data ?? const []);
-                  final dayItems = list.where((e) => _sameDay(e.datumRezervacije, day)).toList();
-                  final revenue = dayItems
-                      .where((e) => e.isPlacena && !e.isOtkazana)
-                      .fold<double>(0, (s, e) => s + e.uslugaCijena);
-                  final therapistsBusy = dayItems.map((e) => e.zaposlenikId).toSet().length;
-                  final total = dayItems.where((e) => !e.isOtkazana).length;
-                  final minutes = dayItems
-                      .where((e) => !e.isOtkazana)
-                      .fold<int>(0, (s, e) => s + (e.uslugaTrajanjeMinuta <= 0 ? 60 : e.uslugaTrajanjeMinuta));
-                  final cap = (therapists.isEmpty ? 1 : therapists.length) * 8 * 60;
-                  final occ = cap <= 0 ? 0.0 : (minutes / cap * 100).clamp(0, 100);
-
-                  return FutureBuilder<DesktopHomeOverview?>(
-                    future: overviewFuture,
-                    builder: (context, oSnap) {
-                      final ov = oSnap.data;
-                      return Column(
-                        children: [
-                          _StatRow('Total appointments', '$total'),
-                          _StatRow('Therapists booked', '$therapistsBusy'),
-                          _StatRow(
-                            'Revenue (paid, est.)',
-                            '${revenue.toStringAsFixed(0)} ${ov?.valuta ?? 'KM'}',
-                          ),
-                          _StatRow('Occupancy (heuristic)', '${occ.toStringAsFixed(0)}%'),
-                          if (ov != null && ov.noviKlijentiZadnjih7Dana != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                'Portal: ${ov.noviKlijentiZadnjih7Dana} new clients (7d)',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  );
-                },
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    onPressed: onNextMiniMonth,
+                    icon: Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.75)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _MiniMonthGrid(
+                month: miniDisplayMonth,
+                summaryDay: summaryDay,
+                weekStartMonday: weekStartMonday,
+                inCurrentWeek: _inCurrentWeek,
+                onPickDay: onPickMiniDay,
               ),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        LuxuryGlassPanel(
-          borderRadius: 20,
-          blurSigma: 22,
-          opacity: 0.28,
-          padding: const EdgeInsets.all(16),
-          child: _TherapistAvailability(
-            therapists: therapists,
-            itemsFuture: itemsFuture,
-            filterFn: filterFn,
-            day: day,
+        if (selected != null) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _CalUi.surfaceCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _CalUi.accent.withValues(alpha: 0.45)),
+            ),
+            child: _DetailCard(item: selected!),
+          ),
+          const SizedBox(height: 14),
+        ],
+        Text(
+          'Upcoming appointments',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: Colors.white.withValues(alpha: 0.92),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
+        FutureBuilder<List<RezervacijaCalendarItem>>(
+          future: itemsFuture,
+          builder: (context, snap) {
+            final list = filterFn(snap.data ?? const []);
+            final dayItems = list.where((e) => _sameDay(e.datumRezervacije, summaryDay)).toList()
+              ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+            if (dayItems.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'No appointments this day.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.45),
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: [
+                for (final e in dayItems.take(12))
+                  _UpcomingRow(item: e),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: _CalUi.border),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: onViewFullSchedule,
+          icon: const Icon(Icons.calendar_month_outlined, size: 20),
+          label: const Text('View Full Schedule', style: TextStyle(fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: onNew,
+          icon: Icon(Icons.add_rounded, color: _CalUi.accent.withValues(alpha: 0.95)),
+          label: Text(
+            'Quick add',
+            style: TextStyle(color: _CalUi.accent.withValues(alpha: 0.95), fontWeight: FontWeight.w800),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _StatRow extends StatelessWidget {
-  const _StatRow(this.k, this.v);
-  final String k;
-  final String v;
+class _MiniMonthGrid extends StatelessWidget {
+  const _MiniMonthGrid({
+    required this.month,
+    required this.summaryDay,
+    required this.weekStartMonday,
+    required this.inCurrentWeek,
+    required this.onPickDay,
+  });
+
+  final DateTime month;
+  final DateTime summaryDay;
+  final DateTime weekStartMonday;
+  final bool Function(DateTime d) inCurrentWeek;
+  final ValueChanged<DateTime> onPickDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final first = DateTime(month.year, month.month);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final lead = first.weekday - 1;
+    const wd = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final w in wd)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    w,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.38),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (var row = 0; row < 6; row++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                for (var col = 0; col < 7; col++)
+                  Expanded(
+                    child: _MiniDayCell(
+                      index: row * 7 + col,
+                      lead: lead,
+                      daysInMonth: daysInMonth,
+                      monthYear: month,
+                      summaryDay: summaryDay,
+                      inWeek: inCurrentWeek,
+                      onPick: onPickDay,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MiniDayCell extends StatelessWidget {
+  const _MiniDayCell({
+    required this.index,
+    required this.lead,
+    required this.daysInMonth,
+    required this.monthYear,
+    required this.summaryDay,
+    required this.inWeek,
+    required this.onPick,
+  });
+
+  final int index;
+  final int lead;
+  final int daysInMonth;
+  final DateTime monthYear;
+  final DateTime summaryDay;
+  final bool Function(DateTime d) inWeek;
+  final ValueChanged<DateTime> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dayNum = index - lead + 1;
+    if (index < lead || dayNum < 1 || dayNum > daysInMonth) {
+      return const SizedBox(height: 30);
+    }
+    final d = DateTime(monthYear.year, monthYear.month, dayNum);
+    final isSummary = _sameDay(d, summaryDay);
+    final isToday = _sameDay(d, DateTime.now());
+    final weekTint = inWeek(d);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onPick(d),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: weekTint ? _CalUi.accent.withValues(alpha: 0.18) : Colors.transparent,
+            border: Border.all(
+              color: isSummary
+                  ? _CalUi.accent
+                  : (isToday ? Colors.white.withValues(alpha: 0.55) : Colors.transparent),
+              width: isSummary || isToday ? 1.5 : 0,
+            ),
+          ),
+          child: Text(
+            '$dayNum',
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: isSummary ? Colors.white : Colors.white.withValues(alpha: 0.82),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpcomingRow extends StatelessWidget {
+  const _UpcomingRow({required this.item});
+  final RezervacijaCalendarItem item;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          SizedBox(
+            width: 44,
             child: Text(
-              k,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
+              _hm(item.datumRezervacije),
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: Colors.white.withValues(alpha: 0.88),
               ),
             ),
           ),
-          Text(
-            v,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w900,
+          Padding(
+            padding: const EdgeInsets.only(top: 4, right: 8),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: _CalUi.accent,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.uslugaNaziv ?? 'Service',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  item.zaposlenikIme ?? 'Therapist',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+                Text(
+                  item.korisnikIme ?? 'Guest',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.42),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1425,7 +1739,6 @@ class _DetailCard extends StatelessWidget {
         _DetailLine(Icons.event_rounded, 'When', _hm(item.datumRezervacije)),
         _DetailLine(Icons.spa_rounded, 'Service', item.uslugaNaziv ?? '—'),
         _DetailLine(Icons.person_outline, 'Therapist', item.zaposlenikIme ?? '—'),
-        _DetailLine(Icons.meeting_room_outlined, 'Room', item.prostorijaNaziv ?? '—'),
         _DetailLine(
           Icons.timer_outlined,
           'Duration',
@@ -1513,178 +1826,6 @@ class _Tag extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.92),
             ),
       ),
-    );
-  }
-}
-
-class _TherapistAvailability extends StatelessWidget {
-  const _TherapistAvailability({
-    required this.therapists,
-    required this.itemsFuture,
-    required this.filterFn,
-    required this.day,
-  });
-
-  final List<Zaposlenik> therapists;
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
-  final DateTime day;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final now = DateTime.now();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Therapist availability',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 10),
-        FutureBuilder<List<RezervacijaCalendarItem>>(
-          future: itemsFuture,
-          builder: (context, snap) {
-            final list = filterFn(snap.data ?? const []);
-            final today = _sameDay(day, now);
-            return Column(
-              children: [
-                for (final t in therapists.take(12))
-                  _TherapistRow(
-                    name: '${t.ime} ${t.prezime}'.trim(),
-                    status: _statusFor(t.id, list, now, today),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  String _statusFor(
-    int tid,
-    List<RezervacijaCalendarItem> list,
-    DateTime now,
-    bool today,
-  ) {
-    final dayList = list.where((e) => e.zaposlenikId == tid && _sameDay(e.datumRezervacije, day)).toList();
-    if (dayList.isEmpty) return 'off';
-    if (!today) return 'booked';
-    final nm = now.hour * 60 + now.minute;
-    for (final e in dayList.where((e) => !e.isOtkazana)) {
-      final s = e.datumRezervacije.toLocal();
-      final start = s.hour * 60 + s.minute;
-      final dur = e.uslugaTrajanjeMinuta <= 0 ? 60 : e.uslugaTrajanjeMinuta;
-      if (nm >= start && nm < start + dur) return 'busy';
-    }
-    return 'available';
-  }
-}
-
-class _TherapistRow extends StatelessWidget {
-  const _TherapistRow({required this.name, required this.status});
-  final String name;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Color dot;
-    String label;
-    switch (status) {
-      case 'busy':
-        dot = const Color(0xFFFBBF24);
-        label = 'Busy';
-      case 'booked':
-        dot = NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.75);
-        label = 'Scheduled';
-      case 'available':
-        dot = const Color(0xFF4ADE80);
-        label = 'Available';
-      default:
-        dot = Colors.white.withValues(alpha: 0.25);
-        label = 'Off / no bookings';
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.25),
-            child: Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.55),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.onNew});
-  final VoidCallback onNew;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Center(
-            child: FilledButton.tonalIcon(
-              onPressed: onNew,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add appointment'),
-            ),
-          ),
-        ),
-        OutlinedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Export schedule — uskoro.')),
-            );
-          },
-          icon: const Icon(Icons.ios_share_outlined, size: 18),
-          label: const Text('Export'),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Print calendar — uskoro.')),
-            );
-          },
-          icon: const Icon(Icons.print_outlined, size: 18),
-          label: const Text('Print'),
-        ),
-      ],
     );
   }
 }

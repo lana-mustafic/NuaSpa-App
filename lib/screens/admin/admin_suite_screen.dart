@@ -11,7 +11,6 @@ import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
-import '../../models/admin/prostorija.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_dashboard_screen.dart';
@@ -40,8 +39,6 @@ enum _AdminSuiteTab {
 
 enum _TherapistsView { availability, calendar }
 
-enum _CalendarAxis { therapists, rooms }
-
 String _calendarDialogDayCaption(DateTime day) {
   const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
   final loc = day.toLocal();
@@ -58,7 +55,6 @@ bool _rezCalMatchesSearch(RezervacijaCalendarItem e, String q) {
       hay(e.korisnikTelefon) ||
       hay(e.korisnikEmail) ||
       hay(e.zaposlenikIme) ||
-      hay(e.prostorijaNaziv) ||
       hay(e.uslugaNaziv) ||
       hay(e.razlogOtkaza) ||
       e.id.toString().contains(q) ||
@@ -76,7 +72,6 @@ String _rezCalBookingStatsLine(List<RezervacijaCalendarItem> xs) {
   final pot = xs.where((x) => !x.isOtkazana && x.isPotvrdjena).length;
   final cek = xs.where((x) => !x.isOtkazana && !x.isPotvrdjena).length;
   final plac = xs.where((x) => x.isPlacena && !x.isOtkazana).length;
-  final bespr = xs.where((x) => x.prostorijaId == null).length;
   final tot = xs.length;
   final parts = <String>[
     'Ukupno $tot',
@@ -84,7 +79,6 @@ String _rezCalBookingStatsLine(List<RezervacijaCalendarItem> xs) {
     if (cek > 0) 'Čekanje $cek',
     'Plaćene $plac',
     if (otk > 0) 'Otkazane $otk',
-    if (bespr > 0) 'Bez prostorije $bespr',
   ];
   return parts.join(' · ');
 }
@@ -93,14 +87,12 @@ class _CalendarDayBookingDialog extends StatefulWidget {
   const _CalendarDayBookingDialog({
     required this.day,
     required this.rowLabel,
-    required this.calendarAxis,
     required this.items,
     required this.dismissContext,
   });
 
   final DateTime day;
   final String rowLabel;
-  final _CalendarAxis calendarAxis;
 
   /// Bookings already filtered and sorted for this calendar cell/day.
   final List<RezervacijaCalendarItem> items;
@@ -114,7 +106,6 @@ class _CalendarDayBookingDialog extends StatefulWidget {
 }
 
 class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
-  bool _onlyNoRoom = false;
   late TextEditingController _query;
 
   @override
@@ -149,22 +140,15 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
     final cap = _calendarDialogDayCaption(widget.day);
     final baseCount = widget.items.length;
 
-    final filteredNoRoom =
-        widget.calendarAxis != _CalendarAxis.therapists || !_onlyNoRoom
-        ? widget.items
-        : widget.items.where((e) => e.prostorijaId == null).toList();
-
     final qq = _query.text.trim().toLowerCase();
     final visible = qq.isEmpty
-        ? filteredNoRoom
-        : filteredNoRoom.where((e) => _rezCalMatchesSearch(e, qq)).toList();
+        ? widget.items
+        : widget.items.where((e) => _rezCalMatchesSearch(e, qq)).toList();
 
     final statsLine = _rezCalBookingStatsLine(visible);
     final titleExtra = [
-      if (_onlyNoRoom && filteredNoRoom.length != baseCount)
-        'filtrirano: ${filteredNoRoom.length}/$baseCount',
-      if (qq.isNotEmpty && visible.length != filteredNoRoom.length)
-        'pretraga: ${visible.length}/${filteredNoRoom.length}',
+      if (qq.isNotEmpty && visible.length != widget.items.length)
+        'pretraga: ${visible.length}/${widget.items.length}',
     ].join(', ');
 
     return AlertDialog(
@@ -186,9 +170,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
           Row(
             children: [
               Icon(
-                widget.calendarAxis == _CalendarAxis.therapists
-                    ? Icons.person_outline
-                    : Icons.meeting_room_outlined,
+                Icons.person_outline,
                 size: 16,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
               ),
@@ -221,29 +203,13 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.calendarAxis == _CalendarAxis.therapists)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilterChip(
-                  avatar: Icon(
-                    Icons.no_meeting_room_outlined,
-                    size: 18,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                  ),
-                  label: const Text('Samo bez dodijeljene prostorije'),
-                  selected: _onlyNoRoom,
-                  onSelected: (v) => setState(() => _onlyNoRoom = v),
-                ),
-              ),
-            if (widget.calendarAxis == _CalendarAxis.therapists)
-              const SizedBox(height: 10),
             TextField(
               controller: _query,
               onChanged: (_) => setState(() {}),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText:
-                    'Pretraži: klijent, telefon, email, usluga, terapeut, prostorija, ID…',
+                    'Pretraži: klijent, telefon, email, usluga, terapeut, ID…',
                 prefixIcon: const Icon(Icons.search, size: 22),
                 isDense: true,
                 filled: true,
@@ -290,11 +256,6 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                               if (qq.isNotEmpty) {
                                 return 'Nema pogodaka za ovaj upit pretrage.';
                               }
-                              if (widget.calendarAxis ==
-                                      _CalendarAxis.therapists &&
-                                  _onlyNoRoom) {
-                                return 'Nema termina bez dodijeljene prostorije.';
-                              }
                               return 'Nema rezervacija za ovaj prikaz.';
                             }(),
                             textAlign: TextAlign.center,
@@ -327,8 +288,6 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                           final spanLine = (dur > 0 && endLoc != null)
                               ? '$timeHm–${_formatTimeHm(endLoc)} · $dur min · $cijenaStr'
                               : '$timeHm · $cijenaStr';
-                          final roomLine =
-                              r.prostorijaNaziv ?? 'Bez prostorije';
                           final subMuted = theme.textTheme.bodySmall?.copyWith(
                             height: 1.35,
                             color: theme.colorScheme.onSurface.withValues(
@@ -481,7 +440,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                         'Klijent: $klijentLabel\n'
                                         'Tel: $telLabel · Mail: $mailLabel\n'
                                         'Terapeut: $terLabel\n'
-                                        'Prostorija: $roomLine · Korisnik #${r.korisnikId} · Rezerv. #${r.id}',
+                                        'Korisnik #${r.korisnikId} · Rezerv. #${r.id}',
                                         style: subMuted,
                                       ),
                                       if (r.isOtkazana &&
@@ -524,7 +483,6 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                       .map((r) {
                         final s = r.datumRezervacije.toLocal();
                         final tl = _formatTimeHm(s);
-                        final room = r.prostorijaNaziv ?? 'Bez prostorije';
                         final st = r.isOtkazana
                             ? 'otk'
                             : (r.isPotvrdjena ? 'potvrd' : 'ček');
@@ -546,7 +504,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                             'ID ${r.id} | kor ${r.korisnikId} | '
                             '${r.uslugaNaziv ?? "usluga"} | '
                             '${r.korisnikIme ?? "—"} | tel $tel | mail $em | '
-                            '${r.zaposlenikIme ?? "—"} | $room | '
+                            '${r.zaposlenikIme ?? "—"} | '
                             '$st$plac'
                             '${rz.isEmpty ? "" : " | razlog: $rz"}';
                       })
@@ -609,11 +567,9 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
 
   // Calendar (admin)
   Future<List<RezervacijaCalendarItem>>? _calendarFuture;
-  Future<List<Prostorija>>? _roomsFuture;
   bool _includeCancelledInCalendar = false;
   bool _autoRefreshCalendar = true;
   Timer? _calendarTimer;
-  _CalendarAxis _calendarAxis = _CalendarAxis.therapists;
 
   void _applyInitialRoute() {
     switch (widget.initialRoute) {
@@ -651,7 +607,6 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     _reloadClients();
     _reloadTherapists();
     _reloadCalendar();
-    _reloadRooms();
     _startCalendarTimerIfNeeded();
   }
 
@@ -698,12 +653,6 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   void _reloadTherapists() {
     setState(() {
       _therapistsFuture = _api.getZaposlenici();
-    });
-  }
-
-  void _reloadRooms() {
-    setState(() {
-      _roomsFuture = _api.getProstorije();
     });
   }
 
@@ -1093,7 +1042,6 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _freeCountCache.clear();
                   _reloadTherapists();
                   _reloadCalendar();
-                  _reloadRooms();
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Osvježi'),
@@ -1115,28 +1063,19 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               }
 
               if (_therapistsView == _TherapistsView.calendar) {
-                return FutureBuilder<List<Prostorija>>(
-                  future: _roomsFuture,
-                  builder: (context, roomsSnap) {
-                    final rooms = roomsSnap.data ?? const <Prostorija>[];
-                    return _AdminCalendarView(
-                      axis: _calendarAxis,
-                      onAxisChanged: (a) => setState(() => _calendarAxis = a),
-                      therapists: list,
-                      rooms: rooms,
-                      days: days,
-                      calendarFuture: _calendarFuture,
-                      includeCancelled: _includeCancelledInCalendar,
-                      autoRefresh: _autoRefreshCalendar,
-                      onToggleCancelled: (v) {
-                        setState(() => _includeCancelledInCalendar = v);
-                        _reloadCalendar();
-                      },
-                      onToggleAutoRefresh: (v) {
-                        setState(() => _autoRefreshCalendar = v);
-                        _startCalendarTimerIfNeeded();
-                      },
-                    );
+                return _AdminCalendarView(
+                  therapists: list,
+                  days: days,
+                  calendarFuture: _calendarFuture,
+                  includeCancelled: _includeCancelledInCalendar,
+                  autoRefresh: _autoRefreshCalendar,
+                  onToggleCancelled: (v) {
+                    setState(() => _includeCancelledInCalendar = v);
+                    _reloadCalendar();
+                  },
+                  onToggleAutoRefresh: (v) {
+                    setState(() => _autoRefreshCalendar = v);
+                    _startCalendarTimerIfNeeded();
                   },
                 );
               }
@@ -1479,10 +1418,7 @@ class _MiniWeekGrid extends StatelessWidget {
 
 class _AdminCalendarView extends StatelessWidget {
   const _AdminCalendarView({
-    required this.axis,
-    required this.onAxisChanged,
     required this.therapists,
-    required this.rooms,
     required this.days,
     required this.calendarFuture,
     required this.includeCancelled,
@@ -1491,10 +1427,7 @@ class _AdminCalendarView extends StatelessWidget {
     required this.onToggleAutoRefresh,
   });
 
-  final _CalendarAxis axis;
-  final ValueChanged<_CalendarAxis> onAxisChanged;
   final List<Zaposlenik> therapists;
-  final List<Prostorija> rooms;
   final List<DateTime> days;
   final Future<List<RezervacijaCalendarItem>>? calendarFuture;
   final bool includeCancelled;
@@ -1509,32 +1442,10 @@ class _AdminCalendarView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final roomRows = <({int? id, String name})>[
-      (id: null, name: 'Bez prostorije'),
-      ...rooms.map((r) => (id: r.id, name: r.naziv)),
-    ];
-
     return Column(
       children: [
         Row(
           children: [
-            SegmentedButton<_CalendarAxis>(
-              segments: const [
-                ButtonSegment(
-                  value: _CalendarAxis.therapists,
-                  label: Text('Terapeuti'),
-                  icon: Icon(Icons.groups_2_outlined),
-                ),
-                ButtonSegment(
-                  value: _CalendarAxis.rooms,
-                  label: Text('Prostorije'),
-                  icon: Icon(Icons.meeting_room_outlined),
-                ),
-              ],
-              selected: {axis},
-              onSelectionChanged: (s) => onAxisChanged(s.first),
-            ),
-            const SizedBox(width: 10),
             FilterChip(
               label: const Text('Uključi otkazane'),
               selected: includeCancelled,
@@ -1595,10 +1506,8 @@ class _AdminCalendarView extends StatelessWidget {
               }
               final items = snap.data ?? const <RezervacijaCalendarItem>[];
               final byTherapist = <int, List<RezervacijaCalendarItem>>{};
-              final byRoomKey = <int?, List<RezervacijaCalendarItem>>{};
               for (final it in items) {
                 byTherapist.putIfAbsent(it.zaposlenikId, () => []).add(it);
-                byRoomKey.putIfAbsent(it.prostorijaId, () => []).add(it);
               }
 
               return Card(
@@ -1607,13 +1516,7 @@ class _AdminCalendarView extends StatelessWidget {
                   child: DataTable(
                     columnSpacing: 18,
                     columns: [
-                      DataColumn(
-                        label: Text(
-                          axis == _CalendarAxis.rooms
-                              ? 'Prostorija'
-                              : 'Terapeut',
-                        ),
-                      ),
+                      const DataColumn(label: Text('Terapeut')),
                       for (final d in days)
                         DataColumn(
                           label: Text(
@@ -1623,36 +1526,19 @@ class _AdminCalendarView extends StatelessWidget {
                         ),
                     ],
                     rows: [
-                      if (axis == _CalendarAxis.therapists)
-                        for (final t in therapists)
-                          DataRow(
-                            cells: [
-                              DataCell(Text('${t.ime} ${t.prezime}')),
-                              for (final d in days)
-                                _buildCalendarCell(
-                                  context,
-                                  calendarAxis: axis,
-                                  rowLabel: '${t.ime} ${t.prezime}'.trim(),
-                                  day: d,
-                                  items: byTherapist[t.id] ?? const [],
-                                ),
-                            ],
-                          )
-                      else
-                        for (final r in roomRows)
-                          DataRow(
-                            cells: [
-                              DataCell(Text(r.name)),
-                              for (final d in days)
-                                _buildCalendarCell(
-                                  context,
-                                  calendarAxis: axis,
-                                  rowLabel: r.name,
-                                  day: d,
-                                  items: byRoomKey[r.id] ?? const [],
-                                ),
-                            ],
-                          ),
+                      for (final t in therapists)
+                        DataRow(
+                          cells: [
+                            DataCell(Text('${t.ime} ${t.prezime}')),
+                            for (final d in days)
+                              _buildCalendarCell(
+                                context,
+                                rowLabel: '${t.ime} ${t.prezime}'.trim(),
+                                day: d,
+                                items: byTherapist[t.id] ?? const [],
+                              ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -1666,7 +1552,6 @@ class _AdminCalendarView extends StatelessWidget {
 
   DataCell _buildCalendarCell(
     BuildContext context, {
-    required _CalendarAxis calendarAxis,
     required String rowLabel,
     required DateTime day,
     required List<RezervacijaCalendarItem> items,
@@ -1718,7 +1603,6 @@ class _AdminCalendarView extends StatelessWidget {
                       builder: (_) => _CalendarDayBookingDialog(
                         day: day,
                         rowLabel: rowLabel,
-                        calendarAxis: calendarAxis,
                         items: list,
                         dismissContext: context,
                       ),

@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/rezervacija.dart';
-import '../../models/rezervacija_oprema_item.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
-import '../../models/admin/prostorija.dart';
-import '../../models/admin/oprema.dart';
-import '../../models/admin/resource_availability.dart';
 import '../../ui/widgets/page_header.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -517,13 +513,10 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   Future<List<Rezervacija>>? _future;
   final ScrollController _scrollController = ScrollController();
   bool _includeOtkazane = false;
-  List<Prostorija> _prostorije = [];
-  List<Oprema> _oprema = [];
 
   @override
   void initState() {
     super.initState();
-    _loadResources();
     _reload();
   }
 
@@ -536,16 +529,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
   void _reload() {
     setState(() {
       _future = _api.getRezervacijeFiltered(includeOtkazane: _includeOtkazane);
-    });
-  }
-
-  Future<void> _loadResources() async {
-    final rooms = await _api.getProstorije();
-    final eq = await _api.getOprema();
-    if (!mounted) return;
-    setState(() {
-      _prostorije = rooms;
-      _oprema = eq;
     });
   }
 
@@ -618,25 +601,17 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     final slotCtrl = ValueNotifier<DateTime>(r.datumRezervacije);
     final therapistCtrl = ValueNotifier<int?>(null);
     final serviceCtrl = ValueNotifier<int?>(null);
-    final roomCtrl = ValueNotifier<int?>(r.prostorijaId);
 
-    // equipment qty
-    final qty = <int, int>{};
-    for (final it in r.oprema) {
-      qty[it.opremaId] = it.kolicina;
-    }
-
-    ResourceAvailability? availability;
-    bool loadingAvailability = false;
-    Map<int, int> remainingMap = {};
-
-    // Fetch therapists/services lazily (same API used elsewhere)
     final therapists = await _api.getZaposlenici();
     final services = await _api.getUsluge();
     if (!mounted) return;
 
-    therapistCtrl.value = _findTherapistIdFromName(therapists, r.zaposlenikIme);
-    serviceCtrl.value = _findServiceIdFromName(services, r.uslugaNaziv);
+    therapistCtrl.value = r.zaposlenikId > 0
+        ? r.zaposlenikId
+        : _findTherapistIdFromName(therapists, r.zaposlenikIme);
+    serviceCtrl.value = r.uslugaId > 0
+        ? r.uslugaId
+        : _findServiceIdFromName(services, r.uslugaNaziv);
 
     Future<void> pickDate() async {
       final picked = await showDatePicker(
@@ -657,34 +632,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       slotCtrl.value = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     }
 
-    Future<void> loadAvailability(StateSetter setLocal) async {
-      loadingAvailability = true;
-      setLocal(() {});
-      availability = await _api.getResourceAvailability(
-        slot: slotCtrl.value,
-        excludeRezervacijaId: r.id,
-      );
-      if (!mounted) return;
-      remainingMap = availability == null
-          ? {}
-          : {for (final e in availability!.equipment) e.opremaId: e.remaining};
-      // clamp room selection
-      if (roomCtrl.value != null &&
-          availability != null &&
-          !availability!.freeRooms.any((x) => x.id == roomCtrl.value)) {
-        roomCtrl.value = null;
-      }
-      // clamp equipment qty
-      for (final entry in qty.entries.toList()) {
-        final max = remainingMap[entry.key];
-        if (max == null) continue;
-        if (entry.value > max) qty[entry.key] = max;
-        if (qty[entry.key] == 0) qty.remove(entry.key);
-      }
-      loadingAvailability = false;
-      setLocal(() {});
-    }
-
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -693,13 +640,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           width: 720,
           child: StatefulBuilder(
             builder: (ctx, setLocal) {
-              // initial load
-              if (availability == null && !loadingAvailability) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!ctx.mounted) return;
-                  loadAvailability(setLocal);
-                });
-              }
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -714,8 +654,8 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                           if (!ctx.mounted) return;
                           final d = dateCtrl.value;
                           final t = slotCtrl.value;
-                          slotCtrl.value = DateTime(d.year, d.month, d.day, t.hour, t.minute);
-                          await loadAvailability(setLocal);
+                          slotCtrl.value =
+                              DateTime(d.year, d.month, d.day, t.hour, t.minute);
                           setLocal(() {});
                         },
                         icon: const Icon(Icons.date_range_outlined),
@@ -727,7 +667,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                         onPressed: () async {
                           await pickTime();
                           if (!ctx.mounted) return;
-                          await loadAvailability(setLocal);
                           setLocal(() {});
                         },
                         icon: const Icon(Icons.schedule_outlined),
@@ -783,45 +722,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Prostorija',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int?>(
-                        isExpanded: true,
-                        value: roomCtrl.value,
-                        hint: loadingAvailability
-                            ? const Text('Učitavam dostupnost...')
-                            : const Text('— bez prostorije —'),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('— bez prostorije —'),
-                          ),
-                          ...(availability?.freeRooms ?? _prostorije).map(
-                            (p) => DropdownMenuItem<int?>(
-                              value: p.id,
-                              child: Text('${p.naziv} (kap: ${p.kapacitet})'),
-                            ),
-                          ),
-                        ],
-                        onChanged: loadingAvailability
-                            ? null
-                            : (v) => setLocal(() => roomCtrl.value = v),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditEquipmentPicker(
-                    oprema: _oprema,
-                    qty: qty,
-                    remainingMap: remainingMap,
-                    loadingAvailability: loadingAvailability,
-                    onChanged: () => setLocal(() {}),
-                  ),
                 ],
               );
             },
@@ -847,11 +747,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       datumRezervacije: slotCtrl.value,
       uslugaId: serviceCtrl.value!,
       zaposlenikId: therapistCtrl.value!,
-      prostorijaId: roomCtrl.value,
-      oprema: qty.entries
-          .where((e) => e.value > 0)
-          .map((e) => RezervacijaOpremaItem(opremaId: e.key, kolicina: e.value))
-          .toList(),
     );
 
     if (!mounted) return;
@@ -1011,77 +906,6 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           ),
         );
       },
-    );
-  }
-}
-
-class _EditEquipmentPicker extends StatelessWidget {
-  const _EditEquipmentPicker({
-    required this.oprema,
-    required this.qty,
-    required this.remainingMap,
-    required this.loadingAvailability,
-    required this.onChanged,
-  });
-
-  final List<Oprema> oprema;
-  final Map<int, int> qty;
-  final Map<int, int> remainingMap;
-  final bool loadingAvailability;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Oprema', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 10),
-            if (loadingAvailability)
-              const Text('Učitavam dostupnost opreme...')
-            else if (oprema.isEmpty)
-              const Text('Nema opreme.')
-            else
-              ...oprema.map((e) {
-                final current = qty[e.id] ?? 0;
-                final max = remainingMap[e.id] ?? e.kolicina;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(e.naziv, overflow: TextOverflow.ellipsis)),
-                      const SizedBox(width: 10),
-                      Text('preostalo $max'),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        onPressed: current <= 0
-                            ? null
-                            : () {
-                                qty[e.id] = current - 1;
-                                onChanged();
-                              },
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                      Text('$current'),
-                      IconButton(
-                        onPressed: current >= max
-                            ? null
-                            : () {
-                                qty[e.id] = current + 1;
-                                onChanged();
-                              },
-                        icon: const Icon(Icons.add_circle_outline),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
-      ),
     );
   }
 }

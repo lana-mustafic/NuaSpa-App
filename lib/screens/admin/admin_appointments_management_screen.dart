@@ -311,8 +311,6 @@ class _AdminAppointmentsManagementScreenState
       datumRezervacije: draft.dateTime,
       uslugaId: draft.serviceId,
       zaposlenikId: draft.therapistId,
-      prostorijaId: r.prostorijaId,
-      oprema: r.oprema,
     );
     if (!mounted) return;
     _toast(updated == null ? 'Edit failed.' : 'Appointment updated.');
