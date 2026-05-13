@@ -11,6 +11,7 @@ import '../../core/api/services/api_service.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
@@ -211,6 +212,23 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     });
   }
 
+  Future<void> _onVipToggle(bool value) async {
+    final sel = _selected;
+    if (sel == null || sel.isOtkazana) return;
+    final ok = await _api.patchRezervacijaVip(sel.id, value);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('VIP status nije spremljen.')),
+      );
+      return;
+    }
+    setState(() {
+      _selected = sel.copyWith(isVip: value);
+    });
+    _reloadCalendar();
+  }
+
   DateTime _summaryDay() {
     final now = _dateOnly(DateTime.now());
     final r = _visibleRange();
@@ -354,6 +372,9 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                     filterFn: _calendarPassThrough,
                     summaryDay: _summaryDay(),
                     onViewFullSchedule: _goToday,
+                    showVipToggle: context.watch<AuthProvider>().isAdmin,
+                    onVipToggle:
+                        context.watch<AuthProvider>().isAdmin ? _onVipToggle : null,
                     onNew: () {
                       context.read<DesktopNav>().requestAppointmentCreate(
                             zaposlenikId: _filterZaposlenikId,
@@ -1467,6 +1488,8 @@ class _RightRail extends StatelessWidget {
     required this.filterFn,
     required this.summaryDay,
     required this.onViewFullSchedule,
+    required this.showVipToggle,
+    this.onVipToggle,
     required this.onNew,
   });
 
@@ -1475,6 +1498,8 @@ class _RightRail extends StatelessWidget {
   final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
   final DateTime summaryDay;
   final VoidCallback onViewFullSchedule;
+  final bool showVipToggle;
+  final Future<void> Function(bool value)? onVipToggle;
   final VoidCallback onNew;
 
   @override
@@ -1491,7 +1516,11 @@ class _RightRail extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: _CalUi.accent.withValues(alpha: 0.45)),
             ),
-            child: _DetailCard(item: selected!),
+            child: _DetailCard(
+              item: selected!,
+              showVipToggle: showVipToggle,
+              onVipToggle: onVipToggle,
+            ),
           ),
           const SizedBox(height: 14),
         ],
@@ -1623,8 +1652,14 @@ class _UpcomingRow extends StatelessWidget {
 }
 
 class _DetailCard extends StatelessWidget {
-  const _DetailCard({required this.item});
+  const _DetailCard({
+    required this.item,
+    required this.showVipToggle,
+    this.onVipToggle,
+  });
   final RezervacijaCalendarItem item;
+  final bool showVipToggle;
+  final Future<void> Function(bool value)? onVipToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -1697,8 +1732,21 @@ class _DetailCard extends StatelessWidget {
             ),
             if (item.isOtkazana)
               const _Tag(label: 'Cancelled', color: Colors.redAccent),
+            if (item.isVip) const _Tag(label: 'VIP', color: Color(0xFFE8C547)),
           ],
         ),
+        if (showVipToggle && !item.isOtkazana && onVipToggle != null) ...[
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              'VIP termin',
+              style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            value: item.isVip,
+            onChanged: (v) => onVipToggle!(v),
+          ),
+        ],
       ],
     );
   }

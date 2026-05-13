@@ -18,6 +18,8 @@ class Rezervacija {
   final int zaposlenikId;
   final String? zaposlenikIme;
   final bool premiumKlijent;
+  /// VIP tretman na samoj rezervaciji (postavlja admin).
+  final bool isVip;
 
   Rezervacija({
     required this.id,
@@ -39,6 +41,7 @@ class Rezervacija {
     this.zaposlenikId = 0,
     this.zaposlenikIme,
     this.premiumKlijent = false,
+    this.isVip = false,
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
@@ -65,6 +68,7 @@ class Rezervacija {
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
       premiumKlijent: json['premiumKlijent'] as bool? ?? false,
+      isVip: json['isVip'] as bool? ?? false,
     );
   }
 }

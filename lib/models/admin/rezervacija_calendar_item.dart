@@ -61,4 +61,28 @@ class RezervacijaCalendarItem {
       razlogOtkaza: json['razlogOtkaza'] as String?,
     );
   }
+
+  RezervacijaCalendarItem copyWith({
+    bool? isVip,
+  }) {
+    return RezervacijaCalendarItem(
+      id: id,
+      datumRezervacije: datumRezervacije,
+      isPotvrdjena: isPotvrdjena,
+      isPlacena: isPlacena,
+      isOtkazana: isOtkazana,
+      isVip: isVip ?? this.isVip,
+      zaposlenikId: zaposlenikId,
+      zaposlenikIme: zaposlenikIme,
+      korisnikId: korisnikId,
+      korisnikIme: korisnikIme,
+      korisnikTelefon: korisnikTelefon,
+      korisnikEmail: korisnikEmail,
+      uslugaId: uslugaId,
+      uslugaNaziv: uslugaNaziv,
+      uslugaTrajanjeMinuta: uslugaTrajanjeMinuta,
+      uslugaCijena: uslugaCijena,
+      razlogOtkaza: razlogOtkaza,
+    );
+  }
 }

@@ -601,6 +601,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     final slotCtrl = ValueNotifier<DateTime>(r.datumRezervacije);
     final therapistCtrl = ValueNotifier<int?>(null);
     final serviceCtrl = ValueNotifier<int?>(null);
+    final vipCtrl = ValueNotifier<bool>(r.isVip);
 
     final therapists = await _api.getZaposlenici();
     final services = await _api.getUsluge();
@@ -722,6 +723,12 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                       ),
                     ),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('VIP termin'),
+                    value: vipCtrl.value,
+                    onChanged: (v) => setLocal(() => vipCtrl.value = v),
+                  ),
                 ],
               );
             },
@@ -747,6 +754,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
       datumRezervacije: slotCtrl.value,
       uslugaId: serviceCtrl.value!,
       zaposlenikId: therapistCtrl.value!,
+      isVip: vipCtrl.value,
     );
 
     if (!mounted) return;

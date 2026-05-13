@@ -381,6 +381,7 @@ class ApiService {
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
+    bool isVip = false,
   }) async {
     try {
       final response = await _dio.put<dynamic>(
@@ -389,6 +390,7 @@ class ApiService {
           'datumRezervacije': datumRezervacije.toIso8601String(),
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
+          'isVip': isVip,
         },
       );
 
@@ -398,6 +400,20 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.editRezervacija: $e');
       return null;
+    }
+  }
+
+  /// Admin: trajna VIP oznaka na rezervaciji.
+  Future<bool> patchRezervacijaVip(int rezervacijaId, bool isVip) async {
+    try {
+      final response = await _dio.patch<dynamic>(
+        'Rezervacija/$rezervacijaId/vip',
+        data: {'isVip': isVip},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Greška u ApiService.patchRezervacijaVip: $e');
+      return false;
     }
   }
 
