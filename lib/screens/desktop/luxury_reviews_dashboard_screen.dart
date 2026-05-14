@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
 /// Premium dark-mode Reviews & Feedback dashboard (desktop), backed by
@@ -168,6 +170,34 @@ class _LuxuryReviewsDashboardScreenState
     );
   }
 
+  Future<void> _openReviewDetail(AdminReviewRow r) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AdminReviewReplySheet(
+        row: r,
+        onSave: (tekst) => _api.patchRecenzijaAdminOdgovor(r.id, tekst),
+      ),
+    );
+    if (!context.mounted) return;
+    if (saved == true) {
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Odgovor salona je spremljen.'),
+          behavior: SnackBarBehavior.floating,
+          width: 380,
+        ),
+      );
+    }
+  }
+
+  void _goToServicesCatalog() {
+    context.read<DesktopNav>().goTo(DesktopRouteKey.catalog);
+  }
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -301,6 +331,7 @@ class _LuxuryReviewsDashboardScreenState
                               _ReviewsTable(
                                 rows: dash?.redovi ?? const [],
                                 compact: tightHeight,
+                                onViewReview: _openReviewDetail,
                               ),
                               SizedBox(height: gap),
                               _PaginationBar(
@@ -335,6 +366,7 @@ class _LuxuryReviewsDashboardScreenState
                             child: _RightInsightsColumn(
                               dash: dash,
                               compact: tightHeight,
+                              onViewAllServices: _goToServicesCatalog,
                             ),
                           ),
                         ),
@@ -672,7 +704,12 @@ class _KpiRow extends StatelessWidget {
             child: _KpiCard(
               title: 'Response Rate',
               value: resp == null ? '—' : '${resp.toStringAsFixed(0)}%',
-              growth: resp == null ? '—' : '+0%',
+              growth: resp == null
+                  ? '—'
+                  : _fmtGrowthPercentD(
+                      resp,
+                      d?.postotakOdgovoraPrethodno,
+                    ),
               subtitle: 'vs previous period',
               compact: compact,
               progress: resp == null ? null : resp / 100,
@@ -1130,10 +1167,15 @@ String _formatRowDate(DateTime utc) {
 }
 
 class _ReviewsTable extends StatelessWidget {
-  const _ReviewsTable({required this.rows, required this.compact});
+  const _ReviewsTable({
+    required this.rows,
+    required this.compact,
+    required this.onViewReview,
+  });
 
   final List<AdminReviewRow> rows;
   final bool compact;
+  final void Function(AdminReviewRow) onViewReview;
 
   @override
   Widget build(BuildContext context) {
@@ -1172,7 +1214,12 @@ class _ReviewsTable extends StatelessWidget {
             thickness: 0.5,
             color: Colors.white.withValues(alpha: 0.08),
           ),
-          for (final row in rows) _TableDataRow(row: row, compact: compact),
+          for (final row in rows)
+            _TableDataRow(
+              row: row,
+              compact: compact,
+              onViewReview: () => onViewReview(row),
+            ),
         ],
       ),
     );
@@ -1227,10 +1274,15 @@ class _TableHeaderRow extends StatelessWidget {
 }
 
 class _TableDataRow extends StatefulWidget {
-  const _TableDataRow({required this.row, required this.compact});
+  const _TableDataRow({
+    required this.row,
+    required this.compact,
+    required this.onViewReview,
+  });
 
   final AdminReviewRow row;
   final bool compact;
+  final VoidCallback onViewReview;
 
   @override
   State<_TableDataRow> createState() => _TableDataRowState();
@@ -1374,28 +1426,42 @@ class _TableDataRowState extends State<_TableDataRow> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  _iconAct(Icons.visibility_outlined),
-                  const SizedBox(width: 4),
-                  _iconAct(Icons.more_horiz_rounded),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    tooltip: 'Detalji i odgovor',
+                    onPressed: widget.onViewReview,
+                    icon: Icon(
+                      Icons.visibility_outlined,
+                      size: 18,
+                      color: Colors.white.withValues(alpha: 0.65),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Više',
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      size: 18,
+                      color: Colors.white.withValues(alpha: 0.65),
+                    ),
+                    color: NuaLuxuryTokens.voidViolet,
+                    onSelected: (v) {
+                      if (v == 'reply') widget.onViewReview();
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'reply',
+                        child: Text('Odgovor salona'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _iconAct(IconData icon) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-      onPressed: () {},
-      icon: Icon(
-        icon,
-        size: 18,
-        color: Colors.white.withValues(alpha: 0.65),
       ),
     );
   }
@@ -1647,10 +1713,15 @@ class _PaginationBar extends StatelessWidget {
 }
 
 class _RightInsightsColumn extends StatelessWidget {
-  const _RightInsightsColumn({required this.dash, required this.compact});
+  const _RightInsightsColumn({
+    required this.dash,
+    required this.compact,
+    required this.onViewAllServices,
+  });
 
   final AdminReviewsDashboard? dash;
   final bool compact;
+  final VoidCallback onViewAllServices;
 
   @override
   Widget build(BuildContext context) {
@@ -1661,7 +1732,12 @@ class _RightInsightsColumn extends StatelessWidget {
       children: [
         _RatingDistributionCard(dash: dash, theme: theme, compact: compact),
         SizedBox(height: gap),
-        _TopServicesCard(dash: dash, theme: theme, compact: compact),
+        _TopServicesCard(
+          dash: dash,
+          theme: theme,
+          compact: compact,
+          onViewAll: onViewAllServices,
+        ),
         SizedBox(height: gap),
         _RecentFeedbackCard(dash: dash, theme: theme, compact: compact),
         SizedBox(height: gap),
@@ -1768,11 +1844,13 @@ class _TopServicesCard extends StatelessWidget {
     required this.dash,
     required this.theme,
     required this.compact,
+    required this.onViewAll,
   });
 
   final AdminReviewsDashboard? dash;
   final ThemeData theme;
   final bool compact;
+  final VoidCallback onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -1844,7 +1922,7 @@ class _TopServicesCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: onViewAll,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: LuxuryReviewsDashboardScreen.textPrimary,
                   side: BorderSide(
@@ -2011,6 +2089,195 @@ class _ManageReviewsCard extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.35),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminReviewReplySheet extends StatefulWidget {
+  const _AdminReviewReplySheet({
+    required this.row,
+    required this.onSave,
+  });
+
+  final AdminReviewRow row;
+  final Future<bool> Function(String? tekst) onSave;
+
+  @override
+  State<_AdminReviewReplySheet> createState() => _AdminReviewReplySheetState();
+}
+
+class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.row.adminOdgovor ?? '');
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context).bottom;
+    final ik = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: ik),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: _glassCard(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + pad),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.row.korisnikPunoIme,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: LuxuryReviewsDashboardScreen.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          icon: const Icon(Icons.close_rounded),
+                          color: Colors.white70,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      widget.row.uslugaNaziv,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white60,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Komentar gosta',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Colors.white54,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.row.komentar.isEmpty ? '—' : widget.row.komentar,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Odgovor salona (javno)',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Colors.white54,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _ctrl,
+                      maxLines: 4,
+                      maxLength: 2000,
+                      style: const TextStyle(
+                        color: LuxuryReviewsDashboardScreen.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.06),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.12),
+                          ),
+                        ),
+                        hintText: 'Zahvala, pojašnjenje ili dodatne informacije…',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed:
+                              _busy ? null : () => Navigator.pop(context, false),
+                          child: const Text('Odustani'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  setState(() => _busy = true);
+                                  final ok = await widget.onSave(null);
+                                  if (!context.mounted) return;
+                                  setState(() => _busy = false);
+                                  if (ok) {
+                                    Navigator.pop(context, true);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Brisanje odgovora nije uspjelo.'),
+                                      ),
+                                    );
+                                  }
+                                },
+                          child: const Text('Obriši odgovor'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  setState(() => _busy = true);
+                                  final t = _ctrl.text.trim();
+                                  final ok = await widget.onSave(
+                                    t.isEmpty ? null : t,
+                                  );
+                                  if (!context.mounted) return;
+                                  setState(() => _busy = false);
+                                  if (ok) {
+                                    Navigator.pop(context, true);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Spremanje nije uspjelo.'),
+                                      ),
+                                    );
+                                  }
+                                },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+                          ),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Spremi'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

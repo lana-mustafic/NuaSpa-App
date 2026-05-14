@@ -714,6 +714,24 @@ class ApiService {
     }
   }
 
+  /// Admin: javni odgovor na recenziju. Prazan [tekst] briše odgovor.
+  Future<bool> patchRecenzijaAdminOdgovor(int recenzijaId, String? tekst) async {
+    try {
+      await _dio.patch<dynamic>(
+        'Recenzija/$recenzijaId/admin-odgovor',
+        data: {'tekst': tekst},
+      );
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return false;
+      debugPrint('Greška u ApiService.patchRecenzijaAdminOdgovor: $e');
+      return false;
+    } catch (e) {
+      debugPrint('Greška u ApiService.patchRecenzijaAdminOdgovor: $e');
+      return false;
+    }
+  }
+
   Future<void> downloadReport() async {
     try {
       final directory = await getApplicationDocumentsDirectory();

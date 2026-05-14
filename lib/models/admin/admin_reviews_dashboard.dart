@@ -29,6 +29,7 @@ class AdminReviewRow {
     required this.uslugaNaziv,
     required this.terapeutIme,
     required this.izvor,
+    this.adminOdgovor,
   });
 
   final int id;
@@ -40,6 +41,7 @@ class AdminReviewRow {
   final String uslugaNaziv;
   final String? terapeutIme;
   final String izvor;
+  final String? adminOdgovor;
 
   factory AdminReviewRow.fromJson(Map<String, dynamic> json) {
     return AdminReviewRow(
@@ -53,6 +55,7 @@ class AdminReviewRow {
       uslugaNaziv: (json['uslugaNaziv'] as String?) ?? '',
       terapeutIme: json['terapeutIme'] as String?,
       izvor: (json['izvor'] as String?) ?? 'NuaSpa',
+      adminOdgovor: json['adminOdgovor'] as String?,
     );
   }
 }
@@ -83,6 +86,7 @@ class AdminReviewsDashboard {
     required this.postotakPozitivnih,
     required this.postotakPozitivnihPrethodno,
     required this.postotakOdgovora,
+    required this.postotakOdgovoraPrethodno,
     required this.distribucijaOcjena,
     required this.topUsluge,
     required this.istaknutaRecenzija,
@@ -98,6 +102,7 @@ class AdminReviewsDashboard {
   final double postotakPozitivnih;
   final double? postotakPozitivnihPrethodno;
   final double? postotakOdgovora;
+  final double? postotakOdgovoraPrethodno;
   final Map<int, int> distribucijaOcjena;
   final List<AdminTopUslugaOcjena> topUsluge;
   final AdminReviewQuote? istaknutaRecenzija;
@@ -159,6 +164,8 @@ class AdminReviewsDashboard {
       postotakPozitivnihPrethodno:
           (json['postotakPozitivnihPrethodno'] as num?)?.toDouble(),
       postotakOdgovora: (json['postotakOdgovora'] as num?)?.toDouble(),
+      postotakOdgovoraPrethodno:
+          (json['postotakOdgovoraPrethodno'] as num?)?.toDouble(),
       distribucijaOcjena: dist,
       topUsluge: top,
       istaknutaRecenzija: quote,
