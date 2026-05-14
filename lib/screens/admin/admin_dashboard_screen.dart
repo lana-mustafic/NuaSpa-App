@@ -5,6 +5,7 @@ import '../../models/rezervacija.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
+import '../catalog/service_editor_dialog.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -236,7 +237,6 @@ class _AdminServicesPage extends StatefulWidget {
 class _AdminServicesPageState extends State<_AdminServicesPage> {
   final ApiService _api = ApiService();
   Future<List<Usluga>>? _futureUsluge;
-  List<KategorijaUsluga> _katCache = [];
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -252,157 +252,15 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
   }
 
   Future<void> _reloadAll() async {
-    final kat = await _api.getKategorijeUsluga();
     if (!mounted) return;
     setState(() {
-      _katCache = kat;
       _futureUsluge = _api.getUsluge();
     });
   }
 
   Future<void> _editService(Usluga? existing) async {
-    if (_katCache.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Prvo dodajte barem jednu kategoriju.'),
-        ),
-      );
-      return;
-    }
-
-    final nazivCtrl = TextEditingController(text: existing?.naziv ?? '');
-    final cijenaCtrl = TextEditingController(
-      text: existing != null ? existing.cijena.toStringAsFixed(2) : '',
-    );
-    final trajanjeCtrl = TextEditingController(
-      text: '${existing?.trajanjeMinuta ?? 60}',
-    );
-    final opisCtrl = TextEditingController(text: existing?.opis ?? '');
-    final slikaCtrl = TextEditingController(
-      text: existing != null && !existing.slikaUrl.contains('picsum.photos')
-          ? existing.slikaUrl
-          : '',
-    );
-
-    var katId = existing?.kategorijaUslugaId ?? _katCache.first.id;
-    if (!_katCache.any((k) => k.id == katId)) {
-      katId = _katCache.first.id;
-    }
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(existing == null ? 'Nova usluga' : 'Uredi uslugu'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nazivCtrl,
-                  decoration: const InputDecoration(labelText: 'Naziv'),
-                ),
-                TextField(
-                  controller: cijenaCtrl,
-                  decoration: const InputDecoration(labelText: 'Cijena (KM)'),
-                  keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: trajanjeCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Trajanje (minute)'),
-                  keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: opisCtrl,
-                  decoration: const InputDecoration(labelText: 'Opis'),
-                  maxLines: 3,
-                ),
-                TextField(
-                  controller: slikaCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Slika URL (opcionalno)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: DropdownButton<int>(
-                    value: katId,
-                    hint: const Text('Kategorija'),
-                    isExpanded: true,
-                    items: _katCache
-                        .map(
-                          (k) => DropdownMenuItem(
-                            value: k.id,
-                            child: Text(k.naziv),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setDialogState(() => katId = v);
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Otkaži'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sačuvaj'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (saved != true || !mounted) return;
-
-    final cijena = double.tryParse(
-          cijenaCtrl.text.replaceAll(',', '.'),
-        ) ??
-        0;
-    final trajanje = int.tryParse(trajanjeCtrl.text.trim()) ?? 60;
-
-    if (nazivCtrl.text.trim().isEmpty || cijena <= 0 || katId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Provjerite naziv, cijenu i kategoriju.')),
-      );
-      return;
-    }
-
-    final slika = slikaCtrl.text.trim();
-    final draft = Usluga(
-      id: existing?.id ?? 0,
-      naziv: nazivCtrl.text.trim(),
-      cijena: cijena,
-      trajanje: '$trajanje min',
-      slikaUrl: slika.isNotEmpty
-          ? slika
-          : (existing?.slikaUrl ??
-              'https://picsum.photos/seed/new/400/300'),
-      kategorija: _katCache.firstWhere((k) => k.id == katId).naziv,
-      trajanjeMinuta: trajanje,
-      opis: opisCtrl.text.trim(),
-      kategorijaUslugaId: katId,
-    );
-
-    final ok = existing == null
-        ? await _api.createUsluga(draft) != null
-        : await _api.updateUsluga(draft) != null;
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Sačuvano.' : 'Greška pri čuvanju.')),
-    );
-    if (ok) _reloadAll();
+    final ok = await showServiceEditorDialog(context, existing: existing);
+    if (ok && mounted) _reloadAll();
   }
 
   Future<void> _delete(Usluga u) async {

@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/usluga.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import 'service_details_screen.dart';
+import 'service_editor_dialog.dart';
 
 /// Premium glass "Service Catalog" experience (English marketing copy per brief).
 class MobileServiceCatalogScreen extends StatefulWidget {
@@ -59,6 +61,14 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     super.dispose();
   }
 
+  Future<void> _openServiceEditor(Usluga? existing) async {
+    final ok = await showServiceEditorDialog(context, existing: existing);
+    if (!mounted) return;
+    if (ok) {
+      await context.read<ServiceProvider>().fetchServices();
+    }
+  }
+
   bool _categoryMatches(Usluga u, List<String>? keywords) {
     if (keywords == null) return true;
     final k = u.kategorija.toLowerCase();
@@ -93,6 +103,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final visible = _visible(sp);
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
 
     if (sp.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
@@ -111,7 +122,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
       controller: _scroll,
       physics: const BouncingScrollPhysics(),
       slivers: [
-        SliverToBoxAdapter(child: _buildHeader(context, tt)),
+        SliverToBoxAdapter(child: _buildHeader(context, tt, isAdmin)),
         SliverToBoxAdapter(child: _buildSearchRow(context)),
         SliverToBoxAdapter(child: _buildPills(context)),
         if (visible.isEmpty)
@@ -153,6 +164,8 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                       context.read<ServiceProvider>().toggleFavorite(u.id);
                     },
                     isFavorite: sp.isFavorite(u.id),
+                    onAdminEdit:
+                        isAdmin ? () => _openServiceEditor(u) : null,
                   );
                 },
                 childCount: visible.length,
@@ -163,7 +176,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     );
   }
 
-  Widget _buildHeader(BuildContext context, TextTheme tt) {
+  Widget _buildHeader(BuildContext context, TextTheme tt, bool isAdmin) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
       child: ClipRRect(
@@ -197,6 +210,13 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                       onTap: widget.onOpenMenu ?? () {},
                     ),
                     const Spacer(),
+                    if (isAdmin) ...[
+                      _GlassCircleButton(
+                        icon: Icons.add_rounded,
+                        onTap: () => _openServiceEditor(null),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     _GlassCircleButton(
                       icon: Icons.notifications_none_rounded,
                       badgeCount: 2,
@@ -455,6 +475,7 @@ class _ServiceCard extends StatelessWidget {
     required this.onAddTap,
     required this.isFavorite,
     this.badge,
+    this.onAdminEdit,
   });
 
   final Usluga usluga;
@@ -462,6 +483,7 @@ class _ServiceCard extends StatelessWidget {
   final VoidCallback onAddTap;
   final bool isFavorite;
   final String? badge;
+  final VoidCallback? onAdminEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -537,6 +559,28 @@ class _ServiceCard extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.6,
                             color: MobileSpaColors.royalPurple,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (onAdminEdit != null)
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.38),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: onAdminEdit,
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
