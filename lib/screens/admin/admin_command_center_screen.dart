@@ -260,7 +260,6 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     bookings: bookings,
                     popularity: pop,
                     therapists: therapists,
-                    therapistDirectoryCount: kpi?.aktivniTerapeuti,
                     activityFeed: activityFeed,
                   ),
                 ),
@@ -397,15 +396,12 @@ class _RightDashboardSidebar extends StatelessWidget {
     required this.popularity,
     required this.therapists,
     required this.activityFeed,
-    this.therapistDirectoryCount,
   });
 
   final List<Rezervacija> bookings;
   final List<ServicePopularity> popularity;
   final List<Zaposlenik> therapists;
   final List<AdminActivityFeedItem> activityFeed;
-  /// From admin KPI (directory size); falls back to [therapists.length].
-  final int? therapistDirectoryCount;
 
   @override
   Widget build(BuildContext context) {
@@ -420,10 +416,7 @@ class _RightDashboardSidebar extends StatelessWidget {
           const SizedBox(height: 16),
           _TopServicesTodayCard(popularity: popularity),
           const SizedBox(height: 16),
-          _TherapistPresenceCard(
-            therapists: therapists,
-            directoryCount: therapistDirectoryCount,
-          ),
+          _TherapistPresenceCard(therapists: therapists),
         ],
       ),
     );
@@ -854,18 +847,13 @@ class _ServiceLegendRow extends StatelessWidget {
 }
 
 class _TherapistPresenceCard extends StatelessWidget {
-  const _TherapistPresenceCard({
-    required this.therapists,
-    this.directoryCount,
-  });
+  const _TherapistPresenceCard({required this.therapists});
 
   final List<Zaposlenik> therapists;
-  final int? directoryCount;
 
   @override
   Widget build(BuildContext context) {
     final visible = therapists.take(5).toList();
-    final n = directoryCount ?? therapists.length;
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
       opacity: 0.34,
@@ -890,20 +878,6 @@ class _TherapistPresenceCard extends StatelessWidget {
                 ),
               ),
             ),
-          Expanded(
-            child: Text(
-              n <= 0
-                  ? 'No therapists in directory'
-                  : n == 1
-                      ? '1 therapist active'
-                      : '$n therapists active',
-              textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.66),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
         ],
       ),
     );
