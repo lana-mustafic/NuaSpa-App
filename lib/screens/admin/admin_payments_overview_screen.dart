@@ -1,12 +1,37 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api/services/api_service.dart';
+import '../../models/admin/admin_finance_dashboard.dart';
+import '../../models/usluga.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
+String _formatKm(num v) {
+  final s = v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2);
+  final parts = s.split('.');
+  final intPart = parts[0];
+  final buf = StringBuffer();
+  for (var i = 0; i < intPart.length; i++) {
+    final fromEnd = intPart.length - i;
+    if (i > 0 && fromEnd % 3 == 0) buf.write(',');
+    buf.write(intPart[i]);
+  }
+  if (parts.length > 1) buf.write('.${parts[1]}');
+  return '${buf.toString()} KM';
+}
+
+String _formatGrowthLine(double? pct) {
+  if (pct == null) return '— vs preth. period';
+  final up = pct >= 0;
+  final arrow = up ? '↑' : '↓';
+  return '$arrow ${pct.abs().toStringAsFixed(0)}% vs preth. period';
+}
+
 /// Premium dark-mode Payments Overview (admin finance hub).
-/// UI-only mock metrics; wire to API when backend endpoints exist.
 class AdminPaymentsOverviewScreen extends StatefulWidget {
   const AdminPaymentsOverviewScreen({super.key});
 
@@ -23,6 +48,7 @@ class AdminPaymentsOverviewScreen extends StatefulWidget {
 
 class _AdminPaymentsOverviewScreenState
     extends State<AdminPaymentsOverviewScreen> {
+  final ApiService _api = ApiService();
   final ScrollController _scroll = ScrollController();
 
   late DateTimeRange _range;
@@ -31,8 +57,13 @@ class _AdminPaymentsOverviewScreenState
   String _serviceFilter = 'all';
   final TextEditingController _tableSearch = TextEditingController();
   int _page = 1;
-  final int _pageSize = 10;
-  final int _totalTx = 123;
+  int _pageSize = 10;
+
+  AdminFinanceDashboard? _dash;
+  List<Usluga> _usluge = [];
+  bool _loading = true;
+  String? _error;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -43,10 +74,59 @@ class _AdminPaymentsOverviewScreenState
       start: DateTime(start.year, start.month, start.day),
       end: DateTime(end.year, end.month, end.day),
     );
+    _tableSearch.addListener(_onSearchChanged);
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final usluge = await _api.getUsluge();
+    if (!mounted) return;
+    setState(() => _usluge = usluge);
+    await _load();
+  }
+
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      setState(() => _page = 1);
+      _load();
+    });
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final dash = await _api.getAdminFinanceDashboard(
+      from: _range.start,
+      toInclusive: _range.end,
+      page: _page,
+      pageSize: _pageSize,
+      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text.trim(),
+      status: _statusFilter == 'all' ? null : _statusFilter,
+      methodCategory: _methodFilter == 'all' ? null : _methodFilter,
+      uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
+    );
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (dash == null) {
+        _error = 'Nije moguće učitati podatke o plaćanjima.';
+        _dash = null;
+      } else {
+        _dash = dash;
+        _page = dash.stranica;
+        _pageSize = dash.velicinaStranice;
+      }
+    });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _tableSearch.removeListener(_onSearchChanged);
     _scroll.dispose();
     _tableSearch.dispose();
     super.dispose();
@@ -85,14 +165,27 @@ class _AdminPaymentsOverviewScreenState
           start: DateTime(picked.start.year, picked.start.month, picked.start.day),
           end: DateTime(picked.end.year, picked.end.month, picked.end.day),
         );
+        _page = 1;
       });
+      await _load();
     }
   }
 
-  void _exportReport() {
+  Future<void> _exportReport() async {
+    final ok = await _api.downloadAdminFinanceCsv(
+      from: _range.start,
+      toInclusive: _range.end,
+      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text.trim(),
+      status: _statusFilter == 'all' ? null : _statusFilter,
+      methodCategory: _methodFilter == 'all' ? null : _methodFilter,
+      uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
+    );
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Izvještaj će biti dostupan uskoro.'),
+      SnackBar(
+        content: Text(
+          ok ? 'CSV izvještaj je spremljen i otvoren.' : 'Izvoz CSV nije uspio.',
+        ),
         behavior: SnackBarBehavior.floating,
         width: 380,
       ),
@@ -108,6 +201,43 @@ class _AdminPaymentsOverviewScreenState
     final tight = mq.height < 760 || w < 1200;
     final gap = tight ? 10.0 : 14.0;
     final pad = tight ? 12.0 : 16.0;
+
+    if (_error != null && _dash == null && !_loading) {
+      return Material(
+        color: Colors.transparent,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: _pgGlass(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_off_rounded,
+                        size: 44, color: Colors.white.withValues(alpha: 0.5)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Pokušaj ponovno'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Material(
       color: Colors.transparent,
@@ -147,7 +277,7 @@ class _AdminPaymentsOverviewScreenState
                         onExport: _exportReport,
                       ),
                       SizedBox(height: gap),
-                      _KpiStrip(compact: tight, width: w),
+                      _KpiStrip(compact: tight, width: w, kpi: _dash?.kpi),
                       SizedBox(height: gap),
                       LayoutBuilder(
                         builder: (context, c) {
@@ -162,21 +292,44 @@ class _AdminPaymentsOverviewScreenState
                                   theme: theme,
                                   compact: tight,
                                   tableSearch: _tableSearch,
+                                  usluge: _usluge,
                                   method: _methodFilter,
                                   status: _statusFilter,
                                   service: _serviceFilter,
-                                  onMethod: (v) => setState(() => _methodFilter = v),
-                                  onStatus: (v) => setState(() => _statusFilter = v),
-                                  onService: (v) => setState(() => _serviceFilter = v),
+                                  onMethod: (v) async {
+                                    setState(() {
+                                      _methodFilter = v;
+                                      _page = 1;
+                                    });
+                                    await _load();
+                                  },
+                                  onStatus: (v) async {
+                                    setState(() {
+                                      _statusFilter = v;
+                                      _page = 1;
+                                    });
+                                    await _load();
+                                  },
+                                  onService: (v) async {
+                                    setState(() {
+                                      _serviceFilter = v;
+                                      _page = 1;
+                                    });
+                                    await _load();
+                                  },
                                 ),
                                 SizedBox(height: gap),
                                 _PaymentsTableBlock(
                                   theme: theme,
                                   compact: tight,
+                                  rows: _dash?.redovi ?? const [],
                                   page: _page,
                                   pageSize: _pageSize,
-                                  total: _totalTx,
-                                  onPage: (p) => setState(() => _page = p),
+                                  total: _dash?.ukupno ?? 0,
+                                  onPage: (p) async {
+                                    setState(() => _page = p);
+                                    await _load();
+                                  },
                                 ),
                               ],
                             );
@@ -192,24 +345,44 @@ class _AdminPaymentsOverviewScreenState
                                       theme: theme,
                                       compact: tight,
                                       tableSearch: _tableSearch,
+                                      usluge: _usluge,
                                       method: _methodFilter,
                                       status: _statusFilter,
                                       service: _serviceFilter,
-                                      onMethod: (v) =>
-                                          setState(() => _methodFilter = v),
-                                      onStatus: (v) =>
-                                          setState(() => _statusFilter = v),
-                                      onService: (v) =>
-                                          setState(() => _serviceFilter = v),
+                                      onMethod: (v) async {
+                                        setState(() {
+                                          _methodFilter = v;
+                                          _page = 1;
+                                        });
+                                        await _load();
+                                      },
+                                      onStatus: (v) async {
+                                        setState(() {
+                                          _statusFilter = v;
+                                          _page = 1;
+                                        });
+                                        await _load();
+                                      },
+                                      onService: (v) async {
+                                        setState(() {
+                                          _serviceFilter = v;
+                                          _page = 1;
+                                        });
+                                        await _load();
+                                      },
                                     ),
                                     SizedBox(height: gap),
                                     _PaymentsTableBlock(
                                       theme: theme,
                                       compact: tight,
+                                      rows: _dash?.redovi ?? const [],
                                       page: _page,
                                       pageSize: _pageSize,
-                                      total: _totalTx,
-                                      onPage: (p) => setState(() => _page = p),
+                                      total: _dash?.ukupno ?? 0,
+                                      onPage: (p) async {
+                                        setState(() => _page = p);
+                                        await _load();
+                                      },
                                     ),
                                   ],
                                 ),
@@ -220,6 +393,7 @@ class _AdminPaymentsOverviewScreenState
                                 child: _RightAnalyticsStack(
                                   theme: theme,
                                   compact: tight,
+                                  dash: _dash,
                                 ),
                               ),
                             ],
@@ -228,7 +402,7 @@ class _AdminPaymentsOverviewScreenState
                       ),
                       if (!showRight) ...[
                         SizedBox(height: gap),
-                        _RightAnalyticsStack(theme: theme, compact: tight),
+                        _RightAnalyticsStack(theme: theme, compact: tight, dash: _dash),
                       ],
                     ],
                   ),
@@ -236,6 +410,17 @@ class _AdminPaymentsOverviewScreenState
               ),
             ),
           ),
+          if (_loading && _dash == null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.25),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: NuaLuxuryTokens.softPurpleGlow,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -441,52 +626,58 @@ class _PaymentsHeroCard extends StatelessWidget {
 // --- KPI --------------------------------------------------------------------
 
 class _KpiStrip extends StatelessWidget {
-  const _KpiStrip({required this.compact, required this.width});
+  const _KpiStrip({
+    required this.compact,
+    required this.width,
+    required this.kpi,
+  });
 
   final bool compact;
   final double width;
+  final AdminFinanceKpi? kpi;
 
   @override
   Widget build(BuildContext context) {
+    final k = kpi;
     final cards = <Widget>[
       _KpiCard(
         label: 'Ukupni prihod',
-        value: '12,450 KM',
-        delta: '↑ 18% vs last 7 days',
-        deltaUp: true,
+        value: k == null ? '—' : _formatKm(k.ukupniPrihod),
+        delta: _formatGrowthLine(k?.postotakPromjeneUkupniPrihod),
+        deltaUp: (k?.postotakPromjeneUkupniPrihod ?? 0) >= 0,
         icon: Icons.account_balance_wallet_outlined,
         iconBg: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
       ),
       _KpiCard(
         label: 'Plaćene rezervacije',
-        value: '3',
-        delta: '↑ 20% vs last 7 days',
-        deltaUp: true,
+        value: k == null ? '—' : '${k.placeneRezervacije}',
+        delta: _formatGrowthLine(k?.postotakPromjenePlaceneRezervacije),
+        deltaUp: (k?.postotakPromjenePlaceneRezervacije ?? 0) >= 0,
         icon: Icons.event_available_rounded,
         iconBg: AdminPaymentsOverviewScreen.successGreen.withValues(alpha: 0.25),
       ),
       _KpiCard(
         label: 'Prosječna vrijednost',
-        value: '250 KM',
-        delta: '↑ 12% vs last 7 days',
-        deltaUp: true,
+        value: k == null ? '—' : _formatKm(k.prosjecnaVrijednost),
+        delta: _formatGrowthLine(k?.postotakPromjeneProsjecnaVrijednost),
+        deltaUp: (k?.postotakPromjeneProsjecnaVrijednost ?? 0) >= 0,
         icon: Icons.stacked_line_chart_rounded,
         iconBg: AdminPaymentsOverviewScreen.secondaryPurple.withValues(alpha: 0.35),
       ),
       _KpiCard(
         label: 'Neplaćene rezervacije',
-        value: '1',
-        delta: '↓ 25% vs last 7 days',
-        deltaUp: false,
+        value: k == null ? '—' : '${k.neplaceneRezervacije}',
+        delta: _formatGrowthLine(k?.postotakPromjeneNeplaceneRezervacije),
+        deltaUp: (k?.postotakPromjeneNeplaceneRezervacije ?? 0) < 0,
         icon: Icons.receipt_long_outlined,
         iconBg: AdminPaymentsOverviewScreen.errorRed.withValues(alpha: 0.22),
         accentRed: true,
       ),
       _KpiCard(
         label: 'Refunds',
-        value: '150 KM',
-        delta: '↓ 10% vs last 7 days',
-        deltaUp: false,
+        value: k == null ? '—' : _formatKm(k.iznosRefundacija),
+        delta: _formatGrowthLine(k?.postotakPromjeneRefundacija),
+        deltaUp: (k?.postotakPromjeneRefundacija ?? 0) < 0,
         icon: Icons.currency_exchange_rounded,
         iconBg: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.28),
       ),
@@ -611,6 +802,7 @@ class _FilterStrip extends StatelessWidget {
     required this.theme,
     required this.compact,
     required this.tableSearch,
+    required this.usluge,
     required this.method,
     required this.status,
     required this.service,
@@ -622,12 +814,23 @@ class _FilterStrip extends StatelessWidget {
   final ThemeData theme;
   final bool compact;
   final TextEditingController tableSearch;
+  final List<Usluga> usluge;
   final String method;
   final String status;
   final String service;
-  final ValueChanged<String> onMethod;
-  final ValueChanged<String> onStatus;
-  final ValueChanged<String> onService;
+  final Future<void> Function(String) onMethod;
+  final Future<void> Function(String) onStatus;
+  final Future<void> Function(String) onService;
+
+  List<MapEntry<String, String>> _serviceItems() {
+    final items = <MapEntry<String, String>>[
+      const MapEntry('all', 'All services'),
+    ];
+    for (final u in usluge) {
+      items.add(MapEntry('${u.id}', u.naziv));
+    }
+    return items;
+  }
 
   InputDecoration _dec(String hint) {
     return InputDecoration(
@@ -694,6 +897,7 @@ class _FilterStrip extends StatelessWidget {
                         MapEntry('all', 'All payment methods'),
                         MapEntry('card', 'Card'),
                         MapEntry('cash', 'Cash'),
+                        MapEntry('digital', 'Digital wallets'),
                       ],
                       onChanged: onMethod,
                     ),
@@ -708,7 +912,7 @@ class _FilterStrip extends StatelessWidget {
                         MapEntry('all', 'All status'),
                         MapEntry('paid', 'Plaćeno'),
                         MapEntry('unpaid', 'Neplaćeno'),
-                        MapEntry('refund', 'Refundirano'),
+                        MapEntry('refunded', 'Refundirano'),
                       ],
                       onChanged: onStatus,
                     ),
@@ -719,11 +923,7 @@ class _FilterStrip extends StatelessWidget {
                     child: _MiniDropdown(
                       value: service,
                       hint: 'All services',
-                      items: const [
-                        MapEntry('all', 'All services'),
-                        MapEntry('massage', 'Massage'),
-                        MapEntry('facial', 'Facial'),
-                      ],
+                      items: _serviceItems(),
                       onChanged: onService,
                     ),
                   ),
@@ -783,6 +983,7 @@ class _FilterStrip extends StatelessWidget {
                     MapEntry('all', 'All payment methods'),
                     MapEntry('card', 'Card'),
                     MapEntry('cash', 'Cash'),
+                    MapEntry('digital', 'Digital wallets'),
                   ],
                   onChanged: onMethod,
                 ),
@@ -800,7 +1001,7 @@ class _FilterStrip extends StatelessWidget {
                     MapEntry('all', 'All status'),
                     MapEntry('paid', 'Plaćeno'),
                     MapEntry('unpaid', 'Neplaćeno'),
-                    MapEntry('refund', 'Refundirano'),
+                    MapEntry('refunded', 'Refundirano'),
                   ],
                   onChanged: onStatus,
                 ),
@@ -814,11 +1015,7 @@ class _FilterStrip extends StatelessWidget {
                 child: _MiniDropdown(
                   value: service,
                   hint: 'All services',
-                  items: const [
-                    MapEntry('all', 'All services'),
-                    MapEntry('massage', 'Massage'),
-                    MapEntry('facial', 'Facial'),
-                  ],
+                  items: _serviceItems(),
                   onChanged: onService,
                 ),
               ),
@@ -865,7 +1062,7 @@ class _MiniDropdown extends StatelessWidget {
   final String value;
   final String hint;
   final List<MapEntry<String, String>> items;
-  final ValueChanged<String> onChanged;
+  final Future<void> Function(String) onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -910,7 +1107,7 @@ class _MiniDropdown extends StatelessWidget {
           )
           .toList(),
       onChanged: (v) {
-        if (v != null) onChanged(v);
+        if (v != null) unawaited(onChanged(v));
       },
     );
   }
@@ -918,100 +1115,11 @@ class _MiniDropdown extends StatelessWidget {
 
 // --- Table ------------------------------------------------------------------
 
-enum _TxStatus { paid, unpaid, refunded }
-
-class _TxRow {
-  _TxRow({
-    required this.id,
-    required this.client,
-    required this.service,
-    required this.when,
-    required this.amount,
-    required this.method,
-    required this.status,
-  });
-
-  final String id;
-  final String client;
-  final String service;
-  final DateTime when;
-  final String amount;
-  final String method;
-  final _TxStatus status;
-}
-
-List<_TxRow> _mockRows() {
-  return [
-    _TxRow(
-      id: '#PAY-2026-00123',
-      client: 'Sarah Johnson',
-      service: 'Swedish Massage (60 min)',
-      when: DateTime(2026, 5, 14, 10, 30),
-      amount: '120 KM',
-      method: 'VISA •••• 4242',
-      status: _TxStatus.paid,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00122',
-      client: 'Emma Wilson',
-      service: 'Aromatherapy (90 min)',
-      when: DateTime(2026, 5, 13, 16, 15),
-      amount: '160 KM',
-      method: 'Mastercard •••• 8888',
-      status: _TxStatus.paid,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00121',
-      client: 'Marko Petrović',
-      service: 'Deep Tissue Massage (90 min)',
-      when: DateTime(2026, 5, 13, 14, 20),
-      amount: '150 KM',
-      method: 'Gotovina',
-      status: _TxStatus.paid,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00120',
-      client: 'Ana Kovač',
-      service: 'Hot Stone Massage (60 min)',
-      when: DateTime(2026, 5, 12, 11, 45),
-      amount: '130 KM',
-      method: 'VISA •••• 1234',
-      status: _TxStatus.paid,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00119',
-      client: 'Ivana Babić',
-      service: 'Facial Treatment (60 min)',
-      when: DateTime(2026, 5, 12, 9, 10),
-      amount: '110 KM',
-      method: 'Apple Pay',
-      status: _TxStatus.paid,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00118',
-      client: 'David Smith',
-      service: 'Couples Massage (120 min)',
-      when: DateTime(2026, 5, 11, 18, 30),
-      amount: '220 KM',
-      method: 'Mastercard •••• 5555',
-      status: _TxStatus.refunded,
-    ),
-    _TxRow(
-      id: '#PAY-2026-00117',
-      client: 'Laura Martin',
-      service: 'Relaxation Massage (60 min)',
-      when: DateTime(2026, 5, 11, 13, 20),
-      amount: '100 KM',
-      method: 'Gotovina',
-      status: _TxStatus.paid,
-    ),
-  ];
-}
-
 class _PaymentsTableBlock extends StatelessWidget {
   const _PaymentsTableBlock({
     required this.theme,
     required this.compact,
+    required this.rows,
     required this.page,
     required this.pageSize,
     required this.total,
@@ -1020,10 +1128,11 @@ class _PaymentsTableBlock extends StatelessWidget {
 
   final ThemeData theme;
   final bool compact;
+  final List<AdminFinanceTransactionRow> rows;
   final int page;
   final int pageSize;
   final int total;
-  final ValueChanged<int> onPage;
+  final Future<void> Function(int) onPage;
 
   String _fmtWhen(DateTime d) {
     const m = [
@@ -1039,7 +1148,6 @@ class _PaymentsTableBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = _mockRows();
     final totalPages = total <= 0 ? 1 : ((total + pageSize - 1) / pageSize).ceil();
     final fromIdx = total == 0 ? 0 : (page - 1) * pageSize + 1;
     final toIdx = ((page - 1) * pageSize + pageSize).clamp(0, total);
@@ -1050,7 +1158,21 @@ class _PaymentsTableBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _TableHeader(theme: theme, compact: compact),
-          for (final r in rows) _TableDataRow(theme: theme, compact: compact, row: r, fmt: _fmtWhen),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'Nema transakcija za odabrane filtere i razdoblje.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            )
+          else
+            for (final r in rows)
+              _TableDataRow(theme: theme, compact: compact, row: r, fmt: _fmtWhen),
           Padding(
             padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 12, compact ? 12 : 16, 14),
             child: Row(
@@ -1061,7 +1183,9 @@ class _PaymentsTableBlock extends StatelessWidget {
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      _pageBtn(theme, Icons.chevron_left, page > 1, () => onPage(page - 1)),
+                      _pageBtn(theme, Icons.chevron_left, page > 1, () {
+                        unawaited(onPage(page - 1));
+                      }),
                       for (final n in _pageNums(page, totalPages))
                         if (n == -1)
                           Padding(
@@ -1069,12 +1193,16 @@ class _PaymentsTableBlock extends StatelessWidget {
                             child: Text('…', style: theme.textTheme.bodySmall),
                           )
                         else
-                          _pageNum(theme, n, n == page, () => onPage(n)),
+                          _pageNum(theme, n, n == page, () {
+                            unawaited(onPage(n));
+                          }),
                       _pageBtn(
                         theme,
                         Icons.chevron_right,
                         page < totalPages,
-                        () => onPage(page + 1),
+                        () {
+                          unawaited(onPage(page + 1));
+                        },
                       ),
                     ],
                   ),
@@ -1214,7 +1342,7 @@ class _TableDataRow extends StatefulWidget {
 
   final ThemeData theme;
   final bool compact;
-  final _TxRow row;
+  final AdminFinanceTransactionRow row;
   final String Function(DateTime) fmt;
 
   @override
@@ -1227,8 +1355,8 @@ class _TableDataRowState extends State<_TableDataRow> {
   @override
   Widget build(BuildContext context) {
     final r = widget.row;
-    final initials = r.client.trim().isNotEmpty
-        ? r.client.trim()[0].toUpperCase()
+    final initials = r.klijentPunoIme.trim().isNotEmpty
+        ? r.klijentPunoIme.trim()[0].toUpperCase()
         : '?';
 
     return MouseRegion(
@@ -1254,7 +1382,7 @@ class _TableDataRowState extends State<_TableDataRow> {
             Expanded(
               flex: 10,
               child: Text(
-                r.id,
+                r.transakcijskiId,
                 style: widget.theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: Colors.white.withValues(alpha: 0.82),
@@ -1279,7 +1407,7 @@ class _TableDataRowState extends State<_TableDataRow> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      r.client,
+                      r.klijentPunoIme,
                       style: widget.theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: AdminPaymentsOverviewScreen.textPrimary,
@@ -1294,7 +1422,7 @@ class _TableDataRowState extends State<_TableDataRow> {
             Expanded(
               flex: 18,
               child: Text(
-                r.service,
+                r.uslugaTekst,
                 style: widget.theme.textTheme.bodySmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.78),
                   height: 1.3,
@@ -1306,7 +1434,7 @@ class _TableDataRowState extends State<_TableDataRow> {
             Expanded(
               flex: 14,
               child: Text(
-                widget.fmt(r.when),
+                widget.fmt(r.datumVrijeme),
                 style: widget.theme.textTheme.labelSmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.58),
                   height: 1.25,
@@ -1318,7 +1446,7 @@ class _TableDataRowState extends State<_TableDataRow> {
             Expanded(
               flex: 8,
               child: Text(
-                r.amount,
+                _formatKm(r.iznos),
                 style: widget.theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: AdminPaymentsOverviewScreen.textPrimary,
@@ -1328,13 +1456,13 @@ class _TableDataRowState extends State<_TableDataRow> {
             ),
             Expanded(
               flex: 11,
-              child: _MethodChip(method: r.method, compact: widget.compact),
+              child: _MethodChip(method: r.metodaLabel, compact: widget.compact),
             ),
             Expanded(
               flex: 9,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: _StatusPill(status: r.status),
+                child: _StatusPill(apiStatus: r.status),
               ),
             ),
             Expanded(
@@ -1427,31 +1555,35 @@ class _MethodChip extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  const _StatusPill({required this.apiStatus});
 
-  final _TxStatus status;
+  final String apiStatus;
 
   @override
   Widget build(BuildContext context) {
     late String label;
     late Color bg;
     late Color fg;
-    switch (status) {
-      case _TxStatus.paid:
+    switch (apiStatus) {
+      case 'paid':
         label = 'Plaćeno';
         bg = AdminPaymentsOverviewScreen.successGreen.withValues(alpha: 0.22);
         fg = AdminPaymentsOverviewScreen.successGreen;
         break;
-      case _TxStatus.unpaid:
+      case 'unpaid':
         label = 'Neplaćeno';
         bg = AdminPaymentsOverviewScreen.errorRed.withValues(alpha: 0.2);
         fg = AdminPaymentsOverviewScreen.errorRed;
         break;
-      case _TxStatus.refunded:
+      case 'refunded':
         label = 'Refundirano';
         bg = NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.28);
         fg = NuaLuxuryTokens.lavenderWhisper;
         break;
+      default:
+        label = apiStatus;
+        bg = Colors.white.withValues(alpha: 0.1);
+        fg = Colors.white70;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1474,10 +1606,15 @@ class _StatusPill extends StatelessWidget {
 // --- Right panel ------------------------------------------------------------
 
 class _RightAnalyticsStack extends StatelessWidget {
-  const _RightAnalyticsStack({required this.theme, required this.compact});
+  const _RightAnalyticsStack({
+    required this.theme,
+    required this.compact,
+    this.dash,
+  });
 
   final ThemeData theme;
   final bool compact;
+  final AdminFinanceDashboard? dash;
 
   @override
   Widget build(BuildContext context) {
@@ -1485,24 +1622,80 @@ class _RightAnalyticsStack extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PaymentMethodsCard(theme: theme, compact: compact),
+        _PaymentMethodsCard(
+          theme: theme,
+          compact: compact,
+          shares: dash?.metodePostotak ?? const [],
+          totalTransactions: dash?.ukupno ?? 0,
+        ),
         SizedBox(height: gap),
-        _RevenueTrendCard(theme: theme, compact: compact),
+        _RevenueTrendCard(
+          theme: theme,
+          compact: compact,
+          points: dash?.prihodDnevno ?? const [],
+        ),
         SizedBox(height: gap),
-        _RecentActivityCard(theme: theme, compact: compact),
+        _RecentActivityCard(
+          theme: theme,
+          compact: compact,
+          items: dash?.nedavnaAktivnost ?? const [],
+        ),
       ],
     );
   }
 }
 
 class _PaymentMethodsCard extends StatelessWidget {
-  const _PaymentMethodsCard({required this.theme, required this.compact});
+  const _PaymentMethodsCard({
+    required this.theme,
+    required this.compact,
+    required this.shares,
+    required this.totalTransactions,
+  });
 
   final ThemeData theme;
   final bool compact;
+  final List<AdminFinanceMethodShare> shares;
+  final int totalTransactions;
+
+  Color _colorFor(String kljuc) {
+    switch (kljuc) {
+      case 'card':
+        return NuaLuxuryTokens.softPurpleGlow;
+      case 'cash':
+        return NuaLuxuryTokens.champagneGold;
+      case 'digital':
+        return AdminPaymentsOverviewScreen.successGreen;
+      default:
+        return NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final vals = shares.map((s) => s.postotak <= 0 ? 0.01 : s.postotak).toList();
+    final sections = <PieChartSectionData>[];
+    for (var i = 0; i < shares.length; i++) {
+      sections.add(
+        PieChartSectionData(
+          value: vals[i],
+          color: _colorFor(shares[i].kljuc),
+          radius: 22,
+          showTitle: false,
+        ),
+      );
+    }
+    if (sections.isEmpty) {
+      sections.add(
+        PieChartSectionData(
+          value: 1,
+          color: Colors.white.withValues(alpha: 0.08),
+          radius: 22,
+          showTitle: false,
+        ),
+      );
+    }
+
     return _pgGlass(
       radius: 20,
       child: Padding(
@@ -1528,32 +1721,7 @@ class _PaymentMethodsCard extends StatelessWidget {
                       PieChartData(
                         sectionsSpace: 1.5,
                         centerSpaceRadius: 46,
-                        sections: [
-                          PieChartSectionData(
-                            value: 62,
-                            color: NuaLuxuryTokens.softPurpleGlow,
-                            radius: 22,
-                            showTitle: false,
-                          ),
-                          PieChartSectionData(
-                            value: 20,
-                            color: NuaLuxuryTokens.champagneGold,
-                            radius: 22,
-                            showTitle: false,
-                          ),
-                          PieChartSectionData(
-                            value: 12,
-                            color: AdminPaymentsOverviewScreen.successGreen,
-                            radius: 22,
-                            showTitle: false,
-                          ),
-                          PieChartSectionData(
-                            value: 6,
-                            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
-                            radius: 22,
-                            showTitle: false,
-                          ),
-                        ],
+                        sections: sections,
                       ),
                     ),
                   ),
@@ -1564,10 +1732,8 @@ class _PaymentMethodsCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _legend('Kartica', '62%', NuaLuxuryTokens.softPurpleGlow),
-                        _legend('Gotovina', '20%', NuaLuxuryTokens.champagneGold),
-                        _legend('Digital Wallets', '12%', AdminPaymentsOverviewScreen.successGreen),
-                        _legend('Ostalo', '6%', NuaLuxuryTokens.lavenderWhisper),
+                        for (final s in shares)
+                          _legend(s.label, '${s.postotak.toStringAsFixed(0)}%', _colorFor(s.kljuc)),
                       ],
                     ),
                   ),
@@ -1576,7 +1742,7 @@ class _PaymentMethodsCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Ukupno transakcija: 123',
+              'Ukupno transakcija: $totalTransactions',
               style: theme.textTheme.labelMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: Colors.white.withValues(alpha: 0.55),
@@ -1626,10 +1792,15 @@ class _PaymentMethodsCard extends StatelessWidget {
 }
 
 class _RevenueTrendCard extends StatefulWidget {
-  const _RevenueTrendCard({required this.theme, required this.compact});
+  const _RevenueTrendCard({
+    required this.theme,
+    required this.compact,
+    required this.points,
+  });
 
   final ThemeData theme;
   final bool compact;
+  final List<AdminFinanceTrendPoint> points;
 
   @override
   State<_RevenueTrendCard> createState() => _RevenueTrendCardState();
@@ -1640,15 +1811,23 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
 
   @override
   Widget build(BuildContext context) {
-    final spots = [
-      const FlSpot(0, 980),
-      const FlSpot(1, 1120),
-      const FlSpot(2, 1050),
-      const FlSpot(3, 1240),
-      const FlSpot(4, 1180),
-      const FlSpot(5, 1320),
-      const FlSpot(6, 1280),
-    ];
+    final pts = widget.points;
+    final spots = <FlSpot>[];
+    double minY = 0;
+    double maxY = 1;
+    if (pts.isNotEmpty) {
+      minY = pts.map((e) => e.iznos).reduce((a, b) => a < b ? a : b);
+      maxY = pts.map((e) => e.iznos).reduce((a, b) => a > b ? a : b);
+      if (maxY <= minY) maxY = minY + 1;
+      final pad = (maxY - minY) * 0.15;
+      minY = (minY - pad).clamp(0, double.infinity);
+      maxY = maxY + pad;
+      for (var i = 0; i < pts.length; i++) {
+        spots.add(FlSpot(i.toDouble(), pts[i].iznos));
+      }
+    } else {
+      spots.add(const FlSpot(0, 0));
+    }
 
     return _pgGlass(
       radius: 20,
@@ -1708,12 +1887,12 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
               height: widget.compact ? 150 : 170,
               child: LineChart(
                 LineChartData(
-                  minY: 800,
-                  maxY: 1400,
+                  minY: minY,
+                  maxY: maxY,
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    horizontalInterval: 200,
+                    horizontalInterval: math.max(1, (maxY - minY) / 4),
                     getDrawingHorizontalLine: (v) => FlLine(
                       color: Colors.white.withValues(alpha: 0.06),
                       strokeWidth: 1,
@@ -1741,12 +1920,15 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
                         showTitles: true,
                         reservedSize: 22,
                         getTitlesWidget: (v, m) {
-                          const days = ['M6', 'M7', 'M8', 'M9', 'M10', 'M11', 'M12'];
-                          final i = v.toInt().clamp(0, days.length - 1);
+                          final i = v.toInt();
+                          if (i < 0 || i >= pts.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final d = pts[i].datum;
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              days[i],
+                              '${d.month}/${d.day}',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.35),
                                 fontSize: 10,
@@ -1762,9 +1944,14 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipItems: (touched) {
                         return touched.map((e) {
+                          final idx = e.x.toInt();
                           final y = e.y;
+                          final d = (idx >= 0 && idx < pts.length)
+                              ? pts[idx].datum
+                              : null;
+                          final datePart = d != null ? '${d.day}/${d.month}' : '';
                           return LineTooltipItem(
-                            '${y.toStringAsFixed(0)} KM / May ${8 + e.x.toInt()}',
+                            '${y.toStringAsFixed(0)} KM${datePart.isEmpty ? '' : ' · $datePart'}',
                             const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -1806,20 +1993,22 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
 }
 
 class _RecentActivityCard extends StatelessWidget {
-  const _RecentActivityCard({required this.theme, required this.compact});
+  const _RecentActivityCard({
+    required this.theme,
+    required this.compact,
+    required this.items,
+  });
 
   final ThemeData theme;
   final bool compact;
+  final List<AdminFinanceActivity> items;
+
+  static String _fmtClock(DateTime d) {
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final items = <({bool refund, String title, String who, String amt, String time})>[
-      (refund: false, title: 'Plaćanje uspješno', who: 'Sarah Johnson', amt: '120 KM', time: '10:30 AM'),
-      (refund: true, title: 'Refund izvršen', who: 'David Smith', amt: '220 KM', time: '06:30 PM'),
-      (refund: false, title: 'Plaćanje uspješno', who: 'Emma Wilson', amt: '160 KM', time: '04:15 PM'),
-      (refund: false, title: 'Plaćanje uspješno', who: 'Marko Petrović', amt: '150 KM', time: '02:20 PM'),
-    ];
-
     return _pgGlass(
       radius: 20,
       child: Padding(
@@ -1835,64 +2024,72 @@ class _RecentActivityCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            for (final it in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: it.refund
-                            ? NuaLuxuryTokens.champagneGold
-                            : AdminPaymentsOverviewScreen.successGreen,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            it.title,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white.withValues(alpha: 0.88),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${it.who} · ${it.amt} · ${it.time}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              height: 1.25,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+            if (items.isEmpty)
+              Text(
+                'Nema nedavnih transakcija u odabranom periodu.',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  height: 1.35,
                 ),
-              ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () {},
+              )
+            else
+              for (final it in items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(top: 4),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: it.tip == 'refund'
+                              ? NuaLuxuryTokens.champagneGold
+                              : it.tip == 'pending'
+                                  ? Colors.white.withValues(alpha: 0.35)
+                                  : AdminPaymentsOverviewScreen.successGreen,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              it.opis.isNotEmpty ? it.opis : it.tip,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white.withValues(alpha: 0.88),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${it.klijent} · ${_formatKm(it.iznos)} · ${_fmtClock(it.datumVrijeme)}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                height: 1.25,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            if (items.length >= 12)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'Pogledaj sve aktivnosti',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: NuaLuxuryTokens.softPurpleGlow,
+                  'Prikazano zadnjih 12 plaćanja.',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.38),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
