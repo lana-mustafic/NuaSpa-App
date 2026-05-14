@@ -13,6 +13,7 @@ import '../../screens/admin/admin_suite_route.dart';
 import '../../screens/admin/admin_therapist_roster_screen.dart';
 import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/desktop/luxury_placeholder_screen.dart';
+import '../../screens/desktop/luxury_reviews_dashboard_screen.dart';
 import '../../screens/desktop/luxury_settings_screen.dart';
 import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
@@ -27,6 +28,7 @@ class LuxurySideItem {
     required this.label,
     required this.icon,
     this.suite,
+    this.purpleGradientNav = false,
   });
 
   final DesktopRouteKey route;
@@ -35,6 +37,9 @@ class LuxurySideItem {
 
   /// When set together with [route] == admin, selects inner Admin Suite tab/view.
   final AdminSuiteRoute? suite;
+
+  /// Premium purple gradient when this item is selected (e.g. Reviews hub).
+  final bool purpleGradientNav;
 }
 
 class DesktopShell extends StatefulWidget {
@@ -63,7 +68,7 @@ class _DesktopShellState extends State<DesktopShell> {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 1100;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
-    final railExpandedW = width < 1450 ? 220.0 : 232.0;
+    final railExpandedW = width < 1450 ? 224.0 : 236.0;
 
     final adminItems = <LuxurySideItem>[
       LuxurySideItem(
@@ -98,9 +103,15 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
+        route: DesktopRouteKey.packages,
+        label: 'Packages',
+        icon: Icons.inventory_2_outlined,
+      ),
+      LuxurySideItem(
         route: DesktopRouteKey.reviews,
         label: 'Reviews',
         icon: Icons.reviews_outlined,
+        purpleGradientNav: true,
       ),
       LuxurySideItem(
         route: DesktopRouteKey.admin,
@@ -191,12 +202,7 @@ class _DesktopShellState extends State<DesktopShell> {
               : widget.home;
         case DesktopRouteKey.reviews:
           return auth.isAdmin
-              ? const LuxuryPlaceholderScreen(
-                  title: 'Guest sentiment',
-                  subtitle:
-                      'Review intelligence, satisfaction recovery, public replies, and premium service signals.',
-                  icon: Icons.reviews_outlined,
-                )
+              ? const LuxuryReviewsDashboardScreen()
               : widget.home;
         case DesktopRouteKey.marketing:
           return auth.isAdmin
@@ -284,7 +290,8 @@ class _DesktopShellState extends State<DesktopShell> {
                               onDateChanged: (d) =>
                                   setState(() => _filterDay = d),
                               notificationCount:
-                                  nav.route == DesktopRouteKey.adminCalendar
+                                  nav.route == DesktopRouteKey.adminCalendar ||
+                                          nav.route == DesktopRouteKey.reviews
                                       ? 3
                                       : 0,
                             ),
@@ -471,6 +478,7 @@ class _LuxuryRail extends StatelessWidget {
                       label: it.label,
                       icon: it.icon,
                       selected: sel,
+                      purpleGradientNav: it.purpleGradientNav,
                       onTap: () => onPick(it),
                     );
                   },
@@ -630,6 +638,7 @@ class _ReportsMenu extends StatelessWidget {
           label: item.label,
           icon: item.icon,
           selected: selected,
+          purpleGradientNav: item.purpleGradientNav,
           onTap: onPick,
         ),
         const SizedBox(height: 6),
@@ -755,6 +764,7 @@ class _SidebarTile extends StatefulWidget {
     required this.selected,
     required this.onTap,
     this.danger = false,
+    this.purpleGradientNav = false,
   });
 
   final bool expanded;
@@ -764,6 +774,7 @@ class _SidebarTile extends StatefulWidget {
   final bool selected;
   final VoidCallback onTap;
   final bool danger;
+  final bool purpleGradientNav;
 
   @override
   State<_SidebarTile> createState() => _SidebarTileState();
@@ -795,7 +806,20 @@ class _SidebarTileState extends State<_SidebarTile> {
             ),
             decoration: BoxDecoration(
               borderRadius: borderRadius,
-              color: widget.selected
+              gradient: widget.selected && widget.purpleGradientNav
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.52),
+                        const Color(0xFF9D6BFF).withValues(alpha: 0.38),
+                        NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.22),
+                      ],
+                    )
+                  : null,
+              color: widget.selected && widget.purpleGradientNav
+                  ? null
+                  : widget.selected
                   ? Colors.white.withValues(alpha: 0.11)
                   : _hover
                   ? Colors.white.withValues(alpha: 0.058)
@@ -809,9 +833,9 @@ class _SidebarTileState extends State<_SidebarTile> {
                   ? [
                       BoxShadow(
                         color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                          alpha: 0.32,
+                          alpha: widget.purpleGradientNav ? 0.42 : 0.32,
                         ),
-                        blurRadius: 22,
+                        blurRadius: widget.purpleGradientNav ? 26 : 22,
                         spreadRadius: -2,
                       ),
                     ]

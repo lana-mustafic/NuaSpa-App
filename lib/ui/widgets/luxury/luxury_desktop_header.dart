@@ -78,6 +78,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
     final isAppointments = nav.route == DesktopRouteKey.reservations;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
+    final isReviews = nav.route == DesktopRouteKey.reviews;
     final isAdminClients = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final compact = compactChrome || isCalendar || isAdminClients;
@@ -178,7 +179,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                                   ? 'Search clients, appointments…'
                                   : isCalendar
                                       ? 'Search appointments…'
-                                      : 'Search services & treatments (Enter → Services)…',
+                                      : isReviews
+                                          ? 'Search reviews, clients, services…'
+                                          : 'Search services & treatments (Enter → Services)…',
                       onChanged: isTherapists
                           ? (q) => context
                                 .read<DesktopNav>()
