@@ -241,10 +241,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           ),
                           const SizedBox(height: 30),
                           _AppointmentsHeader(
-                            onRefresh: _reload,
                             onOpenCalendar: () => context
                                 .read<DesktopNav>()
                                 .goTo(DesktopRouteKey.adminCalendar),
+                            onOpenServicesCatalog: () => context
+                                .read<DesktopNav>()
+                                .goTo(DesktopRouteKey.catalog),
                           ),
                           const SizedBox(height: 14),
                           _BookingsTable(bookings: bookings),
@@ -274,12 +276,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
 
 class _AppointmentsHeader extends StatelessWidget {
   const _AppointmentsHeader({
-    required this.onRefresh,
     required this.onOpenCalendar,
+    required this.onOpenServicesCatalog,
   });
 
-  final VoidCallback onRefresh;
   final VoidCallback onOpenCalendar;
+  final VoidCallback onOpenServicesCatalog;
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +302,7 @@ class _AppointmentsHeader extends StatelessWidget {
           icon: Icons.tune_rounded,
           label: 'All Services',
           trailing: Icons.keyboard_arrow_down_rounded,
-          onTap: onRefresh,
+          onTap: onOpenServicesCatalog,
         ),
         const SizedBox(width: 10),
         _ControlPill(
