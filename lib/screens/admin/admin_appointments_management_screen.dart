@@ -136,6 +136,7 @@ class _AdminAppointmentsManagementScreenState
                             onSelect: (r) => setState(() => _selected = r),
                             onConfirmToggle: _toggleConfirmed,
                             onCancel: _cancel,
+                            onDelete: _delete,
                             onEdit: _edit,
                           ),
                   ],
@@ -151,6 +152,7 @@ class _AdminAppointmentsManagementScreenState
                   onEdit: selected == null ? null : () => _edit(selected),
                   onConfirmToggle: _toggleConfirmed,
                   onCancel: _cancel,
+                  onDelete: _delete,
                 ),
               ),
             ),
@@ -292,6 +294,48 @@ class _AdminAppointmentsManagementScreenState
     if (!mounted) return;
     _toast(ok ? 'Appointment cancelled.' : 'Cancellation failed.');
     if (ok) _reload();
+  }
+
+  Future<void> _delete(Rezervacija r) async {
+    if (r.isPlacena) {
+      _toast('Paid appointments cannot be deleted.');
+      return;
+    }
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete appointment?'),
+        content: const Text(
+          'This permanently removes the appointment from the schedule. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5E7A),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    final err = await _api.deleteRezervacijaAdmin(r.id);
+    if (!mounted) return;
+    if (err != null) {
+      _toast(err);
+      return;
+    }
+    _toast('Appointment deleted.');
+    setState(() {
+      if (_selected?.id == r.id) _selected = null;
+      _future = _load();
+    });
   }
 
   Future<void> _edit(Rezervacija r) async {
@@ -570,6 +614,7 @@ class _AppointmentsTable extends StatelessWidget {
     required this.onSelect,
     required this.onConfirmToggle,
     required this.onCancel,
+    required this.onDelete,
     required this.onEdit,
   });
 
@@ -578,6 +623,7 @@ class _AppointmentsTable extends StatelessWidget {
   final ValueChanged<Rezervacija> onSelect;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onCancel;
+  final ValueChanged<Rezervacija> onDelete;
   final ValueChanged<Rezervacija> onEdit;
 
   @override
@@ -684,6 +730,7 @@ class _AppointmentsTable extends StatelessWidget {
                             appointment: r,
                             onConfirmToggle: onConfirmToggle,
                             onCancel: onCancel,
+                            onDelete: onDelete,
                             onEdit: onEdit,
                           ),
                         ),
@@ -723,12 +770,14 @@ class _AppointmentDetailsPanel extends StatelessWidget {
     required this.onEdit,
     required this.onConfirmToggle,
     required this.onCancel,
+    required this.onDelete,
   });
 
   final Rezervacija? appointment;
   final VoidCallback? onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onCancel;
+  final ValueChanged<Rezervacija> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -752,6 +801,7 @@ class _AppointmentDetailsPanel extends StatelessWidget {
           onEdit: onEdit,
           onConfirmToggle: onConfirmToggle,
           onCancel: onCancel,
+          onDelete: onDelete,
         ),
       ],
     );
@@ -1202,10 +1252,11 @@ class _ActionsMenu extends StatelessWidget {
     required this.appointment,
     required this.onConfirmToggle,
     required this.onCancel,
+    required this.onDelete,
     required this.onEdit,
   });
   final Rezervacija appointment;
-  final ValueChanged<Rezervacija> onConfirmToggle, onCancel, onEdit;
+  final ValueChanged<Rezervacija> onConfirmToggle, onCancel, onDelete, onEdit;
   @override
   Widget build(BuildContext context) => PopupMenuButton<String>(
     color: NuaLuxuryTokens.voidViolet,
@@ -1214,11 +1265,25 @@ class _ActionsMenu extends StatelessWidget {
       if (v == 'edit') onEdit(appointment);
       if (v == 'toggle') onConfirmToggle(appointment);
       if (v == 'cancel') onCancel(appointment);
+      if (v == 'delete') onDelete(appointment);
     },
-    itemBuilder: (_) => const [
-      PopupMenuItem(value: 'edit', child: Text('Edit')),
-      PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
-      PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+    itemBuilder: (_) => [
+      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+      const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
+      const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+      PopupMenuItem(
+        value: 'delete',
+        enabled: !appointment.isPlacena,
+        child: Text(
+          'Delete permanently',
+          style: TextStyle(
+            color: appointment.isPlacena
+                ? Colors.white.withValues(alpha: 0.35)
+                : const Color(0xFFFF5E7A),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     ],
   );
 }
@@ -1420,11 +1485,13 @@ class _BottomEditBar extends StatelessWidget {
     required this.onEdit,
     required this.onConfirmToggle,
     required this.onCancel,
+    required this.onDelete,
   });
   final Rezervacija? appointment;
   final VoidCallback? onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onCancel;
+  final ValueChanged<Rezervacija> onDelete;
   @override
   Widget build(BuildContext context) => Row(
     children: [
@@ -1444,11 +1511,29 @@ class _BottomEditBar extends StatelessWidget {
           if (r == null) return;
           if (v == 'toggle') onConfirmToggle(r);
           if (v == 'cancel') onCancel(r);
+          if (v == 'delete') onDelete(r);
         },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
-          PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-        ],
+        itemBuilder: (ctx) {
+          final r = appointment;
+          final paid = r?.isPlacena ?? true;
+          return [
+            const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
+            const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+            PopupMenuItem(
+              value: 'delete',
+              enabled: !paid,
+              child: Text(
+                'Delete permanently',
+                style: TextStyle(
+                  color: paid
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : const Color(0xFFFF5E7A),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ];
+        },
       ),
     ],
   );

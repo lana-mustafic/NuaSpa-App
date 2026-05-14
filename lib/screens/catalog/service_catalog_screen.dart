@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../core/api/services/api_service.dart';
+import '../../models/usluga.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
-import 'service_details_screen.dart';
-import '../../ui/widgets/page_header.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
-import '../../ui/navigation/desktop_nav.dart';
+import '../../ui/widgets/page_header.dart';
+import 'service_details_screen.dart';
+import 'service_category_manager_panel.dart';
+import 'service_editor_dialog.dart';
 
 class ServiceCatalogScreen extends StatefulWidget {
   const ServiceCatalogScreen({super.key});
@@ -49,9 +55,56 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     super.dispose();
   }
 
+  Future<void> _openServiceEditor(Usluga? existing) async {
+    final ok = await showServiceEditorDialog(context, existing: existing);
+    if (!mounted) return;
+    if (ok) {
+      await context.read<ServiceProvider>().fetchServices();
+    }
+  }
+
+  Future<void> _confirmDeleteService(Usluga u) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Brisanje usluge'),
+        content: Text(
+          'Obrisati „${u.naziv}“? Ako usluga ima rezervacije ili plaćanja, '
+          'brisanje može biti odbijeno.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Otkaži'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Obriši'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    final err = await ApiService().deleteUsluga(u.id);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Usluga obrisana.')),
+      );
+      await context.read<ServiceProvider>().fetchServices();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     var serviceProvider = Provider.of<ServiceProvider>(context);
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
 
     return Material(
       color: Colors.transparent,
@@ -60,10 +113,30 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const PageHeader(
+            PageHeader(
               title: 'Katalog usluga',
-              subtitle: 'Pretraži i upravljaj favoritima.',
-              trailing: _BackIfPossible(),
+              subtitle: isAdmin
+                  ? 'Pretraži i upravljaj favoritima; kao admin upravljaj kategorijama, dodaj, uredi ili obriši usluge.'
+                  : 'Pretraži i upravljaj favoritima.',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isAdmin) ...[
+                    IconButton(
+                      tooltip: 'Kategorije usluga',
+                      icon: const Icon(Icons.category_outlined),
+                      onPressed: () =>
+                          showServiceCategoryManagerDialog(context),
+                    ),
+                    IconButton(
+                      tooltip: 'Nova usluga',
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => _openServiceEditor(null),
+                    ),
+                  ],
+                  const _BackIfPossible(),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -89,7 +162,13 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            Expanded(child: _buildCatalogBody(context, serviceProvider)),
+            Expanded(
+              child: _buildCatalogBody(
+                context,
+                serviceProvider,
+                isAdmin,
+              ),
+            ),
           ],
         ),
       ),
@@ -99,6 +178,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   Widget _buildCatalogBody(
     BuildContext context,
     ServiceProvider serviceProvider,
+    bool isAdmin,
   ) {
     if (serviceProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -111,10 +191,23 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     }
     if (serviceProvider.services.isEmpty) {
       return Center(
-        child: Text(
-          'Nema dostupnih usluga u katalogu.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
-          textAlign: TextAlign.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Nema dostupnih usluga u katalogu.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+              textAlign: TextAlign.center,
+            ),
+            if (isAdmin) ...[
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: () => _openServiceEditor(null),
+                icon: const Icon(Icons.add),
+                label: const Text('Dodaj uslugu'),
+              ),
+            ],
+          ],
         ),
       );
     }
@@ -205,6 +298,54 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                       ),
                     ),
                   ),
+                  if (isAdmin)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Uredi uslugu',
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          onPressed: () => _openServiceEditor(usluga),
+                        ),
+                      ),
+                    ),
+                  if (isAdmin)
+                    Positioned(
+                      bottom: 10,
+                      right: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Obriši uslugu',
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Color(0xFFFFAB91),
+                            size: 20,
+                          ),
+                          onPressed: () => _confirmDeleteService(usluga),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     top: 10,
                     right: 10,

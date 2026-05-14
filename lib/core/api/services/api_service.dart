@@ -17,6 +17,7 @@ import '../../../models/admin/admin_kpi.dart';
 import '../../../models/admin/revenue_point.dart';
 import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
+import '../../../models/admin/admin_activity_feed_item.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
@@ -327,6 +328,21 @@ class ApiService {
     }
   }
 
+  /// Admin: trajno briše rezervaciju (plaćene blokira API).
+  Future<String?> deleteRezervacijaAdmin(int id) async {
+    try {
+      await _dio.delete<void>('Rezervacija/$id');
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      debugPrint('Greška u ApiService.deleteRezervacijaAdmin: $e');
+      return e.message;
+    }
+  }
+
   Future<List<DateTime>> getDostupniTermini({
     required int zaposlenikId,
     required DateTime datum,
@@ -601,6 +617,38 @@ class ApiService {
       }
       debugPrint('Greška u ApiService.deleteUsluga: $e');
       return e.message;
+    }
+  }
+
+  /// Admin: multipart upload slike usluge; vraća puni URL iz odgovora API-ja.
+  Future<String?> uploadUslugaImage(String filePath) async {
+    try {
+      final normalized = filePath.replaceAll(r'\', '/');
+      final fileName = normalized.contains('/')
+          ? normalized.split('/').last
+          : normalized;
+      final form = FormData.fromMap({
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final response = await _dio.post<dynamic>(
+        'Usluga/upload-image',
+        data: form,
+      );
+      final data = response.data;
+      if (data is Map && data['url'] != null) {
+        return data['url'].toString();
+      }
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        debugPrint('uploadUslugaImage: ${data['message']}');
+      }
+      debugPrint('Greška u ApiService.uploadUslugaImage: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.uploadUslugaImage: $e');
+      return null;
     }
   }
 
@@ -911,6 +959,34 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getTopSpenders: $e');
+      return [];
+    }
+  }
+
+  Future<List<AdminActivityFeedItem>> getAdminActivityFeed({
+    required DateTime day,
+    int take = 16,
+  }) async {
+    try {
+      final d = DateTime(day.year, day.month, day.day);
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/activity-feed',
+        queryParameters: {
+          'day': d.toIso8601String(),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map(
+            (e) =>
+                AdminActivityFeedItem.fromJson(Map<String, dynamic>.from(e)),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminActivityFeed: $e');
       return [];
     }
   }
