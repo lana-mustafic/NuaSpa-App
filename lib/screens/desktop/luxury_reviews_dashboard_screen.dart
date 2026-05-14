@@ -49,6 +49,9 @@ class _LuxuryReviewsDashboardScreenState
 
   Timer? _searchDebounce;
 
+  final ScrollController _mainScrollController = ScrollController();
+  final ScrollController _rightScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -203,6 +206,8 @@ class _LuxuryReviewsDashboardScreenState
     _searchDebounce?.cancel();
     _tableSearch.removeListener(_onSearchChanged);
     _tableSearch.dispose();
+    _mainScrollController.dispose();
+    _rightScrollController.dispose();
     super.dispose();
   }
 
@@ -264,119 +269,125 @@ class _LuxuryReviewsDashboardScreenState
     final dash = _data;
 
     return Stack(
+      fit: StackFit.expand,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            return ColoredBox(
-              color: Colors.transparent,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(pad, tightHeight ? 8 : 12, pad, pad),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: Scrollbar(
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          physics: const ClampingScrollPhysics(),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _HeaderGlassCard(
-                                theme: theme,
-                                compact: tightHeight,
-                                rangeLabel: _rangeLabel(),
-                                onPickRange: _pickRange,
-                                onExport: _exportCsv,
-                              ),
-                              SizedBox(height: gap),
-                              _KpiRow(
-                                dash: dash,
-                                compact: tightHeight,
-                              ),
-                              SizedBox(height: gap),
-                              _FilterBar(
-                                controller: _tableSearch,
-                                compact: tightHeight,
-                                usluge: _usluge,
-                                zaposlenici: _zaposlenici,
-                                filterUslugaId: _filterUslugaId,
-                                filterZaposlenikId: _filterZaposlenikId,
-                                minOcjena: _minOcjena,
-                                maxOcjena: _maxOcjena,
-                                onRatingChanged: (min, max) {
-                                  setState(() {
-                                    _minOcjena = min;
-                                    _maxOcjena = max;
-                                    _page = 1;
-                                  });
-                                  _load();
-                                },
-                                onServiceChanged: (id) {
-                                  setState(() {
-                                    _filterUslugaId = id;
-                                    _page = 1;
-                                  });
-                                  _load();
-                                },
-                                onTherapistChanged: (id) {
-                                  setState(() {
-                                    _filterZaposlenikId = id;
-                                    _page = 1;
-                                  });
-                                  _load();
-                                },
-                              ),
-                              SizedBox(height: gap),
-                              _ReviewsTable(
-                                rows: dash?.redovi ?? const [],
-                                compact: tightHeight,
-                                onViewReview: _openReviewDetail,
-                              ),
-                              SizedBox(height: gap),
-                              _PaginationBar(
-                                page: _page,
-                                pageSize: _pageSize,
-                                total: dash?.ukupno ?? 0,
-                                onPage: (p) {
-                                  setState(() => _page = p);
-                                  _load();
-                                },
-                                onPageSize: (s) {
-                                  setState(() {
-                                    _pageSize = s;
-                                    _page = 1;
-                                  });
-                                  _load();
-                                },
-                              ),
-                            ],
+        Positioned.fill(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 8 : 12, pad, pad),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Scrollbar(
+                    controller: _mainScrollController,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      controller: _mainScrollController,
+                      primary: false,
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: ClampingScrollPhysics(),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _HeaderGlassCard(
+                            theme: theme,
+                            compact: tightHeight,
+                            rangeLabel: _rangeLabel(),
+                            onPickRange: _pickRange,
+                            onExport: _exportCsv,
                           ),
+                          SizedBox(height: gap),
+                          _KpiRow(
+                            dash: dash,
+                            compact: tightHeight,
+                          ),
+                          SizedBox(height: gap),
+                          _FilterBar(
+                            controller: _tableSearch,
+                            compact: tightHeight,
+                            usluge: _usluge,
+                            zaposlenici: _zaposlenici,
+                            filterUslugaId: _filterUslugaId,
+                            filterZaposlenikId: _filterZaposlenikId,
+                            minOcjena: _minOcjena,
+                            maxOcjena: _maxOcjena,
+                            onRatingChanged: (min, max) {
+                              setState(() {
+                                _minOcjena = min;
+                                _maxOcjena = max;
+                                _page = 1;
+                              });
+                              _load();
+                            },
+                            onServiceChanged: (id) {
+                              setState(() {
+                                _filterUslugaId = id;
+                                _page = 1;
+                              });
+                              _load();
+                            },
+                            onTherapistChanged: (id) {
+                              setState(() {
+                                _filterZaposlenikId = id;
+                                _page = 1;
+                              });
+                              _load();
+                            },
+                          ),
+                          SizedBox(height: gap),
+                          _ReviewsTable(
+                            rows: dash?.redovi ?? const [],
+                            compact: tightHeight,
+                            onViewReview: _openReviewDetail,
+                          ),
+                          SizedBox(height: gap),
+                          _PaginationBar(
+                            page: _page,
+                            pageSize: _pageSize,
+                            total: dash?.ukupno ?? 0,
+                            onPage: (p) {
+                              setState(() => _page = p);
+                              _load();
+                            },
+                            onPageSize: (s) {
+                              setState(() {
+                                _pageSize = s;
+                                _page = 1;
+                              });
+                              _load();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (showRight) ...[
+                  SizedBox(width: tightHeight ? 14 : 18),
+                  SizedBox(
+                    width: 300,
+                    child: Scrollbar(
+                      controller: _rightScrollController,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _rightScrollController,
+                        primary: false,
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: ClampingScrollPhysics(),
+                        ),
+                        child: _RightInsightsColumn(
+                          dash: dash,
+                          compact: tightHeight,
+                          onViewAllServices: _goToServicesCatalog,
                         ),
                       ),
                     ),
-                    if (showRight) ...[
-                      SizedBox(width: tightHeight ? 14 : 18),
-                      SizedBox(
-                        width: 300,
-                        child: Scrollbar(
-                          thumbVisibility: true,
-                          child: SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: _RightInsightsColumn(
-                              dash: dash,
-                              compact: tightHeight,
-                              onViewAllServices: _goToServicesCatalog,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
         if (_loading && _data == null)
           Positioned.fill(
