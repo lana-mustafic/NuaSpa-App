@@ -21,6 +21,7 @@ import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/spa_centar.dart';
+import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 
 class ApiService {
@@ -627,6 +628,107 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.createPaymentIntent: $e');
       return null;
+    }
+  }
+
+  Future<AdminReviewsDashboard?> getAdminReviewsDashboard({
+    required DateTime from,
+    required DateTime toInclusive,
+    int page = 1,
+    int pageSize = 10,
+    String? search,
+    int? minOcjena,
+    int? maxOcjena,
+    int? uslugaId,
+    int? zaposlenikId,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'from': _dateOnly(from),
+        'to': _dateOnly(toInclusive),
+        'page': page,
+        'pageSize': pageSize,
+      };
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (minOcjena != null) query['minOcjena'] = minOcjena;
+      if (maxOcjena != null) query['maxOcjena'] = maxOcjena;
+      if (uslugaId != null) query['uslugaId'] = uslugaId;
+      if (zaposlenikId != null) query['zaposlenikId'] = zaposlenikId;
+
+      final response = await _dio.get<dynamic>(
+        'Recenzija/admin-dashboard',
+        queryParameters: query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return AdminReviewsDashboard.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminReviewsDashboard: $e');
+      return null;
+    }
+  }
+
+  String _dateOnly(DateTime d) {
+    final x = DateTime(d.year, d.month, d.day);
+    return '${x.year.toString().padLeft(4, '0')}-'
+        '${x.month.toString().padLeft(2, '0')}-'
+        '${x.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<bool> downloadAdminReviewsCsv({
+    required DateTime from,
+    required DateTime toInclusive,
+    String? search,
+    int? minOcjena,
+    int? maxOcjena,
+    int? uslugaId,
+    int? zaposlenikId,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'from': _dateOnly(from),
+        'to': _dateOnly(toInclusive),
+      };
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (minOcjena != null) query['minOcjena'] = minOcjena;
+      if (maxOcjena != null) query['maxOcjena'] = maxOcjena;
+      if (uslugaId != null) query['uslugaId'] = uslugaId;
+      if (zaposlenikId != null) query['zaposlenikId'] = zaposlenikId;
+
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/recenzije_export.csv';
+      await _dio.download(
+        'Recenzija/admin-dashboard/csv',
+        filePath,
+        queryParameters: query,
+      );
+      await OpenFile.open(filePath);
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.downloadAdminReviewsCsv: $e');
+      return false;
+    }
+  }
+
+  /// Admin: javni odgovor na recenziju. Prazan [tekst] briše odgovor.
+  Future<bool> patchRecenzijaAdminOdgovor(int recenzijaId, String? tekst) async {
+    try {
+      await _dio.patch<dynamic>(
+        'Recenzija/$recenzijaId/admin-odgovor',
+        data: {'tekst': tekst},
+      );
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return false;
+      debugPrint('Greška u ApiService.patchRecenzijaAdminOdgovor: $e');
+      return false;
+    } catch (e) {
+      debugPrint('Greška u ApiService.patchRecenzijaAdminOdgovor: $e');
+      return false;
     }
   }
 
