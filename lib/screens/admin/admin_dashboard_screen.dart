@@ -289,6 +289,55 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     _reload();
   }
 
+  Future<void> _delete(Rezervacija r) async {
+    if (r.isPlacena) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Plaćenu rezervaciju nije moguće obrisati.'),
+        ),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Brisanje rezervacije'),
+        content: Text(
+          'Trajno ukloniti rezervaciju za „${r.uslugaNaziv ?? 'usluga'}”?\n'
+          'Ova radnja se ne može poništiti.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nazad'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Obriši'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final err = await _api.deleteRezervacijaAdmin(r.id);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err)),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Rezervacija obrisana.')),
+    );
+    _reload();
+  }
+
   Future<void> _edit(Rezervacija r) async {
     final selectedDate = DateTime(
       r.datumRezervacije.year,
@@ -562,6 +611,13 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                                   icon: const Icon(Icons.cancel_outlined),
                                 ),
                               ),
+                            Tooltip(
+                              message: 'Obriši trajno',
+                              child: IconButton(
+                                onPressed: r.isPlacena ? null : () => _delete(r),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ),
                             Tooltip(
                               message: 'Potvrdi/odbij',
                               child: Switch(

@@ -328,6 +328,21 @@ class ApiService {
     }
   }
 
+  /// Admin: trajno briše rezervaciju (plaćene blokira API).
+  Future<String?> deleteRezervacijaAdmin(int id) async {
+    try {
+      await _dio.delete<void>('Rezervacija/$id');
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      debugPrint('Greška u ApiService.deleteRezervacijaAdmin: $e');
+      return e.message;
+    }
+  }
+
   Future<List<DateTime>> getDostupniTermini({
     required int zaposlenikId,
     required DateTime datum,
