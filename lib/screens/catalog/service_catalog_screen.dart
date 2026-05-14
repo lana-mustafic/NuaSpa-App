@@ -325,7 +325,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                   if (isAdmin)
                     Positioned(
                       bottom: 10,
-                      left: 10,
+                      right: 10,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.35),

@@ -636,7 +636,7 @@ class _ServiceCard extends StatelessWidget {
                     ),
                   if (onAdminDelete != null)
                     Positioned(
-                      left: 10,
+                      right: 10,
                       bottom: 10,
                       child: Material(
                         color: Colors.black.withValues(alpha: 0.38),
