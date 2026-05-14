@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../models/admin/admin_activity_feed_item.dart';
 import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
@@ -32,17 +33,17 @@ class _CcData {
     required this.kpi,
     required this.revenue,
     required this.popularity,
-    required this.clients,
     required this.bookings,
     required this.therapists,
+    required this.activityFeed,
   });
 
   final AdminKpi? kpi;
   final List<RevenuePoint> revenue;
   final List<ServicePopularity> popularity;
-  final List<AdminClientRow> clients;
   final List<Rezervacija> bookings;
   final List<Zaposlenik> therapists;
+  final List<AdminActivityFeedItem> activityFeed;
 }
 
 class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
@@ -71,18 +72,18 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         final results = await Future.wait([
           _api.getAdminKpis(date: day),
           _api.getRevenueSeries(from: from30, to: day),
-          _api.getServicePopularity(from: from30, to: day, take: 6),
-          _api.getAdminClients(q: '', take: 14),
+          _api.getServicePopularity(from: day, to: day, take: 8),
           _api.getRezervacijeFiltered(datum: day, includeOtkazane: true),
           _api.getZaposlenici(),
+          _api.getAdminActivityFeed(day: day, take: 16),
         ]);
         return _CcData(
           kpi: results[0] as AdminKpi?,
           revenue: results[1] as List<RevenuePoint>,
           popularity: results[2] as List<ServicePopularity>,
-          clients: results[3] as List<AdminClientRow>,
-          bookings: results[4] as List<Rezervacija>,
-          therapists: results[5] as List<Zaposlenik>,
+          bookings: results[3] as List<Rezervacija>,
+          therapists: results[4] as List<Zaposlenik>,
+          activityFeed: results[5] as List<AdminActivityFeedItem>,
         );
       }();
     });
@@ -119,13 +120,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         final kpi = d?.kpi;
         final rev = d?.revenue ?? const <RevenuePoint>[];
         final pop = d?.popularity ?? const <ServicePopularity>[];
-        final clients = d?.clients ?? const <AdminClientRow>[];
-        final bookings = (d?.bookings ?? const <Rezervacija>[])
-            .take(24)
-            .toList();
-        final therapists = (d?.therapists ?? const <Zaposlenik>[])
-            .take(12)
-            .toList();
+        final bookings = d?.bookings ?? const <Rezervacija>[];
+        final therapists = d?.therapists ?? const <Zaposlenik>[];
+        final activityFeed =
+            d?.activityFeed ?? const <AdminActivityFeedItem>[];
 
         return LayoutBuilder(
           builder: (context, c) {
@@ -261,8 +259,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                   child: _RightDashboardSidebar(
                     bookings: bookings,
                     popularity: pop,
-                    clients: clients,
                     therapists: therapists,
+                    therapistDirectoryCount: kpi?.aktivniTerapeuti,
+                    activityFeed: activityFeed,
                   ),
                 ),
               ],
@@ -396,14 +395,17 @@ class _RightDashboardSidebar extends StatelessWidget {
   const _RightDashboardSidebar({
     required this.bookings,
     required this.popularity,
-    required this.clients,
     required this.therapists,
+    required this.activityFeed,
+    this.therapistDirectoryCount,
   });
 
   final List<Rezervacija> bookings;
   final List<ServicePopularity> popularity;
-  final List<AdminClientRow> clients;
   final List<Zaposlenik> therapists;
+  final List<AdminActivityFeedItem> activityFeed;
+  /// From admin KPI (directory size); falls back to [therapists.length].
+  final int? therapistDirectoryCount;
 
   @override
   Widget build(BuildContext context) {
@@ -414,11 +416,14 @@ class _RightDashboardSidebar extends StatelessWidget {
         children: [
           _UpcomingTodayCard(bookings: bookings),
           const SizedBox(height: 16),
-          _RecentActivityCard(bookings: bookings, clients: clients),
+          _RecentActivityCard(activityFeed: activityFeed),
           const SizedBox(height: 16),
           _TopServicesTodayCard(popularity: popularity),
           const SizedBox(height: 16),
-          _TherapistPresenceCard(therapists: therapists),
+          _TherapistPresenceCard(
+            therapists: therapists,
+            directoryCount: therapistDirectoryCount,
+          ),
         ],
       ),
     );
@@ -436,6 +441,7 @@ class _UpcomingTodayCard extends StatelessWidget {
     final active = bookings.where((b) => !b.isOtkazana).toList();
     active.sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
     final next = active.isEmpty ? null : active.first;
+    final count = active.length;
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
       opacity: 0.42,
@@ -462,7 +468,7 @@ class _UpcomingTodayCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '${active.isEmpty ? 8 : active.length} appointments',
+            count == 1 ? '1 appointment' : '$count appointments',
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
@@ -471,7 +477,9 @@ class _UpcomingTodayCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Next: ${next == null ? '10:30 AM' : _formatTimeAmPm(next.datumRezervacije)}',
+            next == null
+                ? 'No upcoming slots today'
+                : 'Next: ${_formatTimeAmPm(next.datumRezervacije)}',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.62),
             ),
@@ -561,45 +569,26 @@ class _UpcomingAmbientPanel extends StatelessWidget {
 }
 
 class _RecentActivityCard extends StatelessWidget {
-  const _RecentActivityCard({required this.bookings, required this.clients});
+  const _RecentActivityCard({required this.activityFeed});
 
-  final List<Rezervacija> bookings;
-  final List<AdminClientRow> clients;
+  final List<AdminActivityFeedItem> activityFeed;
 
   @override
   Widget build(BuildContext context) {
-    final recentBooking = bookings.isNotEmpty ? bookings.first : null;
-    final recentClient = clients.isNotEmpty ? clients.first : null;
-    final items = [
-      _ActivityItem(
-        icon: Icons.event_available_outlined,
-        color: NuaLuxuryTokens.softPurpleGlow,
-        text: recentBooking == null
-            ? 'New booking created'
-            : 'New booking: ${recentBooking.uslugaNaziv ?? 'Spa ritual'}',
-        time: '4 min ago',
-      ),
-      const _ActivityItem(
-        icon: Icons.payments_outlined,
-        color: NuaLuxuryTokens.champagneGold,
-        text: 'Payment received',
-        time: '12 min ago',
-      ),
-      _ActivityItem(
-        icon: Icons.person_add_alt_outlined,
-        color: const Color(0xFF6EE7B7),
-        text: recentClient == null
-            ? 'New client registered'
-            : 'New client: ${recentClient.punoIme}',
-        time: '28 min ago',
-      ),
-      const _ActivityItem(
-        icon: Icons.star_border_rounded,
-        color: Color(0xFFFFD166),
-        text: 'Review received',
-        time: '42 min ago',
-      ),
-    ];
+    final items = activityFeed.map((row) {
+      final vis = _activityFeedVisual(row.tip, row.naslov);
+      final sub = row.podnaslov;
+      final timeBits = <String>[
+        if (sub != null && sub.isNotEmpty) sub,
+        _relativeTimeLabel(row.datumVrijeme),
+      ];
+      return _ActivityItem(
+        icon: vis.$1,
+        color: vis.$2,
+        text: row.naslov,
+        time: timeBits.join(' · '),
+      );
+    }).toList();
 
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
@@ -616,12 +605,22 @@ class _RecentActivityCard extends StatelessWidget {
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 13),
-              child: item,
+          if (items.isEmpty)
+            Text(
+              'No activity for this day yet.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                      alpha: 0.55,
+                    ),
+                  ),
+            )
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 13),
+                child: item,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -693,33 +692,36 @@ class _TopServicesTodayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fallback = const [
-      ServicePopularity(
-        uslugaId: 1,
-        naziv: 'Swedish Massage',
-        brojRezervacija: 12,
-        prihod: 0,
-      ),
-      ServicePopularity(
-        uslugaId: 2,
-        naziv: 'Deep Tissue Massage',
-        brojRezervacija: 8,
-        prihod: 0,
-      ),
-      ServicePopularity(
-        uslugaId: 3,
-        naziv: 'Facials',
-        brojRezervacija: 6,
-        prihod: 0,
-      ),
-      ServicePopularity(
-        uslugaId: 4,
-        naziv: 'Other',
-        brojRezervacija: 4,
-        prihod: 0,
-      ),
-    ];
-    final items = (popularity.isEmpty ? fallback : popularity).take(4).toList();
+    final items = popularity.take(4).toList();
+    final theme = Theme.of(context);
+
+    if (items.isEmpty) {
+      return LuxuryGlassPanel(
+        borderRadius: NuaLuxuryTokens.radiusXl,
+        opacity: 0.38,
+        blurSigma: 24,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Top Services Today',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No paid service volume for this day yet.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final total = items.fold<double>(
       0,
       (sum, item) => sum + item.brojRezervacija,
@@ -852,13 +854,18 @@ class _ServiceLegendRow extends StatelessWidget {
 }
 
 class _TherapistPresenceCard extends StatelessWidget {
-  const _TherapistPresenceCard({required this.therapists});
+  const _TherapistPresenceCard({
+    required this.therapists,
+    this.directoryCount,
+  });
 
   final List<Zaposlenik> therapists;
+  final int? directoryCount;
 
   @override
   Widget build(BuildContext context) {
-    final visible = therapists.take(4).toList();
+    final visible = therapists.take(5).toList();
+    final n = directoryCount ?? therapists.length;
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
       opacity: 0.34,
@@ -885,9 +892,11 @@ class _TherapistPresenceCard extends StatelessWidget {
             ),
           Expanded(
             child: Text(
-              visible.isEmpty
-                  ? '12 therapists ready for service'
-                  : '${therapists.length} therapists active',
+              n <= 0
+                  ? 'No therapists in directory'
+                  : n == 1
+                      ? '1 therapist active'
+                      : '$n therapists active',
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.66),
@@ -902,6 +911,47 @@ class _TherapistPresenceCard extends StatelessWidget {
 
   String _initial(String value) =>
       value.trim().isEmpty ? 'N' : value.trim()[0].toUpperCase();
+}
+
+(IconData, Color) _activityFeedVisual(String tip, String naslov) {
+  final t = tip.toLowerCase();
+  switch (t) {
+    case 'payment':
+      return (Icons.payments_outlined, NuaLuxuryTokens.champagneGold);
+    case 'review':
+      return (Icons.star_rate_rounded, const Color(0xFFE8C07D));
+    case 'client':
+      return (Icons.person_add_alt_outlined, const Color(0xFF6EE7B7));
+    case 'booking':
+      if (naslov.toLowerCase().contains('cancel')) {
+        return (Icons.event_busy_outlined, const Color(0xFFE57373));
+      }
+      return (Icons.event_available_outlined, NuaLuxuryTokens.softPurpleGlow);
+    default:
+      if (naslov.toLowerCase().contains('cancel')) {
+        return (Icons.event_busy_outlined, const Color(0xFFE57373));
+      }
+      return (Icons.notifications_none_outlined, NuaLuxuryTokens.lavenderWhisper);
+  }
+}
+
+String _relativeTimeLabel(DateTime t) {
+  final now = DateTime.now();
+  final d = t.toLocal();
+  final n = now.toLocal();
+  final diff = n.difference(d);
+  if (diff.isNegative) {
+    final ahead = d.difference(n);
+    if (ahead.inMinutes < 1) return 'Soon';
+    if (ahead.inMinutes < 60) return 'In ${ahead.inMinutes} min';
+    if (ahead.inHours < 24) return 'In ${ahead.inHours} h';
+    return _formatTimeAmPm(d);
+  }
+  if (diff.inSeconds < 45) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours} h ago';
+  if (diff.inDays < 7) return '${diff.inDays} d ago';
+  return '${d.month}/${d.day}/${d.year}';
 }
 
 String _formatTimeAmPm(DateTime d) {

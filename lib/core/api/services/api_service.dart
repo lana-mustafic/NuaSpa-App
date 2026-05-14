@@ -17,6 +17,7 @@ import '../../../models/admin/admin_kpi.dart';
 import '../../../models/admin/revenue_point.dart';
 import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
+import '../../../models/admin/admin_activity_feed_item.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
@@ -911,6 +912,34 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getTopSpenders: $e');
+      return [];
+    }
+  }
+
+  Future<List<AdminActivityFeedItem>> getAdminActivityFeed({
+    required DateTime day,
+    int take = 16,
+  }) async {
+    try {
+      final d = DateTime(day.year, day.month, day.day);
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/activity-feed',
+        queryParameters: {
+          'day': d.toIso8601String(),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map(
+            (e) =>
+                AdminActivityFeedItem.fromJson(Map<String, dynamic>.from(e)),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminActivityFeed: $e');
       return [];
     }
   }
