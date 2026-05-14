@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
@@ -66,6 +67,44 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     final ok = await showServiceEditorDialog(context, existing: existing);
     if (!mounted) return;
     if (ok) {
+      await context.read<ServiceProvider>().fetchServices();
+    }
+  }
+
+  Future<void> _confirmDeleteService(Usluga u) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Brisanje usluge'),
+        content: Text(
+          'Obrisati „${u.naziv}“? Ako usluga ima rezervacije ili plaćanja, '
+          'brisanje može biti odbijeno.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Otkaži'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Obriši'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    final err = await ApiService().deleteUsluga(u.id);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Usluga obrisana.')),
+      );
       await context.read<ServiceProvider>().fetchServices();
     }
   }
@@ -167,6 +206,8 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                     isFavorite: sp.isFavorite(u.id),
                     onAdminEdit:
                         isAdmin ? () => _openServiceEditor(u) : null,
+                    onAdminDelete:
+                        isAdmin ? () => _confirmDeleteService(u) : null,
                   );
                 },
                 childCount: visible.length,
@@ -482,6 +523,7 @@ class _ServiceCard extends StatelessWidget {
     required this.isFavorite,
     this.badge,
     this.onAdminEdit,
+    this.onAdminDelete,
   });
 
   final Usluga usluga;
@@ -490,6 +532,7 @@ class _ServiceCard extends StatelessWidget {
   final bool isFavorite;
   final String? badge;
   final VoidCallback? onAdminEdit;
+  final VoidCallback? onAdminDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -586,6 +629,28 @@ class _ServiceCard extends StatelessWidget {
                               Icons.edit_outlined,
                               size: 18,
                               color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (onAdminDelete != null)
+                    Positioned(
+                      left: 10,
+                      bottom: 10,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.38),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: onAdminDelete,
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Color(0xFFFFAB91),
                             ),
                           ),
                         ),

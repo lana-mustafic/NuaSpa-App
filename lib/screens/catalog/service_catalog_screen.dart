@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
@@ -62,6 +63,44 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     }
   }
 
+  Future<void> _confirmDeleteService(Usluga u) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Brisanje usluge'),
+        content: Text(
+          'Obrisati „${u.naziv}“? Ako usluga ima rezervacije ili plaćanja, '
+          'brisanje može biti odbijeno.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Otkaži'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Obriši'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    final err = await ApiService().deleteUsluga(u.id);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Usluga obrisana.')),
+      );
+      await context.read<ServiceProvider>().fetchServices();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     var serviceProvider = Provider.of<ServiceProvider>(context);
@@ -77,7 +116,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
             PageHeader(
               title: 'Katalog usluga',
               subtitle: isAdmin
-                  ? 'Pretraži i upravljaj favoritima; kao admin upravljaj kategorijama, dodaj ili uredi usluge.'
+                  ? 'Pretraži i upravljaj favoritima; kao admin upravljaj kategorijama, dodaj, uredi ili obriši usluge.'
                   : 'Pretraži i upravljaj favoritima.',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -280,6 +319,30 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                             size: 20,
                           ),
                           onPressed: () => _openServiceEditor(usluga),
+                        ),
+                      ),
+                    ),
+                  if (isAdmin)
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Obriši uslugu',
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Color(0xFFFFAB91),
+                            size: 20,
+                          ),
+                          onPressed: () => _confirmDeleteService(usluga),
                         ),
                       ),
                     ),
