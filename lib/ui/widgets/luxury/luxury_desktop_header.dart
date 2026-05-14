@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -159,59 +157,44 @@ class LuxuryDesktopHeader extends StatelessWidget {
           SizedBox(width: compact ? 12 : 22),
           if (!isRevenue) ...[
             ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: compact ? 360 : 340),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.052),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.11),
-                        width: 0.85,
-                      ),
-                    ),
-                    child: DeskGlobalSearchBar(
-                      showShortcutHint: auth.isAdmin,
-                      controller: isCalendar ? nav.calendarSearchController : null,
-                      hintText: isTherapists
-                          ? 'Search therapists…'
-                          : isAdminClients
-                              ? 'Search services & therapies…'
-                              : isAppointments
-                                  ? 'Search clients, appointments…'
-                                  : isCalendar
-                                      ? 'Search appointments…'
-                                      : isReviews
-                                          ? 'Search reviews, clients, services…'
-                                          : isAdminPayments
-                                              ? 'Search payments, invoices, clients…'
-                                              : 'Search services & treatments (Enter → Services)…',
-                      onChanged: isTherapists
-                          ? (q) => context
-                                .read<DesktopNav>()
-                                .setTherapistSearchQuery(q)
-                          : isAppointments
-                          ? (q) => context
-                                .read<DesktopNav>()
-                                .setAppointmentSearchQuery(q)
-                          : null,
-                      onSubmitted: isTherapists
-                          ? (q) => context
-                                .read<DesktopNav>()
-                                .setTherapistSearchQuery(q)
-                          : isAppointments
-                          ? (q) => context
-                                .read<DesktopNav>()
-                                .setAppointmentSearchQuery(q)
-                          : isCalendar
-                          ? (_) {}
-                          : null,
-                    ),
-                  ),
-                ),
+              constraints: BoxConstraints(
+                maxWidth: compact ? 340 : 380,
+              ),
+              child: DeskGlobalSearchBar(
+                compact: compact,
+                showShortcutHint: auth.isAdmin,
+                controller: isCalendar ? nav.calendarSearchController : null,
+                hintText: isTherapists
+                    ? 'Search therapists…'
+                    : isAdminClients
+                        ? 'Search services & therapies…'
+                        : isAppointments
+                            ? 'Search clients, appointments…'
+                            : isCalendar
+                                ? 'Search appointments…'
+                                : isReviews
+                                    ? 'Search reviews, clients, services…'
+                                    : isAdminPayments
+                                        ? 'Search payments, invoices, clients…'
+                                        : 'Search services & treatments (Enter → Services)…',
+                onChanged: isTherapists
+                    ? (q) =>
+                        context.read<DesktopNav>().setTherapistSearchQuery(q)
+                    : isAppointments
+                        ? (q) => context
+                            .read<DesktopNav>()
+                            .setAppointmentSearchQuery(q)
+                        : null,
+                onSubmitted: isTherapists
+                    ? (q) =>
+                        context.read<DesktopNav>().setTherapistSearchQuery(q)
+                    : isAppointments
+                        ? (q) => context
+                            .read<DesktopNav>()
+                            .setAppointmentSearchQuery(q)
+                        : isCalendar
+                            ? (_) {}
+                            : null,
               ),
             ),
             SizedBox(width: compact ? 10 : 14),
