@@ -9,6 +9,7 @@ import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/page_header.dart';
 import 'service_details_screen.dart';
+import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
 
 class ServiceCatalogScreen extends StatefulWidget {
@@ -76,17 +77,24 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
             PageHeader(
               title: 'Katalog usluga',
               subtitle: isAdmin
-                  ? 'Pretraži i upravljaj favoritima; kao admin možeš dodati ili urediti usluge.'
+                  ? 'Pretraži i upravljaj favoritima; kao admin upravljaj kategorijama, dodaj ili uredi usluge.'
                   : 'Pretraži i upravljaj favoritima.',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isAdmin)
+                  if (isAdmin) ...[
+                    IconButton(
+                      tooltip: 'Kategorije usluga',
+                      icon: const Icon(Icons.category_outlined),
+                      onPressed: () =>
+                          showServiceCategoryManagerDialog(context),
+                    ),
                     IconButton(
                       tooltip: 'Nova usluga',
                       icon: const Icon(Icons.add_circle_outline),
                       onPressed: () => _openServiceEditor(null),
                     ),
+                  ],
                   const _BackIfPossible(),
                 ],
               ),

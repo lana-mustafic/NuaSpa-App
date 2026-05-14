@@ -10,6 +10,7 @@ import '../../providers/service_provider.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import 'service_details_screen.dart';
+import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
 
 /// Premium glass "Service Catalog" experience (English marketing copy per brief).
@@ -211,6 +212,11 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                     ),
                     const Spacer(),
                     if (isAdmin) ...[
+                      _GlassCircleButton(
+                        icon: Icons.category_outlined,
+                        onTap: () => showServiceCategoryManagerDialog(context),
+                      ),
+                      const SizedBox(width: 10),
                       _GlassCircleButton(
                         icon: Icons.add_rounded,
                         onTap: () => _openServiceEditor(null),

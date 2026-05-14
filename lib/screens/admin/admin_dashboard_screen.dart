@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/api/services/api_service.dart';
-import '../../models/kategorija_usluga.dart';
 import '../../models/rezervacija.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
+import '../catalog/service_category_manager_panel.dart';
 import '../catalog/service_editor_dialog.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -59,171 +59,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-class _AdminCategoriesPage extends StatefulWidget {
+class _AdminCategoriesPage extends StatelessWidget {
   const _AdminCategoriesPage();
 
   @override
-  State<_AdminCategoriesPage> createState() => _AdminCategoriesPageState();
-}
-
-class _AdminCategoriesPageState extends State<_AdminCategoriesPage> {
-  final ApiService _api = ApiService();
-  Future<List<KategorijaUsluga>>? _future;
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _reload() {
-    setState(() {
-      _future = _api.getKategorijeUsluga();
-    });
-  }
-
-  Future<void> _editCategory(KategorijaUsluga? existing) async {
-    final ctrl = TextEditingController(text: existing?.naziv ?? '');
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Nova kategorija' : 'Uredi kategoriju'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Naziv'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Otkaži'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sačuvaj'),
-          ),
-        ],
-      ),
-    );
-
-    if (saved != true || !mounted) return;
-
-    final naziv = ctrl.text.trim();
-    if (naziv.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Naziv je obavezan.')),
-      );
-      return;
-    }
-
-    final ok = existing == null
-        ? await _api.createKategorijaUsluga(naziv) != null
-        : await _api.updateKategorijaUsluga(
-                KategorijaUsluga(id: existing.id, naziv: naziv),
-              ) !=
-              null;
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Sačuvano.' : 'Greška pri čuvanju.')),
-    );
-    if (ok) _reload();
-  }
-
-  Future<void> _delete(KategorijaUsluga k) async {
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje kategorije'),
-        content: Text('Obrisati „${k.naziv}“?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Ne'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
-          ),
-        ],
-      ),
-    );
-    if (yes != true || !mounted) return;
-
-    final err = await _api.deleteKategorijaUsluga(k.id);
-    if (!mounted) return;
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kategorija obrisana.')),
-      );
-      _reload();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<KategorijaUsluga>>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final list = snap.data ?? [];
-        return Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: () async => _reload(),
-              child: Scrollbar(
-                controller: _scrollController,
-                child: ListView.builder(
-                  controller: _scrollController,
-                  primary: false,
-                  padding: const EdgeInsets.only(bottom: 88),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) {
-                    final k = list[i];
-                    return ListTile(
-                      leading: const Icon(Icons.folder_outlined),
-                      title: Text(k.naziv),
-                      trailing: PopupMenuButton<String>(
-                        tooltip: 'Akcije za kategoriju',
-                        onSelected: (v) {
-                          if (v == 'edit') _editCategory(k);
-                          if (v == 'delete') _delete(k);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                          PopupMenuItem(value: 'delete', child: Text('Obriši')),
-                        ],
-                      ),
-                      onTap: () => _editCategory(k),
-                    );
-                  },
-                ),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: FloatingActionButton(
-                tooltip: 'Nova kategorija',
-                onPressed: () => _editCategory(null),
-                child: const Icon(Icons.add),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    return const ServiceCategoryManagerPanel();
   }
 }
 

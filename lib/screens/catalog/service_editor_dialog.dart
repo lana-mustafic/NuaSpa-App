@@ -13,12 +13,16 @@ Future<bool> showServiceEditorDialog(
   final katList = await api.getKategorijeUsluga();
   if (!context.mounted) return false;
 
-  if (katList.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Prvo dodajte barem jednu kategoriju.')),
-    );
-    return false;
-  }
+    if (katList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nema kategorija. U Katalogu usluga (admin) otvori ikonu kategorije i dodaj barem jednu.',
+          ),
+        ),
+      );
+      return false;
+    }
 
   final nazivCtrl = TextEditingController(text: existing?.naziv ?? '');
   final cijenaCtrl = TextEditingController(
