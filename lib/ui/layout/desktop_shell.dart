@@ -467,11 +467,6 @@ class _LuxuryRail extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.08),
                 thickness: 0.5,
               ),
-              if (expanded && nav.route == DesktopRouteKey.revenueAnalytics) ...[
-                SizedBox(height: compact ? 8 : 12),
-                const _UpgradePremiumCard(),
-                SizedBox(height: compact ? 8 : 12),
-              ],
               _SidebarTile(
                 expanded: expanded,
                 compact: compact,
@@ -480,106 +475,6 @@ class _LuxuryRail extends StatelessWidget {
                 selected: false,
                 danger: true,
                 onTap: () => context.read<AuthProvider>().logout(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _UpgradePremiumCard extends StatelessWidget {
-  const _UpgradePremiumCard();
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.18),
-                NuaLuxuryTokens.voidViolet.withValues(alpha: 0.35),
-                NuaLuxuryTokens.champagneGold.withValues(alpha: 0.08),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
-              width: 0.85,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.18),
-                blurRadius: 30,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.16),
-                  border: Border.all(
-                    color: NuaLuxuryTokens.champagneGold.withValues(
-                      alpha: 0.34,
-                    ),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.workspace_premium_outlined,
-                  color: NuaLuxuryTokens.champagneGold,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Upgrade to Premium',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'Unlock advanced insights and reports.',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                    alpha: 0.58,
-                  ),
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: NuaLuxuryTokens.champagneGold,
-                    foregroundColor: const Color(0xFF120B24),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () {},
-                  child: const Text(
-                    'Upgrade Now',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                ),
               ),
             ],
           ),
