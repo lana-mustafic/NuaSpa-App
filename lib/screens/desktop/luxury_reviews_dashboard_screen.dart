@@ -1434,41 +1434,50 @@ class _TableDataRowState extends State<_TableDataRow> {
             ),
             Expanded(
               flex: 1,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    tooltip: 'Detalji i odgovor',
-                    onPressed: widget.onViewReview,
-                    icon: Icon(
-                      Icons.visibility_outlined,
-                      size: 18,
-                      color: Colors.white.withValues(alpha: 0.65),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Više',
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                      Icons.more_horiz_rounded,
-                      size: 18,
-                      color: Colors.white.withValues(alpha: 0.65),
-                    ),
-                    color: NuaLuxuryTokens.voidViolet,
-                    onSelected: (v) {
-                      if (v == 'reply') widget.onViewReview();
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: 'reply',
-                        child: Text('Odgovor salona'),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 32, minHeight: 32),
+                        tooltip: 'Detalji i odgovor',
+                        onPressed: widget.onViewReview,
+                        icon: Icon(
+                          Icons.visibility_outlined,
+                          size: 18,
+                          color: Colors.white.withValues(alpha: 0.65),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Više',
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 18,
+                          color: Colors.white.withValues(alpha: 0.65),
+                        ),
+                        color: NuaLuxuryTokens.voidViolet,
+                        onSelected: (v) {
+                          if (v == 'reply') widget.onViewReview();
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'reply',
+                            child: Text('Odgovor salona'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -1489,20 +1498,28 @@ class _StarRatingInt extends StatelessWidget {
     final v = value.clamp(0, 5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            for (var i = 0; i < 5; i++)
-              Icon(
-                i < v ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 16,
-                color: NuaLuxuryTokens.champagneGold,
-              ),
-          ],
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < 5; i++)
+                Icon(
+                  i < v ? Icons.star_rounded : Icons.star_outline_rounded,
+                  size: 16,
+                  color: NuaLuxuryTokens.champagneGold,
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           '$v.0',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w800,
             color: Colors.white.withValues(alpha: 0.85),

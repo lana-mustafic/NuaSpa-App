@@ -14,6 +14,7 @@ import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_clients_desktop_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'admin_payments_overview_screen.dart';
 import 'admin_resources_screen.dart';
 import 'admin_therapist_profile_screen.dart';
 import 'admin_suite_route.dart';
@@ -716,8 +717,9 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   Widget _buildRouteBody(BuildContext context) {
     switch (widget.initialRoute) {
       case AdminSuiteRoute.overview:
-      case AdminSuiteRoute.finance:
         return _buildOverview(context);
+      case AdminSuiteRoute.finance:
+        return const AdminPaymentsOverviewScreen();
       case AdminSuiteRoute.therapists:
       case AdminSuiteRoute.therapistsCalendar:
         return _buildTherapists(context);

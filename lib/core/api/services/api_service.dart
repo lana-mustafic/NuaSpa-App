@@ -22,6 +22,7 @@ import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
+import '../../../models/admin/admin_finance_dashboard.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 
 class ApiService {
@@ -710,6 +711,86 @@ class ApiService {
       return true;
     } catch (e) {
       debugPrint('Greška u ApiService.downloadAdminReviewsCsv: $e');
+      return false;
+    }
+  }
+
+  Future<AdminFinanceDashboard?> getAdminFinanceDashboard({
+    required DateTime from,
+    required DateTime toInclusive,
+    int page = 1,
+    int pageSize = 10,
+    String? search,
+    String? status,
+    String? methodCategory,
+    int? uslugaId,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'from': _dateOnly(from),
+        'to': _dateOnly(toInclusive),
+        'page': page,
+        'pageSize': pageSize,
+      };
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (status != null && status.trim().isNotEmpty) {
+        query['status'] = status.trim();
+      }
+      if (methodCategory != null && methodCategory.trim().isNotEmpty) {
+        query['methodCategory'] = methodCategory.trim();
+      }
+      if (uslugaId != null) query['uslugaId'] = uslugaId;
+
+      final response = await _dio.get<dynamic>(
+        'AdminFinance/dashboard',
+        queryParameters: query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return AdminFinanceDashboard.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminFinanceDashboard: $e');
+      return null;
+    }
+  }
+
+  Future<bool> downloadAdminFinanceCsv({
+    required DateTime from,
+    required DateTime toInclusive,
+    String? search,
+    String? status,
+    String? methodCategory,
+    int? uslugaId,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'from': _dateOnly(from),
+        'to': _dateOnly(toInclusive),
+      };
+      if (search != null && search.trim().isNotEmpty) {
+        query['search'] = search.trim();
+      }
+      if (status != null && status.trim().isNotEmpty) {
+        query['status'] = status.trim();
+      }
+      if (methodCategory != null && methodCategory.trim().isNotEmpty) {
+        query['methodCategory'] = methodCategory.trim();
+      }
+      if (uslugaId != null) query['uslugaId'] = uslugaId;
+
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/placanja_export.csv';
+      await _dio.download(
+        'AdminFinance/dashboard/csv',
+        filePath,
+        queryParameters: query,
+      );
+      await OpenFile.open(filePath);
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.downloadAdminFinanceCsv: $e');
       return false;
     }
   }

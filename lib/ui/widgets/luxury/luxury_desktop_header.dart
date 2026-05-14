@@ -81,7 +81,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isReviews = nav.route == DesktopRouteKey.reviews;
     final isAdminClients = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
-    final compact = compactChrome || isCalendar || isAdminClients;
+    final isAdminPayments = nav.route == DesktopRouteKey.admin &&
+        nav.adminSuiteTarget == AdminSuiteRoute.finance;
+    final compact = compactChrome ||
+        isCalendar ||
+        isAdminClients ||
+        isAdminPayments;
 
     final roleLabel = auth.isAdmin
         ? 'Super Admin'
@@ -181,7 +186,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                                       ? 'Search appointments…'
                                       : isReviews
                                           ? 'Search reviews, clients, services…'
-                                          : 'Search services & treatments (Enter → Services)…',
+                                          : isAdminPayments
+                                              ? 'Search payments, invoices, clients…'
+                                              : 'Search services & treatments (Enter → Services)…',
                       onChanged: isTherapists
                           ? (q) => context
                                 .read<DesktopNav>()
