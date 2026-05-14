@@ -7,7 +7,6 @@ enum DesktopRouteKey {
   therapists,
   revenueAnalytics,
   marketing,
-  packages,
   reviews,
   settings,
   home,

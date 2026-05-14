@@ -103,11 +103,6 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.packages,
-        label: 'Packages',
-        icon: Icons.inventory_2_outlined,
-      ),
-      LuxurySideItem(
         route: DesktopRouteKey.reviews,
         label: 'Reviews',
         icon: Icons.reviews_outlined,
@@ -190,15 +185,6 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.revenueAnalytics:
           return auth.isAdmin
               ? const AdminRevenueAnalyticsScreen()
-              : widget.home;
-        case DesktopRouteKey.packages:
-          return auth.isAdmin
-              ? const LuxuryPlaceholderScreen(
-                  title: 'Package atelier',
-                  subtitle:
-                      'Curated rituals, couple journeys, membership bundles, and seasonal spa collections.',
-                  icon: Icons.card_giftcard_outlined,
-                )
               : widget.home;
         case DesktopRouteKey.reviews:
           return auth.isAdmin
