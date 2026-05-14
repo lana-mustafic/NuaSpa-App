@@ -605,6 +605,38 @@ class ApiService {
     }
   }
 
+  /// Admin: multipart upload slike usluge; vraća puni URL iz odgovora API-ja.
+  Future<String?> uploadUslugaImage(String filePath) async {
+    try {
+      final normalized = filePath.replaceAll(r'\', '/');
+      final fileName = normalized.contains('/')
+          ? normalized.split('/').last
+          : normalized;
+      final form = FormData.fromMap({
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final response = await _dio.post<dynamic>(
+        'Usluga/upload-image',
+        data: form,
+      );
+      final data = response.data;
+      if (data is Map && data['url'] != null) {
+        return data['url'].toString();
+      }
+      return null;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        debugPrint('uploadUslugaImage: ${data['message']}');
+      }
+      debugPrint('Greška u ApiService.uploadUslugaImage: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.uploadUslugaImage: $e');
+      return null;
+    }
+  }
+
   Future<bool> updateRezervacijaPotvrdjena(int id, bool isPotvrdjena) async {
     try {
       await _dio.patch<void>(
