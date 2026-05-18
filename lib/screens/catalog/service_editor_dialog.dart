@@ -16,6 +16,24 @@ String _fileNameFromPath(String path) {
   return i >= 0 ? normalized.substring(i + 1) : normalized;
 }
 
+class _ServiceEditorFormData {
+  const _ServiceEditorFormData({
+    required this.naziv,
+    required this.cijena,
+    required this.trajanjeMinuta,
+    required this.opis,
+    required this.categoryId,
+    this.pickedImagePath,
+  });
+
+  final String naziv;
+  final double cijena;
+  final int trajanjeMinuta;
+  final String opis;
+  final int categoryId;
+  final String? pickedImagePath;
+}
+
 /// Opens a luxury modal to create or edit a service (Admin API).
 /// Returns `true` if the record was saved successfully.
 Future<bool> showServiceEditorDialog(
@@ -37,24 +55,9 @@ Future<bool> showServiceEditorDialog(
     return false;
   }
 
-  final nazivCtrl = TextEditingController(text: existing?.naziv ?? '');
-  final cijenaCtrl = TextEditingController(
-    text: existing != null ? existing.cijena.toStringAsFixed(2) : '',
-  );
-  final trajanjeCtrl = TextEditingController(
-    text: '${existing?.trajanjeMinuta ?? 60}',
-  );
-  final opisCtrl = TextEditingController(text: existing?.opis ?? '');
-
-  var katId = existing?.kategorijaUslugaId ?? katList.first.id;
-  if (!katList.any((k) => k.id == katId)) {
-    katId = katList.first.id;
-  }
-
-  String? pickedImagePath;
   final isNew = existing == null;
 
-  final saved = await showGeneralDialog<bool>(
+  final formData = await showGeneralDialog<_ServiceEditorFormData>(
     context: context,
     barrierDismissible: true,
     barrierLabel: isNew ? 'Close add service' : 'Close edit service',
@@ -67,7 +70,7 @@ Future<bool> showServiceEditorDialog(
           fit: StackFit.expand,
           children: [
             GestureDetector(
-              onTap: () => Navigator.of(ctx).pop(false),
+              onTap: () => Navigator.of(ctx).pop(),
               behavior: HitTestBehavior.opaque,
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -79,17 +82,8 @@ Future<bool> showServiceEditorDialog(
             Center(
               child: _LuxuryServiceEditorShell(
                 isNew: isNew,
+                existing: existing,
                 categories: katList,
-                nazivCtrl: nazivCtrl,
-                cijenaCtrl: cijenaCtrl,
-                trajanjeCtrl: trajanjeCtrl,
-                opisCtrl: opisCtrl,
-                initialCategoryId: katId,
-                onCategoryChanged: (id) => katId = id,
-                onImagePicked: (path) => pickedImagePath = path,
-                pickedImagePath: () => pickedImagePath,
-                onCancel: () => Navigator.of(ctx).pop(false),
-                onSave: () => Navigator.of(ctx).pop(true),
               ),
             ),
           ],
@@ -112,25 +106,16 @@ Future<bool> showServiceEditorDialog(
     },
   );
 
-  void disposeCtrls() {
-    nazivCtrl.dispose();
-    cijenaCtrl.dispose();
-    trajanjeCtrl.dispose();
-    opisCtrl.dispose();
-  }
-
-  if (saved != true || !context.mounted) {
-    disposeCtrls();
+  if (formData == null || !context.mounted) {
     return false;
   }
 
-  final naziv = nazivCtrl.text.trim();
-  final cijena =
-      double.tryParse(cijenaCtrl.text.replaceAll(',', '.')) ?? 0;
-  final trajanje = int.tryParse(trajanjeCtrl.text.trim()) ?? 60;
-  final opis = opisCtrl.text.trim();
-
-  disposeCtrls();
+  final naziv = formData.naziv;
+  final cijena = formData.cijena;
+  final trajanje = formData.trajanjeMinuta;
+  final opis = formData.opis;
+  final katId = formData.categoryId;
+  final pickedImagePath = formData.pickedImagePath;
 
   if (naziv.isEmpty || cijena <= 0 || katId <= 0) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -149,7 +134,7 @@ Future<bool> showServiceEditorDialog(
       );
       return false;
     }
-    final uploaded = await api.uploadUslugaImage(pickedImagePath!);
+    final uploaded = await api.uploadUslugaImage(pickedImagePath);
     if (!context.mounted) return false;
     if (uploaded == null || uploaded.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -195,31 +180,13 @@ Future<bool> showServiceEditorDialog(
 class _LuxuryServiceEditorShell extends StatefulWidget {
   const _LuxuryServiceEditorShell({
     required this.isNew,
+    required this.existing,
     required this.categories,
-    required this.nazivCtrl,
-    required this.cijenaCtrl,
-    required this.trajanjeCtrl,
-    required this.opisCtrl,
-    required this.initialCategoryId,
-    required this.onCategoryChanged,
-    required this.onImagePicked,
-    required this.pickedImagePath,
-    required this.onCancel,
-    required this.onSave,
   });
 
   final bool isNew;
+  final Usluga? existing;
   final List<KategorijaUsluga> categories;
-  final TextEditingController nazivCtrl;
-  final TextEditingController cijenaCtrl;
-  final TextEditingController trajanjeCtrl;
-  final TextEditingController opisCtrl;
-  final int initialCategoryId;
-  final ValueChanged<int> onCategoryChanged;
-  final ValueChanged<String?> onImagePicked;
-  final String? Function() pickedImagePath;
-  final VoidCallback onCancel;
-  final VoidCallback onSave;
 
   @override
   State<_LuxuryServiceEditorShell> createState() =>
@@ -227,6 +194,12 @@ class _LuxuryServiceEditorShell extends StatefulWidget {
 }
 
 class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
+  late final TextEditingController _nazivCtrl;
+  late final TextEditingController _cijenaCtrl;
+  late final TextEditingController _trajanjeCtrl;
+  late final TextEditingController _opisCtrl;
+  late final ScrollController _scrollCtrl;
+
   late int _categoryId;
   String? _localImagePath;
   bool _closeHover = false;
@@ -234,8 +207,58 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
   @override
   void initState() {
     super.initState();
-    _categoryId = widget.initialCategoryId;
-    _localImagePath = widget.pickedImagePath();
+    final existing = widget.existing;
+    _nazivCtrl = TextEditingController(text: existing?.naziv ?? '');
+    _cijenaCtrl = TextEditingController(
+      text: existing != null ? existing.cijena.toStringAsFixed(2) : '',
+    );
+    _trajanjeCtrl = TextEditingController(
+      text: '${existing?.trajanjeMinuta ?? 60}',
+    );
+    _opisCtrl = TextEditingController(text: existing?.opis ?? '');
+    _scrollCtrl = ScrollController();
+
+    _categoryId = existing?.kategorijaUslugaId ?? widget.categories.first.id;
+    if (!widget.categories.any((k) => k.id == _categoryId)) {
+      _categoryId = widget.categories.first.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    _nazivCtrl.dispose();
+    _cijenaCtrl.dispose();
+    _trajanjeCtrl.dispose();
+    _opisCtrl.dispose();
+    super.dispose();
+  }
+
+  void _close() => Navigator.of(context).pop();
+
+  void _submit() {
+    final naziv = _nazivCtrl.text.trim();
+    final cijena = double.tryParse(_cijenaCtrl.text.replaceAll(',', '.')) ?? 0;
+    final trajanje = int.tryParse(_trajanjeCtrl.text.trim()) ?? 60;
+    final opis = _opisCtrl.text.trim();
+
+    if (naziv.isEmpty || cijena <= 0 || _categoryId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Check name, price and category.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ServiceEditorFormData(
+        naziv: naziv,
+        cijena: cijena,
+        trajanjeMinuta: trajanje,
+        opis: opis,
+        categoryId: _categoryId,
+        pickedImagePath: _localImagePath,
+      ),
+    );
   }
 
   Future<void> _pickImage() async {
@@ -245,9 +268,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
       withData: false,
     );
     if (r != null && r.files.isNotEmpty && r.files.single.path != null) {
-      final path = r.files.single.path;
-      setState(() => _localImagePath = path);
-      widget.onImagePicked(path);
+      setState(() => _localImagePath = r.files.single.path);
     }
   }
 
@@ -287,8 +308,11 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                 _buildHeader(),
                 Expanded(
                   child: Scrollbar(
+                    controller: _scrollCtrl,
                     thumbVisibility: true,
                     child: SingleChildScrollView(
+                      controller: _scrollCtrl,
+                      primary: false,
                       padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -296,7 +320,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                           _LuxuryField(
                             label: 'Service name',
                             child: TextField(
-                              controller: widget.nazivCtrl,
+                              controller: _nazivCtrl,
                               style: LuxuryModalStyle.fieldStyle(context),
                               decoration: LuxuryModalStyle.fieldDecoration(
                                 hint: 'e.g. Swedish Massage',
@@ -310,7 +334,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                 child: _LuxuryField(
                                   label: 'Price (KM)',
                                   child: TextField(
-                                    controller: widget.cijenaCtrl,
+                                    controller: _cijenaCtrl,
                                     keyboardType: TextInputType.number,
                                     style:
                                         LuxuryModalStyle.fieldStyle(context),
@@ -326,7 +350,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                 child: _LuxuryField(
                                   label: 'Duration (minutes)',
                                   child: TextField(
-                                    controller: widget.trajanjeCtrl,
+                                    controller: _trajanjeCtrl,
                                     keyboardType: TextInputType.number,
                                     style:
                                         LuxuryModalStyle.fieldStyle(context),
@@ -345,7 +369,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                             child: SizedBox(
                               height: 120,
                               child: TextField(
-                                controller: widget.opisCtrl,
+                                controller: _opisCtrl,
                                 maxLines: null,
                                 expands: true,
                                 textAlignVertical: TextAlignVertical.top,
@@ -369,10 +393,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                             child: _LuxuryCategoryDropdown(
                               categories: widget.categories,
                               selectedId: _categoryId,
-                              onSelected: (id) {
-                                setState(() => _categoryId = id);
-                                widget.onCategoryChanged(id);
-                              },
+                              onSelected: (id) => setState(() => _categoryId = id),
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -392,12 +413,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                     onTap: _pickImage,
                                     onRemove: _localImagePath == null
                                         ? null
-                                        : () {
-                                            setState(
-                                              () => _localImagePath = null,
-                                            );
-                                            widget.onImagePicked(null);
-                                          },
+                                        : () => setState(() => _localImagePath = null),
                                   ),
                           ),
                         ],
@@ -443,7 +459,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
             onExit: (_) => setState(() => _closeHover = false),
             child: IconButton(
               tooltip: 'Close',
-              onPressed: widget.onCancel,
+              onPressed: _close,
               style: IconButton.styleFrom(
                 backgroundColor: _closeHover
                     ? LuxuryModalStyle.accentPurple.withValues(alpha: 0.22)
@@ -468,12 +484,12 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
         children: [
           _LuxurySecondaryButton(
             label: 'Cancel',
-            onPressed: widget.onCancel,
+            onPressed: _close,
           ),
           const SizedBox(width: 12),
           _LuxuryPrimaryButton(
             label: widget.isNew ? 'Save Service' : 'Save Changes',
-            onPressed: widget.onSave,
+            onPressed: _submit,
           ),
         ],
       ),
