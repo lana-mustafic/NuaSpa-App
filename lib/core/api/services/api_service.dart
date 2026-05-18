@@ -143,8 +143,12 @@ class ApiService {
       if (data is Map && data['message'] != null) {
         return data['message'].toString();
       }
+      final code = e.response?.statusCode;
+      if (code == 409) {
+        return 'Therapist cannot be deleted while linked reservations exist.';
+      }
       debugPrint('Greška u ApiService.deleteZaposlenik: $e');
-      return e.message;
+      return 'Failed to delete therapist. Please try again.';
     }
   }
 
