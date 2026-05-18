@@ -440,13 +440,10 @@ class _LuxuryAddCategoryFabState extends State<_LuxuryAddCategoryFab> {
         scale: _hover ? 1.06 : 1,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        child: Material(
-          color: Colors.transparent,
-          elevation: 0,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: widget.onPressed,
-            child: Ink(
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          child: ClipOval(
+            child: Container(
               width: 64,
               height: 64,
               decoration: BoxDecoration(
