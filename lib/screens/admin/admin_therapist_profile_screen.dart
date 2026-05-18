@@ -76,11 +76,13 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
   @override
   void initState() {
     super.initState();
-    _reload();
+    _bundleFuture = _loadBundle();
   }
 
   void _reload() {
-    setState(() => _bundleFuture = _loadBundle());
+    setState(() {
+      _bundleFuture = _loadBundle();
+    });
   }
 
   Future<_TherapistScreenBundle> _loadBundle() async {
