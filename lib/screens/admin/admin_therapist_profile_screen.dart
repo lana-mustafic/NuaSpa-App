@@ -691,38 +691,41 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected
-                  ? _ProfileUi.textPrimary
-                  : _ProfileUi.textSecondary,
+      behavior: HitTestBehavior.opaque,
+      child: IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected
+                    ? _ProfileUi.textPrimary
+                    : _ProfileUi.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 2,
-            decoration: BoxDecoration(
-              color: selected ? _ProfileUi.accentPurple : Colors.transparent,
-              borderRadius: BorderRadius.circular(2),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: _ProfileUi.accentPurple.withValues(alpha: 0.5),
-                        blurRadius: 8,
-                      ),
-                    ]
-                  : null,
+            const SizedBox(height: 10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 2,
+              decoration: BoxDecoration(
+                color: selected ? _ProfileUi.accentPurple : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: _ProfileUi.accentPurple.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
