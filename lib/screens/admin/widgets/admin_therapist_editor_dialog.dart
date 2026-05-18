@@ -86,6 +86,15 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   late final TextEditingController _telefon = TextEditingController(
     text: widget.existing?.telefon ?? '',
   );
+  late final TextEditingController _email = TextEditingController(
+    text: widget.existing?.email ?? '',
+  );
+  late final TextEditingController _jezici = TextEditingController(
+    text: widget.existing?.jezici ?? '',
+  );
+  late final TextEditingController _obrazovanje = TextEditingController(
+    text: widget.existing?.obrazovanje ?? '',
+  );
 
   bool _loading = true;
   String? _loadError;
@@ -254,6 +263,10 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
         prezime: _prezime.text.trim(),
         specijalizacija: _buildSpecijalizacija(),
         telefon: _telefon.text.trim().isEmpty ? null : _telefon.text.trim(),
+        email: _email.text.trim().isEmpty ? null : _email.text.trim(),
+        jezici: _jezici.text.trim().isEmpty ? null : _jezici.text.trim(),
+        obrazovanje:
+            _obrazovanje.text.trim().isEmpty ? null : _obrazovanje.text.trim(),
         kategorijaUslugaId: _categoryId,
       ),
     );
@@ -265,6 +278,9 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     _ime.dispose();
     _prezime.dispose();
     _telefon.dispose();
+    _email.dispose();
+    _jezici.dispose();
+    _obrazovanje.dispose();
     super.dispose();
   }
 
@@ -477,6 +493,51 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           keyboardType: TextInputType.phone,
                                         ),
                                       ),
+                                      const SizedBox(height: 18),
+                                      _LuxuryTherapistField(
+                                        label: 'Email (optional)',
+                                        icon: Icons.mail_outline_rounded,
+                                        child: _LuxuryTextInput(
+                                          controller: _email,
+                                          hint: 'therapist@nuaspa.ba',
+                                          keyboardType:
+                                              TextInputType.emailAddress,
+                                          validator: (v) {
+                                            final t = v?.trim() ?? '';
+                                            if (t.isEmpty) return null;
+                                            if (!t.contains('@') ||
+                                                !t.contains('.')) {
+                                              return 'Enter a valid email.';
+                                            }
+                                            return null;
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      _LuxuryTherapistField(
+                                        label: 'Languages (optional)',
+                                        icon: Icons.translate_rounded,
+                                        helper:
+                                            'e.g. English, Bosnian',
+                                        child: _LuxuryTextInput(
+                                          controller: _jezici,
+                                          hint: 'English, Bosnian',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      _LuxuryTherapistField(
+                                        label: 'Education (optional)',
+                                        icon: Icons.school_outlined,
+                                        helper:
+                                            'Certifications, degrees, training',
+                                        child: _LuxuryTextInput(
+                                          controller: _obrazovanje,
+                                          hint:
+                                              'Certified Massage Therapist (CMT)',
+                                          maxLines: 4,
+                                          minHeight: 100,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -668,12 +729,16 @@ class _LuxuryTextInput extends StatefulWidget {
     required this.hint,
     this.validator,
     this.keyboardType,
+    this.maxLines = 1,
+    this.minHeight = 54,
   });
 
   final TextEditingController controller;
   final String hint;
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
+  final int maxLines;
+  final double minHeight;
 
   @override
   State<_LuxuryTextInput> createState() => _LuxuryTextInputState();
@@ -686,6 +751,7 @@ class _LuxuryTextInputState extends State<_LuxuryTextInput> {
       controller: widget.controller,
       keyboardType: widget.keyboardType,
       validator: widget.validator,
+      maxLines: widget.maxLines,
       style: GoogleFonts.inter(
         fontSize: 15,
         color: const Color(0xFFF5F3FA),
@@ -698,8 +764,11 @@ class _LuxuryTextInputState extends State<_LuxuryTextInput> {
         ),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.04),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        constraints: const BoxConstraints(minHeight: 54),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        constraints: BoxConstraints(minHeight: widget.minHeight),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(

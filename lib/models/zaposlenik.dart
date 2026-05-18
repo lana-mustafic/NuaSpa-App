@@ -4,6 +4,7 @@ class Zaposlenik {
   final String prezime;
   final String specijalizacija;
   final String? telefon;
+  final String? email;
   final int? kategorijaUslugaId;
   final String? kategorijaUslugaNaziv;
   final String? jezici;
@@ -17,6 +18,7 @@ class Zaposlenik {
     required this.prezime,
     required this.specijalizacija,
     required this.telefon,
+    this.email,
     this.kategorijaUslugaId,
     this.kategorijaUslugaNaziv,
     this.jezici,
@@ -34,6 +36,7 @@ class Zaposlenik {
       prezime: json['prezime'] as String,
       specijalizacija: json['specijalizacija'] as String,
       telefon: json['telefon'] as String?,
+      email: json['email'] as String?,
       kategorijaUslugaId:
           katId == null ? null : (katId as num).toInt(),
       kategorijaUslugaNaziv: json['kategorijaUslugaNaziv'] as String?,
@@ -52,6 +55,7 @@ class Zaposlenik {
       'prezime': prezime,
       'specijalizacija': specijalizacija,
       'telefon': telefon,
+      if (email != null && email!.trim().isNotEmpty) 'email': email,
       if (kategorijaUslugaId != null) 'kategorijaUslugaId': kategorijaUslugaId,
       if (jezici != null && jezici!.trim().isNotEmpty) 'jezici': jezici,
       if (obrazovanje != null && obrazovanje!.trim().isNotEmpty)
@@ -68,6 +72,7 @@ class Zaposlenik {
     String? prezime,
     String? specijalizacija,
     String? telefon,
+    String? email,
     int? kategorijaUslugaId,
     String? kategorijaUslugaNaziv,
     String? jezici,
@@ -81,6 +86,7 @@ class Zaposlenik {
       prezime: prezime ?? this.prezime,
       specijalizacija: specijalizacija ?? this.specijalizacija,
       telefon: telefon ?? this.telefon,
+      email: email ?? this.email,
       kategorijaUslugaId: kategorijaUslugaId ?? this.kategorijaUslugaId,
       kategorijaUslugaNaziv:
           kategorijaUslugaNaziv ?? this.kategorijaUslugaNaziv,

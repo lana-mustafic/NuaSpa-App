@@ -123,16 +123,6 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
     }
   }
 
-  String _hireDateLabel(DateTime? d) {
-    if (d == null) return '—';
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final x = d.toLocal();
-    return '${m[x.month - 1]} ${x.day}, ${x.year}';
-  }
-
   String _shortDate(DateTime d) {
     final x = d.toLocal();
     return '${x.day.toString().padLeft(2, '0')}.'
@@ -218,7 +208,6 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       kpi: kpi,
                       schedule: schedule,
                       topServices: topServices,
-                      hireDateLabel: _hireDateLabel(t.datumZaposlenja),
                     )
                   else if (_tab == _ProfileTab.schedule)
                     _WeekScheduleListCard(schedule: schedule)
@@ -449,10 +438,7 @@ class _HeroCard extends StatelessWidget {
     final phone = therapist.telefon?.trim().isNotEmpty == true
         ? therapist.telefon!
         : '—';
-    final le = linkedEmail?.trim();
-    final email = (le != null && le.isNotEmpty)
-        ? le
-        : '—';
+    final contactEmail = _contactEmail(therapist, linkedEmail);
     final initials =
         '${therapist.ime.isNotEmpty ? therapist.ime[0] : ''}'
         '${therapist.prezime.isNotEmpty ? therapist.prezime[0] : ''}'
@@ -490,7 +476,10 @@ class _HeroCard extends StatelessWidget {
                 alignment: stack ? WrapAlignment.center : WrapAlignment.start,
                 children: [
                   _ContactItem(icon: Icons.phone_outlined, text: phone),
-                  _ContactItem(icon: Icons.mail_outline_rounded, text: email),
+                  _ContactItem(
+                    icon: Icons.mail_outline_rounded,
+                    text: contactEmail,
+                  ),
                   _ContactItem(
                     icon: Icons.location_on_outlined,
                     text: location?.isNotEmpty == true
@@ -731,6 +720,14 @@ class _TabItem extends StatelessWidget {
   }
 }
 
+String _contactEmail(Zaposlenik therapist, String? linkedEmail) {
+  final stored = therapist.email?.trim();
+  if (stored != null && stored.isNotEmpty) return stored;
+  final linked = linkedEmail?.trim();
+  if (linked != null && linked.isNotEmpty) return linked;
+  return '—';
+}
+
 class _OverviewSection extends StatelessWidget {
   const _OverviewSection({
     required this.therapist,
@@ -738,7 +735,6 @@ class _OverviewSection extends StatelessWidget {
     required this.kpi,
     required this.schedule,
     required this.topServices,
-    required this.hireDateLabel,
   });
 
   final Zaposlenik therapist;
@@ -746,7 +742,6 @@ class _OverviewSection extends StatelessWidget {
   final TherapistKpi? kpi;
   final List<TherapistWeeklyScheduleDay> schedule;
   final List<TherapistTopService> topServices;
-  final String hireDateLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -759,7 +754,6 @@ class _OverviewSection extends StatelessWidget {
                   _AboutCard(
                     therapist: therapist,
                     profile: profile,
-                    hireDateLabel: hireDateLabel,
                   ),
                   const SizedBox(height: 16),
                   _WeekScheduleListCard(schedule: schedule),
@@ -775,7 +769,6 @@ class _OverviewSection extends StatelessWidget {
                       child: _AboutCard(
                         therapist: therapist,
                         profile: profile,
-                        hireDateLabel: hireDateLabel,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -808,22 +801,17 @@ class _AboutCard extends StatelessWidget {
   const _AboutCard({
     required this.therapist,
     required this.profile,
-    required this.hireDateLabel,
   });
 
   final Zaposlenik therapist;
   final TherapistAdminProfile? profile;
-  final String hireDateLabel;
 
   @override
   Widget build(BuildContext context) {
     final phone = therapist.telefon?.trim().isNotEmpty == true
         ? therapist.telefon!
         : '—';
-    final le = profile?.povezanEmail?.trim();
-    final email = (le != null && le.isNotEmpty)
-        ? le
-        : (profile?.imaKorisnickiNalog == true ? '—' : 'No linked account');
+    final email = _contactEmail(therapist, profile?.povezanEmail);
 
     return _GlassCard(
       child: Column(
@@ -834,17 +822,6 @@ class _AboutCard extends StatelessWidget {
           _InfoRow(label: 'Employee ID', value: '#${therapist.id}'),
           _InfoRow(label: 'Phone', value: phone),
           _InfoRow(label: 'Email', value: email),
-          _InfoRow(label: 'Hire Date', value: hireDateLabel),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              SizedBox(
-                width: 110,
-                child: Text('Status', style: _ProfileUi.bodyMuted(context)),
-              ),
-              _StatusBadge(label: 'Active'),
-            ],
-          ),
           if (therapist.kategorijaUslugaNaziv?.trim().isNotEmpty == true)
             _InfoRow(
               label: 'Category',
@@ -900,32 +877,6 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: _ProfileUi.success.withValues(alpha: 0.15),
-        border: Border.all(color: _ProfileUi.success.withValues(alpha: 0.45)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: _ProfileUi.success,
-        ),
       ),
     );
   }
