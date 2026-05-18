@@ -962,8 +962,6 @@ class _FilterBar extends StatelessWidget {
               Expanded(child: ratingMenu),
               SizedBox(width: compact ? 8 : 10),
               Expanded(child: serviceMenu),
-              SizedBox(width: compact ? 8 : 10),
-              const _FiltersButton(),
             ],
           );
         }
@@ -978,7 +976,6 @@ class _FilterBar extends StatelessWidget {
               children: [
                 ratingMenu,
                 serviceMenu,
-                const _FiltersButton(),
               ],
             ),
           ],
@@ -1053,45 +1050,6 @@ class _FilterSearchField extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 4,
             vertical: 12,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FiltersButton extends StatelessWidget {
-  const _FiltersButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {},
-        child: _glassCard(
-          radius: 14,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.tune_rounded,
-                  size: 18,
-                  color: Colors.white.withValues(alpha: 0.75),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Filters',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
