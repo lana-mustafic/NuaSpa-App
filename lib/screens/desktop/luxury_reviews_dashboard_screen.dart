@@ -1306,6 +1306,7 @@ class _TableDataRowState extends State<_TableDataRow> {
   Widget build(BuildContext context) {
     final r = widget.row;
     final theme = Theme.of(context);
+    final therapist = (r.terapeutIme ?? '').trim();
     final initials = r.korisnikPunoIme.trim().isNotEmpty
         ? r.korisnikPunoIme.trim()[0].toUpperCase()
         : '?';
@@ -1388,9 +1389,7 @@ class _TableDataRowState extends State<_TableDataRow> {
                     ),
                   ),
                   Text(
-                    (r.terapeutIme ?? '—').trim().isEmpty
-                        ? '—'
-                        : r.terapeutIme!,
+                    therapist.isEmpty ? '—' : therapist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
