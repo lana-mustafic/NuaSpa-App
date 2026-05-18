@@ -280,7 +280,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
               flex: 11,
@@ -382,6 +382,7 @@ class _LeftServicePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final description = service.opis.trim();
+    final imageHeight = (MediaQuery.sizeOf(context).height - 300).clamp(320.0, 520.0);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(_DetailsStyle.cardRadius),
@@ -392,81 +393,101 @@ class _LeftServicePanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(_DetailsStyle.cardRadius),
-                ),
-                child: Image.network(
-                  service.slikaUrl,
-                  height: 520,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      height: 520,
-                      color: _DetailsStyle.accentPurple.withValues(alpha: 0.12),
-                      child: Icon(
-                        Icons.spa_outlined,
-                        size: 72,
-                        color: _DetailsStyle.accentPurple.withValues(alpha: 0.35),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(_DetailsStyle.cardRadius),
+                        ),
+                        child: Image.network(
+                          service.slikaUrl,
+                          height: imageHeight,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: imageHeight,
+                              color: _DetailsStyle.accentPurple
+                                  .withValues(alpha: 0.12),
+                              child: Icon(
+                                Icons.spa_outlined,
+                                size: 72,
+                                color: _DetailsStyle.accentPurple
+                                    .withValues(alpha: 0.35),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    );
-                  },
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.28),
-                  border: Border(
-                    top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(service.naziv, style: _DetailsStyle.displayTitle(context)),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Text(
-                          service.cijenaKm,
-                          style: GoogleFonts.inter(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _DetailsStyle.accentPurple,
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.28),
+                          border: Border(
+                            top: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Icon(
-                          Icons.schedule_rounded,
-                          size: 18,
-                          color: _DetailsStyle.textSecondary,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              service.naziv,
+                              style: _DetailsStyle.displayTitle(context),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Text(
+                                  service.cijenaKm,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: _DetailsStyle.accentPurple,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Icon(
+                                  Icons.schedule_rounded,
+                                  size: 18,
+                                  color: _DetailsStyle.textSecondary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  service.trajanje,
+                                  style: _DetailsStyle.body(context),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            _CategoryPill(label: service.kategorija),
+                            if (benefitTags.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: benefitTags
+                                    .map((t) => _BenefitTag(label: t))
+                                    .toList(),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Text(service.trajanje, style: _DetailsStyle.body(context)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _CategoryPill(label: service.kategorija),
-                    if (benefitTags.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: benefitTags
-                            .map((t) => _BenefitTag(label: t))
-                            .toList(),
                       ),
+                      if (description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: _DescriptionMiniCard(text: description),
+                        ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-              if (description.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: _DescriptionMiniCard(text: description),
-                ),
             ],
           ),
         ),
