@@ -1,16 +1,13 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/format/km_format.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/admin/therapist_admin_profile.dart';
 import '../../models/admin/therapist_kpi.dart';
 import '../../models/rezervacija.dart';
 import '../../models/zaposlenik.dart';
-import '../../ui/navigation/desktop_nav.dart';
-import '../../ui/theme/nua_luxury_tokens.dart';
-import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
 
 class _TherapistScreenBundle {
@@ -25,7 +22,7 @@ class _TherapistScreenBundle {
   final TherapistAdminProfile? profile;
 }
 
-/// High-fidelity therapist profile — matches NuaSpa luxury admin mockup.
+/// Simplified luxury therapist profile — overview-focused layout.
 class AdminTherapistProfileScreen extends StatefulWidget {
   const AdminTherapistProfileScreen({super.key, required this.therapist});
 
@@ -42,16 +39,43 @@ enum _ProfileTab {
   appointments,
   services,
   reviews,
-  performance,
-  payouts,
   notes,
+}
+
+abstract final class _ProfileUi {
+  static const Color bgDeep = Color(0xFF07040F);
+  static const Color bgMid = Color(0xFF120A24);
+  static const Color textPrimary = Color(0xFFF5F3FA);
+  static const Color textSecondary = Color(0xA6FFFFFF);
+  static const Color accentPurple = Color(0xFF7B4DFF);
+  static const Color accentSecondary = Color(0xFF9D6BFF);
+  static const Color success = Color(0xFF4ADE80);
+  static const Color danger = Color(0xFFFF5E7A);
+
+  static TextStyle title(BuildContext context) => GoogleFonts.inter(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.4,
+        color: textPrimary,
+      );
+
+  static TextStyle cardTitle(BuildContext context) => GoogleFonts.inter(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: textPrimary,
+      );
+
+  static TextStyle bodyMuted(BuildContext context) => GoogleFonts.inter(
+        fontSize: 13.5,
+        height: 1.45,
+        color: textSecondary,
+      );
 }
 
 class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScreen> {
   final ApiService _api = ApiService();
   _ProfileTab _tab = _ProfileTab.overview;
   late Zaposlenik _therapist = widget.therapist;
-
   Future<_TherapistScreenBundle>? _bundleFuture;
 
   @override
@@ -60,38 +84,15 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
     _reload();
   }
 
-  String _shortDate(DateTime d) {
-    final x = d.toLocal();
-    return '${x.day.toString().padLeft(2, '0')}.'
-        '${x.month.toString().padLeft(2, '0')}.'
-        '${x.year}';
-  }
-
-  String _hireDateLabel(DateTime? d) {
-    if (d == null) return '—';
-    const m = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final x = d.toLocal();
-    return '${m[x.month - 1]} ${x.day}, ${x.year}';
+  void _reload() {
+    setState(() => _bundleFuture = _loadBundle());
   }
 
   Future<_TherapistScreenBundle> _loadBundle() async {
     final id = _therapist.id;
     final now = DateTime.now();
-    final from = now.subtract(const Duration(days: 30));
-    final fromD = DateTime(from.year, from.month, from.day);
+    final fromD = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 30));
     final toD = DateTime(now.year, now.month, now.day);
     final w0 = _mondayOf(now);
     final w1 = w0.add(const Duration(days: 7));
@@ -126,8 +127,8 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
       SnackBar(
         content: Text(
           result == null
-              ? 'Greška pri čuvanju profila.'
-              : 'Profil terapeuta je ažuriran.',
+              ? 'Failed to save profile.'
+              : 'Therapist profile updated.',
         ),
       ),
     );
@@ -137,36 +138,31 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
     }
   }
 
-  void _newAppointmentForTherapist() {
-    context.read<DesktopNav>().requestAppointmentCreate(
-          zaposlenikId: _therapist.id,
-        );
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-  }
-
   DateTime _mondayOf(DateTime d) {
     final day = DateTime(d.year, d.month, d.day);
     return day.subtract(Duration(days: day.weekday - DateTime.monday));
   }
 
-  void _reload() {
-    setState(() {
-      _bundleFuture = _loadBundle();
-    });
+  String _hireDateLabel(DateTime? d) {
+    if (d == null) return '—';
+    const m = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final x = d.toLocal();
+    return '${m[x.month - 1]} ${x.day}, ${x.year}';
+  }
+
+  String _shortDate(DateTime d) {
+    final x = d.toLocal();
+    return '${x.day.toString().padLeft(2, '0')}.'
+        '${x.month.toString().padLeft(2, '0')}.'
+        '${x.year}';
   }
 
   List<String> _tags(String raw) {
     final t = raw.trim();
-    if (t.isEmpty) {
-      return const [
-        'Deep Tissue',
-        'Swedish',
-        'Aromatherapy',
-        'Relaxation',
-      ];
-    }
+    if (t.isEmpty) return const [];
     return t
         .split(RegExp(r'[,;/]'))
         .map((e) => e.trim())
@@ -175,92 +171,98 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
         .toList();
   }
 
+  String _roleLabel(TherapistKpi? kpi) {
+    final n = kpi?.ukupnoRezervacija ?? 0;
+    return n >= 20 ? 'Senior Therapist' : 'Therapist';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Material(
-      color: Colors.transparent,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_ProfileUi.bgDeep, _ProfileUi.bgMid],
+        ),
+      ),
       child: FutureBuilder<_TherapistScreenBundle>(
         future: _bundleFuture,
         builder: (context, snap) {
           final bundle = snap.data;
           final kpi = bundle?.kpi;
-          final weekItems =
-              bundle?.week ?? const <RezervacijaCalendarItem>[];
+          final weekItems = bundle?.week ?? const <RezervacijaCalendarItem>[];
           final profile = bundle?.profile;
           final t = profile?.terapeut ?? _therapist;
           final name = '${t.ime} ${t.prezime}'.trim();
+          final tags = _tags(t.specijalizacija);
+          final loading = snap.connectionState == ConnectionState.waiting;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 36),
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _BackRow(onBack: () => Navigator.pop(context)),
-                const SizedBox(height: 8),
-                Text(
-                  'Therapist Profile',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.4,
-                    color: Colors.white.withValues(alpha: 0.94),
-                  ),
-                ),
+                _BackLink(onTap: () => Navigator.pop(context)),
+                const SizedBox(height: 12),
+                _PageTopBar(onEdit: _editProfile, onRefresh: _reload),
                 const SizedBox(height: 20),
-                _HeroCard(
-                  name: name,
-                  therapist: t,
-                  linkedEmail: profile?.povezanEmail,
-                  tags: _tags(t.specijalizacija),
-                  kpi: kpi,
-                  onEdit: _editProfile,
-                  onSchedule: () =>
-                      setState(() => _tab = _ProfileTab.schedule),
-                  onNewAppointment: _newAppointmentForTherapist,
-                  onReload: _reload,
-                ),
-                const SizedBox(height: 22),
-                _TabStrip(
-                  selected: _tab,
-                  onSelect: (tab) => setState(() => _tab = tab),
-                ),
-                const SizedBox(height: 22),
-                if (_tab == _ProfileTab.overview)
-                  _OverviewBody(
+                if (loading)
+                  const Padding(
+                    padding: EdgeInsets.all(48),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: _ProfileUi.accentPurple,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                else ...[
+                  _HeroCard(
+                    name: name,
+                    role: _roleLabel(kpi),
                     therapist: t,
-                    kpi: kpi,
-                    weekItems: weekItems,
-                    reviews: profile?.nedavneRecenzije ?? const [],
-                    profile: profile,
-                    hireDateLabel: _hireDateLabel(t.datumZaposlenja),
-                    formatReviewDate: _shortDate,
-                  )
-                else if (_tab == _ProfileTab.schedule)
-                  _WeekScheduleCard(items: weekItems)
-                else if (_tab == _ProfileTab.appointments)
-                  _TherapistAppointmentsPanel(
-                    api: _api,
-                    zaposlenikId: t.id,
-                  )
-                else if (_tab == _ProfileTab.reviews)
-                  _ReviewsListPanel(
-                    reviews: profile?.nedavneRecenzije ?? const [],
-                    formatReviewDate: _shortDate,
-                  )
-                else if (_tab == _ProfileTab.performance)
-                  _PerformanceCard(kpi: kpi)
-                else if (_tab == _ProfileTab.notes)
-                  _InternaNapomenaPanel(
-                    api: _api,
-                    zaposlenikId: t.id,
-                    profile: profile,
-                    onSaved: _reload,
-                  )
-                else
-                  _PlaceholderTab(
-                    label: _tabLabel(_tab),
+                    linkedEmail: profile?.povezanEmail,
+                    tags: tags,
                   ),
+                  const SizedBox(height: 22),
+                  _TabRow(
+                    selected: _tab,
+                    onSelect: (tab) => setState(() => _tab = tab),
+                  ),
+                  const SizedBox(height: 22),
+                  if (_tab == _ProfileTab.overview)
+                    _OverviewSection(
+                      therapist: t,
+                      profile: profile,
+                      kpi: kpi,
+                      weekItems: weekItems,
+                      hireDateLabel: _hireDateLabel(t.datumZaposlenja),
+                    )
+                  else if (_tab == _ProfileTab.schedule)
+                    _WeekScheduleListCard(items: weekItems)
+                  else if (_tab == _ProfileTab.appointments)
+                    _TherapistAppointmentsPanel(
+                      api: _api,
+                      zaposlenikId: t.id,
+                    )
+                  else if (_tab == _ProfileTab.reviews)
+                    _ReviewsPanel(
+                      reviews: profile?.nedavneRecenzije ?? const [],
+                      formatDate: _shortDate,
+                    )
+                  else if (_tab == _ProfileTab.notes)
+                    _InternaNapomenaPanel(
+                      api: _api,
+                      zaposlenikId: t.id,
+                      profile: profile,
+                      onSaved: _reload,
+                    )
+                  else if (_tab == _ProfileTab.services)
+                    const _PlaceholderTab(label: 'Services')
+                  else
+                    const _PlaceholderTab(label: 'Section'),
+                ],
               ],
             ),
           );
@@ -268,42 +270,29 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
       ),
     );
   }
-
-  String _tabLabel(_ProfileTab tab) {
-    return switch (tab) {
-      _ProfileTab.overview => 'Overview',
-      _ProfileTab.schedule => 'Schedule',
-      _ProfileTab.appointments => 'Appointments',
-      _ProfileTab.services => 'Services',
-      _ProfileTab.reviews => 'Client Reviews',
-      _ProfileTab.performance => 'Performance',
-      _ProfileTab.payouts => 'Payouts',
-      _ProfileTab.notes => 'Notes',
-    };
-  }
 }
 
-class _BackRow extends StatelessWidget {
-  const _BackRow({required this.onBack});
+class _BackLink extends StatelessWidget {
+  const _BackLink({required this.onTap});
 
-  final VoidCallback onBack;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
-        onPressed: onBack,
-        icon: Icon(
-          Icons.chevron_left_rounded,
-          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.85),
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: _ProfileUi.textSecondary,
+          padding: EdgeInsets.zero,
         ),
+        icon: const Icon(Icons.chevron_left_rounded, size: 22),
         label: Text(
           'Back to Therapists',
-          style: TextStyle(
-            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.88),
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.05,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
           ),
         ),
       ),
@@ -311,259 +300,229 @@ class _BackRow extends StatelessWidget {
   }
 }
 
+class _PageTopBar extends StatelessWidget {
+  const _PageTopBar({required this.onEdit, required this.onRefresh});
+
+  final VoidCallback onEdit;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text('Therapist Profile', style: _ProfileUi.title(context)),
+        ),
+        _PurpleButton(label: 'Edit Profile', onPressed: onEdit),
+        const SizedBox(width: 10),
+        _IconSquareButton(
+          icon: Icons.more_horiz_rounded,
+          onPressed: () {},
+          menuItems: const [
+            ('refresh', 'Refresh data'),
+          ],
+          onMenu: (v) {
+            if (v == 'refresh') onRefresh();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _PurpleButton extends StatefulWidget {
+  const _PurpleButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  State<_PurpleButton> createState() => _PurpleButtonState();
+}
+
+class _PurpleButtonState extends State<_PurpleButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              colors: _hover
+                  ? [_ProfileUi.accentSecondary, _ProfileUi.accentPurple]
+                  : [_ProfileUi.accentPurple, _ProfileUi.accentSecondary],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _ProfileUi.accentPurple.withValues(alpha: _hover ? 0.4 : 0.28),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IconSquareButton extends StatelessWidget {
+  const _IconSquareButton({
+    required this.icon,
+    required this.onPressed,
+    this.menuItems,
+    this.onMenu,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final List<(String, String)>? menuItems;
+  final void Function(String)? onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Icon(icon, color: Colors.white.withValues(alpha: 0.85), size: 22),
+    );
+
+    if (menuItems != null && onMenu != null) {
+      return PopupMenuButton<String>(
+        tooltip: 'More',
+        offset: const Offset(0, 44),
+        color: _ProfileUi.bgMid,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        onSelected: onMenu,
+        itemBuilder: (_) => [
+          for (final item in menuItems!)
+            PopupMenuItem(value: item.$1, child: Text(item.$2)),
+        ],
+        child: child,
+      );
+    }
+
+    return GestureDetector(onTap: onPressed, child: child);
+  }
+}
+
 class _HeroCard extends StatelessWidget {
   const _HeroCard({
     required this.name,
+    required this.role,
     required this.therapist,
     required this.tags,
-    required this.kpi,
-    required this.onEdit,
-    required this.onSchedule,
-    required this.onNewAppointment,
-    required this.onReload,
     this.linkedEmail,
   });
 
   final String name;
+  final String role;
   final Zaposlenik therapist;
-  final String? linkedEmail;
   final List<String> tags;
-  final TherapistKpi? kpi;
-  final VoidCallback onEdit;
-  final VoidCallback onSchedule;
-  final VoidCallback onNewAppointment;
-  final VoidCallback onReload;
+  final String? linkedEmail;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final kRating = kpi?.prosjecnaOcjena;
-    final rating = (kRating != null && kRating > 0) ? kRating : 4.9;
-    final reviews = kpi?.ukupnoRezervacija ?? 128;
     final phone = therapist.telefon?.trim().isNotEmpty == true
         ? therapist.telefon!
-        : '+387 61 000 000';
+        : '—';
     final le = linkedEmail?.trim();
     final email = (le != null && le.isNotEmpty)
         ? le
-        : 'wellness.${therapist.ime.toLowerCase()}@nuaspa.com';
+        : '—';
+    final initials =
+        '${therapist.ime.isNotEmpty ? therapist.ime[0] : ''}'
+        '${therapist.prezime.isNotEmpty ? therapist.prezime[0] : ''}'
+        .toUpperCase();
 
-    return LuxuryGlassPanel(
-      borderRadius: NuaLuxuryTokens.radiusXl + 4,
-      blurSigma: 28,
-      opacity: 0.42,
-      padding: const EdgeInsets.fromLTRB(26, 26, 26, 22),
+    return _GlassCard(
+      padding: const EdgeInsets.all(32),
       child: LayoutBuilder(
         builder: (context, c) {
-          final stack = c.maxWidth < 900;
-          final avatar = Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 52,
-                backgroundColor:
-                    NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.45),
-                child: Text(
-                  '${therapist.ime.isNotEmpty ? therapist.ime[0] : '·'}'
-                  '${therapist.prezime.isNotEmpty ? therapist.prezime[0] : '·'}',
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4ADE80),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: NuaLuxuryTokens.voidViolet, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4ADE80).withValues(alpha: 0.55),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-
-          final meta = Column(
+          final stack = c.maxWidth < 720;
+          final avatar = _Avatar(initials: initials.isEmpty ? '?' : initials);
+          final info = Column(
             crossAxisAlignment:
                 stack ? CrossAxisAlignment.center : CrossAxisAlignment.start,
             children: [
               Text(
                 name,
                 textAlign: stack ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: _ProfileUi.textPrimary,
+                  letterSpacing: -0.3,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
-                'Senior Therapist',
-                textAlign: stack ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.55),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment:
-                    stack ? MainAxisAlignment.center : MainAxisAlignment.start,
-                children: [
-                  Icon(Icons.star_rounded,
-                      color: NuaLuxuryTokens.champagneGold, size: 22),
-                  const SizedBox(width: 4),
-                  Text(
-                    rating.toStringAsFixed(1),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    ' / $reviews reviews',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _MetaChip(icon: Icons.phone_outlined, text: phone),
-                  _MetaChip(icon: Icons.mail_outline_rounded, text: email),
-                  _MetaChip(
-                    icon: Icons.location_on_outlined,
-                    text: 'Sarajevo · NuaSpa flagship',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
-                children: [
-                  for (final tag in tags) _SpecTag(label: tag),
-                ],
+                role,
+                style: _ProfileUi.bodyMuted(context),
               ),
               const SizedBox(height: 14),
-              Text(
-                therapist.specijalizacija.trim().isEmpty
-                    ? 'Dedicated to restorative bodywork, nervous system down-regulation, '
-                        'and bespoke aromatherapy journeys for discerning guests.'
-                    : therapist.specijalizacija,
-                textAlign: stack ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.45,
-                  color: Colors.white.withValues(alpha: 0.72),
-                ),
-              ),
-            ],
-          );
-
-          final actions = Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: stack ? WrapAlignment.center : WrapAlignment.end,
-            children: [
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                  backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-                ),
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                label: const Text('Edit Profile'),
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  foregroundColor: Colors.white.withValues(alpha: 0.9),
-                  side: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.22),
+              Wrap(
+                spacing: 18,
+                runSpacing: 8,
+                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
+                children: [
+                  _ContactItem(icon: Icons.phone_outlined, text: phone),
+                  _ContactItem(icon: Icons.mail_outline_rounded, text: email),
+                  const _ContactItem(
+                    icon: Icons.location_on_outlined,
+                    text: 'Sarajevo · NuaSpa',
                   ),
-                ),
-                onPressed: onSchedule,
-                icon: const Icon(Icons.calendar_month_outlined, size: 20),
-                label: const Text('View Schedule'),
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  foregroundColor: Colors.white.withValues(alpha: 0.9),
-                  side: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.22),
-                  ),
-                ),
-                onPressed: onNewAppointment,
-                icon: const Icon(Icons.event_note_outlined, size: 20),
-                label: const Text('New appointment'),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'More actions',
-                icon: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Icon(Icons.more_horiz_rounded,
-                      color: Colors.white.withValues(alpha: 0.85)),
-                ),
-                onSelected: (v) {
-                  if (v == 'refresh') onReload();
-                },
-                itemBuilder: (ctx) => const [
-                  PopupMenuItem(value: 'refresh', child: Text('Refresh data')),
-                  PopupMenuItem(value: 'export', child: Text('Export profile')),
                 ],
               ),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: stack ? WrapAlignment.center : WrapAlignment.start,
+                  children: [
+                    for (final tag in tags) _SpecPill(label: tag),
+                  ],
+                ),
+              ],
             ],
           );
 
           if (stack) {
             return Column(
-              children: [
-                avatar,
-                const SizedBox(height: 20),
-                meta,
-                const SizedBox(height: 20),
-                actions,
-              ],
+              children: [avatar, const SizedBox(height: 20), info],
             );
           }
-
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               avatar,
-              const SizedBox(width: 28),
-              Expanded(child: meta),
-              const SizedBox(width: 18),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
-                child: actions,
-              ),
+              const SizedBox(width: 24),
+              Expanded(child: info),
             ],
           );
         },
@@ -572,8 +531,68 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.icon, required this.text});
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.initials});
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 88,
+          height: 88,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF7B4DFF),
+                Color(0xFF9D6BFF),
+                Color(0xFFC8B6E8),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            initials,
+            style: GoogleFonts.inter(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        Positioned(
+          right: 4,
+          bottom: 4,
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: _ProfileUi.success,
+              shape: BoxShape.circle,
+              border: Border.all(color: _ProfileUi.bgDeep, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactItem extends StatelessWidget {
+  const _ContactItem({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -583,68 +602,58 @@ class _MetaChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 17, color: Colors.white.withValues(alpha: 0.45)),
+        Icon(icon, size: 16, color: _ProfileUi.textSecondary),
         const SizedBox(width: 6),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w600,
-              ),
-        ),
+        Text(text, style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 13)),
       ],
     );
   }
 }
 
-class _SpecTag extends StatelessWidget {
-  const _SpecTag({required this.label});
+class _SpecPill extends StatelessWidget {
+  const _SpecPill({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        gradient: LinearGradient(
-          colors: [
-            NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
-            NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12),
-          ],
-        ),
+        color: _ProfileUi.accentPurple.withValues(alpha: 0.18),
         border: Border.all(
-          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.35),
+          color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
         ),
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
-            ),
+        style: GoogleFonts.inter(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: _ProfileUi.textPrimary,
+        ),
       ),
     );
   }
 }
 
-class _TabStrip extends StatelessWidget {
-  const _TabStrip({required this.selected, required this.onSelect});
+class _TabRow extends StatelessWidget {
+  const _TabRow({required this.selected, required this.onSelect});
 
   final _ProfileTab selected;
   final ValueChanged<_ProfileTab> onSelect;
 
-  static const _tabs = <_ProfileTab>[
-    _ProfileTab.overview,
-    _ProfileTab.schedule,
-    _ProfileTab.appointments,
-    _ProfileTab.services,
-    _ProfileTab.reviews,
-    _ProfileTab.performance,
-    _ProfileTab.payouts,
-    _ProfileTab.notes,
-  ];
+  static const _tabs = _ProfileTab.values;
+
+  static String _label(_ProfileTab t) => switch (t) {
+        _ProfileTab.overview => 'Overview',
+        _ProfileTab.schedule => 'Schedule',
+        _ProfileTab.appointments => 'Appointments',
+        _ProfileTab.services => 'Services',
+        _ProfileTab.reviews => 'Client Reviews',
+        _ProfileTab.notes => 'Notes',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -653,32 +662,21 @@ class _TabStrip extends StatelessWidget {
       child: Row(
         children: [
           for (final tab in _tabs) ...[
-            _TabPill(
+            _TabItem(
               label: _label(tab),
               selected: selected == tab,
               onTap: () => onSelect(tab),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 24),
           ],
         ],
       ),
     );
   }
-
-  String _label(_ProfileTab t) => switch (t) {
-        _ProfileTab.overview => 'Overview',
-        _ProfileTab.schedule => 'Schedule',
-        _ProfileTab.appointments => 'Appointments',
-        _ProfileTab.services => 'Services',
-        _ProfileTab.reviews => 'Client Reviews',
-        _ProfileTab.performance => 'Performance',
-        _ProfileTab.payouts => 'Payouts',
-        _ProfileTab.notes => 'Notes',
-      };
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({
+class _TabItem extends StatelessWidget {
+  const _TabItem({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -690,46 +688,639 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: selected
-                ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.22)
-                : Colors.white.withValues(alpha: 0.04),
-            border: Border.all(
-              color: selected
-                  ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.75)
-                  : Colors.white.withValues(alpha: 0.08),
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color:
-                          NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.25),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: selected
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.55),
-                ),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected
+                  ? _ProfileUi.textPrimary
+                  : _ProfileUi.textSecondary,
+            ),
           ),
+          const SizedBox(height: 10),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 2,
+            decoration: BoxDecoration(
+              color: selected ? _ProfileUi.accentPurple : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: _ProfileUi.accentPurple.withValues(alpha: 0.5),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewSection extends StatelessWidget {
+  const _OverviewSection({
+    required this.therapist,
+    required this.profile,
+    required this.kpi,
+    required this.weekItems,
+    required this.hireDateLabel,
+  });
+
+  final Zaposlenik therapist;
+  final TherapistAdminProfile? profile;
+  final TherapistKpi? kpi;
+  final List<RezervacijaCalendarItem> weekItems;
+  final String hireDateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final stacked = c.maxWidth < 1100;
+        final grid = stacked
+            ? Column(
+                children: [
+                  _AboutCard(
+                    therapist: therapist,
+                    profile: profile,
+                    hireDateLabel: hireDateLabel,
+                  ),
+                  const SizedBox(height: 16),
+                  _WeekScheduleListCard(items: weekItems),
+                  const SizedBox(height: 16),
+                  _PerformanceSummaryCard(kpi: kpi),
+                ],
+              )
+            : IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _AboutCard(
+                        therapist: therapist,
+                        profile: profile,
+                        hireDateLabel: hireDateLabel,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _WeekScheduleListCard(items: weekItems),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(child: _PerformanceSummaryCard(kpi: kpi)),
+                  ],
+                ),
+              );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            grid,
+            const SizedBox(height: 16),
+            _TopServicesCard(items: weekItems, fallbackTags: therapist.specijalizacija),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AboutCard extends StatelessWidget {
+  const _AboutCard({
+    required this.therapist,
+    required this.profile,
+    required this.hireDateLabel,
+  });
+
+  final Zaposlenik therapist;
+  final TherapistAdminProfile? profile;
+  final String hireDateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = therapist.telefon?.trim().isNotEmpty == true
+        ? therapist.telefon!
+        : '—';
+    final le = profile?.povezanEmail?.trim();
+    final email = (le != null && le.isNotEmpty)
+        ? le
+        : (profile?.imaKorisnickiNalog == true ? '—' : 'No linked account');
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('About ${therapist.ime}', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 16),
+          _InfoRow(label: 'Employee ID', value: '#${therapist.id}'),
+          _InfoRow(label: 'Phone', value: phone),
+          _InfoRow(label: 'Email', value: email),
+          _InfoRow(label: 'Hire Date', value: hireDateLabel),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              SizedBox(
+                width: 110,
+                child: Text('Status', style: _ProfileUi.bodyMuted(context)),
+              ),
+              _StatusBadge(label: 'Active'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _InfoRow(label: 'Languages', value: 'English, Bosnian'),
+          const SizedBox(height: 8),
+          Text('Education', style: _ProfileUi.bodyMuted(context)),
+          const SizedBox(height: 6),
+          Text(
+            '• Certified Massage Therapist (CMT)\n'
+            '• Advanced aromatherapy practitioner',
+            style: _ProfileUi.bodyMuted(context).copyWith(height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: _ProfileUi.bodyMuted(context)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: _ProfileUi.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: _ProfileUi.success.withValues(alpha: 0.15),
+        border: Border.all(color: _ProfileUi.success.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: _ProfileUi.success,
         ),
       ),
+    );
+  }
+}
+
+class _WeekScheduleListCard extends StatelessWidget {
+  const _WeekScheduleListCard({required this.items});
+
+  final List<RezervacijaCalendarItem> items;
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - DateTime.monday));
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("This Week's Schedule", style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 16),
+          for (var i = 0; i < 7; i++) ...[
+            _ScheduleRow(
+              label: _formatDay(monday.add(Duration(days: i)), i),
+              hours: _hoursForDay(monday.add(Duration(days: i)), items),
+            ),
+            if (i < 6) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDay(DateTime day, int index) {
+    return '${_dayNames[index]} ${_months[day.month - 1]} ${day.day}';
+  }
+
+  String _hoursForDay(DateTime day, List<RezervacijaCalendarItem> items) {
+    final dayItems = items.where((e) {
+      if (e.isOtkazana) return false;
+      final d = e.datumRezervacije.toLocal();
+      return d.year == day.year && d.month == day.month && d.day == day.day;
+    }).toList();
+
+    if (dayItems.isEmpty) return 'Day off';
+
+    var minH = 23;
+    var minM = 59;
+    var maxH = 0;
+    var maxM = 0;
+    for (final e in dayItems) {
+      final t = e.datumRezervacije.toLocal();
+      final end = t.add(Duration(minutes: e.uslugaTrajanjeMinuta));
+      if (t.hour < minH || (t.hour == minH && t.minute < minM)) {
+        minH = t.hour;
+        minM = t.minute;
+      }
+      if (end.hour > maxH || (end.hour == maxH && end.minute > maxM)) {
+        maxH = end.hour;
+        maxM = end.minute;
+      }
+    }
+
+    if (dayItems.length == 1 && minH == maxH) {
+      return '${_fmt(minH, minM)}–${_fmt(maxH + 1, 0)}';
+    }
+    return '${_fmt(minH, minM)}–${_fmt(maxH, maxM)}';
+  }
+
+  String _fmt(int h, int m) =>
+      '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+}
+
+class _ScheduleRow extends StatelessWidget {
+  const _ScheduleRow({required this.label, required this.hours});
+
+  final String label;
+  final String hours;
+
+  bool get _isOff => hours == 'Day off';
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (!_isOff) ...[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: _ProfileUi.success,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+        ] else
+          const SizedBox(width: 18),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: _ProfileUi.textPrimary,
+            ),
+          ),
+        ),
+        Text(
+          hours,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: _isOff ? _ProfileUi.textSecondary : _ProfileUi.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PerformanceSummaryCard extends StatelessWidget {
+  const _PerformanceSummaryCard({required this.kpi});
+
+  final TherapistKpi? kpi;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = kpi?.ukupnoRezervacija ?? 0;
+    final completed = kpi?.placeneRezervacije ?? kpi?.potvrdjeneRezervacije ?? 0;
+    final cancel = kpi?.otkazaneRezervacije ?? 0;
+    final cancelPct = total == 0 ? 0.0 : (cancel / total * 100);
+    final rating = (kpi?.prosjecnaOcjena ?? 0) > 0 ? kpi!.prosjecnaOcjena : 0;
+    final satisfaction =
+        rating > 0 ? (rating / 5 * 100).round() : null;
+    final revenue = kpi?.prihod ?? 0;
+
+    final rows = <_PerfRow>[
+      _PerfRow('Total Appointments', '$total', badge: '+12%', positive: true),
+      _PerfRow('Completed Appointments', '$completed', badge: '+14%', positive: true),
+      _PerfRow(
+        'Cancellation Rate',
+        '${cancelPct.toStringAsFixed(0)}%',
+        badge: '−2%',
+        positive: false,
+      ),
+      _PerfRow(
+        'Average Rating',
+        rating > 0 ? '${rating.toStringAsFixed(1)} / 5' : '—',
+        badge: rating > 0 ? '+0.2' : null,
+        positive: true,
+      ),
+      _PerfRow(
+        'Client Satisfaction',
+        satisfaction != null ? '$satisfaction%' : '—',
+        badge: satisfaction != null ? '+5%' : null,
+        positive: true,
+      ),
+      _PerfRow(
+        'Revenue Generated',
+        revenue > 0 ? formatKm(revenue) : '—',
+        badge: revenue > 0 ? '+18%' : null,
+        positive: true,
+      ),
+    ];
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Performance Summary', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 14),
+          for (final row in rows) ...[
+            _PerformanceRow(row: row),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PerfRow {
+  const _PerfRow(this.label, this.value, {this.badge, this.positive = true});
+
+  final String label;
+  final String value;
+  final String? badge;
+  final bool positive;
+}
+
+class _PerformanceRow extends StatelessWidget {
+  const _PerformanceRow({required this.row});
+
+  final _PerfRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(row.label, style: _ProfileUi.bodyMuted(context)),
+        ),
+        Text(
+          row.value,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: _ProfileUi.textPrimary,
+          ),
+        ),
+        if (row.badge != null) ...[
+          const SizedBox(width: 8),
+          _TrendBadge(text: row.badge!, positive: row.positive),
+        ],
+      ],
+    );
+  }
+}
+
+class _TrendBadge extends StatelessWidget {
+  const _TrendBadge({required this.text, required this.positive});
+
+  final String text;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? _ProfileUi.success : _ProfileUi.danger;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        color: color.withValues(alpha: 0.12),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _TopServicesCard extends StatelessWidget {
+  const _TopServicesCard({
+    required this.items,
+    required this.fallbackTags,
+  });
+
+  final List<RezervacijaCalendarItem> items;
+  final String fallbackTags;
+
+  List<(String, int)> _serviceCounts() {
+    final counts = <String, int>{};
+    for (final e in items) {
+      if (e.isOtkazana) continue;
+      final n = e.uslugaNaziv?.trim();
+      if (n == null || n.isEmpty) continue;
+      counts[n] = (counts[n] ?? 0) + 1;
+    }
+    if (counts.isNotEmpty) {
+      final entries = counts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return entries.take(4).map((e) => (e.key, e.value)).toList();
+    }
+
+    final tags = fallbackTags
+        .split(RegExp(r'[,;/]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(3)
+        .toList();
+    if (tags.isEmpty) {
+      return const [
+        ('Deep Tissue', 4),
+        ('Swedish', 3),
+        ('Aromatherapy', 2),
+        ('Other', 1),
+      ];
+    }
+    final weights = [40, 30, 20, 10];
+    final result = <(String, int)>[];
+    for (var i = 0; i < tags.length && i < 3; i++) {
+      result.add((tags[i], weights[i]));
+    }
+    if (tags.length < 4) result.add(('Other', 10));
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final top = _serviceCounts();
+    final total = top.fold<int>(0, (a, e) => a + e.$2);
+    final safeTotal = total == 0 ? 1 : total;
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Top Services Performed', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 18),
+          for (var i = 0; i < top.length; i++) ...[
+            _ServiceProgressRow(
+              label: top[i].$1,
+              percent: (top[i].$2 / safeTotal * 100).round(),
+            ),
+            if (i < top.length - 1) const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceProgressRow extends StatelessWidget {
+  const _ServiceProgressRow({required this.label, required this.percent});
+
+  final String label;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: _ProfileUi.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: SizedBox(
+              height: 8,
+              child: Stack(
+                children: [
+                  Container(color: Colors.white.withValues(alpha: 0.08)),
+                  FractionallySizedBox(
+                    widthFactor: percent / 100,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFF7B4DFF),
+                            Color(0xFF9D6BFF),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 40,
+          child: Text(
+            '$percent%',
+            textAlign: TextAlign.right,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _ProfileUi.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding ?? const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: _ProfileUi.accentPurple.withValues(alpha: 0.12),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
@@ -741,1002 +1332,105 @@ class _PlaceholderTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 22,
-      opacity: 0.32,
-      padding: const EdgeInsets.all(40),
-      child: Center(
-        child: Text(
-          '$label — full module ships next iteration.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Text(
+            '${label[0].toUpperCase()}${label.substring(1)} — coming soon.',
+            style: _ProfileUi.bodyMuted(context),
+          ),
         ),
       ),
     );
   }
 }
 
-class _OverviewBody extends StatelessWidget {
-  const _OverviewBody({
-    required this.therapist,
-    required this.kpi,
-    required this.weekItems,
+class _ReviewsPanel extends StatelessWidget {
+  const _ReviewsPanel({
     required this.reviews,
-    required this.profile,
-    required this.hireDateLabel,
-    required this.formatReviewDate,
-  });
-
-  final Zaposlenik therapist;
-  final TherapistKpi? kpi;
-  final List<RezervacijaCalendarItem> weekItems;
-  final List<TherapistReviewRow> reviews;
-  final TherapistAdminProfile? profile;
-  final String hireDateLabel;
-  final String Function(DateTime d) formatReviewDate;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        if (c.maxWidth < 1100) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _AboutCard(
-                therapist: therapist,
-                linkedEmail: profile?.povezanEmail,
-                hireDateLabel: hireDateLabel,
-                imaKorisnickiNalog: profile?.imaKorisnickiNalog ?? false,
-              ),
-              const SizedBox(height: 18),
-              _ReviewsCard(
-                reviews: reviews,
-                formatReviewDate: formatReviewDate,
-              ),
-              const SizedBox(height: 18),
-              _WeekScheduleCard(items: weekItems),
-              const SizedBox(height: 18),
-              _ServicesDonutCard(items: weekItems),
-              const SizedBox(height: 18),
-              _PerformanceCard(kpi: kpi),
-              const SizedBox(height: 18),
-              _UpcomingCard(items: weekItems),
-              const SizedBox(height: 18),
-              _NotesSummaryCard(
-                name: '${therapist.ime} ${therapist.prezime}'.trim(),
-                note: profile?.internaNapomena,
-                imaKorisnickiNalog:
-                    profile?.imaKorisnickiNalog ?? false,
-              ),
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 5,
-              child: Column(
-                children: [
-                  _AboutCard(
-                    therapist: therapist,
-                    linkedEmail: profile?.povezanEmail,
-                    hireDateLabel: hireDateLabel,
-                    imaKorisnickiNalog: profile?.imaKorisnickiNalog ?? false,
-                  ),
-                  const SizedBox(height: 18),
-                  _ReviewsCard(
-                    reviews: reviews,
-                    formatReviewDate: formatReviewDate,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              flex: 6,
-              child: Column(
-                children: [
-                  _WeekScheduleCard(items: weekItems),
-                  const SizedBox(height: 18),
-                  _ServicesDonutCard(items: weekItems),
-                ],
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              flex: 5,
-              child: Column(
-                children: [
-                  _PerformanceCard(kpi: kpi),
-                  const SizedBox(height: 18),
-                  _UpcomingCard(items: weekItems),
-                  const SizedBox(height: 18),
-                  _NotesSummaryCard(
-                    name: '${therapist.ime} ${therapist.prezime}'.trim(),
-                    note: profile?.internaNapomena,
-                    imaKorisnickiNalog:
-                        profile?.imaKorisnickiNalog ?? false,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _AboutCard extends StatelessWidget {
-  const _AboutCard({
-    required this.therapist,
-    required this.linkedEmail,
-    required this.hireDateLabel,
-    required this.imaKorisnickiNalog,
-  });
-
-  final Zaposlenik therapist;
-  final String? linkedEmail;
-  final String hireDateLabel;
-  final bool imaKorisnickiNalog;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final phone = therapist.telefon?.trim().isNotEmpty == true
-        ? therapist.telefon!
-        : '—';
-    final le = linkedEmail?.trim();
-    final emailRow = (le != null && le.isNotEmpty)
-        ? le
-        : (imaKorisnickiNalog ? '—' : 'Nema povezanog korisničkog naloga');
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.38,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'About ${therapist.ime}',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _AboutRow('Employee ID', '#${therapist.id}'),
-          _AboutRow('Phone', phone),
-          _AboutRow('Email', emailRow),
-          _AboutRow('Hire Date', hireDateLabel),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                'Status',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.45),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: const Color(0xFF4ADE80).withValues(alpha: 0.18),
-                  border: Border.all(
-                    color: const Color(0xFF4ADE80).withValues(alpha: 0.55),
-                  ),
-                ),
-                child: Text(
-                  'Active',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF4ADE80),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _AboutRow('Languages', 'English, Bosnian'),
-          const SizedBox(height: 10),
-          Text(
-            'Education',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.85),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '• Certified Massage Therapist (CMT)\n'
-            '• Advanced aromatherapy practitioner',
-            style: theme.textTheme.bodySmall?.copyWith(
-              height: 1.45,
-              color: Colors.white.withValues(alpha: 0.65),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AboutRow extends StatelessWidget {
-  const _AboutRow(this.k, this.v);
-
-  final String k;
-  final String v;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 108,
-            child: Text(
-              k,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              v,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewsCard extends StatelessWidget {
-  const _ReviewsCard({
-    required this.reviews,
-    required this.formatReviewDate,
+    required this.formatDate,
   });
 
   final List<TherapistReviewRow> reviews;
-  final String Function(DateTime d) formatReviewDate;
+  final String Function(DateTime) formatDate;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.36,
-      padding: const EdgeInsets.all(20),
+    return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Recent Client Reviews',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
+          Text('Client Reviews', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 16),
           if (reviews.isEmpty)
             Text(
-              'Još nema recenzija za potvrđene termine s ovim terapeutom.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-                height: 1.4,
-              ),
+              'No reviews yet for confirmed sessions with this therapist.',
+              style: _ProfileUi.bodyMuted(context),
             )
           else
             for (var i = 0; i < reviews.length; i++) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor:
-                        NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.4),
-                    child: Text(
-                      reviews[i].korisnikIme.isNotEmpty
-                          ? reviews[i].korisnikIme[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                reviews[i].korisnikIme,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              formatReviewDate(reviews[i].createdAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.45),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (reviews[i].uslugaNaziv.trim().isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            reviews[i].uslugaNaziv,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: NuaLuxuryTokens.lavenderWhisper
-                                  .withValues(alpha: 0.75),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Row(
-                          children: List.generate(
-                            5,
-                            (si) => Icon(
-                              Icons.star_rounded,
-                              size: 16,
-                              color: si < reviews[i].ocjena
-                                  ? NuaLuxuryTokens.champagneGold
-                                  : Colors.white.withValues(alpha: 0.12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          reviews[i].komentar.trim().isEmpty
-                              ? '—'
-                              : reviews[i].komentar,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.68),
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              _ReviewTile(review: reviews[i], formatDate: formatDate),
               if (i < reviews.length - 1)
-                Divider(height: 22, color: Colors.white.withValues(alpha: 0.06)),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _WeekScheduleCard extends StatelessWidget {
-  const _WeekScheduleCard({required this.items});
-
-  final List<RezervacijaCalendarItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - DateTime.monday));
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.38,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "This Week's Schedule",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              for (var i = 0; i < 7; i++) ...[
-                Expanded(
-                  child: _DayCell(
-                    label: names[i],
-                    date: monday.add(Duration(days: i)),
-                    busy: items.any((e) {
-                      final d = e.datumRezervacije.toLocal();
-                      final t = monday.add(Duration(days: i));
-                      return d.year == t.year &&
-                          d.month == t.month &&
-                          d.day == t.day &&
-                          !e.isOtkazana;
-                    }),
-                  ),
+                Divider(
+                  height: 24,
+                  color: Colors.white.withValues(alpha: 0.06),
                 ),
-                if (i < 6) const SizedBox(width: 8),
-              ],
             ],
-          ),
         ],
       ),
     );
   }
 }
 
-class _DayCell extends StatelessWidget {
-  const _DayCell({
-    required this.label,
-    required this.date,
-    required this.busy,
-  });
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review, required this.formatDate});
 
-  final String label;
-  final DateTime date;
-  final bool busy;
+  final TherapistReviewRow review;
+  final String Function(DateTime) formatDate;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white.withValues(alpha: busy ? 0.07 : 0.03),
-        border: Border.all(
-          color: busy
-              ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: 0.08),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                review.korisnikIme,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
+            ),
+            Text(formatDate(review.createdAt), style: _ProfileUi.bodyMuted(context)),
+          ],
         ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.45),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${date.day}',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (busy) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF4ADE80),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '9 AM – 6 PM',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.65),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ] else
-            Text(
-              'Day off',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.38),
-              ),
-            ),
+        if (review.uslugaNaziv.trim().isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(review.uslugaNaziv, style: _ProfileUi.bodyMuted(context)),
         ],
-      ),
-    );
-  }
-}
-
-class _ServicesDonutCard extends StatelessWidget {
-  const _ServicesDonutCard({required this.items});
-
-  final List<RezervacijaCalendarItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final counts = <String, int>{};
-    for (final e in items) {
-      if (e.isOtkazana) continue;
-      final n = e.uslugaNaziv ?? 'Treatment';
-      counts[n] = (counts[n] ?? 0) + 1;
-    }
-    if (counts.isEmpty) {
-      counts['Deep Tissue'] = 4;
-      counts['Swedish'] = 3;
-      counts['Aromatherapy'] = 2;
-      counts['Relaxation'] = 1;
-    }
-    final entries = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final top = entries.take(4).toList();
-    final total = top.fold<int>(0, (a, e) => a + e.value);
-    final colors = [
-      NuaLuxuryTokens.softPurpleGlow,
-      NuaLuxuryTokens.champagneGold,
-      NuaLuxuryTokens.lavenderWhisper,
-      const Color(0xFF7EC8E3),
-    ];
-
-    final sections = <PieChartSectionData>[];
-    for (var i = 0; i < top.length; i++) {
-      sections.add(
-        PieChartSectionData(
-          value: top[i].value.toDouble(),
-          color: colors[i % colors.length].withValues(alpha: 0.92),
-          radius: 46,
-          showTitle: false,
-          borderSide: BorderSide.none,
+        const SizedBox(height: 6),
+        Row(
+          children: List.generate(
+            5,
+            (i) => Icon(
+              Icons.star_rounded,
+              size: 16,
+              color: i < review.ocjena
+                  ? const Color(0xFFF5B942)
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
         ),
-      );
-    }
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.38,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Top Services Performed',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 200,
-            child: Row(
-              children: [
-                Expanded(
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 52,
-                      sections: sections,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: top.length,
-                    itemBuilder: (_, i) {
-                      final pct =
-                          total == 0 ? 0 : (top[i].value / total * 100).round();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: colors[i % colors.length],
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: colors[i % colors.length]
-                                        .withValues(alpha: 0.4),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                top[i].key,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '$pct%',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white.withValues(alpha: 0.75),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PerformanceCard extends StatelessWidget {
-  const _PerformanceCard({required this.kpi});
-
-  final TherapistKpi? kpi;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final total = kpi?.ukupnoRezervacija ?? 42;
-    final done = kpi?.potvrdjeneRezervacije ?? 38;
-    final cancel = kpi?.otkazaneRezervacije ?? 2;
-    final rate = kpi?.prosjecnaOcjena ?? 4.9;
-    final rev = kpi?.prihod ?? 2850.0;
-    final cancelPct = total == 0 ? 0.0 : (cancel / total * 100);
-
-    final rows = <(String, String, String)>[
-      ('Total Appointments', '$total', '+12%'),
-      ('Completed Appointments', '$done', '+14%'),
-      ('Cancellation Rate', '${cancelPct.toStringAsFixed(0)}%', '−2%'),
-      ('Average Rating', '${rate.toStringAsFixed(1)} / 5', '+0.2'),
-      ('Client Satisfaction', '98%', '+5%'),
-      ('Revenue Generated', '${rev.toStringAsFixed(0)} KM', '+18%'),
-    ];
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.38,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Performance Summary',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          for (final r in rows)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      r.$1,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    r.$2,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _TrendChip(text: r.$3),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrendChip extends StatelessWidget {
-  const _TrendChip({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final isNegative = text.startsWith('−') || text.startsWith('-');
-    final color = isNegative
-        ? const Color(0xFFFF8A80)
-        : const Color(0xFF4ADE80);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: color.withValues(alpha: 0.15),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-      ),
-    );
-  }
-}
-
-class _UpcomingCard extends StatelessWidget {
-  const _UpcomingCard({required this.items});
-
-  final List<RezervacijaCalendarItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final now = DateTime.now();
-    final upcoming = items
-        .where((e) => !e.isOtkazana && e.datumRezervacije.isAfter(now))
-        .toList()
-      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
-    final show = upcoming.take(3).toList();
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.36,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Upcoming Appointments',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (show.isEmpty)
-            Text(
-              'No upcoming bookings in loaded window.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
-            )
-          else
-            for (final e in show)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 56,
-                      child: Text(
-                        _hm(e.datumRezervacije),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor:
-                          NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.4),
-                      child: Text(
-                        (e.korisnikIme ?? 'G')[0],
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            e.korisnikIme ?? 'Guest',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            e.uslugaNaziv ?? 'Treatment',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    _StatusBadge(
-                      label: e.isPotvrdjena ? 'Confirmed' : 'Pending',
-                      gold: !e.isPotvrdjena,
-                    ),
-                  ],
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-
-  String _hm(DateTime d) {
-    final l = d.toLocal();
-    final h = l.hour > 12 ? l.hour - 12 : (l.hour == 0 ? 12 : l.hour);
-    final am = l.hour >= 12 ? 'PM' : 'AM';
-    return '$h:${l.minute.toString().padLeft(2, '0')} $am';
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label, this.gold = false});
-
-  final String label;
-  final bool gold;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = gold
-        ? NuaLuxuryTokens.champagneGold
-        : NuaLuxuryTokens.softPurpleGlow;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: c.withValues(alpha: 0.16),
-        border: Border.all(color: c.withValues(alpha: 0.55)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
-      ),
-    );
-  }
-}
-
-class _NotesSummaryCard extends StatelessWidget {
-  const _NotesSummaryCard({
-    required this.name,
-    required this.note,
-    required this.imaKorisnickiNalog,
-  });
-
-  final String name;
-  final String? note;
-  final bool imaKorisnickiNalog;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final trimmed = note?.trim() ?? '';
-    final body = !imaKorisnickiNalog
-        ? 'Terapeut nema povezan korisnički nalog — polje NapomenaZaTerapeuta '
-            'na kartici klijenta nije vezano za ovog terapeuta.'
-        : (trimmed.isEmpty
-            ? 'Još nema interne napomene za povezani račun.'
-            : trimmed);
-
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.34,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Interna napomena',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.45),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.format_quote_rounded,
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.45),
-                size: 28,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  body,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.45,
-                    color: Colors.white.withValues(alpha: 0.72),
-                    fontStyle: imaKorisnickiNalog && trimmed.isNotEmpty
-                        ? FontStyle.italic
-                        : FontStyle.normal,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewsListPanel extends StatelessWidget {
-  const _ReviewsListPanel({
-    required this.reviews,
-    required this.formatReviewDate,
-  });
-
-  final List<TherapistReviewRow> reviews;
-  final String Function(DateTime d) formatReviewDate;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 22,
-      opacity: 0.32,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Client Reviews',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _ReviewsCard(
-            reviews: reviews,
-            formatReviewDate: formatReviewDate,
-          ),
-        ],
-      ),
+        const SizedBox(height: 6),
+        Text(
+          review.komentar.trim().isEmpty ? '—' : review.komentar,
+          style: _ProfileUi.bodyMuted(context),
+        ),
+      ],
     );
   }
 }
@@ -1755,8 +1449,7 @@ class _TherapistAppointmentsPanel extends StatefulWidget {
       _TherapistAppointmentsPanelState();
 }
 
-class _TherapistAppointmentsPanelState
-    extends State<_TherapistAppointmentsPanel> {
+class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel> {
   late Future<List<Rezervacija>> _future = widget.api.getRezervacijeFiltered(
     includeOtkazane: true,
     zaposlenikId: widget.zaposlenikId,
@@ -1764,24 +1457,14 @@ class _TherapistAppointmentsPanelState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 22,
-      opacity: 0.32,
-      padding: const EdgeInsets.all(24),
+    return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Appointments',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: Text('Appointments', style: _ProfileUi.cardTitle(context)),
               ),
               TextButton.icon(
                 onPressed: () => setState(() {
@@ -1790,8 +1473,8 @@ class _TherapistAppointmentsPanelState
                     zaposlenikId: widget.zaposlenikId,
                   );
                 }),
-                icon: const Icon(Icons.refresh_rounded, size: 20),
-                label: const Text('Osvježi'),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -1802,17 +1485,19 @@ class _TherapistAppointmentsPanelState
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: _ProfileUi.accentPurple,
+                      strokeWidth: 2,
+                    ),
+                  ),
                 );
               }
               final list = snap.data ?? const <Rezervacija>[];
               if (list.isEmpty) {
                 return Text(
-                  'Nema rezervacija za ovog terapeuta (ili su sve otkazane '
-                  'i filtrirane).',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.55),
-                  ),
+                  'No appointments for this therapist.',
+                  style: _ProfileUi.bodyMuted(context),
                 );
               }
               return Column(
@@ -1821,27 +1506,27 @@ class _TherapistAppointmentsPanelState
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        list[i].korisnikIme ?? 'Klijent #${list[i].korisnikId}',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                        list[i].korisnikIme ?? 'Client #${list[i].korisnikId}',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: _ProfileUi.textPrimary,
                         ),
                       ),
                       subtitle: Text(
-                        '${list[i].uslugaNaziv ?? 'Usluga'} · '
-                        '${_fmtApptDateTime(list[i].datumRezervacije)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.5),
-                        ),
+                        '${list[i].uslugaNaziv ?? 'Service'} · '
+                        '${_fmt(list[i].datumRezervacije)}',
+                        style: _ProfileUi.bodyMuted(context),
                       ),
                       trailing: Text(
                         list[i].isOtkazana
-                            ? 'Otkazano'
-                            : (list[i].isPotvrdjena ? 'Potvrđeno' : 'Na čekanju'),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                            ? 'Cancelled'
+                            : (list[i].isPotvrdjena ? 'Confirmed' : 'Pending'),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                           color: list[i].isOtkazana
-                              ? Colors.redAccent.withValues(alpha: 0.9)
-                              : Colors.white.withValues(alpha: 0.65),
+                              ? _ProfileUi.danger
+                              : _ProfileUi.textSecondary,
                         ),
                       ),
                     ),
@@ -1860,7 +1545,7 @@ class _TherapistAppointmentsPanelState
     );
   }
 
-  String _fmtApptDateTime(DateTime d) {
+  String _fmt(DateTime d) {
     final l = d.toLocal();
     return '${l.day.toString().padLeft(2, '0')}.'
         '${l.month.toString().padLeft(2, '0')}.'
@@ -1919,91 +1604,76 @@ class _InternaNapomenaPanelState extends State<_InternaNapomenaPanel> {
     final messenger = ScaffoldMessenger.of(context);
     if (ok == true) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Interna napomena je spremljena.')),
+        const SnackBar(content: Text('Note saved.')),
       );
       widget.onSaved();
-    } else if (ok == false) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Terapeut nema povezan korisnički nalog — napomena se ne može spremiti.',
-          ),
-        ),
-      );
     } else {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Greška pri spremanju napomene.')),
+        const SnackBar(content: Text('Could not save note.')),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final canEdit = widget.profile?.imaKorisnickiNalog ?? false;
 
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 22,
-      opacity: 0.32,
-      padding: const EdgeInsets.all(24),
+    return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Interna napomena',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          Text('Notes', style: _ProfileUi.cardTitle(context)),
           const SizedBox(height: 8),
           Text(
-            'Vidljivo na kartici povezanog korisničkog naloga (NapomenaZaTerapeuta).',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.5),
-              height: 1.35,
-            ),
+            'Internal note linked to the therapist account.',
+            style: _ProfileUi.bodyMuted(context),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           if (!canEdit)
             Text(
-              'Ovaj terapeut nema povezan Identity korisnik s postavljenim ZaposlenikId.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
+              'This therapist has no linked user account.',
+              style: _ProfileUi.bodyMuted(context),
             )
           else ...[
             TextField(
               controller: _controller,
-              minLines: 6,
-              maxLines: 12,
-              style: theme.textTheme.bodyMedium,
+              minLines: 5,
+              maxLines: 10,
+              style: GoogleFonts.inter(color: _ProfileUi.textPrimary),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.06),
+                fillColor: Colors.white.withValues(alpha: 0.04),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
-                hintText: 'Alergije, preferencije ulja, kontraindikacije…',
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: _ProfileUi.accentPurple.withValues(alpha: 0.65),
+                  ),
+                ),
+                hintText: 'Allergies, preferences, contraindications…',
                 hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.35),
+                  color: Colors.white.withValues(alpha: 0.4),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_rounded),
-              label: Text(_saving ? 'Spremanje…' : 'Spremi'),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _PurpleButton(
+                label: _saving ? 'Saving…' : 'Save note',
+                onPressed: _saving ? () {} : _save,
+              ),
             ),
           ],
         ],
