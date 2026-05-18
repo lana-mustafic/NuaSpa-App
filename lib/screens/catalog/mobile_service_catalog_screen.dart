@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
+import '../../ui/widgets/favorites_quick_link.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/service_category_filter_bar.dart';
 import 'service_details_screen.dart';
@@ -108,7 +109,9 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final visible = sp.services;
-    final isAdmin = context.watch<AuthProvider>().isAdmin;
+    final auth = context.watch<AuthProvider>();
+    final isAdmin = auth.isAdmin;
+    final canFavorite = !auth.isZaposlenik;
 
     if (sp.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
@@ -136,6 +139,13 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
               selectedCategoryId: sp.selectedCategoryId,
               onSelected: sp.setCategoryFilter,
               variant: ServiceCategoryFilterVariant.mobile,
+            ),
+          ),
+        if (canFavorite)
+          SliverToBoxAdapter(
+            child: FavoritesQuickLink(
+              count: sp.favoriteServices.length,
+              compact: true,
             ),
           ),
         if (visible.isEmpty)
@@ -188,9 +198,21 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                         ),
                       );
                     },
-                    onAddTap: () {
-                      context.read<ServiceProvider>().toggleFavorite(u.id);
-                    },
+                    onAddTap: canFavorite
+                        ? () async {
+                            final ok = await context
+                                .read<ServiceProvider>()
+                                .toggleFavorite(u.id);
+                            if (!context.mounted || ok) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Favorit nije sačuvan. Prijavite se kao klijent ili admin.',
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
                     isFavorite: sp.isFavorite(u.id),
                     onAdminEdit:
                         isAdmin ? () => _openServiceEditor(u) : null,
@@ -465,7 +487,7 @@ class _ServiceCard extends StatelessWidget {
 
   final Usluga usluga;
   final VoidCallback onOpen;
-  final VoidCallback onAddTap;
+  final VoidCallback? onAddTap;
   final bool isFavorite;
   final String? badge;
   final VoidCallback? onAdminEdit;
@@ -653,23 +675,24 @@ class _ServiceCard extends StatelessWidget {
                           ),
                         ),
                         const Spacer(),
-                        Material(
-                          color: MobileSpaColors.royalPurple,
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: onAddTap,
-                            child: SizedBox(
-                              width: 34,
-                              height: 34,
-                              child: Icon(
-                                isFavorite ? Icons.favorite : Icons.add,
-                                color: Colors.white,
-                                size: 18,
+                        if (onAddTap != null)
+                          Material(
+                            color: MobileSpaColors.royalPurple,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: onAddTap,
+                              child: SizedBox(
+                                width: 34,
+                                height: 34,
+                                child: Icon(
+                                  isFavorite ? Icons.favorite : Icons.add,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ],

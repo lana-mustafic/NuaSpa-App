@@ -10,9 +10,12 @@ class ServiceProvider with ChangeNotifier {
   List<Usluga> _allServices = [];
   List<Usluga> _filteredServices = [];
   List<KategorijaUsluga> _categories = [];
+  List<Usluga> _favoriteServices = [];
   bool _isLoading = false;
+  bool _favoritesLoading = false;
   Set<int> _favoriteIds = {};
   String? _loadError;
+  String? _favoritesError;
   String _searchQuery = '';
   int? _selectedCategoryId;
 
@@ -29,8 +32,12 @@ class ServiceProvider with ChangeNotifier {
   String get searchQuery => _searchQuery;
 
   bool get isLoading => _isLoading;
+  bool get favoritesLoading => _favoritesLoading;
+  List<Usluga> get favoriteServices =>
+      List<Usluga>.unmodifiable(_favoriteServices);
   Set<int> get favoriteIds => _favoriteIds;
   bool isFavorite(int uslugaId) => _favoriteIds.contains(uslugaId);
+  String? get favoritesError => _favoritesError;
 
   /// Postavljen ako zadnji [fetchServices] nije uspio (npr. nema konekcije).
   String? get loadError => _loadError;
@@ -67,13 +74,14 @@ class ServiceProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _favoriteIds = await _apiService.getMyFavoriteIds();
       final results = await Future.wait([
         _apiService.getUsluge(),
         _apiService.getKategorijeUsluga(),
+        _apiService.getMyFavorites(),
       ]);
       _allServices = results[0] as List<Usluga>;
       _categories = results[1] as List<KategorijaUsluga>;
+      _applyFavoriteList(results[2] as List<Usluga>);
       if (_selectedCategoryId != null &&
           !_categories.any((c) => c.id == _selectedCategoryId)) {
         _selectedCategoryId = null;
@@ -86,6 +94,7 @@ class ServiceProvider with ChangeNotifier {
       _allServices = [];
       _filteredServices = [];
       _categories = [];
+      _favoriteServices = [];
       _favoriteIds = {};
     } finally {
       _isLoading = false;
@@ -93,16 +102,30 @@ class ServiceProvider with ChangeNotifier {
     }
   }
 
-  Future<void> refreshFavorites() async {
+  Future<void> fetchFavorites() async {
+    _favoritesLoading = true;
+    _favoritesError = null;
+    notifyListeners();
+
     try {
-      _favoriteIds = await _apiService.getMyFavoriteIds();
+      final list = await _apiService.getMyFavorites();
+      _applyFavoriteList(list);
+      _favoritesError = null;
+    } catch (e, st) {
+      debugPrint('Greška pri dohvatu favorita: $e\n$st');
+      _favoritesError = _mapLoadError(e);
+    } finally {
+      _favoritesLoading = false;
       notifyListeners();
-    } catch (e) {
-      debugPrint("Greška pri dohvatu favorita: $e");
     }
   }
 
-  Future<void> toggleFavorite(int uslugaId) async {
+  void _applyFavoriteList(List<Usluga> list) {
+    _favoriteServices = list;
+    _favoriteIds = list.map((u) => u.id).toSet();
+  }
+
+  Future<bool> toggleFavorite(int uslugaId) async {
     final wasFavorite = _favoriteIds.contains(uslugaId);
     final previousIds = Set<int>.from(_favoriteIds);
 
@@ -111,6 +134,9 @@ class ServiceProvider with ChangeNotifier {
     } else {
       _favoriteIds.add(uslugaId);
     }
+    _favoriteServices = _allServices
+        .where((u) => _favoriteIds.contains(u.id))
+        .toList();
     notifyListeners();
 
     try {
@@ -119,17 +145,24 @@ class ServiceProvider with ChangeNotifier {
           : await _apiService.addFavorite(uslugaId);
       if (!ok) {
         _favoriteIds = previousIds;
+        _favoriteServices = _allServices
+            .where((u) => _favoriteIds.contains(u.id))
+            .toList();
         notifyListeners();
+        return false;
       }
+      await fetchFavorites();
+      return true;
     } catch (e) {
       _favoriteIds = previousIds;
+      _favoriteServices = _allServices
+          .where((u) => _favoriteIds.contains(u.id))
+          .toList();
       notifyListeners();
-      debugPrint("Greška pri toggle favorite: $e");
+      debugPrint('Greška pri toggle favorite: $e');
+      return false;
     }
   }
-
-  List<Usluga> get favoriteServices =>
-      _allServices.where((u) => _favoriteIds.contains(u.id)).toList();
 
   void searchServices(String query) {
     _searchQuery = query.trim();

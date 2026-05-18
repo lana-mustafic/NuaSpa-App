@@ -22,8 +22,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     super.initState();
     Future.microtask(() async {
       if (!mounted) return;
-      // Učitaj katalog i ID-eve favorita; favoriteServices filtrira po _allServices.
-      await context.read<ServiceProvider>().fetchServices();
+      final sp = context.read<ServiceProvider>();
+      if (sp.allServices.isEmpty) {
+        await sp.fetchServices();
+      } else {
+        await sp.fetchFavorites();
+      }
     });
   }
 
@@ -64,10 +68,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     ServiceProvider sp,
     List<Usluga> favorites,
   ) {
-    if (sp.isLoading) {
+    if (sp.isLoading || sp.favoritesLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (sp.loadFailed) {
+    if (sp.favoritesError != null) {
+      return LoadRetryPanel(
+        message: sp.favoritesError ?? 'Nepoznata greška.',
+        title: 'Ne možemo učitati favorita',
+        onRetry: () => sp.fetchFavorites(),
+      );
+    }
+    if (sp.loadFailed && sp.allServices.isEmpty) {
       return LoadRetryPanel(
         message: sp.loadError ?? 'Nepoznata greška.',
         title: 'Ne možemo učitati favorita',

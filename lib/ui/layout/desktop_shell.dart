@@ -103,6 +103,11 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
+        route: DesktopRouteKey.favorites,
+        label: 'Favorites',
+        icon: Icons.favorite_border,
+      ),
+      LuxurySideItem(
         route: DesktopRouteKey.reviews,
         label: 'Reviews',
         icon: Icons.reviews_outlined,

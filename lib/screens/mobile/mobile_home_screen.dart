@@ -5,9 +5,12 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
+import '../../providers/service_provider.dart';
 import '../catalog/service_details_screen.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
+import '../../ui/widgets/favorites_quick_link.dart';
 
 /// Light zen landing — recommendations + entry into Services tab.
 class MobileHomeScreen extends StatefulWidget {
@@ -25,6 +28,10 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   @override
   void initState() {
     super.initState();
+    Future.microtask(() {
+      if (!mounted) return;
+      context.read<ServiceProvider>().fetchFavorites();
+    });
     _load();
   }
 
@@ -41,6 +48,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final auth = context.watch<AuthProvider>();
+    final favorites = context.watch<ServiceProvider>().favoriteServices;
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -106,6 +115,32 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             ),
           ),
         ),
+        if (!auth.isZaposlenik)
+          SliverToBoxAdapter(
+            child: FavoritesQuickLink(count: favorites.length),
+          ),
+        if (!auth.isZaposlenik && favorites.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 0, 12),
+              child: Text('Vaši favoriti', style: tt.titleLarge),
+            ),
+          ),
+        if (!auth.isZaposlenik && favorites.isNotEmpty)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 200,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                scrollDirection: Axis.horizontal,
+                itemCount: favorites.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                itemBuilder: (context, i) {
+                  return _RecommendCard(usluga: favorites[i]);
+                },
+              ),
+            ),
+          ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),

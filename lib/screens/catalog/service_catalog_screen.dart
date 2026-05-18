@@ -105,7 +105,9 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     var serviceProvider = Provider.of<ServiceProvider>(context);
-    final isAdmin = context.watch<AuthProvider>().isAdmin;
+    final auth = context.watch<AuthProvider>();
+    final isAdmin = auth.isAdmin;
+    final canFavorite = !auth.isZaposlenik;
 
     return Material(
       color: Colors.transparent,
@@ -176,6 +178,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                 context,
                 serviceProvider,
                 isAdmin,
+                canFavorite,
               ),
             ),
           ],
@@ -188,6 +191,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     BuildContext context,
     ServiceProvider serviceProvider,
     bool isAdmin,
+    bool canFavorite,
   ) {
     if (serviceProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -370,32 +374,42 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                         ),
                       ),
                     ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          width: 0.8,
+                  if (canFavorite)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            width: 0.8,
+                          ),
                         ),
-                      ),
-                      child: IconButton(
-                        tooltip: isFav
-                            ? 'Ukloni iz favorita'
-                            : 'Dodaj u favorite',
-                        icon: Icon(
-                          isFav ? Icons.favorite : Icons.favorite_border,
-                          color: isFav ? Colors.redAccent : Colors.white,
+                        child: IconButton(
+                          tooltip: isFav
+                              ? 'Ukloni iz favorita'
+                              : 'Dodaj u favorite',
+                          icon: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.redAccent : Colors.white,
+                          ),
+                          onPressed: () async {
+                            final ok = await serviceProvider
+                                .toggleFavorite(usluga.id);
+                            if (!context.mounted || ok) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Favorit nije sačuvan. Prijavite se kao klijent ili admin.',
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        onPressed: () {
-                          serviceProvider.toggleFavorite(usluga.id);
-                        },
                       ),
                     ),
-                  ),
                 ],
               );
             },
