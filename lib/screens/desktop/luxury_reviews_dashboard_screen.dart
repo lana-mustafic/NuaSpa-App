@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/usluga.dart';
-import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
@@ -42,10 +41,8 @@ class _LuxuryReviewsDashboardScreenState
   int? _minOcjena;
   int? _maxOcjena;
   int? _filterUslugaId;
-  int? _filterZaposlenikId;
 
   List<Usluga> _usluge = [];
-  List<Zaposlenik> _zaposlenici = [];
 
   Timer? _searchDebounce;
 
@@ -63,15 +60,9 @@ class _LuxuryReviewsDashboardScreenState
   }
 
   Future<void> _bootstrap() async {
-    final results = await Future.wait([
-      _api.getUsluge(),
-      _api.getZaposlenici(),
-    ]);
+    final usluge = await _api.getUsluge();
     if (!mounted) return;
-    setState(() {
-      _usluge = results[0] as List<Usluga>;
-      _zaposlenici = results[1] as List<Zaposlenik>;
-    });
+    setState(() => _usluge = usluge);
     await _load();
   }
 
@@ -97,7 +88,6 @@ class _LuxuryReviewsDashboardScreenState
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
-      zaposlenikId: _filterZaposlenikId,
     );
     if (!mounted) return;
     setState(() {
@@ -159,7 +149,6 @@ class _LuxuryReviewsDashboardScreenState
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
-      zaposlenikId: _filterZaposlenikId,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -307,9 +296,7 @@ class _LuxuryReviewsDashboardScreenState
                             controller: _tableSearch,
                             compact: tightHeight,
                             usluge: _usluge,
-                            zaposlenici: _zaposlenici,
                             filterUslugaId: _filterUslugaId,
-                            filterZaposlenikId: _filterZaposlenikId,
                             minOcjena: _minOcjena,
                             maxOcjena: _maxOcjena,
                             onRatingChanged: (min, max) {
@@ -323,13 +310,6 @@ class _LuxuryReviewsDashboardScreenState
                             onServiceChanged: (id) {
                               setState(() {
                                 _filterUslugaId = id;
-                                _page = 1;
-                              });
-                              _load();
-                            },
-                            onTherapistChanged: (id) {
-                              setState(() {
-                                _filterZaposlenikId = id;
                                 _page = 1;
                               });
                               _load();
@@ -891,39 +871,26 @@ String _lookupServiceName(List<Usluga> list, int id) {
   return 'Service';
 }
 
-String _lookupTherapistName(List<Zaposlenik> list, int id) {
-  for (final z in list) {
-    if (z.id == id) return '${z.ime} ${z.prezime}';
-  }
-  return 'Therapist';
-}
-
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.controller,
     required this.compact,
     required this.usluge,
-    required this.zaposlenici,
     required this.filterUslugaId,
-    required this.filterZaposlenikId,
     required this.minOcjena,
     required this.maxOcjena,
     required this.onRatingChanged,
     required this.onServiceChanged,
-    required this.onTherapistChanged,
   });
 
   final TextEditingController controller;
   final bool compact;
   final List<Usluga> usluge;
-  final List<Zaposlenik> zaposlenici;
   final int? filterUslugaId;
-  final int? filterZaposlenikId;
   final int? minOcjena;
   final int? maxOcjena;
   final void Function(int? min, int? max) onRatingChanged;
   final void Function(int?) onServiceChanged;
-  final void Function(int?) onTherapistChanged;
 
   String _ratingLabel() {
     if (minOcjena == null && maxOcjena == null) return 'All ratings';
@@ -984,33 +951,6 @@ class _FilterBar extends StatelessWidget {
           ),
         );
 
-        final therapistMenu = PopupMenuButton<int?>(
-          onSelected: onTherapistChanged,
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: null, child: Text('All therapists')),
-            ...zaposlenici.map(
-              (z) => PopupMenuItem(
-                value: z.id,
-                child: Text('${z.ime} ${z.prezime}'),
-              ),
-            ),
-          ],
-          child: _FilterDropdownPill(
-            label: filterZaposlenikId == null
-                ? 'All therapists'
-                : _lookupTherapistName(zaposlenici, filterZaposlenikId!),
-          ),
-        );
-
-        final sourceMenu = PopupMenuButton<String>(
-          onSelected: (_) {},
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'all', child: Text('All sources')),
-            PopupMenuItem(value: 'app', child: Text('NuaSpa')),
-          ],
-          child: const _FilterDropdownPill(label: 'All sources'),
-        );
-
         if (wide) {
           return Row(
             children: [
@@ -1022,10 +962,6 @@ class _FilterBar extends StatelessWidget {
               Expanded(child: ratingMenu),
               SizedBox(width: compact ? 8 : 10),
               Expanded(child: serviceMenu),
-              SizedBox(width: compact ? 8 : 10),
-              Expanded(child: therapistMenu),
-              SizedBox(width: compact ? 8 : 10),
-              Expanded(child: sourceMenu),
               SizedBox(width: compact ? 8 : 10),
               const _FiltersButton(),
             ],
@@ -1042,8 +978,6 @@ class _FilterBar extends StatelessWidget {
               children: [
                 ratingMenu,
                 serviceMenu,
-                therapistMenu,
-                sourceMenu,
                 const _FiltersButton(),
               ],
             ),
