@@ -381,7 +381,6 @@ class _LeftServicePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final description = service.opis.trim();
     final imageHeight = (MediaQuery.sizeOf(context).height - 300).clamp(320.0, 520.0);
 
     return ClipRRect(
@@ -479,11 +478,6 @@ class _LeftServicePanel extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (description.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: _DescriptionMiniCard(text: description),
-                        ),
                     ],
                   ),
                 ),
@@ -739,40 +733,6 @@ class _BenefitTag extends StatelessWidget {
           fontWeight: FontWeight.w500,
           color: _DetailsStyle.textSecondary,
         ),
-      ),
-    );
-  }
-}
-
-class _DescriptionMiniCard extends StatelessWidget {
-  const _DescriptionMiniCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.spa_outlined,
-            size: 22,
-            color: _DetailsStyle.accentPurple.withValues(alpha: 0.75),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: _DetailsStyle.body(context).copyWith(
-                  color: _DetailsStyle.textPrimary.withValues(alpha: 0.88),
-                )),
-          ),
-        ],
       ),
     );
   }
