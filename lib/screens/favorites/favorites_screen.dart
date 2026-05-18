@@ -50,8 +50,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
           const PageHeader(
-            title: 'Favoriti',
-            subtitle: 'Vaše omiljene usluge na jednom mjestu.',
+            title: 'Favorites',
+            subtitle: 'Your favorite services in one place.',
           ),
           const SizedBox(height: 14),
           Expanded(
@@ -73,22 +73,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     }
     if (sp.favoritesError != null) {
       return LoadRetryPanel(
-        message: sp.favoritesError ?? 'Nepoznata greška.',
-        title: 'Ne možemo učitati favorita',
+        message: sp.favoritesError ?? 'Unknown error.',
+        title: 'Unable to load favorites',
         onRetry: () => sp.fetchFavorites(),
       );
     }
     if (sp.loadFailed && sp.allServices.isEmpty) {
       return LoadRetryPanel(
-        message: sp.loadError ?? 'Nepoznata greška.',
-        title: 'Ne možemo učitati favorita',
+        message: sp.loadError ?? 'Unknown error.',
+        title: 'Unable to load favorites',
         onRetry: () => sp.fetchServices(),
       );
     }
     if (favorites.isEmpty) {
       return Center(
         child: Text(
-          'Još nemaš favorita.',
+          'You have no favorites yet.',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.75),
           ),
@@ -117,7 +117,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               final u = favorites[index];
               return HoverCard(
                 padding: const EdgeInsets.all(14),
-                tooltip: 'Otvori detalje: ${u.naziv}',
+                tooltip: 'Open details: ${u.naziv}',
                 onTap: () {
                   Navigator.push(
                     context,
@@ -168,7 +168,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Ukloni iz favorita',
+                      tooltip: 'Remove from favorites',
                       icon: const Icon(
                         Icons.favorite,
                         color: Colors.redAccent,

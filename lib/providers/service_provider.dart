@@ -49,22 +49,22 @@ class ServiceProvider with ChangeNotifier {
         case DioExceptionType.connectionTimeout:
         case DioExceptionType.sendTimeout:
         case DioExceptionType.receiveTimeout:
-          return 'Isteklo je vrijeme čekanja. Provjerite mrežu i da li je API dostupan.';
+          return 'Request timed out. Check your network and that the API is available.';
         case DioExceptionType.connectionError:
-          return 'Nema veze sa serverom. Pokrenite backend ili provjerite NUASPA_API_BASE_URL.';
+          return 'Cannot reach the server. Start the backend or check NUASPA_API_BASE_URL.';
         case DioExceptionType.badCertificate:
-          return 'Problem sa HTTPS certifikatom (dev: koristite HTTP ili povjereni certifikat).';
+          return 'HTTPS certificate issue (dev: use HTTP or a trusted certificate).';
         case DioExceptionType.badResponse:
           final code = e.response?.statusCode;
           if (code == 401) {
-            return 'Niste prijavljeni ili je sesija istekla. Prijavite se ponovo.';
+            return 'You are not signed in or your session expired. Sign in again.';
           }
-          return 'Server je vratio grešku (${code ?? '?'}).';
+          return 'The server returned an error (${code ?? '?'}).';
         default:
           break;
       }
     }
-    return 'Došlo je do greške pri učitavanju. Pokušajte ponovo.';
+    return 'Something went wrong while loading. Please try again.';
   }
 
   // Funkcija za povlačenje podataka

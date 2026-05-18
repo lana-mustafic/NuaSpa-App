@@ -40,20 +40,20 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Nova kategorija' : 'Uredi kategoriju'),
+        title: Text(existing == null ? 'New category' : 'Edit category'),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Naziv'),
+          decoration: const InputDecoration(labelText: 'Name'),
           autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Otkaži'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sačuvaj'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -66,7 +66,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
 
     if (naziv.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Naziv je obavezan.')),
+        const SnackBar(content: Text('Name is required.')),
       );
       return;
     }
@@ -80,7 +80,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+      SnackBar(content: Text(ok ? 'Saved.' : 'Error saving.')),
     );
     if (ok) _reload();
   }
@@ -89,16 +89,16 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje kategorije'),
-        content: Text('Obrisati „${k.naziv}“?'),
+        title: const Text('Delete category'),
+        content: Text('Delete "${k.naziv}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Ne'),
+            child: const Text('No'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -111,7 +111,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kategorija obrisana.')),
+        const SnackBar(content: Text('Category deleted.')),
       );
       _reload();
     }
@@ -143,14 +143,14 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
                       leading: const Icon(Icons.folder_outlined),
                       title: Text(k.naziv),
                       trailing: PopupMenuButton<String>(
-                        tooltip: 'Akcije za kategoriju',
+                        tooltip: 'Category actions',
                         onSelected: (v) {
                           if (v == 'edit') _editCategory(k);
                           if (v == 'delete') _delete(k);
                         },
                         itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                          PopupMenuItem(value: 'delete', child: Text('Obriši')),
+                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete')),
                         ],
                       ),
                       onTap: () => _editCategory(k),
@@ -163,7 +163,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
               right: 0,
               bottom: 0,
               child: FloatingActionButton(
-                tooltip: 'Nova kategorija',
+                tooltip: 'New category',
                 onPressed: () => _editCategory(null),
                 child: const Icon(Icons.add),
               ),
@@ -195,14 +195,14 @@ Future<void> showServiceCategoryManagerDialog(BuildContext context) {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Kategorije usluga',
+                        'Service categories',
                         style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Zatvori',
+                      tooltip: 'Close',
                       onPressed: () => Navigator.pop(ctx),
                       icon: const Icon(Icons.close),
                     ),
@@ -212,7 +212,7 @@ Future<void> showServiceCategoryManagerDialog(BuildContext context) {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
-                  'Kategorije određuju grupiranje usluga u katalogu i pri izboru usluge.',
+                  'Categories control how services are grouped in the catalog and when booking.',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx)
                             .colorScheme

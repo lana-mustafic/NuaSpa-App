@@ -123,7 +123,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 0, 12),
-              child: Text('Vaši favoriti', style: tt.titleLarge),
+              child: Text('Your favorites', style: tt.titleLarge),
             ),
           ),
         if (!auth.isZaposlenik && favorites.isNotEmpty)

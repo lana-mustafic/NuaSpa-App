@@ -69,7 +69,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       children: List.generate(5, (i) {
         final v = i + 1;
         return IconButton(
-          tooltip: 'Ocjena $v od 5',
+          tooltip: 'Rating $v of 5',
           onPressed: () => setState(() => _ocjena = v),
           icon: Icon(
             v <= _ocjena ? Icons.star : Icons.star_border,
@@ -103,11 +103,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Recenzije',
+                  'Reviews',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 IconButton(
-                  tooltip: 'Osvježi',
+                  tooltip: 'Refresh',
                   onPressed: _refreshRecenzije,
                   icon: const Icon(Icons.refresh),
                 ),
@@ -115,7 +115,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
             ),
             const SizedBox(height: 8),
             if (reviews.isEmpty)
-              const Text('Još nema recenzija za ovu uslugu.')
+              const Text('No reviews for this service yet.')
             else
               ...reviews.map((r) {
                 return Card(
@@ -141,7 +141,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              r.korisnikIme.isEmpty ? 'Korisnik' : r.korisnikIme,
+                              r.korisnikIme.isEmpty ? 'User' : r.korisnikIme,
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             _buildStars(r.ocjena),
@@ -156,7 +156,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               }),
             const SizedBox(height: 16),
             Text(
-              'Dodaj recenziju',
+              'Add a review',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -169,18 +169,18 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               minLines: 2,
               maxLines: 5,
               decoration: const InputDecoration(
-                labelText: 'Komentar',
+                labelText: 'Comment',
               ),
             ),
             const SizedBox(height: 12),
             Tooltip(
-              message: 'Pošalji recenziju',
+              message: 'Submit review',
               child: FilledButton.icon(
                 onPressed: () async {
                   final komentar = _komentarController.text.trim();
                   if (komentar.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Unesi komentar.')),
+                      const SnackBar(content: Text('Enter a comment.')),
                     );
                     return;
                   }
@@ -198,7 +198,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   if (created == null) {
                     messenger.showSnackBar(
                       const SnackBar(
-                        content: Text('Neuspjelo slanje recenzije.'),
+                        content: Text('Failed to submit review.'),
                       ),
                     );
                     return;
@@ -207,11 +207,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   _komentarController.clear();
                   await _refreshRecenzije();
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('Recenzija je dodana.')),
+                    const SnackBar(content: Text('Review added.')),
                   );
                 },
                 icon: const Icon(Icons.send),
-                label: const Text('Pošalji'),
+                label: const Text('Submit'),
               ),
             ),
           ],
@@ -331,10 +331,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     text: service.opis.trim().isEmpty ? null : service.opis,
                   ),
                   const SizedBox(height: 26),
-                  Text('Detalji i recenzije', style: tt.titleLarge),
+                  Text('Details & reviews', style: tt.titleLarge),
                   const SizedBox(height: 6),
                   Text(
-                    'Iskustva drugih gostiju i tvoja ocjena.',
+                    'Guest experiences and your rating.',
                     style: tt.bodySmall,
                   ),
                   const SizedBox(height: 18),
@@ -368,7 +368,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
         if (snapshot.hasError) {
           final err = Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Greška pri učitavanju: ${snapshot.error}'),
+            child: Text('Error loading: ${snapshot.error}'),
           );
           if (nuaspaUseMobileShell()) {
             return Scaffold(
@@ -402,10 +402,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   onPressed: () => Navigator.pop(context),
                 ),
               ),
-              body: const Center(child: Text('Usluga nije pronađena.')),
+              body: const Center(child: Text('Service not found.')),
             );
           }
-          return const Center(child: Text('Usluga nije pronađena.'));
+          return const Center(child: Text('Service not found.'));
         }
 
         if (nuaspaUseMobileShell()) {
@@ -476,7 +476,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Kategorija: ${service.kategorija}',
+                          'Category: ${service.kategorija}',
                           style: TextStyle(
                             color: Theme.of(context)
                                 .colorScheme
@@ -495,10 +495,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 PageHeader(
-                  title: 'Detalji usluge',
-                  subtitle: 'Pregled usluge i recenzija.',
+                  title: 'Service details',
+                  subtitle: 'Service overview and reviews.',
                   trailing: IconButton(
-                    tooltip: 'Nazad',
+                    tooltip: 'Back',
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.arrow_back),
                   ),
@@ -519,7 +519,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   ),
                   child: Text(
                     service.opis.trim().isEmpty
-                        ? 'Opis uskoro.'
+                        ? 'Description coming soon.'
                         : service.opis,
                   ),
                 ),
@@ -644,7 +644,7 @@ class _SpaDescriptionPanel extends StatelessWidget {
             ),
           ),
           child: Text(
-            text ?? 'Opis uskoro.',
+            text ?? 'Description coming soon.',
             style: tt.bodyMedium?.copyWith(
               color: text == null
                   ? MobileSpaColors.royalPurple.withValues(alpha: 0.45)

@@ -18,7 +18,7 @@ class ServiceCategoryFilterBar extends StatelessWidget {
   final ValueChanged<int?> onSelected;
   final ServiceCategoryFilterVariant variant;
 
-  static const String _allLabel = 'Sve usluge';
+  static const String _allLabel = 'All services';
 
   @override
   Widget build(BuildContext context) {

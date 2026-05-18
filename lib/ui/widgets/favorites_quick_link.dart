@@ -20,8 +20,8 @@ class FavoritesQuickLink extends StatelessWidget {
 
     final tt = Theme.of(context).textTheme;
     final label = compact
-        ? '$count favorit${count == 1 ? '' : 'a'}'
-        : 'Pogledaj $count omiljen${count == 1 ? 'u' : 'e'} uslug${count == 1 ? 'u' : 'e'}';
+        ? '$count favorite${count == 1 ? '' : 's'}'
+        : 'View your $count favorite service${count == 1 ? '' : 's'}';
 
     return Padding(
       padding: EdgeInsets.fromLTRB(compact ? 20 : 24, compact ? 8 : 12, compact ? 20 : 24, 0),

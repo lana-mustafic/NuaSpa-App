@@ -62,22 +62,22 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje usluge'),
+        title: const Text('Delete service'),
         content: Text(
-          'Obrisati „${u.naziv}“? Ako usluga ima rezervacije ili plaćanja, '
-          'brisanje može biti odbijeno.',
+          'Delete "${u.naziv}"? If the service has bookings or payments, '
+          'deletion may be refused.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Otkaži'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFC62828),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -90,7 +90,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usluga obrisana.')),
+        const SnackBar(content: Text('Service deleted.')),
       );
       await context.read<ServiceProvider>().fetchServices();
     }
@@ -155,7 +155,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
               child: Column(
                 children: [
                   Text(
-                    'Nema usluga za odabrane filtere.',
+                    'No services match the selected filters.',
                     style: tt.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -167,7 +167,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                         sp.clearCatalogFilters();
                         setState(() {});
                       },
-                      child: const Text('Poništi filtere'),
+                      child: const Text('Clear filters'),
                     ),
                   ],
                 ],
@@ -207,7 +207,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Favorit nije sačuvan. Prijavite se kao klijent ili admin.',
+                                  'Could not save favorite. Sign in as a client or admin.',
                                 ),
                               ),
                             );

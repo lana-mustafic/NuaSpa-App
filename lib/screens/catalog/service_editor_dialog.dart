@@ -11,8 +11,8 @@ String _fileNameFromPath(String path) {
   return i >= 0 ? normalized.substring(i + 1) : normalized;
 }
 
-/// Otvara dijalog za kreiranje ili uređivanje usluge (Admin API).
-/// Vraća `true` ako je zapis uspješno snimljen.
+/// Opens a dialog to create or edit a service (Admin API).
+/// Returns `true` if the record was saved successfully.
 Future<bool> showServiceEditorDialog(
   BuildContext context, {
   Usluga? existing,
@@ -25,7 +25,7 @@ Future<bool> showServiceEditorDialog(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Nema kategorija. U Katalogu usluga (admin) otvori ikonu kategorije i dodaj barem jednu.',
+          'No categories yet. In Service catalog (admin) open the category icon and add at least one.',
         ),
       ),
     );
@@ -52,7 +52,7 @@ Future<bool> showServiceEditorDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDialogState) => AlertDialog(
-        title: Text(existing == null ? 'Nova usluga' : 'Uredi uslugu'),
+        title: Text(existing == null ? 'New service' : 'Edit service'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -60,27 +60,27 @@ Future<bool> showServiceEditorDialog(
             children: [
               TextField(
                 controller: nazivCtrl,
-                decoration: const InputDecoration(labelText: 'Naziv'),
+                decoration: const InputDecoration(labelText: 'Name'),
               ),
               TextField(
                 controller: cijenaCtrl,
-                decoration: const InputDecoration(labelText: 'Cijena (KM)'),
+                decoration: const InputDecoration(labelText: 'Price (KM)'),
                 keyboardType: TextInputType.number,
               ),
               TextField(
                 controller: trajanjeCtrl,
                 decoration:
-                    const InputDecoration(labelText: 'Trajanje (minute)'),
+                    const InputDecoration(labelText: 'Duration (minutes)'),
                 keyboardType: TextInputType.number,
               ),
               TextField(
                 controller: opisCtrl,
-                decoration: const InputDecoration(labelText: 'Opis'),
+                decoration: const InputDecoration(labelText: 'Description'),
                 maxLines: 3,
               ),
               const SizedBox(height: 8),
               Text(
-                'Slika',
+                'Image',
                 style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -88,8 +88,8 @@ Future<bool> showServiceEditorDialog(
               const SizedBox(height: 6),
               if (kIsWeb)
                 Text(
-                  'Upload slike iz datoteka na ovoj platformi nije podržan u pregledniku; '
-                  'koristi Windows, macOS ili mobilnu aplikaciju.',
+                  'Image upload from files is not supported in the browser; '
+                  'use Windows, macOS or the mobile app.',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                       ),
@@ -112,8 +112,8 @@ Future<bool> showServiceEditorDialog(
                   icon: const Icon(Icons.photo_library_outlined),
                   label: Text(
                     pickedImagePath == null
-                        ? 'Odaberi sliku iz dokumenata…'
-                        : 'Promijeni sliku…',
+                        ? 'Choose image from files…'
+                        : 'Change image…',
                   ),
                 ),
                 if (pickedImagePath != null) ...[
@@ -133,7 +133,7 @@ Future<bool> showServiceEditorDialog(
                           pickedImagePath = null;
                           setDialogState(() {});
                         },
-                        child: const Text('Ukloni'),
+                        child: const Text('Remove'),
                       ),
                     ],
                   ),
@@ -144,7 +144,7 @@ Future<bool> showServiceEditorDialog(
                 alignment: Alignment.centerLeft,
                 child: DropdownButton<int>(
                   value: katId,
-                  hint: const Text('Kategorija'),
+                  hint: const Text('Category'),
                   isExpanded: true,
                   items: katList
                       .map(
@@ -169,11 +169,11 @@ Future<bool> showServiceEditorDialog(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Otkaži'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sačuvaj'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -204,7 +204,7 @@ Future<bool> showServiceEditorDialog(
 
   if (naziv.isEmpty || cijena <= 0 || katId <= 0) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Provjerite naziv, cijenu i kategoriju.')),
+      const SnackBar(content: Text('Check name, price and category.')),
     );
     return false;
   }
@@ -213,7 +213,9 @@ Future<bool> showServiceEditorDialog(
   if (pickedImagePath != null) {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload slike nije dostupan u web pregledniku.')),
+        const SnackBar(
+          content: Text('Image upload is not available in the web browser.'),
+        ),
       );
       return false;
     }
@@ -222,7 +224,9 @@ Future<bool> showServiceEditorDialog(
     if (uploaded == null || uploaded.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Upload slike nije uspio. Provjeri vezu i dozvole.'),
+          content: Text(
+            'Image upload failed. Check your connection and permissions.',
+          ),
         ),
       );
       return false;
@@ -253,7 +257,7 @@ Future<bool> showServiceEditorDialog(
 
   if (!context.mounted) return false;
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(ok ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+    SnackBar(content: Text(ok ? 'Saved.' : 'Error saving.')),
   );
   return ok;
 }

@@ -68,22 +68,22 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje usluge'),
+        title: const Text('Delete service'),
         content: Text(
-          'Obrisati „${u.naziv}“? Ako usluga ima rezervacije ili plaćanja, '
-          'brisanje može biti odbijeno.',
+          'Delete "${u.naziv}"? If the service has bookings or payments, '
+          'deletion may be refused.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Otkaži'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFC62828),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -96,7 +96,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usluga obrisana.')),
+        const SnackBar(content: Text('Service deleted.')),
       );
       await context.read<ServiceProvider>().fetchServices();
     }
@@ -117,22 +117,22 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             PageHeader(
-              title: 'Katalog usluga',
+              title: 'Service catalog',
               subtitle: isAdmin
-                  ? 'Pretraži i upravljaj favoritima; kao admin upravljaj kategorijama, dodaj, uredi ili obriši usluge.'
-                  : 'Pretraži i upravljaj favoritima.',
+                  ? 'Search and manage favorites; as admin manage categories, add, edit or delete services.'
+                  : 'Search and manage favorites.',
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (isAdmin) ...[
                     IconButton(
-                      tooltip: 'Kategorije usluga',
+                      tooltip: 'Service categories',
                       icon: const Icon(Icons.category_outlined),
                       onPressed: () =>
                           showServiceCategoryManagerDialog(context),
                     ),
                     IconButton(
-                      tooltip: 'Nova usluga',
+                      tooltip: 'New service',
                       icon: const Icon(Icons.add_circle_outline),
                       onPressed: () => _openServiceEditor(null),
                     ),
@@ -149,12 +149,12 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                 setState(() {});
               },
               decoration: InputDecoration(
-                hintText: 'Pretraži usluge…',
+                hintText: 'Search services…',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _filterCtrl.text.isEmpty
                     ? null
                     : IconButton(
-                        tooltip: 'Očisti',
+                        tooltip: 'Clear',
                         icon: const Icon(Icons.clear_rounded),
                         onPressed: () {
                           _filterCtrl.clear();
@@ -198,7 +198,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     }
     if (serviceProvider.loadFailed) {
       return LoadRetryPanel(
-        message: serviceProvider.loadError ?? 'Nepoznata greška.',
+        message: serviceProvider.loadError ?? 'Unknown error.',
         onRetry: () => serviceProvider.fetchServices(),
       );
     }
@@ -211,8 +211,8 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
           children: [
             Text(
               hasFilters
-                  ? 'Nema usluga za odabrane filtere.'
-                  : 'Nema dostupnih usluga u katalogu.',
+                  ? 'No services match the selected filters.'
+                  : 'No services available in the catalog.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
               textAlign: TextAlign.center,
             ),
@@ -224,7 +224,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                   serviceProvider.clearCatalogFilters();
                   setState(() {});
                 },
-                child: const Text('Poništi filtere'),
+                child: const Text('Clear filters'),
               ),
             ],
             if (isAdmin) ...[
@@ -232,7 +232,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
               FilledButton.icon(
                 onPressed: () => _openServiceEditor(null),
                 icon: const Icon(Icons.add),
-                label: const Text('Dodaj uslugu'),
+                label: const Text('Add service'),
               ),
             ],
           ],
@@ -269,7 +269,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                   Positioned.fill(
                     child: HoverCard(
                       padding: EdgeInsets.zero,
-                      tooltip: 'Otvori detalje: ${usluga.naziv}',
+                      tooltip: 'Open details: ${usluga.naziv}',
                       onTap: () {
                         Navigator.push(
                           context,
@@ -340,7 +340,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                           ),
                         ),
                         child: IconButton(
-                          tooltip: 'Uredi uslugu',
+                          tooltip: 'Edit service',
                           icon: const Icon(
                             Icons.edit_outlined,
                             color: Colors.white,
@@ -364,7 +364,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                           ),
                         ),
                         child: IconButton(
-                          tooltip: 'Obriši uslugu',
+                          tooltip: 'Delete service',
                           icon: const Icon(
                             Icons.delete_outline,
                             color: Color(0xFFFFAB91),
@@ -389,8 +389,8 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                         ),
                         child: IconButton(
                           tooltip: isFav
-                              ? 'Ukloni iz favorita'
-                              : 'Dodaj u favorite',
+                              ? 'Remove from favorites'
+                              : 'Add to favorites',
                           icon: Icon(
                             isFav ? Icons.favorite : Icons.favorite_border,
                             color: isFav ? Colors.redAccent : Colors.white,
@@ -402,7 +402,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Favorit nije sačuvan. Prijavite se kao klijent ili admin.',
+                                  'Could not save favorite. Sign in as a client or admin.',
                                 ),
                               ),
                             );
@@ -427,7 +427,7 @@ class _BackIfPossible extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!Navigator.canPop(context)) return const SizedBox.shrink();
     return IconButton(
-      tooltip: 'Nazad',
+      tooltip: 'Back',
       onPressed: () => Navigator.pop(context),
       icon: const Icon(Icons.arrow_back),
     );
