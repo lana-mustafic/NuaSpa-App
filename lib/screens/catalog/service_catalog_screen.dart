@@ -9,6 +9,7 @@ import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/page_header.dart';
+import '../../ui/widgets/service_category_filter_bar.dart';
 import 'service_details_screen.dart';
 import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
@@ -155,12 +156,20 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                         icon: const Icon(Icons.clear_rounded),
                         onPressed: () {
                           _filterCtrl.clear();
-                          serviceProvider.searchServices('');
+                          serviceProvider.clearCatalogFilters();
                           setState(() {});
                         },
                       ),
               ),
             ),
+            if (serviceProvider.categories.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ServiceCategoryFilterBar(
+                categories: serviceProvider.categories,
+                selectedCategoryId: serviceProvider.selectedCategoryId,
+                onSelected: serviceProvider.setCategoryFilter,
+              ),
+            ],
             const SizedBox(height: 14),
             Expanded(
               child: _buildCatalogBody(
@@ -190,15 +199,30 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
       );
     }
     if (serviceProvider.services.isEmpty) {
+      final hasFilters = serviceProvider.selectedCategoryId != null ||
+          serviceProvider.searchQuery.isNotEmpty;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Nema dostupnih usluga u katalogu.',
+              hasFilters
+                  ? 'Nema usluga za odabrane filtere.'
+                  : 'Nema dostupnih usluga u katalogu.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
               textAlign: TextAlign.center,
             ),
+            if (hasFilters) ...[
+              const SizedBox(height: 14),
+              TextButton(
+                onPressed: () {
+                  _filterCtrl.clear();
+                  serviceProvider.clearCatalogFilters();
+                  setState(() {});
+                },
+                child: const Text('Poništi filtere'),
+              ),
+            ],
             if (isAdmin) ...[
               const SizedBox(height: 18),
               FilledButton.icon(

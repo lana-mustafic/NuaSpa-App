@@ -1,23 +1,32 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../models/kategorija_usluga.dart';
 import '../models/usluga.dart';
-// Provjeri da li je putanja tačna prema tvom folderu:
 import '../core/api/services/api_service.dart';
 
 class ServiceProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
 
-  List<Usluga> _allServices = [];      // SVE usluge koje dobijemo s API-ja
-  List<Usluga> _filteredServices = []; // Samo one koje prikazujemo (nakon pretrage)
+  List<Usluga> _allServices = [];
+  List<Usluga> _filteredServices = [];
+  List<KategorijaUsluga> _categories = [];
   bool _isLoading = false;
   Set<int> _favoriteIds = {};
   String? _loadError;
+  String _searchQuery = '';
+  int? _selectedCategoryId;
 
-  // Getteri
   List<Usluga> get services => _filteredServices;
 
-  /// Sve učitane usluge (bez pretrage u katalogu). Koristiti za dropdowne npr. kod rezervacije.
+  /// Sve učitane usluge (bez filtera kataloga). Koristiti za dropdowne npr. kod rezervacije.
   List<Usluga> get allServices => List<Usluga>.unmodifiable(_allServices);
+
+  List<KategorijaUsluga> get categories =>
+      List<KategorijaUsluga>.unmodifiable(_categories);
+
+  int? get selectedCategoryId => _selectedCategoryId;
+
+  String get searchQuery => _searchQuery;
 
   bool get isLoading => _isLoading;
   Set<int> get favoriteIds => _favoriteIds;
@@ -59,14 +68,24 @@ class ServiceProvider with ChangeNotifier {
 
     try {
       _favoriteIds = await _apiService.getMyFavoriteIds();
-      _allServices = await _apiService.getUsluge();
-      _filteredServices = _allServices; // Na početku, prikazujemo sve
+      final results = await Future.wait([
+        _apiService.getUsluge(),
+        _apiService.getKategorijeUsluga(),
+      ]);
+      _allServices = results[0] as List<Usluga>;
+      _categories = results[1] as List<KategorijaUsluga>;
+      if (_selectedCategoryId != null &&
+          !_categories.any((c) => c.id == _selectedCategoryId)) {
+        _selectedCategoryId = null;
+      }
+      _applyFilters();
       _loadError = null;
     } catch (e, st) {
       debugPrint('Greška pri dohvatu usluga: $e\n$st');
       _loadError = _mapLoadError(e);
       _allServices = [];
       _filteredServices = [];
+      _categories = [];
       _favoriteIds = {};
     } finally {
       _isLoading = false;
@@ -112,28 +131,36 @@ class ServiceProvider with ChangeNotifier {
   List<Usluga> get favoriteServices =>
       _allServices.where((u) => _favoriteIds.contains(u.id)).toList();
 
-  // Funkcija za pretragu (Search) - pozivaćemo je iz TextField-a
   void searchServices(String query) {
-    if (query.isEmpty) {
-      _filteredServices = _allServices;
-    } else {
-      _filteredServices = _allServices
-          .where((usluga) =>
-              usluga.naziv.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    }
-    notifyListeners(); // Javljamo UI-u da se lista promijenila
+    _searchQuery = query.trim();
+    _applyFilters();
   }
 
-  // Opcionalno: Filtriranje po kategoriji
-  void filterByCategory(String category) {
-    if (category == "Sve") {
-      _filteredServices = _allServices;
-    } else {
-      _filteredServices = _allServices
-          .where((usluga) => usluga.kategorija == category)
+  void setCategoryFilter(int? categoryId) {
+    _selectedCategoryId = categoryId;
+    _applyFilters();
+  }
+
+  void clearCatalogFilters() {
+    _searchQuery = '';
+    _selectedCategoryId = null;
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    var list = _allServices;
+    if (_selectedCategoryId != null) {
+      list = list
+          .where((u) => u.kategorijaUslugaId == _selectedCategoryId)
           .toList();
     }
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list
+          .where((u) => u.naziv.toLowerCase().contains(q))
+          .toList();
+    }
+    _filteredServices = list;
     notifyListeners();
   }
 }

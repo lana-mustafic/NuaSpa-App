@@ -10,6 +10,7 @@ import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/load_retry_panel.dart';
+import '../../ui/widgets/service_category_filter_bar.dart';
 import 'service_details_screen.dart';
 import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
@@ -28,24 +29,9 @@ class MobileServiceCatalogScreen extends StatefulWidget {
       _MobileServiceCatalogScreenState();
 }
 
-class _CategoryPill {
-  const _CategoryPill(this.label, this.keywords);
-  final String label;
-  final List<String>? keywords;
-}
-
-const _kPills = <_CategoryPill>[
-  _CategoryPill('All Services', null),
-  _CategoryPill('Massages', ['masaž', 'massage', 'masa', 'massag']),
-  _CategoryPill('Facials', ['facial', 'lice', 'lica', 'lič']),
-  _CategoryPill('Body Treatments', ['body', 'tijelo', 'tjelesn']),
-  _CategoryPill('Rituals', ['ritual', 'rituali']),
-];
-
 class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen> {
   final ScrollController _scroll = ScrollController();
   final TextEditingController _search = TextEditingController();
-  int _pillIndex = 0;
 
   @override
   void initState() {
@@ -109,27 +95,6 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     }
   }
 
-  bool _categoryMatches(Usluga u, List<String>? keywords) {
-    if (keywords == null) return true;
-    final k = u.kategorija.toLowerCase();
-    return keywords.any((w) => k.contains(w));
-  }
-
-  List<Usluga> _visible(ServiceProvider sp) {
-    final q = _search.text.trim().toLowerCase();
-    var list = sp.allServices;
-    final kw = _kPills[_pillIndex].keywords;
-    if (kw != null) {
-      list = list.where((u) => _categoryMatches(u, kw)).toList();
-    }
-    if (q.isNotEmpty) {
-      list = list
-          .where((u) => u.naziv.toLowerCase().contains(q))
-          .toList();
-    }
-    return list;
-  }
-
   String? _badgeFor(Usluga u) {
     final h = u.id % 7;
     if (h == 0 || h == 3) return 'POPULAR';
@@ -142,7 +107,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     final sp = context.watch<ServiceProvider>();
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final visible = _visible(sp);
+    final visible = sp.services;
     final isAdmin = context.watch<AuthProvider>().isAdmin;
 
     if (sp.isLoading) {
@@ -164,15 +129,38 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
       slivers: [
         SliverToBoxAdapter(child: _buildHeader(context, tt, isAdmin)),
         SliverToBoxAdapter(child: _buildSearchRow(context)),
-        SliverToBoxAdapter(child: _buildPills(context)),
+        if (sp.categories.isNotEmpty)
+          SliverToBoxAdapter(
+            child: ServiceCategoryFilterBar(
+              categories: sp.categories,
+              selectedCategoryId: sp.selectedCategoryId,
+              onSelected: sp.setCategoryFilter,
+              variant: ServiceCategoryFilterVariant.mobile,
+            ),
+          ),
         if (visible.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 48, 24, 120),
-              child: Text(
-                'No treatments match your search yet.',
-                style: tt.bodyMedium,
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text(
+                    'Nema usluga za odabrane filtere.',
+                    style: tt.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  if (sp.selectedCategoryId != null || _search.text.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        _search.clear();
+                        sp.clearCatalogFilters();
+                        setState(() {});
+                      },
+                      child: const Text('Poništi filtere'),
+                    ),
+                  ],
+                ],
               ),
             ),
           )
@@ -328,7 +316,10 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                   ),
                   child: TextField(
                     controller: _search,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (value) {
+                      context.read<ServiceProvider>().searchServices(value);
+                      setState(() {});
+                    },
                     style: Theme.of(context).textTheme.bodyMedium,
                     decoration: InputDecoration(
                       hintText: 'Search for treatments, massages…',
@@ -394,60 +385,6 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPills(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: _kPills.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, i) {
-          final selected = i == _pillIndex;
-          return GestureDetector(
-            onTap: () => setState(() => _pillIndex = i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: selected
-                    ? MobileSpaColors.royalPurple
-                    : MobileSpaColors.lavender.withValues(alpha: 0.38),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: selected
-                      ? MobileSpaColors.royalPurple
-                      : MobileSpaColors.lavender.withValues(alpha: 0.5),
-                ),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: MobileSpaColors.royalPurple.withValues(alpha: 0.25),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Text(
-                _kPills[i].label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: selected
-                          ? Colors.white
-                          : MobileSpaColors.royalPurple.withValues(alpha: 0.9),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
