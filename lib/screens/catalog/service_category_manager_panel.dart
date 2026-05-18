@@ -236,7 +236,6 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
           thumbVisibility: list.length > 4,
           child: ListView.separated(
             controller: _scrollController,
-            shrinkWrap: true,
             padding: const EdgeInsets.only(bottom: 8),
             itemCount: list.length,
             separatorBuilder: (_, _) => const SizedBox(height: 14),
@@ -494,57 +493,61 @@ class _LuxuryCategoryModalShellState extends State<_LuxuryCategoryModalShell> {
 
   @override
   Widget build(BuildContext context) {
+    final modalHeight = (MediaQuery.sizeOf(context).height * 0.82)
+        .clamp(320.0, 620.0)
+        .toDouble();
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(_CategoryModalStyle.modalRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
+        child: SizedBox(
           width: _CategoryModalStyle.modalWidth,
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-            minHeight: 320,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_CategoryModalStyle.modalRadius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _CategoryModalStyle.bgMid.withValues(alpha: 0.88),
-                _CategoryModalStyle.bgDeep.withValues(alpha: 0.92),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-            boxShadow: _CategoryModalStyle.modalGlow,
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _LuxuryCategoryModalHeader(
-                    onClose: () => Navigator.of(context).pop(),
-                  ),
-                  Flexible(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 88),
-                      child: ServiceCategoryManagerPanel(key: _panelKey),
-                    ),
-                  ),
+          height: modalHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius:
+                  BorderRadius.circular(_CategoryModalStyle.modalRadius),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _CategoryModalStyle.bgMid.withValues(alpha: 0.88),
+                  _CategoryModalStyle.bgDeep.withValues(alpha: 0.92),
                 ],
               ),
-              Positioned(
-                right: 24,
-                bottom: 24,
-                child: _LuxuryAddCategoryFab(
-                  onPressed: () => _panelKey.currentState?._editCategory(null),
-                ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
               ),
-            ],
+              boxShadow: _CategoryModalStyle.modalGlow,
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _LuxuryCategoryModalHeader(
+                      onClose: () => Navigator.of(context).pop(),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 88),
+                        child: ServiceCategoryManagerPanel(key: _panelKey),
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned(
+                  right: 24,
+                  bottom: 24,
+                  child: _LuxuryAddCategoryFab(
+                    onPressed: () =>
+                        _panelKey.currentState?._editCategory(null),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

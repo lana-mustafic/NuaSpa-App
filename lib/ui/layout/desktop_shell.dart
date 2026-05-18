@@ -59,11 +59,30 @@ class _DesktopShellState extends State<DesktopShell> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    _scheduleAdminLandingSeed();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleAdminLandingSeed();
+  }
+
+  void _scheduleAdminLandingSeed() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<DesktopNav>().seedAdminLandingIfNeeded(
+            context.read<AuthProvider>().isAdmin,
+          );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final nav = context.watch<DesktopNav>();
-
-    nav.seedAdminLandingIfNeeded(auth.isAdmin);
 
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 1100;
