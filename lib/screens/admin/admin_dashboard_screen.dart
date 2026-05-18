@@ -162,7 +162,7 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
                       leading: const Icon(Icons.spa_outlined),
                       title: Text(u.naziv),
                       subtitle: Text(
-                        '${u.cijena.toStringAsFixed(2)} KM · ${u.kategorija}',
+                        '${u.cijenaKm} · ${u.kategorija}',
                         style:
                             TextStyle(color: Colors.white.withValues(alpha: 0.70)),
                       ),

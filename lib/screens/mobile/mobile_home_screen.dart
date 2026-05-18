@@ -231,7 +231,7 @@ class _RecommendCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${usluga.cijena.toStringAsFixed(0)} KM',
+                      usluga.cijenaKm,
                       style: tt.bodySmall?.copyWith(
                         color: MobileSpaColors.gold,
                         fontWeight: FontWeight.w600,

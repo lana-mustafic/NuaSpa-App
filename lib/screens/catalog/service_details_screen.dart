@@ -308,7 +308,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     children: [
                       _SpaMetaChip(
                         icon: Icons.payments_outlined,
-                        label: '${service.cijena.toStringAsFixed(0)} KM',
+                        label: service.cijenaKm,
                         goldAccent: true,
                       ),
                       _SpaMetaChip(
@@ -453,7 +453,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         Row(
                           children: [
                             Text(
-                              '${service.cijena} KM',
+                              service.cijenaKm,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleMedium

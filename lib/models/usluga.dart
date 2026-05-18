@@ -1,3 +1,5 @@
+import '../core/format/km_format.dart';
+
 class Usluga {
   final int id;
   final String naziv;
@@ -23,6 +25,12 @@ class Usluga {
 
   bool get _isPlaceholderSlika =>
       slikaUrl.contains('picsum.photos');
+
+  /// Prikaz cijene s dvije decimale, npr. "80.00".
+  String get cijenaDisplay => formatKmAmount(cijena);
+
+  /// Prikaz s valutom, npr. "80.00 KM".
+  String get cijenaKm => formatKm(cijena);
 
   /// JSON za admin POST/PUT prema API kontraktu (.NET camelCase).
   Map<String, dynamic> toAdminJson({required bool includeId}) {

@@ -148,7 +148,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${u.cijena} KM • ${u.trajanje}',
+                            '${u.cijenaKm} • ${u.trajanje}',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.72),
                             ),

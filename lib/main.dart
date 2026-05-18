@@ -355,7 +355,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '${u.cijena.toStringAsFixed(2)} KM',
+                              u.cijenaKm,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white.withValues(alpha: 0.72),

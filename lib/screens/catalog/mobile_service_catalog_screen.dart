@@ -631,7 +631,7 @@ class _ServiceCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            '${usluga.cijena.toStringAsFixed(0)} KM',
+                            usluga.cijenaKm,
                             style: tt.labelSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: MobileSpaColors.royalPurple,

@@ -309,7 +309,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${usluga.cijena} KM • ${usluga.trajanje}',
+                                  '${usluga.cijenaKm} • ${usluga.trajanje}',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.72),
                                     fontSize: 12,
