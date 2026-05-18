@@ -153,15 +153,17 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_ProfileUi.bgDeep, _ProfileUi.bgMid],
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_ProfileUi.bgDeep, _ProfileUi.bgMid],
+          ),
         ),
-      ),
-      child: FutureBuilder<_TherapistScreenBundle>(
+        child: FutureBuilder<_TherapistScreenBundle>(
         future: _bundleFuture,
         builder: (context, snap) {
           final profile = snap.data?.profile;
@@ -246,6 +248,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
             ),
           );
         },
+        ),
       ),
     );
   }
@@ -290,8 +293,14 @@ class _PageTopBar extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text('Therapist Profile', style: _ProfileUi.title(context)),
+          child: Text(
+            'Therapist Profile',
+            style: _ProfileUi.title(context),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        const SizedBox(width: 12),
         _PurpleButton(label: 'Edit Profile', onPressed: onEdit),
         const SizedBox(width: 10),
         _IconSquareButton(
@@ -388,20 +397,29 @@ class _IconSquareButton extends StatelessWidget {
     );
 
     if (menuItems != null && onMenu != null) {
-      return PopupMenuButton<String>(
-        tooltip: 'More',
-        offset: const Offset(0, 44),
-        color: _ProfileUi.bgMid,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+      return Material(
+        color: Colors.transparent,
+        child: PopupMenuButton<String>(
+          tooltip: 'More',
+          offset: const Offset(0, 44),
+          color: _ProfileUi.bgMid,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          onSelected: onMenu,
+          itemBuilder: (_) => [
+            for (final item in menuItems!)
+              PopupMenuItem(
+                value: item.$1,
+                child: Text(
+                  item.$2,
+                  style: GoogleFonts.inter(color: _ProfileUi.textPrimary),
+                ),
+              ),
+          ],
+          child: child,
         ),
-        onSelected: onMenu,
-        itemBuilder: (_) => [
-          for (final item in menuItems!)
-            PopupMenuItem(value: item.$1, child: Text(item.$2)),
-        ],
-        child: child,
       );
     }
 
