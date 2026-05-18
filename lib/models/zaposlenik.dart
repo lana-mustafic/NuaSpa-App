@@ -5,6 +5,10 @@ class Zaposlenik {
   final String specijalizacija;
   final String? telefon;
   final int? kategorijaUslugaId;
+  final String? kategorijaUslugaNaziv;
+  final String? jezici;
+  final String? obrazovanje;
+  final String? lokacija;
   final DateTime? datumZaposlenja;
 
   Zaposlenik({
@@ -14,6 +18,10 @@ class Zaposlenik {
     required this.specijalizacija,
     required this.telefon,
     this.kategorijaUslugaId,
+    this.kategorijaUslugaNaziv,
+    this.jezici,
+    this.obrazovanje,
+    this.lokacija,
     this.datumZaposlenja,
   });
 
@@ -28,6 +36,10 @@ class Zaposlenik {
       telefon: json['telefon'] as String?,
       kategorijaUslugaId:
           katId == null ? null : (katId as num).toInt(),
+      kategorijaUslugaNaziv: json['kategorijaUslugaNaziv'] as String?,
+      jezici: json['jezici'] as String?,
+      obrazovanje: json['obrazovanje'] as String?,
+      lokacija: json['lokacija'] as String?,
       datumZaposlenja:
           dz == null ? null : DateTime.tryParse(dz.toString()),
     );
@@ -41,6 +53,10 @@ class Zaposlenik {
       'specijalizacija': specijalizacija,
       'telefon': telefon,
       if (kategorijaUslugaId != null) 'kategorijaUslugaId': kategorijaUslugaId,
+      if (jezici != null && jezici!.trim().isNotEmpty) 'jezici': jezici,
+      if (obrazovanje != null && obrazovanje!.trim().isNotEmpty)
+        'obrazovanje': obrazovanje,
+      if (lokacija != null && lokacija!.trim().isNotEmpty) 'lokacija': lokacija,
       if (datumZaposlenja != null)
         'datumZaposlenja': datumZaposlenja!.toIso8601String(),
     };
@@ -53,6 +69,10 @@ class Zaposlenik {
     String? specijalizacija,
     String? telefon,
     int? kategorijaUslugaId,
+    String? kategorijaUslugaNaziv,
+    String? jezici,
+    String? obrazovanje,
+    String? lokacija,
     DateTime? datumZaposlenja,
   }) {
     return Zaposlenik(
@@ -62,6 +82,11 @@ class Zaposlenik {
       specijalizacija: specijalizacija ?? this.specijalizacija,
       telefon: telefon ?? this.telefon,
       kategorijaUslugaId: kategorijaUslugaId ?? this.kategorijaUslugaId,
+      kategorijaUslugaNaziv:
+          kategorijaUslugaNaziv ?? this.kategorijaUslugaNaziv,
+      jezici: jezici ?? this.jezici,
+      obrazovanje: obrazovanje ?? this.obrazovanje,
+      lokacija: lokacija ?? this.lokacija,
       datumZaposlenja: datumZaposlenja ?? this.datumZaposlenja,
     );
   }

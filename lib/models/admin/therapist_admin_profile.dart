@@ -1,4 +1,7 @@
 import '../zaposlenik.dart';
+import 'therapist_kpi.dart';
+import 'therapist_top_service.dart';
+import 'therapist_weekly_schedule_day.dart';
 
 class TherapistReviewRow {
   TherapistReviewRow({
@@ -33,6 +36,11 @@ class TherapistAdminProfile {
     required this.imaKorisnickiNalog,
     required this.internaNapomena,
     required this.nedavneRecenzije,
+    this.lokacijaPrikaz,
+    this.uloga,
+    this.kpi,
+    this.sedmicniRaspored = const [],
+    this.topUsluge = const [],
   });
 
   final Zaposlenik terapeut;
@@ -40,6 +48,11 @@ class TherapistAdminProfile {
   final bool imaKorisnickiNalog;
   final String? internaNapomena;
   final List<TherapistReviewRow> nedavneRecenzije;
+  final String? lokacijaPrikaz;
+  final String? uloga;
+  final TherapistKpi? kpi;
+  final List<TherapistWeeklyScheduleDay> sedmicniRaspored;
+  final List<TherapistTopService> topUsluge;
 
   factory TherapistAdminProfile.fromJson(Map<String, dynamic> json) {
     final t = json['terapeut'];
@@ -47,6 +60,11 @@ class TherapistAdminProfile {
     if (t is! Map<String, dynamic>) {
       throw const FormatException('terapeut');
     }
+
+    final rawKpi = json['kpi'];
+    final rawSchedule = json['sedmicniRaspored'];
+    final rawTop = json['topUsluge'];
+
     return TherapistAdminProfile(
       terapeut: Zaposlenik.fromJson(t),
       povezanEmail: json['povezanEmail'] as String?,
@@ -57,6 +75,30 @@ class TherapistAdminProfile {
               .whereType<Map>()
               .map(
                 (e) => TherapistReviewRow.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+          : const [],
+      lokacijaPrikaz: json['lokacijaPrikaz'] as String?,
+      uloga: json['uloga'] as String?,
+      kpi: rawKpi is Map<String, dynamic>
+          ? TherapistKpi.fromJson(rawKpi)
+          : null,
+      sedmicniRaspored: rawSchedule is List
+          ? rawSchedule
+              .whereType<Map>()
+              .map(
+                (e) => TherapistWeeklyScheduleDay.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
+          : const [],
+      topUsluge: rawTop is List
+          ? rawTop
+              .whereType<Map>()
+              .map(
+                (e) =>
+                    TherapistTopService.fromJson(Map<String, dynamic>.from(e)),
               )
               .toList()
           : const [],

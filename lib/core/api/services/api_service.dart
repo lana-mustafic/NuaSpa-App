@@ -177,11 +177,22 @@ class ApiService {
   Future<TherapistAdminProfile?> getTherapistAdminProfile({
     required int zaposlenikId,
     int maxReviews = 20,
+    DateTime? from,
+    DateTime? to,
   }) async {
     try {
+      final query = <String, dynamic>{'maxReviews': maxReviews};
+      if (from != null) {
+        query['from'] = DateTime(from.year, from.month, from.day)
+            .toIso8601String();
+      }
+      if (to != null) {
+        query['to'] =
+            DateTime(to.year, to.month, to.day).toIso8601String();
+      }
       final response = await _dio.get<dynamic>(
         'Zaposlenik/$zaposlenikId/admin-profile',
-        queryParameters: {'maxReviews': maxReviews},
+        queryParameters: query,
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;

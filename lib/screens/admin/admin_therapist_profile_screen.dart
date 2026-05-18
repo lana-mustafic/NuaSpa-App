@@ -3,22 +3,17 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/format/km_format.dart';
-import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/admin/therapist_admin_profile.dart';
 import '../../models/admin/therapist_kpi.dart';
+import '../../models/admin/therapist_top_service.dart';
+import '../../models/admin/therapist_weekly_schedule_day.dart';
 import '../../models/rezervacija.dart';
 import '../../models/zaposlenik.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
 
 class _TherapistScreenBundle {
-  const _TherapistScreenBundle({
-    required this.kpi,
-    required this.week,
-    required this.profile,
-  });
+  const _TherapistScreenBundle({required this.profile});
 
-  final TherapistKpi? kpi;
-  final List<RezervacijaCalendarItem> week;
   final TherapistAdminProfile? profile;
 }
 
@@ -89,30 +84,18 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
   }
 
   Future<_TherapistScreenBundle> _loadBundle() async {
-    final id = _therapist.id;
     final now = DateTime.now();
     final fromD = DateTime(now.year, now.month, now.day)
         .subtract(const Duration(days: 30));
     final toD = DateTime(now.year, now.month, now.day);
-    final w0 = _mondayOf(now);
-    final w1 = w0.add(const Duration(days: 7));
 
-    final profile = await _api.getTherapistAdminProfile(zaposlenikId: id);
-    final effectiveId = profile?.terapeut.id ?? id;
-
-    final kpi = await _api.getTherapistKpis(
-      zaposlenikId: effectiveId,
+    final profile = await _api.getTherapistAdminProfile(
+      zaposlenikId: _therapist.id,
       from: fromD,
       to: toD,
     );
-    final week = await _api.getRezervacijeCalendar(
-      from: w0,
-      to: w1.subtract(const Duration(seconds: 1)),
-      zaposlenikId: effectiveId,
-      includeOtkazane: true,
-    );
 
-    return _TherapistScreenBundle(kpi: kpi, week: week, profile: profile);
+    return _TherapistScreenBundle(profile: profile);
   }
 
   Future<void> _editProfile() async {
@@ -136,11 +119,6 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
       setState(() => _therapist = result);
       _reload();
     }
-  }
-
-  DateTime _mondayOf(DateTime d) {
-    final day = DateTime(d.year, d.month, d.day);
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
   }
 
   String _hireDateLabel(DateTime? d) {
@@ -171,11 +149,6 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
         .toList();
   }
 
-  String _roleLabel(TherapistKpi? kpi) {
-    final n = kpi?.ukupnoRezervacija ?? 0;
-    return n >= 20 ? 'Senior Therapist' : 'Therapist';
-  }
-
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
@@ -189,13 +162,15 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
       child: FutureBuilder<_TherapistScreenBundle>(
         future: _bundleFuture,
         builder: (context, snap) {
-          final bundle = snap.data;
-          final kpi = bundle?.kpi;
-          final weekItems = bundle?.week ?? const <RezervacijaCalendarItem>[];
-          final profile = bundle?.profile;
+          final profile = snap.data?.profile;
+          final kpi = profile?.kpi;
+          final schedule = profile?.sedmicniRaspored ?? const [];
+          final topServices = profile?.topUsluge ?? const [];
           final t = profile?.terapeut ?? _therapist;
           final name = '${t.ime} ${t.prezime}'.trim();
           final tags = _tags(t.specijalizacija);
+          final role = profile?.uloga ?? kpi?.uloga ?? 'Therapist';
+          final location = profile?.lokacijaPrikaz?.trim();
           final loading = snap.connectionState == ConnectionState.waiting;
 
           return SingleChildScrollView(
@@ -220,9 +195,10 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                 else ...[
                   _HeroCard(
                     name: name,
-                    role: _roleLabel(kpi),
+                    role: role,
                     therapist: t,
                     linkedEmail: profile?.povezanEmail,
+                    location: location,
                     tags: tags,
                   ),
                   const SizedBox(height: 22),
@@ -236,11 +212,12 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       therapist: t,
                       profile: profile,
                       kpi: kpi,
-                      weekItems: weekItems,
+                      schedule: schedule,
+                      topServices: topServices,
                       hireDateLabel: _hireDateLabel(t.datumZaposlenja),
                     )
                   else if (_tab == _ProfileTab.schedule)
-                    _WeekScheduleListCard(items: weekItems)
+                    _WeekScheduleListCard(schedule: schedule)
                   else if (_tab == _ProfileTab.appointments)
                     _TherapistAppointmentsPanel(
                       api: _api,
@@ -437,6 +414,7 @@ class _HeroCard extends StatelessWidget {
     required this.therapist,
     required this.tags,
     this.linkedEmail,
+    this.location,
   });
 
   final String name;
@@ -444,6 +422,7 @@ class _HeroCard extends StatelessWidget {
   final Zaposlenik therapist;
   final List<String> tags;
   final String? linkedEmail;
+  final String? location;
 
   @override
   Widget build(BuildContext context) {
@@ -492,9 +471,11 @@ class _HeroCard extends StatelessWidget {
                 children: [
                   _ContactItem(icon: Icons.phone_outlined, text: phone),
                   _ContactItem(icon: Icons.mail_outline_rounded, text: email),
-                  const _ContactItem(
+                  _ContactItem(
                     icon: Icons.location_on_outlined,
-                    text: 'Sarajevo · NuaSpa',
+                    text: location?.isNotEmpty == true
+                        ? location!
+                        : '—',
                   ),
                 ],
               ),
@@ -732,14 +713,16 @@ class _OverviewSection extends StatelessWidget {
     required this.therapist,
     required this.profile,
     required this.kpi,
-    required this.weekItems,
+    required this.schedule,
+    required this.topServices,
     required this.hireDateLabel,
   });
 
   final Zaposlenik therapist;
   final TherapistAdminProfile? profile;
   final TherapistKpi? kpi;
-  final List<RezervacijaCalendarItem> weekItems;
+  final List<TherapistWeeklyScheduleDay> schedule;
+  final List<TherapistTopService> topServices;
   final String hireDateLabel;
 
   @override
@@ -756,7 +739,7 @@ class _OverviewSection extends StatelessWidget {
                     hireDateLabel: hireDateLabel,
                   ),
                   const SizedBox(height: 16),
-                  _WeekScheduleListCard(items: weekItems),
+                  _WeekScheduleListCard(schedule: schedule),
                   const SizedBox(height: 16),
                   _PerformanceSummaryCard(kpi: kpi),
                 ],
@@ -774,7 +757,7 @@ class _OverviewSection extends StatelessWidget {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: _WeekScheduleListCard(items: weekItems),
+                      child: _WeekScheduleListCard(schedule: schedule),
                     ),
                     const SizedBox(width: 16),
                     Expanded(child: _PerformanceSummaryCard(kpi: kpi)),
@@ -787,7 +770,10 @@ class _OverviewSection extends StatelessWidget {
           children: [
             grid,
             const SizedBox(height: 16),
-            _TopServicesCard(items: weekItems, fallbackTags: therapist.specijalizacija),
+            _TopServicesCard(
+              topServices: topServices,
+              fallbackTags: therapist.specijalizacija,
+            ),
           ],
         );
       },
@@ -836,14 +822,25 @@ class _AboutCard extends StatelessWidget {
               _StatusBadge(label: 'Active'),
             ],
           ),
+          if (therapist.kategorijaUslugaNaziv?.trim().isNotEmpty == true)
+            _InfoRow(
+              label: 'Category',
+              value: therapist.kategorijaUslugaNaziv!,
+            ),
           const SizedBox(height: 12),
-          _InfoRow(label: 'Languages', value: 'English, Bosnian'),
+          _InfoRow(
+            label: 'Languages',
+            value: therapist.jezici?.trim().isNotEmpty == true
+                ? therapist.jezici!
+                : '—',
+          ),
           const SizedBox(height: 8),
           Text('Education', style: _ProfileUi.bodyMuted(context)),
           const SizedBox(height: 6),
           Text(
-            '• Certified Massage Therapist (CMT)\n'
-            '• Advanced aromatherapy practitioner',
+            therapist.obrazovanje?.trim().isNotEmpty == true
+                ? therapist.obrazovanje!
+                : '—',
             style: _ProfileUi.bodyMuted(context).copyWith(height: 1.5),
           ),
         ],
@@ -912,78 +909,32 @@ class _StatusBadge extends StatelessWidget {
 }
 
 class _WeekScheduleListCard extends StatelessWidget {
-  const _WeekScheduleListCard({required this.items});
+  const _WeekScheduleListCard({required this.schedule});
 
-  final List<RezervacijaCalendarItem> items;
-
-  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  final List<TherapistWeeklyScheduleDay> schedule;
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - DateTime.monday));
-
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("This Week's Schedule", style: _ProfileUi.cardTitle(context)),
           const SizedBox(height: 16),
-          for (var i = 0; i < 7; i++) ...[
-            _ScheduleRow(
-              label: _formatDay(monday.add(Duration(days: i)), i),
-              hours: _hoursForDay(monday.add(Duration(days: i)), items),
-            ),
-            if (i < 6) const SizedBox(height: 10),
-          ],
+          if (schedule.isEmpty)
+            Text('No schedule data.', style: _ProfileUi.bodyMuted(context))
+          else
+            for (var i = 0; i < schedule.length; i++) ...[
+              _ScheduleRow(
+                label: schedule[i].label,
+                hours: schedule[i].hoursText,
+              ),
+              if (i < schedule.length - 1) const SizedBox(height: 10),
+            ],
         ],
       ),
     );
   }
-
-  String _formatDay(DateTime day, int index) {
-    return '${_dayNames[index]} ${_months[day.month - 1]} ${day.day}';
-  }
-
-  String _hoursForDay(DateTime day, List<RezervacijaCalendarItem> items) {
-    final dayItems = items.where((e) {
-      if (e.isOtkazana) return false;
-      final d = e.datumRezervacije.toLocal();
-      return d.year == day.year && d.month == day.month && d.day == day.day;
-    }).toList();
-
-    if (dayItems.isEmpty) return 'Day off';
-
-    var minH = 23;
-    var minM = 59;
-    var maxH = 0;
-    var maxM = 0;
-    for (final e in dayItems) {
-      final t = e.datumRezervacije.toLocal();
-      final end = t.add(Duration(minutes: e.uslugaTrajanjeMinuta));
-      if (t.hour < minH || (t.hour == minH && t.minute < minM)) {
-        minH = t.hour;
-        minM = t.minute;
-      }
-      if (end.hour > maxH || (end.hour == maxH && end.minute > maxM)) {
-        maxH = end.hour;
-        maxM = end.minute;
-      }
-    }
-
-    if (dayItems.length == 1 && minH == maxH) {
-      return '${_fmt(minH, minM)}–${_fmt(maxH + 1, 0)}';
-    }
-    return '${_fmt(minH, minM)}–${_fmt(maxH, maxM)}';
-  }
-
-  String _fmt(int h, int m) =>
-      '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
 class _ScheduleRow extends StatelessWidget {
@@ -1042,39 +993,51 @@ class _PerformanceSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = kpi?.ukupnoRezervacija ?? 0;
     final completed = kpi?.placeneRezervacije ?? kpi?.potvrdjeneRezervacije ?? 0;
-    final cancel = kpi?.otkazaneRezervacije ?? 0;
-    final cancelPct = total == 0 ? 0.0 : (cancel / total * 100);
+    final cancelPct = kpi?.stopaOtkazivanjaPostotak ?? 0;
     final rating = (kpi?.prosjecnaOcjena ?? 0) > 0 ? kpi!.prosjecnaOcjena : 0;
-    final satisfaction =
-        rating > 0 ? (rating / 5 * 100).round() : null;
+    final satisfaction = kpi?.zadovoljstvoKlijenataPostotak;
     final revenue = kpi?.prihod ?? 0;
 
+    final cancelTrend = kpi?.trendOtkazanePostotak;
+    final cancelTrendBadge = TherapistKpi.badgePercent(cancelTrend);
+    final cancelTrendPositive = cancelTrend == null || cancelTrend <= 0;
+
     final rows = <_PerfRow>[
-      _PerfRow('Total Appointments', '$total', badge: '+12%', positive: true),
-      _PerfRow('Completed Appointments', '$completed', badge: '+14%', positive: true),
+      _PerfRow(
+        'Total Appointments',
+        '$total',
+        badge: TherapistKpi.badgePercent(kpi?.trendUkupnoRezervacijaPostotak),
+        positive: (kpi?.trendUkupnoRezervacijaPostotak ?? 0) >= 0,
+      ),
+      _PerfRow(
+        'Completed Appointments',
+        '$completed',
+        badge: TherapistKpi.badgePercent(kpi?.trendPotvrdjenePostotak),
+        positive: (kpi?.trendPotvrdjenePostotak ?? 0) >= 0,
+      ),
       _PerfRow(
         'Cancellation Rate',
         '${cancelPct.toStringAsFixed(0)}%',
-        badge: '−2%',
-        positive: false,
+        badge: cancelTrendBadge,
+        positive: cancelTrendPositive,
       ),
       _PerfRow(
         'Average Rating',
         rating > 0 ? '${rating.toStringAsFixed(1)} / 5' : '—',
-        badge: rating > 0 ? '+0.2' : null,
-        positive: true,
+        badge: TherapistKpi.badgeRatingDelta(kpi?.trendProsjecnaOcjenaDelta),
+        positive: (kpi?.trendProsjecnaOcjenaDelta ?? 0) >= 0,
       ),
       _PerfRow(
         'Client Satisfaction',
         satisfaction != null ? '$satisfaction%' : '—',
-        badge: satisfaction != null ? '+5%' : null,
-        positive: true,
+        badge: TherapistKpi.badgePercent(kpi?.trendZadovoljstvoPostotak),
+        positive: (kpi?.trendZadovoljstvoPostotak ?? 0) >= 0,
       ),
       _PerfRow(
         'Revenue Generated',
         revenue > 0 ? formatKm(revenue) : '—',
-        badge: revenue > 0 ? '+18%' : null,
-        positive: true,
+        badge: TherapistKpi.badgePercent(kpi?.trendPrihodPostotak),
+        positive: (kpi?.trendPrihodPostotak ?? 0) >= 0,
       ),
     ];
 
@@ -1161,55 +1124,43 @@ class _TrendBadge extends StatelessWidget {
 
 class _TopServicesCard extends StatelessWidget {
   const _TopServicesCard({
-    required this.items,
+    required this.topServices,
     required this.fallbackTags,
   });
 
-  final List<RezervacijaCalendarItem> items;
+  final List<TherapistTopService> topServices;
   final String fallbackTags;
 
-  List<(String, int)> _serviceCounts() {
-    final counts = <String, int>{};
-    for (final e in items) {
-      if (e.isOtkazana) continue;
-      final n = e.uslugaNaziv?.trim();
-      if (n == null || n.isEmpty) continue;
-      counts[n] = (counts[n] ?? 0) + 1;
-    }
-    if (counts.isNotEmpty) {
-      final entries = counts.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      return entries.take(4).map((e) => (e.key, e.value)).toList();
-    }
-
+  List<(String, int)> _fallbackRows() {
     final tags = fallbackTags
         .split(RegExp(r'[,;/]'))
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .take(3)
+        .take(4)
         .toList();
-    if (tags.isEmpty) {
-      return const [
-        ('Deep Tissue', 4),
-        ('Swedish', 3),
-        ('Aromatherapy', 2),
-        ('Other', 1),
-      ];
-    }
+    if (tags.isEmpty) return const [];
     final weights = [40, 30, 20, 10];
     final result = <(String, int)>[];
-    for (var i = 0; i < tags.length && i < 3; i++) {
+    for (var i = 0; i < tags.length && i < 4; i++) {
       result.add((tags[i], weights[i]));
     }
-    if (tags.length < 4) result.add(('Other', 10));
     return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    final top = _serviceCounts();
-    final total = top.fold<int>(0, (a, e) => a + e.$2);
-    final safeTotal = total == 0 ? 1 : total;
+    final fromApi = topServices
+        .where((s) => s.naziv.trim().isNotEmpty)
+        .map((s) => (s.naziv, s.postotak.round()))
+        .toList();
+
+    final fallback = _fallbackRows();
+    final useApi = fromApi.isNotEmpty;
+    final rows = useApi
+        ? fromApi
+        : fallback
+            .map((e) => (e.$1, e.$2))
+            .toList();
 
     return _GlassCard(
       child: Column(
@@ -1217,13 +1168,19 @@ class _TopServicesCard extends StatelessWidget {
         children: [
           Text('Top Services Performed', style: _ProfileUi.cardTitle(context)),
           const SizedBox(height: 18),
-          for (var i = 0; i < top.length; i++) ...[
-            _ServiceProgressRow(
-              label: top[i].$1,
-              percent: (top[i].$2 / safeTotal * 100).round(),
-            ),
-            if (i < top.length - 1) const SizedBox(height: 14),
-          ],
+          if (rows.isEmpty)
+            Text(
+              'No service history yet.',
+              style: _ProfileUi.bodyMuted(context),
+            )
+          else
+            for (var i = 0; i < rows.length; i++) ...[
+              _ServiceProgressRow(
+                label: rows[i].$1,
+                percent: rows[i].$2,
+              ),
+              if (i < rows.length - 1) const SizedBox(height: 14),
+            ],
         ],
       ),
     );
