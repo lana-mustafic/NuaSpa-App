@@ -75,12 +75,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   final ApiService _apiService = ApiService();
   final ScrollController _rightScrollController = ScrollController();
 
-  Future<Usluga?> get _serviceFuture => _apiService.getUslugaById(widget.serviceId);
+  late final Future<Usluga?> _serviceFuture;
   late Future<List<Recenzija>> _recenzijeFuture;
 
   final TextEditingController _komentarController = TextEditingController();
   int _ocjena = 5;
-  int _commentLength = 0;
   List<Zaposlenik> _therapists = [];
   int? _selectedZaposlenikId;
   bool _therapistsLoading = false;
@@ -92,9 +91,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   void initState() {
     super.initState();
     _recenzijeFuture = _apiService.getRecenzijeByUsluga(widget.serviceId);
-    _komentarController.addListener(() {
-      setState(() => _commentLength = _komentarController.text.length);
-    });
+    _serviceFuture = _loadServiceAndTherapists();
+  }
+
+  Future<Usluga?> _loadServiceAndTherapists() async {
+    final service = await _apiService.getUslugaById(widget.serviceId);
+    if (service != null && mounted) {
+      await _loadTherapistsForService(service);
+    }
+    return service;
   }
 
   @override
@@ -338,7 +343,6 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 ocjena: _ocjena,
                 onRatingChanged: (v) => setState(() => _ocjena = v),
                 komentarController: _komentarController,
-                commentLength: _commentLength,
                 maxCommentLength: _maxCommentLength,
                 therapists: _therapists,
                 therapistsLoading: _therapistsLoading,
@@ -402,10 +406,6 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               ),
             );
           }
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _loadTherapistsForService(service);
-          });
 
           if (nuaspaUseMobileShell()) {
             return _buildMobileSpaDetails(context, service);
@@ -546,7 +546,6 @@ class _RightDetailsPanel extends StatelessWidget {
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
-    required this.commentLength,
     required this.maxCommentLength,
     required this.therapists,
     required this.therapistsLoading,
@@ -563,7 +562,6 @@ class _RightDetailsPanel extends StatelessWidget {
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
-  final int commentLength;
   final int maxCommentLength;
   final List<Zaposlenik> therapists;
   final bool therapistsLoading;
@@ -728,7 +726,6 @@ class _RightDetailsPanel extends StatelessWidget {
                                 _CommentField(
                                   controller: komentarController,
                                   maxLength: maxCommentLength,
-                                  length: commentLength,
                                 ),
                                 const SizedBox(height: 18),
                                 Align(
@@ -1091,12 +1088,10 @@ class _CommentField extends StatefulWidget {
   const _CommentField({
     required this.controller,
     required this.maxLength,
-    required this.length,
   });
 
   final TextEditingController controller;
   final int maxLength;
-  final int length;
 
   @override
   State<_CommentField> createState() => _CommentFieldState();
@@ -1133,34 +1128,39 @@ class _CommentFieldState extends State<_CommentField> {
           child: Focus(
             onFocusChange: (f) => setState(() => _focused = f),
             child: TextField(
-            controller: widget.controller,
-            maxLength: widget.maxLength,
-            maxLines: null,
-            expands: true,
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
-            style: LuxuryModalStyle.fieldStyle(context),
-            decoration: InputDecoration(
-              hintText: 'Share your experience…',
-              hintStyle: LuxuryModalStyle.hintTextStyle(),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              counterText: '',
-              contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            ),
+              controller: widget.controller,
+              maxLength: widget.maxLength,
+              maxLines: null,
+              expands: true,
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              style: LuxuryModalStyle.fieldStyle(context),
+              decoration: InputDecoration(
+                hintText: 'Share your experience…',
+                hintStyle: LuxuryModalStyle.hintTextStyle(),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                counterText: '',
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              ),
             ),
           ),
         ),
         const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            '${widget.length} / ${widget.maxLength}',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: _DetailsStyle.textSecondary,
-            ),
-          ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: widget.controller,
+          builder: (context, value, _) {
+            return Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${value.text.length} / ${widget.maxLength}',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: _DetailsStyle.textSecondary,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
