@@ -1134,19 +1134,93 @@ class _FilterSearchField extends StatelessWidget {
 }
 
 abstract final class _ReviewsTableStyle {
-  static const guestW = 220.0;
-  static const serviceW = 260.0;
-  static const ratingW = 190.0;
-  static const dateW = 180.0;
-  static const actionsW = 120.0;
   static const gold = Color(0xFFF5B942);
   static const primaryPurple = Color(0xFF7B4DFF);
+  static const horizontalPadding = 24.0;
+  static const reviewMinWidth = 72.0;
+}
 
-  static double guestWidth(bool compact) => compact ? 190.0 : guestW;
-  static double serviceWidth(bool compact) => compact ? 220.0 : serviceW;
-  static double ratingWidth(bool compact) => compact ? 160.0 : ratingW;
-  static double dateWidth(bool compact) => compact ? 150.0 : dateW;
-  static double actionsWidth(bool compact) => compact ? 100.0 : actionsW;
+/// Responsive column widths — scales down on narrow viewports (no overflow).
+class _ReviewColWidths {
+  const _ReviewColWidths({
+    required this.guest,
+    required this.service,
+    required this.rating,
+    required this.date,
+    required this.actions,
+    required this.avatarSize,
+    required this.actionButtonSize,
+    required this.tight,
+  });
+
+  final double guest;
+  final double service;
+  final double rating;
+  final double date;
+  final double actions;
+  final double avatarSize;
+  final double actionButtonSize;
+  final bool tight;
+
+  static _ReviewColWidths fromMaxWidth(double maxWidth, bool compact) {
+    var guest = compact ? 190.0 : 220.0;
+    var service = compact ? 220.0 : 260.0;
+    var rating = compact ? 160.0 : 190.0;
+    var date = compact ? 150.0 : 180.0;
+    var actions = compact ? 100.0 : 120.0;
+
+    final inner = maxWidth - _ReviewsTableStyle.horizontalPadding * 2;
+    var fixed = guest + service + rating + date + actions;
+    final needed = fixed + _ReviewsTableStyle.reviewMinWidth;
+
+    if (inner < needed && fixed > 0) {
+      final scale = (inner - _ReviewsTableStyle.reviewMinWidth) / fixed;
+      final s = scale.clamp(0.55, 1.0);
+      guest *= s;
+      service *= s;
+      rating *= s;
+      date *= s;
+      actions *= s;
+    }
+
+    final tight = inner < 920;
+    final avatarSize = tight ? 42.0 : 54.0;
+    final actionButtonSize = actions < 96 ? 38.0 : 44.0;
+
+    return _ReviewColWidths(
+      guest: guest,
+      service: service,
+      rating: rating,
+      date: date,
+      actions: actions,
+      avatarSize: avatarSize,
+      actionButtonSize: actionButtonSize,
+      tight: tight,
+    );
+  }
+}
+
+class _ReviewsTableRowShell extends StatelessWidget {
+  const _ReviewsTableRowShell({
+    required this.compact,
+    required this.child,
+  });
+
+  final bool compact;
+  final Widget Function(_ReviewColWidths widths) child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final widths = _ReviewColWidths.fromMaxWidth(
+          constraints.maxWidth,
+          compact,
+        );
+        return child(widths);
+      },
+    );
+  }
 }
 
 String _formatReviewDateLine(DateTime utc) {
@@ -1275,34 +1349,27 @@ class _TableHeaderRow extends StatelessWidget {
     return Container(
       height: 64,
       color: Colors.white.withValues(alpha: 0.04),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          SizedBox(
-            width: _ReviewsTableStyle.guestWidth(compact),
-            child: _headerLabel('Guest'),
-          ),
-          SizedBox(
-            width: _ReviewsTableStyle.serviceWidth(compact),
-            child: _headerLabel('Service'),
-          ),
-          SizedBox(
-            width: _ReviewsTableStyle.ratingWidth(compact),
-            child: _headerLabel('Rating'),
-          ),
-          Expanded(child: _headerLabel('Review')),
-          SizedBox(
-            width: _ReviewsTableStyle.dateWidth(compact),
-            child: _headerLabel('Date'),
-          ),
-          SizedBox(
-            width: _ReviewsTableStyle.actionsWidth(compact),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _headerLabel('Actions'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: _ReviewsTableStyle.horizontalPadding,
+      ),
+      child: _ReviewsTableRowShell(
+        compact: compact,
+        child: (w) => Row(
+          children: [
+            SizedBox(width: w.guest, child: _headerLabel('Guest')),
+            SizedBox(width: w.service, child: _headerLabel('Service')),
+            SizedBox(width: w.rating, child: _headerLabel('Rating')),
+            Expanded(child: _headerLabel('Review')),
+            SizedBox(width: w.date, child: _headerLabel('Date')),
+            SizedBox(
+              width: w.actions,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _headerLabel('Actions'),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1360,115 +1427,135 @@ class _TableDataRowState extends State<_TableDataRow> {
             bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: _ReviewsTableStyle.guestWidth(widget.compact),
-              child: Row(
-                children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF7B4DFF),
-                          LuxuryReviewsDashboardScreen.secondaryPurple,
-                        ],
-                      ),
-                    ),
-                    child: Text(
-                      initials,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.korisnikPunoIme,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: LuxuryReviewsDashboardScreen.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.person_outline_rounded,
-                              size: 14,
-                              color: LuxuryReviewsDashboardScreen.secondaryPurple
-                                  .withValues(alpha: 0.9),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              '${r.brojPosjeta} visits',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.65),
-                              ),
-                            ),
+        padding: const EdgeInsets.fromLTRB(
+          _ReviewsTableStyle.horizontalPadding,
+          22,
+          _ReviewsTableStyle.horizontalPadding,
+          22,
+        ),
+        child: _ReviewsTableRowShell(
+          compact: widget.compact,
+          child: (w) => Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: w.guest,
+                child: Row(
+                  children: [
+                    Container(
+                      width: w.avatarSize,
+                      height: w.avatarSize,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF7B4DFF),
+                            LuxuryReviewsDashboardScreen.secondaryPurple,
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              width: _ReviewsTableStyle.serviceWidth(widget.compact),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      r.uslugaNaziv,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: LuxuryReviewsDashboardScreen.textPrimary,
-                        height: 1.25,
+                      ),
+                      child: Text(
+                        initials,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          fontSize: w.tight ? 16 : null,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      therapist.isEmpty ? '—' : therapist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: LuxuryReviewsDashboardScreen.secondaryPurple
-                            .withValues(alpha: 0.85),
+                    SizedBox(width: w.tight ? 10 : 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.korisnikPunoIme,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: LuxuryReviewsDashboardScreen.textPrimary,
+                              fontSize: w.tight ? 13 : null,
+                            ),
+                          ),
+                          if (!w.tight) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person_outline_rounded,
+                                  size: 14,
+                                  color: LuxuryReviewsDashboardScreen
+                                      .secondaryPurple
+                                      .withValues(alpha: 0.9),
+                                ),
+                                const SizedBox(width: 5),
+                                Flexible(
+                                  child: Text(
+                                    '${r.brojPosjeta} visits',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.65),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            SizedBox(
-              width: _ReviewsTableStyle.ratingWidth(widget.compact),
-              child: _PremiumRatingCell(ocjena: r.ocjena, theme: theme),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+              SizedBox(
+                width: w.service,
+                child: Padding(
+                  padding: EdgeInsets.only(right: w.tight ? 8 : 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r.uslugaNaziv,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: LuxuryReviewsDashboardScreen.textPrimary,
+                          height: 1.25,
+                          fontSize: w.tight ? 13 : null,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        therapist.isEmpty ? '—' : therapist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: LuxuryReviewsDashboardScreen.secondaryPurple
+                              .withValues(alpha: 0.85),
+                          fontSize: w.tight ? 11 : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: w.rating,
+                child: _PremiumRatingCell(
+                  ocjena: r.ocjena,
+                  theme: theme,
+                  compact: w.tight,
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: w.tight ? 8 : 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1477,7 +1564,7 @@ class _TableDataRowState extends State<_TableDataRow> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 15,
+                          fontSize: w.tight ? 13 : 15,
                           height: 1.45,
                           color: Colors.white.withValues(alpha: 0.82),
                         ),
@@ -1495,6 +1582,7 @@ class _TableDataRowState extends State<_TableDataRow> {
                                 style: theme.textTheme.labelLarge?.copyWith(
                                   color: _ReviewsTableStyle.primaryPurple,
                                   fontWeight: FontWeight.w700,
+                                  fontSize: w.tight ? 12 : null,
                                 ),
                               ),
                               Icon(
@@ -1510,27 +1598,35 @@ class _TableDataRowState extends State<_TableDataRow> {
                   ),
                 ),
               ),
-            ),
-            SizedBox(
-              width: _ReviewsTableStyle.dateWidth(widget.compact),
-              child: _ReviewDateCell(createdAt: r.createdAt, theme: theme),
-            ),
-            SizedBox(
-              width: _ReviewsTableStyle.actionsWidth(widget.compact),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _ReviewActionButton(
-                    icon: Icons.visibility_outlined,
-                    tooltip: 'Detalji i odgovor',
-                    onPressed: widget.onViewReview,
-                  ),
-                  const SizedBox(width: 8),
-                  _ReviewActionMenuButton(onReply: widget.onViewReview),
-                ],
+              SizedBox(
+                width: w.date,
+                child: _ReviewDateCell(
+                  createdAt: r.createdAt,
+                  theme: theme,
+                  compact: w.tight,
+                ),
               ),
-            ),
-          ],
+              SizedBox(
+                width: w.actions,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _ReviewActionButton(
+                      icon: Icons.visibility_outlined,
+                      tooltip: 'Detalji i odgovor',
+                      onPressed: widget.onViewReview,
+                      size: w.actionButtonSize,
+                    ),
+                    SizedBox(width: w.tight ? 4 : 8),
+                    _ReviewActionMenuButton(
+                      onReply: widget.onViewReview,
+                      size: w.actionButtonSize,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1538,14 +1634,20 @@ class _TableDataRowState extends State<_TableDataRow> {
 }
 
 class _PremiumRatingCell extends StatelessWidget {
-  const _PremiumRatingCell({required this.ocjena, required this.theme});
+  const _PremiumRatingCell({
+    required this.ocjena,
+    required this.theme,
+    this.compact = false,
+  });
 
   final int ocjena;
   final ThemeData theme;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final v = ocjena.clamp(0, 5);
+    final starSize = compact ? 14.0 : 18.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -1555,48 +1657,56 @@ class _PremiumRatingCell extends StatelessWidget {
             for (var i = 0; i < 5; i++)
               Icon(
                 i < v ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 18,
+                size: starSize,
                 color: _ReviewsTableStyle.gold,
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: compact ? 4 : 8),
         Text(
           v.toDouble().toStringAsFixed(1),
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
             color: LuxuryReviewsDashboardScreen.textPrimary,
+            fontSize: compact ? 13 : null,
           ),
         ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: LuxuryReviewsDashboardScreen.secondaryPurple
-                  .withValues(alpha: 0.35),
+        if (!compact) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: LuxuryReviewsDashboardScreen.secondaryPurple
+                    .withValues(alpha: 0.35),
+              ),
+            ),
+            child: Text(
+              _ratingLabel(v),
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: LuxuryReviewsDashboardScreen.secondaryPurple,
+              ),
             ),
           ),
-          child: Text(
-            _ratingLabel(v),
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: LuxuryReviewsDashboardScreen.secondaryPurple,
-            ),
-          ),
-        ),
+        ],
       ],
     );
   }
 }
 
 class _ReviewDateCell extends StatelessWidget {
-  const _ReviewDateCell({required this.createdAt, required this.theme});
+  const _ReviewDateCell({
+    required this.createdAt,
+    required this.theme,
+    this.compact = false,
+  });
 
   final DateTime createdAt;
   final ThemeData theme;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1607,6 +1717,7 @@ class _ReviewDateCell extends StatelessWidget {
     final textStyle = theme.textTheme.bodySmall?.copyWith(
       color: Colors.white.withValues(alpha: 0.65),
       height: 1.35,
+      fontSize: compact ? 11 : null,
     );
 
     return Column(
@@ -1642,11 +1753,13 @@ class _ReviewActionButton extends StatefulWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.size = 44,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
+  final double size;
 
   @override
   State<_ReviewActionButton> createState() => _ReviewActionButtonState();
@@ -1666,8 +1779,8 @@ class _ReviewActionButtonState extends State<_ReviewActionButton> {
           onTap: widget.onPressed,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 44,
-            height: 44,
+            width: widget.size,
+            height: widget.size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
@@ -1689,7 +1802,7 @@ class _ReviewActionButtonState extends State<_ReviewActionButton> {
             ),
             child: Icon(
               widget.icon,
-              size: 20,
+              size: widget.size * 0.45,
               color: Colors.white.withValues(alpha: 0.85),
             ),
           ),
@@ -1700,9 +1813,13 @@ class _ReviewActionButtonState extends State<_ReviewActionButton> {
 }
 
 class _ReviewActionMenuButton extends StatefulWidget {
-  const _ReviewActionMenuButton({required this.onReply});
+  const _ReviewActionMenuButton({
+    required this.onReply,
+    this.size = 44,
+  });
 
   final VoidCallback onReply;
+  final double size;
 
   @override
   State<_ReviewActionMenuButton> createState() => _ReviewActionMenuButtonState();
@@ -1729,8 +1846,8 @@ class _ReviewActionMenuButtonState extends State<_ReviewActionMenuButton> {
         ],
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
+          width: widget.size,
+          height: widget.size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
@@ -1752,7 +1869,7 @@ class _ReviewActionMenuButtonState extends State<_ReviewActionMenuButton> {
           ),
           child: Icon(
             Icons.more_horiz_rounded,
-            size: 20,
+            size: widget.size * 0.45,
             color: Colors.white.withValues(alpha: 0.85),
           ),
         ),
