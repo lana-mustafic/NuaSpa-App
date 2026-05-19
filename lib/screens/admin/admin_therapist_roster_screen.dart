@@ -217,8 +217,6 @@ class _AdminTherapistRosterScreenState
       specializations: _tags(therapist.specijalizacija),
       weekDays: weekDays,
       weekStatuses: statuses,
-      paidAppointments: kpi?.placeneRezervacije ?? 0,
-      revenue: kpi?.prihod ?? 0,
     );
   }
 
@@ -742,7 +740,7 @@ class _TherapistProfile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                '${t.role} · ${t.paidAppointments} paid · ${t.revenue.toStringAsFixed(0)} KM',
+                t.role,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: NuaLuxuryTokens.lavenderWhisper.withValues(
                     alpha: 0.62,
@@ -1215,8 +1213,6 @@ class _RosterTherapist {
     required this.specializations,
     required this.weekDays,
     required this.weekStatuses,
-    required this.paidAppointments,
-    required this.revenue,
   });
 
   final Zaposlenik zaposlenik;
@@ -1227,8 +1223,6 @@ class _RosterTherapist {
   final List<String> specializations;
   final List<DateTime> weekDays;
   final List<_AvailabilityStatus> weekStatuses;
-  final int paidAppointments;
-  final double revenue;
 
   String get rosterStatus {
     if (weekStatuses.every((x) => x == _AvailabilityStatus.available)) {
