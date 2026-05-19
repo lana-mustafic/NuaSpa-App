@@ -8,7 +8,9 @@ import '../../models/admin/therapist_kpi.dart';
 import '../../models/admin/therapist_top_service.dart';
 import '../../models/admin/therapist_weekly_schedule_day.dart';
 import '../../models/rezervacija.dart';
+import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../catalog/service_details_screen.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
 
 class _TherapistScreenBundle {
@@ -229,7 +231,11 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       onSaved: _reload,
                     )
                   else if (_tab == _ProfileTab.services)
-                    const _PlaceholderTab(label: 'Services')
+                    _TherapistServicesPanel(
+                      api: _api,
+                      therapist: t,
+                      topServices: topServices,
+                    )
                   else
                     const _PlaceholderTab(label: 'Section'),
                 ],
@@ -1270,6 +1276,297 @@ class _PlaceholderTab extends StatelessWidget {
           child: Text(
             '${label[0].toUpperCase()}${label.substring(1)} — coming soon.',
             style: _ProfileUi.bodyMuted(context),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TherapistServicesPanel extends StatefulWidget {
+  const _TherapistServicesPanel({
+    required this.api,
+    required this.therapist,
+    required this.topServices,
+  });
+
+  final ApiService api;
+  final Zaposlenik therapist;
+  final List<TherapistTopService> topServices;
+
+  @override
+  State<_TherapistServicesPanel> createState() => _TherapistServicesPanelState();
+}
+
+class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
+  late Future<List<Usluga>> _servicesFuture = _loadServices();
+
+  Future<List<Usluga>> _loadServices() async {
+    final all = await widget.api.getUsluge();
+    final katId = widget.therapist.kategorijaUslugaId;
+    if (katId == null || katId <= 0) return const [];
+    return all.where((u) => u.kategorijaUslugaId == katId).toList()
+      ..sort((a, b) => a.naziv.compareTo(b.naziv));
+  }
+
+  void _refresh() {
+    setState(() => _servicesFuture = _loadServices());
+  }
+
+  Map<String, TherapistTopService> get _topByName {
+    final map = <String, TherapistTopService>{};
+    for (final s in widget.topServices) {
+      final key = s.naziv.trim().toLowerCase();
+      if (key.isNotEmpty) map[key] = s;
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final katName = widget.therapist.kategorijaUslugaNaziv?.trim();
+    final hasCategory =
+        (widget.therapist.kategorijaUslugaId ?? 0) > 0 &&
+        katName != null &&
+        katName.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasCategory)
+          _GlassCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: const LinearGradient(
+                      colors: [
+                        _ProfileUi.accentPurple,
+                        _ProfileUi.accentSecondary,
+                      ],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.spa_outlined,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Service category',
+                        style: _ProfileUi.bodyMuted(context),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        katName,
+                        style: _ProfileUi.cardTitle(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          _GlassCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: _ProfileUi.accentSecondary.withValues(alpha: 0.9),
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No service category is assigned. Edit the therapist profile '
+                    'and link a category to show eligible services here.',
+                    style: _ProfileUi.bodyMuted(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+        _TopServicesCard(
+          topServices: widget.topServices,
+          fallbackTags: widget.therapist.specijalizacija,
+        ),
+        const SizedBox(height: 16),
+        _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Linked services',
+                      style: _ProfileUi.cardTitle(context),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Refresh'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasCategory
+                    ? 'Services in this therapist\'s category from the catalog.'
+                    : 'Assign a category to list services.',
+                style: _ProfileUi.bodyMuted(context),
+              ),
+              const SizedBox(height: 16),
+              FutureBuilder<List<Usluga>>(
+                future: _servicesFuture,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(28),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: _ProfileUi.accentPurple,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  }
+                  final services = snap.data ?? const <Usluga>[];
+                  if (!hasCategory) {
+                    return Text(
+                      '—',
+                      style: _ProfileUi.bodyMuted(context),
+                    );
+                  }
+                  if (services.isEmpty) {
+                    return Text(
+                      'No services found for this category.',
+                      style: _ProfileUi.bodyMuted(context),
+                    );
+                  }
+                  return Column(
+                    children: [
+                      for (var i = 0; i < services.length; i++) ...[
+                        _TherapistServiceTile(
+                          service: services[i],
+                          top: _topByName[services[i].naziv.trim().toLowerCase()],
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ServiceDetailsScreen(
+                                  serviceId: services[i].id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (i < services.length - 1)
+                          Divider(
+                            height: 1,
+                            color: Colors.white.withValues(alpha: 0.06),
+                          ),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TherapistServiceTile extends StatelessWidget {
+  const _TherapistServiceTile({
+    required this.service,
+    required this.onTap,
+    this.top,
+  });
+
+  final Usluga service;
+  final TherapistTopService? top;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _ProfileUi.accentPurple.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.design_services_outlined,
+                  color: _ProfileUi.accentSecondary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      service.naziv,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _ProfileUi.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${service.cijenaKm} · ${service.trajanje}',
+                      style: _ProfileUi.bodyMuted(context),
+                    ),
+                    if (top != null && top!.broj > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '${top!.broj} completed · ${top!.postotak.round()}% of volume',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _ProfileUi.accentSecondary.withValues(
+                            alpha: 0.95,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white.withValues(alpha: 0.35),
+              ),
+            ],
           ),
         ),
       ),
