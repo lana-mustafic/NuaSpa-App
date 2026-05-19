@@ -2266,8 +2266,6 @@ class _RightInsightsColumn extends StatelessWidget {
         ),
         SizedBox(height: gap),
         _RecentFeedbackCard(dash: dash, theme: theme, compact: compact),
-        SizedBox(height: gap),
-        _ManageReviewsCard(theme: theme, compact: compact),
       ],
     );
   }
@@ -2539,83 +2537,6 @@ class _RecentFeedbackCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ManageReviewsCard extends StatelessWidget {
-  const _ManageReviewsCard({required this.theme, required this.compact});
-
-  final ThemeData theme;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return _glassCard(
-      radius: 20,
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Manage Reviews',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            SizedBox(height: compact ? 10 : 12),
-            _manageTile(theme, compact, Icons.settings_outlined, 'Review Settings'),
-            Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-            _manageTile(
-              theme,
-              compact,
-              Icons.auto_awesome_mosaic_outlined,
-              'Auto-Response Templates',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _manageTile(
-    ThemeData theme,
-    bool compact,
-    IconData icon,
-    String label,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {},
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: compact ? 10 : 12),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.88),
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white.withValues(alpha: 0.35),
-              ),
-            ],
-          ),
         ),
       ),
     );
