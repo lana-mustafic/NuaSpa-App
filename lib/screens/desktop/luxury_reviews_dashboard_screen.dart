@@ -469,215 +469,383 @@ class _HeaderGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _glassCard(
-      radius: 22,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 16 : 22,
-          vertical: compact ? 14 : 18,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: compact ? 44 : 52,
-              height: compact ? 44 : 52,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.95),
-                    LuxuryReviewsDashboardScreen.secondaryPurple.withValues(
-                      alpha: 0.75,
+    final iconSize = compact ? 56.0 : 84.0;
+    final iconRadius = compact ? 16.0 : 22.0;
+    final titleSize = compact ? 26.0 : 40.0;
+    final controlHeight = compact ? 52.0 : 64.0;
+    final dividerHeight = compact ? 88.0 : 120.0;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B4DFF).withValues(alpha: 0.18),
+                blurRadius: 48,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 20 : 32,
+              vertical: compact ? 20 : 28,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 960;
+
+                final infoBlock = Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: iconSize,
+                      height: iconSize,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(iconRadius),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF7B4DFF),
+                            LuxuryReviewsDashboardScreen.secondaryPurple,
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                              alpha: 0.45,
+                            ),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.reviews_rounded,
+                        color: Colors.white.withValues(alpha: 0.96),
+                        size: compact ? 28 : 38,
+                      ),
+                    ),
+                    SizedBox(width: compact ? 16 : 24),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Reviews & Feedback',
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontSize: titleSize,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.6,
+                              height: 1.1,
+                              color: LuxuryReviewsDashboardScreen.textPrimary,
+                            ),
+                          ),
+                          SizedBox(height: compact ? 6 : 10),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            child: Text(
+                              'Track reviews, guest sentiment and service reputation.',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                fontSize: compact ? 13 : 15,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white.withValues(alpha: 0.65),
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
+                );
+
+                final controls = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: _HeaderDateRangeButton(
+                        label: rangeLabel,
+                        height: controlHeight,
+                        compact: compact,
+                        onTap: onPickRange,
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    _HeaderAddReviewButton(
+                      size: controlHeight,
+                      onTap: onAddReview,
+                    ),
+                    const SizedBox(width: 18),
+                    _HeaderExportButton(
+                      height: controlHeight,
+                      compact: compact,
+                      onTap: onExport,
+                    ),
+                  ],
+                );
+
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      infoBlock,
+                      SizedBox(height: compact ? 16 : 24),
+                      controls,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(flex: 5, child: infoBlock),
+                    const SizedBox(width: 28),
+                    Container(
+                      width: 1,
+                      height: dividerHeight,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                    const SizedBox(width: 28),
+                    Expanded(flex: 5, child: controls),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderDateRangeButton extends StatefulWidget {
+  const _HeaderDateRangeButton({
+    required this.label,
+    required this.height,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final String label;
+  final double height;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_HeaderDateRangeButton> createState() => _HeaderDateRangeButtonState();
+}
+
+class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          height: widget.height,
+          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 16 : 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _hover
+                  ? const Color(0xFF7B4DFF).withValues(alpha: 0.55)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF7B4DFF).withValues(alpha: 0.2),
+                      blurRadius: 18,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_today_outlined,
+                size: widget.compact ? 18 : 20,
+                color: LuxuryReviewsDashboardScreen.secondaryPurple
+                    .withValues(alpha: 0.95),
+              ),
+              SizedBox(width: widget.compact ? 10 : 14),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: LuxuryReviewsDashboardScreen.textPrimary,
+                        fontSize: widget.compact ? 13 : 15,
+                      ),
+                ),
+              ),
+              Icon(
+                Icons.expand_more_rounded,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderAddReviewButton extends StatefulWidget {
+  const _HeaderAddReviewButton({
+    required this.size,
+    required this.onTap,
+  });
+
+  final double size;
+  final VoidCallback onTap;
+
+  @override
+  State<_HeaderAddReviewButton> createState() => _HeaderAddReviewButtonState();
+}
+
+class _HeaderAddReviewButtonState extends State<_HeaderAddReviewButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Add review',
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedScale(
+            scale: _hover ? 1.03 : 1,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: widget.size,
+              height: widget.size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _hover
+                    ? const Color(0xFF7B4DFF).withValues(alpha: 0.38)
+                    : const Color(0xFF7B4DFF).withValues(alpha: 0.24),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFF9D6BFF).withValues(
+                    alpha: _hover ? 0.7 : 0.4,
+                  ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.35,
+                    color: const Color(0xFF7B4DFF).withValues(
+                      alpha: _hover ? 0.45 : 0.28,
                     ),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
+                    blurRadius: _hover ? 22 : 14,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Icon(
-                Icons.reviews_rounded,
-                color: Colors.white.withValues(alpha: 0.95),
-                size: compact ? 22 : 26,
+                Icons.add_rounded,
+                size: widget.size * 0.42,
+                color: Colors.white.withValues(alpha: 0.96),
               ),
             ),
-            SizedBox(width: compact ? 14 : 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Reviews & Feedback',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.4,
-                      color: LuxuryReviewsDashboardScreen.textPrimary,
-                      fontSize: compact ? 18 : 22,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Track reviews, guest sentiment and service reputation.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderExportButton extends StatefulWidget {
+  const _HeaderExportButton({
+    required this.height,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final double height;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_HeaderExportButton> createState() => _HeaderExportButtonState();
+}
+
+class _HeaderExportButtonState extends State<_HeaderExportButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          height: widget.height,
+          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 18 : 28),
+          transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF7B4DFF),
+                LuxuryReviewsDashboardScreen.secondaryPurple,
+              ],
             ),
-            if (!compact) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: onPickRange,
-                  child: _glassCard(
-                    radius: 14,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.date_range_outlined,
-                            size: 18,
-                            color: Colors.white.withValues(alpha: 0.75),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            rangeLabel,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: LuxuryReviewsDashboardScreen.textPrimary,
-                            ),
-                          ),
-                          Icon(
-                            Icons.expand_more_rounded,
-                            color: Colors.white.withValues(alpha: 0.45),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B4DFF).withValues(
+                  alpha: _hover ? 0.55 : 0.38,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: onAddReview,
-                  child: _glassCard(
-                    radius: 14,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.add_rounded,
-                            size: 18,
-                            color: Colors.white.withValues(alpha: 0.9),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Nova recenzija',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: LuxuryReviewsDashboardScreen.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    colors: [
-                      NuaLuxuryTokens.softPurpleGlow,
-                      LuxuryReviewsDashboardScreen.secondaryPurple,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                        alpha: 0.4,
-                      ),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: onExport,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.download_rounded,
-                            size: 18,
-                            color: Colors.white.withValues(alpha: 0.95),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Export Report',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ] else ...[
-              IconButton.filled(
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                ),
-                onPressed: onAddReview,
-                icon: const Icon(Icons.add_rounded, size: 20),
-              ),
-              IconButton.filled(
-                style: IconButton.styleFrom(
-                  backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-                ),
-                onPressed: onExport,
-                icon: const Icon(Icons.download_rounded, size: 20),
+                blurRadius: _hover ? 28 : 18,
+                offset: Offset(0, _hover ? 10 : 6),
               ),
             ],
-          ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.download_rounded,
+                size: widget.compact ? 18 : 20,
+                color: Colors.white.withValues(alpha: 0.96),
+              ),
+              SizedBox(width: widget.compact ? 8 : 10),
+              Text(
+                'Export Report',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      fontSize: widget.compact ? 13 : 15,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
