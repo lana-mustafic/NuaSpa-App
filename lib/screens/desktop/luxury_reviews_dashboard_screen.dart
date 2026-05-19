@@ -7,7 +7,9 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/usluga.dart';
+import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
+import 'widgets/add_review_sheet.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
 /// Premium dark-mode Reviews & Feedback dashboard (desktop), backed by
@@ -43,6 +45,7 @@ class _LuxuryReviewsDashboardScreenState
   int? _filterUslugaId;
 
   List<Usluga> _usluge = [];
+  List<Zaposlenik> _therapists = [];
 
   Timer? _searchDebounce;
 
@@ -60,9 +63,15 @@ class _LuxuryReviewsDashboardScreenState
   }
 
   Future<void> _bootstrap() async {
-    final usluge = await _api.getUsluge();
+    final results = await Future.wait([
+      _api.getUsluge(),
+      _api.getZaposlenici(),
+    ]);
     if (!mounted) return;
-    setState(() => _usluge = usluge);
+    setState(() {
+      _usluge = results[0] as List<Usluga>;
+      _therapists = results[1] as List<Zaposlenik>;
+    });
     await _load();
   }
 
@@ -160,6 +169,31 @@ class _LuxuryReviewsDashboardScreenState
         width: 380,
       ),
     );
+  }
+
+  Future<void> _openAddReview() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AddReviewSheet(
+        therapists: _therapists,
+        usluge: _usluge,
+        api: _api,
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Recenzija je dodana.'),
+          behavior: SnackBarBehavior.floating,
+          width: 380,
+        ),
+      );
+    }
   }
 
   Future<void> _openReviewDetail(AdminReviewRow r) async {
@@ -285,6 +319,7 @@ class _LuxuryReviewsDashboardScreenState
                             rangeLabel: _rangeLabel(),
                             onPickRange: _pickRange,
                             onExport: _exportCsv,
+                            onAddReview: _openAddReview,
                           ),
                           SizedBox(height: gap),
                           _KpiRow(
@@ -425,6 +460,7 @@ class _HeaderGlassCard extends StatelessWidget {
     required this.rangeLabel,
     required this.onPickRange,
     required this.onExport,
+    required this.onAddReview,
   });
 
   final ThemeData theme;
@@ -432,6 +468,7 @@ class _HeaderGlassCard extends StatelessWidget {
   final String rangeLabel;
   final VoidCallback onPickRange;
   final VoidCallback onExport;
+  final VoidCallback onAddReview;
 
   @override
   Widget build(BuildContext context) {
@@ -541,6 +578,41 @@ class _HeaderGlassCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: onAddReview,
+                  child: _glassCard(
+                    radius: 14,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.add_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Nova recenzija',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: LuxuryReviewsDashboardScreen.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
               DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
@@ -593,6 +665,13 @@ class _HeaderGlassCard extends StatelessWidget {
                 ),
               ),
             ] else ...[
+              IconButton.filled(
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                ),
+                onPressed: onAddReview,
+                icon: const Icon(Icons.add_rounded, size: 20),
+              ),
               IconButton.filled(
                 style: IconButton.styleFrom(
                   backgroundColor: NuaLuxuryTokens.softPurpleGlow,

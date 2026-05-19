@@ -7,6 +7,7 @@ import '../../core/api/services/api_service.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../models/recenzija.dart';
 import '../../models/usluga.dart';
+import '../../models/zaposlenik.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/theme/luxury_modal_style.dart';
 
@@ -80,6 +81,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   final TextEditingController _komentarController = TextEditingController();
   int _ocjena = 5;
   int _commentLength = 0;
+  List<Zaposlenik> _therapists = [];
+  int? _selectedZaposlenikId;
+  bool _therapistsLoading = false;
+  int? _therapistsLoadedForUslugaId;
 
   static const int _maxCommentLength = 500;
 
@@ -105,28 +110,57 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     });
   }
 
+  Future<void> _loadTherapistsForService(Usluga service) async {
+    if (_therapistsLoading || _therapistsLoadedForUslugaId == service.id) {
+      return;
+    }
+    setState(() => _therapistsLoading = true);
+    final all = await _apiService.getZaposlenici();
+    if (!mounted) return;
+    final kat = service.kategorijaUslugaId;
+    final filtered = kat > 0
+        ? all.where((z) => z.kategorijaUslugaId == kat).toList()
+        : all;
+    setState(() {
+      _therapists = filtered;
+      _therapistsLoading = false;
+      _therapistsLoadedForUslugaId = service.id;
+      if (filtered.length == 1) {
+        _selectedZaposlenikId = filtered.first.id;
+      } else if (_selectedZaposlenikId != null &&
+          !filtered.any((z) => z.id == _selectedZaposlenikId)) {
+        _selectedZaposlenikId = null;
+      }
+    });
+  }
+
   Future<void> _submitReview() async {
     final komentar = _komentarController.text.trim();
+    if (_selectedZaposlenikId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Odaberite terapeuta.')),
+      );
+      return;
+    }
     if (komentar.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a comment.')),
+        const SnackBar(content: Text('Unesite komentar.')),
       );
       return;
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    final created = await _apiService.createRecenzija(
+    final (_, error) = await _apiService.createRecenzija(
       uslugaId: widget.serviceId,
+      zaposlenikId: _selectedZaposlenikId!,
       ocjena: _ocjena,
       komentar: komentar,
     );
 
     if (!mounted) return;
 
-    if (created == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Failed to submit review.')),
-      );
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -256,6 +290,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     ocjena: _ocjena,
                     onRatingChanged: (v) => setState(() => _ocjena = v),
                     komentarController: _komentarController,
+                    therapists: _therapists,
+                    therapistsLoading: _therapistsLoading,
+                    selectedZaposlenikId: _selectedZaposlenikId,
+                    onTherapistChanged: (id) =>
+                        setState(() => _selectedZaposlenikId = id),
                     onRefresh: _refreshRecenzije,
                     onSubmit: _submitReview,
                   ),
@@ -301,6 +340,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 komentarController: _komentarController,
                 commentLength: _commentLength,
                 maxCommentLength: _maxCommentLength,
+                therapists: _therapists,
+                therapistsLoading: _therapistsLoading,
+                selectedZaposlenikId: _selectedZaposlenikId,
+                onTherapistChanged: (id) =>
+                    setState(() => _selectedZaposlenikId = id),
                 onRefresh: _refreshRecenzije,
                 onSubmit: _submitReview,
                 onBack: () => Navigator.pop(context),
@@ -358,6 +402,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               ),
             );
           }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _loadTherapistsForService(service);
+          });
 
           if (nuaspaUseMobileShell()) {
             return _buildMobileSpaDetails(context, service);
@@ -500,6 +548,10 @@ class _RightDetailsPanel extends StatelessWidget {
     required this.komentarController,
     required this.commentLength,
     required this.maxCommentLength,
+    required this.therapists,
+    required this.therapistsLoading,
+    required this.selectedZaposlenikId,
+    required this.onTherapistChanged,
     required this.onRefresh,
     required this.onSubmit,
     required this.onBack,
@@ -513,6 +565,10 @@ class _RightDetailsPanel extends StatelessWidget {
   final TextEditingController komentarController;
   final int commentLength;
   final int maxCommentLength;
+  final List<Zaposlenik> therapists;
+  final bool therapistsLoading;
+  final int? selectedZaposlenikId;
+  final ValueChanged<int?> onTherapistChanged;
   final VoidCallback onRefresh;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
@@ -642,6 +698,18 @@ class _RightDetailsPanel extends StatelessWidget {
                                       .copyWith(fontSize: 18),
                                 ),
                                 const SizedBox(height: 14),
+                                Text(
+                                  'Therapist',
+                                  style: _DetailsStyle.label(context),
+                                ),
+                                const SizedBox(height: 8),
+                                _TherapistPicker(
+                                  therapists: therapists,
+                                  loading: therapistsLoading,
+                                  selectedId: selectedZaposlenikId,
+                                  onChanged: onTherapistChanged,
+                                ),
+                                const SizedBox(height: 18),
                                 Text(
                                   'Your rating',
                                   style: _DetailsStyle.label(context),
@@ -1167,6 +1235,67 @@ class _SubmitReviewButtonState extends State<_SubmitReviewButton> {
   }
 }
 
+class _TherapistPicker extends StatelessWidget {
+  const _TherapistPicker({
+    required this.therapists,
+    required this.loading,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  final List<Zaposlenik> therapists;
+  final bool loading;
+  final int? selectedId;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+    if (therapists.isEmpty) {
+      return Text(
+        'Nema terapeuta za ovu kategoriju usluge.',
+        style: _DetailsStyle.body(context),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            isExpanded: true,
+            value: selectedId,
+            hint: Text(
+              'Odaberite terapeuta',
+              style: _DetailsStyle.label(context),
+            ),
+            dropdownColor: _DetailsStyle.bgMid,
+            style: GoogleFonts.inter(color: _DetailsStyle.textPrimary),
+            items: therapists
+                .map(
+                  (z) => DropdownMenuItem(
+                    value: z.id,
+                    child: Text('${z.ime} ${z.prezime}'),
+                  ),
+                )
+                .toList(),
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Simplified mobile reviews block (keeps backend wiring).
 class _MobileReviewsBlock extends StatelessWidget {
   const _MobileReviewsBlock({
@@ -1174,6 +1303,10 @@ class _MobileReviewsBlock extends StatelessWidget {
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
+    required this.therapists,
+    required this.therapistsLoading,
+    required this.selectedZaposlenikId,
+    required this.onTherapistChanged,
     required this.onRefresh,
     required this.onSubmit,
   });
@@ -1182,6 +1315,10 @@ class _MobileReviewsBlock extends StatelessWidget {
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
+  final List<Zaposlenik> therapists;
+  final bool therapistsLoading;
+  final int? selectedZaposlenikId;
+  final ValueChanged<int?> onTherapistChanged;
   final VoidCallback onRefresh;
   final VoidCallback onSubmit;
 
@@ -1211,6 +1348,13 @@ class _MobileReviewsBlock extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 16),
+            _TherapistPicker(
+              therapists: therapists,
+              loading: therapistsLoading,
+              selectedId: selectedZaposlenikId,
+              onChanged: onTherapistChanged,
+            ),
+            const SizedBox(height: 12),
             _GoldStarRating(value: ocjena, onChanged: onRatingChanged),
             const SizedBox(height: 8),
             TextField(

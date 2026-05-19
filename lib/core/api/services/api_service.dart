@@ -468,22 +468,37 @@ class ApiService {
     }
   }
 
-  Future<Recenzija?> createRecenzija({
+  Future<(Recenzija?, String?)> createRecenzija({
     required int uslugaId,
+    required int zaposlenikId,
     required int ocjena,
     required String komentar,
   }) async {
     try {
       final response = await _dio.post<dynamic>(
         'Recenzija',
-        data: {'uslugaId': uslugaId, 'ocjena': ocjena, 'komentar': komentar},
+        data: {
+          'uslugaId': uslugaId,
+          'zaposlenikId': zaposlenikId,
+          'ocjena': ocjena,
+          'komentar': komentar,
+        },
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Recenzija.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (null, 'Neočekivan odgovor servera.');
+      }
+      return (Recenzija.fromJson(data), null);
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      if (body is Map && body['message'] != null) {
+        return (null, body['message'].toString());
+      }
+      debugPrint('Greška u ApiService.createRecenzija: $e');
+      return (null, 'Slanje recenzije nije uspjelo.');
     } catch (e) {
       debugPrint('Greška u ApiService.createRecenzija: $e');
-      return null;
+      return (null, 'Slanje recenzije nije uspjelo.');
     }
   }
 
