@@ -355,9 +355,6 @@ class _LuxuryReviewsDashboardScreenState
                             rows: dash?.redovi ?? const [],
                             compact: tightHeight,
                             onViewReview: _openReviewDetail,
-                          ),
-                          SizedBox(height: gap),
-                          _PaginationBar(
                             page: _page,
                             pageSize: _pageSize,
                             total: dash?.ukupno ?? 0,
@@ -1136,16 +1133,47 @@ class _FilterSearchField extends StatelessWidget {
   }
 }
 
-String _formatRowDate(DateTime utc) {
+abstract final class _ReviewsTableStyle {
+  static const guestW = 220.0;
+  static const serviceW = 260.0;
+  static const ratingW = 190.0;
+  static const dateW = 180.0;
+  static const actionsW = 120.0;
+  static const gold = Color(0xFFF5B942);
+  static const primaryPurple = Color(0xFF7B4DFF);
+
+  static double guestWidth(bool compact) => compact ? 190.0 : guestW;
+  static double serviceWidth(bool compact) => compact ? 220.0 : serviceW;
+  static double ratingWidth(bool compact) => compact ? 160.0 : ratingW;
+  static double dateWidth(bool compact) => compact ? 150.0 : dateW;
+  static double actionsWidth(bool compact) => compact ? 100.0 : actionsW;
+}
+
+String _formatReviewDateLine(DateTime utc) {
   final d = utc.toLocal();
   const m = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
+  return '${m[d.month - 1]} ${d.day}, ${d.year}';
+}
+
+String _formatReviewTimeLine(DateTime utc) {
+  final d = utc.toLocal();
   final h = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
   final am = d.hour >= 12 ? 'PM' : 'AM';
   final mm = d.minute.toString().padLeft(2, '0');
-  return '${m[d.month - 1]} ${d.day}, ${d.year}, $h:$mm $am';
+  return '$h:$mm $am';
+}
+
+String _ratingLabel(int ocjena) {
+  return switch (ocjena.clamp(1, 5)) {
+    5 => 'Excellent',
+    4 => 'Great',
+    3 => 'Good',
+    2 => 'Fair',
+    _ => 'Poor',
+  };
 }
 
 class _ReviewsTable extends StatelessWidget {
@@ -1153,59 +1181,87 @@ class _ReviewsTable extends StatelessWidget {
     required this.rows,
     required this.compact,
     required this.onViewReview,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.onPage,
+    required this.onPageSize,
   });
 
   final List<AdminReviewRow> rows;
   final bool compact;
   final void Function(AdminReviewRow) onViewReview;
+  final int page;
+  final int pageSize;
+  final int total;
+  final ValueChanged<int> onPage;
+  final ValueChanged<int> onPageSize;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     if (rows.isEmpty) {
-      return _glassCard(
+      return DecoratedBox(
+        decoration: _reviewsTableDecoration(),
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(40),
           child: Center(
             child: Text(
               'Nema recenzija za odabrane filtere i razdoblje.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: Colors.white.withValues(alpha: 0.65),
               ),
             ),
           ),
         ),
       );
     }
-    return _glassCard(
-      radius: 22,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 12 : 16,
-              compact ? 10 : 14,
-              compact ? 12 : 16,
-              0,
+
+    return DecoratedBox(
+      decoration: _reviewsTableDecoration(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TableHeaderRow(compact: compact, theme: theme),
+            for (final row in rows)
+              _TableDataRow(
+                row: row,
+                compact: compact,
+                onViewReview: () => onViewReview(row),
+              ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: Colors.white.withValues(alpha: 0.06),
             ),
-            child: _TableHeaderRow(compact: compact, theme: theme),
-          ),
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-          for (final row in rows)
-            _TableDataRow(
-              row: row,
-              compact: compact,
-              onViewReview: () => onViewReview(row),
+            _ReviewsTableFooter(
+              page: page,
+              pageSize: pageSize,
+              total: total,
+              onPage: onPage,
+              onPageSize: onPageSize,
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  BoxDecoration _reviewsTableDecoration() => BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.14),
+            blurRadius: 36,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      );
 }
 
 class _TableHeaderRow extends StatelessWidget {
@@ -1216,43 +1272,49 @@ class _TableHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(compact ? 16 : 20),
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 8 : 10),
-        child: Row(
-          children: [
-            _hCell('Guest', 2, theme),
-            _hCell('Service', 2, theme),
-            _hCell('Rating', 1, theme),
-            _hCell('Review', 3, theme),
-            _hCell('Source', 1, theme),
-            _hCell('Date', 1, theme),
-            _hCell('Actions', 1, theme),
-          ],
-        ),
+    return Container(
+      height: 64,
+      color: Colors.white.withValues(alpha: 0.04),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          SizedBox(
+            width: _ReviewsTableStyle.guestWidth(compact),
+            child: _headerLabel('Guest'),
+          ),
+          SizedBox(
+            width: _ReviewsTableStyle.serviceWidth(compact),
+            child: _headerLabel('Service'),
+          ),
+          SizedBox(
+            width: _ReviewsTableStyle.ratingWidth(compact),
+            child: _headerLabel('Rating'),
+          ),
+          Expanded(child: _headerLabel('Review')),
+          SizedBox(
+            width: _ReviewsTableStyle.dateWidth(compact),
+            child: _headerLabel('Date'),
+          ),
+          SizedBox(
+            width: _ReviewsTableStyle.actionsWidth(compact),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerLabel('Actions'),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _hCell(String t, int flex, ThemeData theme) {
-    return Expanded(
-      flex: flex,
-      child: Text(
-        t,
-        style: theme.textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.6,
-          color: Colors.white.withValues(alpha: 0.55),
+  Widget _headerLabel(String text) => Text(
+        text,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(alpha: 0.62),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _TableDataRow extends StatefulWidget {
@@ -1281,46 +1343,55 @@ class _TableDataRowState extends State<_TableDataRow> {
     final initials = r.korisnikPunoIme.trim().isNotEmpty
         ? r.korisnikPunoIme.trim()[0].toUpperCase()
         : '?';
+    final showReadMore = r.komentar.trim().length > 90;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        constraints: const BoxConstraints(minHeight: 120),
         decoration: BoxDecoration(
           color: _hover
-              ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.07)
+              ? const Color(0xFF7B4DFF).withValues(alpha: 0.07)
               : Colors.transparent,
           border: Border(
-            bottom: BorderSide(
-              color: Colors.white.withValues(alpha: 0.06),
-            ),
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
           ),
         ),
-        padding: EdgeInsets.symmetric(
-          horizontal: widget.compact ? 12 : 16,
-          vertical: widget.compact ? 10 : 12,
-        ),
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              flex: 2,
+            SizedBox(
+              width: _ReviewsTableStyle.guestWidth(widget.compact),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: widget.compact ? 16 : 18,
-                    backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.35,
+                  Container(
+                    width: 54,
+                    height: 54,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF7B4DFF),
+                          LuxuryReviewsDashboardScreen.secondaryPurple,
+                        ],
+                      ),
                     ),
                     child: Text(
                       initials,
-                      style: theme.textTheme.labelLarge?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1334,11 +1405,23 @@ class _TableDataRowState extends State<_TableDataRow> {
                             color: LuxuryReviewsDashboardScreen.textPrimary,
                           ),
                         ),
-                        Text(
-                          '${r.brojPosjeta} visits',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline_rounded,
+                              size: 14,
+                              color: LuxuryReviewsDashboardScreen.secondaryPurple
+                                  .withValues(alpha: 0.9),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${r.brojPosjeta} visits',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.65),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1346,108 +1429,105 @@ class _TableDataRowState extends State<_TableDataRow> {
                 ],
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    r.uslugaNaziv,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+            SizedBox(
+              width: _ReviewsTableStyle.serviceWidth(widget.compact),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.uslugaNaziv,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: LuxuryReviewsDashboardScreen.textPrimary,
+                        height: 1.25,
+                      ),
                     ),
-                  ),
-                  Text(
-                    therapist.isEmpty ? '—' : therapist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.5),
+                    const SizedBox(height: 6),
+                    Text(
+                      therapist.isEmpty ? '—' : therapist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: LuxuryReviewsDashboardScreen.secondaryPurple
+                            .withValues(alpha: 0.85),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: _StarRatingInt(value: r.ocjena, theme: theme),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                r.komentar,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  height: 1.35,
+                  ],
                 ),
               ),
             ),
-            Expanded(
-              flex: 1,
-              child: _SourceBadge(label: r.izvor),
+            SizedBox(
+              width: _ReviewsTableStyle.ratingWidth(widget.compact),
+              child: _PremiumRatingCell(ocjena: r.ocjena, theme: theme),
             ),
             Expanded(
-              flex: 1,
-              child: Text(
-                _formatRowDate(r.createdAt),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  height: 1.3,
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.end,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 32, minHeight: 32),
-                        tooltip: 'Detalji i odgovor',
-                        onPressed: widget.onViewReview,
-                        icon: Icon(
-                          Icons.visibility_outlined,
-                          size: 18,
-                          color: Colors.white.withValues(alpha: 0.65),
+                      Text(
+                        r.komentar,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 15,
+                          height: 1.45,
+                          color: Colors.white.withValues(alpha: 0.82),
                         ),
                       ),
-                      PopupMenuButton<String>(
-                        tooltip: 'Više',
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.more_horiz_rounded,
-                          size: 18,
-                          color: Colors.white.withValues(alpha: 0.65),
-                        ),
-                        color: NuaLuxuryTokens.voidViolet,
-                        onSelected: (v) {
-                          if (v == 'reply') widget.onViewReview();
-                        },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'reply',
-                            child: Text('Odgovor salona'),
+                      if (showReadMore) ...[
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: widget.onViewReview,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Read more',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: _ReviewsTableStyle.primaryPurple,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: _ReviewsTableStyle.primaryPurple,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
+              ),
+            ),
+            SizedBox(
+              width: _ReviewsTableStyle.dateWidth(widget.compact),
+              child: _ReviewDateCell(createdAt: r.createdAt, theme: theme),
+            ),
+            SizedBox(
+              width: _ReviewsTableStyle.actionsWidth(widget.compact),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ReviewActionButton(
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'Detalji i odgovor',
+                    onPressed: widget.onViewReview,
+                  ),
+                  const SizedBox(width: 8),
+                  _ReviewActionMenuButton(onReply: widget.onViewReview),
+                ],
               ),
             ),
           ],
@@ -1457,42 +1537,54 @@ class _TableDataRowState extends State<_TableDataRow> {
   }
 }
 
-class _StarRatingInt extends StatelessWidget {
-  const _StarRatingInt({required this.value, required this.theme});
+class _PremiumRatingCell extends StatelessWidget {
+  const _PremiumRatingCell({required this.ocjena, required this.theme});
 
-  final int value;
+  final int ocjena;
   final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
-    final v = value.clamp(0, 5);
+    final v = ocjena.clamp(0, 5);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < 5; i++)
-                Icon(
-                  i < v ? Icons.star_rounded : Icons.star_outline_rounded,
-                  size: 16,
-                  color: NuaLuxuryTokens.champagneGold,
-                ),
-            ],
+        Row(
+          children: [
+            for (var i = 0; i < 5; i++)
+              Icon(
+                i < v ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: 18,
+                color: _ReviewsTableStyle.gold,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          v.toDouble().toStringAsFixed(1),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: LuxuryReviewsDashboardScreen.textPrimary,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          '$v.0',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: Colors.white.withValues(alpha: 0.85),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: LuxuryReviewsDashboardScreen.secondaryPurple
+                  .withValues(alpha: 0.35),
+            ),
+          ),
+          child: Text(
+            _ratingLabel(v),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: LuxuryReviewsDashboardScreen.secondaryPurple,
+            ),
           ),
         ),
       ],
@@ -1500,27 +1592,106 @@ class _StarRatingInt extends StatelessWidget {
   }
 }
 
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.label});
+class _ReviewDateCell extends StatelessWidget {
+  const _ReviewDateCell({required this.createdAt, required this.theme});
 
-  final String label;
+  final DateTime createdAt;
+  final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+    final dateLine = _formatReviewDateLine(createdAt);
+    final timeLine = _formatReviewTimeLine(createdAt);
+    final iconColor =
+        LuxuryReviewsDashboardScreen.secondaryPurple.withValues(alpha: 0.9);
+    final textStyle = theme.textTheme.bodySmall?.copyWith(
+      color: Colors.white.withValues(alpha: 0.65),
+      height: 1.35,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 14, color: iconColor),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(dateLine, style: textStyle),
+            ),
+          ],
         ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: Colors.white.withValues(alpha: 0.75),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Icon(Icons.schedule_rounded, size: 14, color: iconColor),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(timeLine, style: textStyle),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewActionButton extends StatefulWidget {
+  const _ReviewActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ReviewActionButton> createState() => _ReviewActionButtonState();
+}
+
+class _ReviewActionButtonState extends State<_ReviewActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _hover
+                    ? _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.65)
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
+              boxShadow: _hover
+                  ? [
+                      BoxShadow(
+                        color: _ReviewsTableStyle.primaryPurple
+                            .withValues(alpha: 0.28),
+                        blurRadius: 14,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: Colors.white.withValues(alpha: 0.85),
+            ),
           ),
         ),
       ),
@@ -1528,8 +1699,70 @@ class _SourceBadge extends StatelessWidget {
   }
 }
 
-class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({
+class _ReviewActionMenuButton extends StatefulWidget {
+  const _ReviewActionMenuButton({required this.onReply});
+
+  final VoidCallback onReply;
+
+  @override
+  State<_ReviewActionMenuButton> createState() => _ReviewActionMenuButtonState();
+}
+
+class _ReviewActionMenuButtonState extends State<_ReviewActionMenuButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: PopupMenuButton<String>(
+        tooltip: 'Više',
+        color: NuaLuxuryTokens.voidViolet,
+        offset: const Offset(0, 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: (v) {
+          if (v == 'reply') widget.onReply();
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: 'reply', child: Text('Odgovor salona')),
+        ],
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _hover
+                  ? _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.65)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: _ReviewsTableStyle.primaryPurple
+                          .withValues(alpha: 0.28),
+                      blurRadius: 14,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            Icons.more_horiz_rounded,
+            size: 20,
+            color: Colors.white.withValues(alpha: 0.85),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewsTableFooter extends StatelessWidget {
+  const _ReviewsTableFooter({
     required this.page,
     required this.pageSize,
     required this.total,
@@ -1546,122 +1779,142 @@ class _PaginationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final totalPages = total <= 0 ? 1 : ((total + pageSize - 1) / pageSize).ceil();
+    final totalPages =
+        total <= 0 ? 1 : ((total + pageSize - 1) / pageSize).ceil();
     final fromIdx = total == 0 ? 0 : (page - 1) * pageSize + 1;
     final toIdx = ((page - 1) * pageSize + pageSize).clamp(0, total);
 
-    List<int> pageNums() {
-      if (totalPages <= 7) {
-        return List.generate(totalPages, (i) => i + 1);
-      }
-      if (page <= 3) return [1, 2, 3, 4, 5];
-      if (page >= totalPages - 2) {
-        return [
-          totalPages - 4,
-          totalPages - 3,
-          totalPages - 2,
-          totalPages - 1,
-          totalPages,
-        ];
-      }
-      return [page - 2, page - 1, page, page + 1, page + 2];
-    }
-
-    final nums = pageNums();
-
-    return Row(
-      children: [
-        Expanded(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 4,
-            runSpacing: 6,
-            children: [
-              _pageArrow(Icons.chevron_left_rounded, () {
-                if (page > 1) onPage(page - 1);
-              }),
-              for (final p in nums) _pageNum(p, theme, page, onPage),
-              if (totalPages > 7 && nums.last < totalPages - 1)
-                Text(
-                  '...',
-                  style: theme.textTheme.labelMedium?.copyWith(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+      child: Row(
+        children: [
+          _FooterPageArrow(
+            icon: Icons.chevron_left_rounded,
+            enabled: page > 1,
+            onTap: () {
+              if (page > 1) onPage(page - 1);
+            },
+          ),
+          const SizedBox(width: 8),
+          _FooterPageChip(page: page, active: true, onTap: () {}),
+          const SizedBox(width: 8),
+          _FooterPageArrow(
+            icon: Icons.chevron_right_rounded,
+            enabled: page < totalPages,
+            onTap: () {
+              if (page < totalPages) onPage(page + 1);
+            },
+          ),
+          const Spacer(),
+          PopupMenuButton<int>(
+            onSelected: onPageSize,
+            color: NuaLuxuryTokens.voidViolet,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 10, child: Text('Show 10')),
+              PopupMenuItem(value: 25, child: Text('Show 25')),
+              PopupMenuItem(value: 50, child: Text('Show 50')),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Show $pageSize',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  Icon(
+                    Icons.expand_more_rounded,
                     color: Colors.white.withValues(alpha: 0.45),
                   ),
-                ),
-              if (totalPages > 7 && nums.last < totalPages)
-                _pageNum(totalPages, theme, page, onPage),
-              _pageArrow(Icons.chevron_right_rounded, () {
-                if (page < totalPages) onPage(page + 1);
-              }),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PopupMenuButton<int>(
-              onSelected: onPageSize,
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 10, child: Text('Show 10')),
-                PopupMenuItem(value: 25, child: Text('Show 25')),
-                PopupMenuItem(value: 50, child: Text('Show 50')),
-              ],
-              child: _glassCard(
-                radius: 12,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Show $pageSize',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Icon(
-                        Icons.expand_more_rounded,
-                        color: Colors.white.withValues(alpha: 0.45),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          const SizedBox(width: 14),
+          Text(
+            total == 0 ? '0 reviews' : '$fromIdx–$toIdx of $total reviews',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.65),
             ),
-            const SizedBox(width: 14),
-            Text(
-              total == 0
-                  ? '0 reviews'
-                  : '$fromIdx–$toIdx of $total reviews',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
-            ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
+}
 
-  Widget _pageNum(
-    int p,
-    ThemeData theme,
-    int current,
-    ValueChanged<int> onTap,
-  ) {
-    final active = p == current;
+class _FooterPageArrow extends StatelessWidget {
+  const _FooterPageArrow({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => onTap(p),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: 34,
-          height: 34,
+        borderRadius: BorderRadius.circular(14),
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 44,
+          height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white.withValues(alpha: enabled ? 0.75 : 0.28),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterPageChip extends StatelessWidget {
+  const _FooterPageChip({
+    required this.page,
+    required this.active,
+    required this.onTap,
+  });
+
+  final int page;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
             gradient: active
                 ? const LinearGradient(
                     colors: [
@@ -1670,7 +1923,7 @@ class _PaginationBar extends StatelessWidget {
                     ],
                   )
                 : null,
-            color: active ? null : Colors.white.withValues(alpha: 0.04),
+            color: active ? null : Colors.white.withValues(alpha: 0.05),
             border: Border.all(
               color: active
                   ? Colors.transparent
@@ -1688,24 +1941,14 @@ class _PaginationBar extends StatelessWidget {
                 : null,
           ),
           child: Text(
-            '$p',
+            '$page',
             style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w800,
-              color: active
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.65),
+              color: active ? Colors.white : Colors.white.withValues(alpha: 0.65),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _pageArrow(IconData icon, VoidCallback onTap) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap,
-      icon: Icon(icon, color: Colors.white.withValues(alpha: 0.65)),
     );
   }
 }
