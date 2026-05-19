@@ -852,28 +852,57 @@ class _HeaderExportButtonState extends State<_HeaderExportButton> {
   }
 }
 
-String _fmtGrowthPercent(int current, int previous) {
-  if (previous <= 0) {
-    if (current > 0) return '+100%';
-    return '0%';
+/// Trend badge derived from admin-dashboard comparison fields.
+class _KpiTrend {
+  const _KpiTrend({required this.label, this.positive});
+
+  final String label;
+  /// `true` = up (green), `false` = down, `null` = neutral / no prior period.
+  final bool? positive;
+
+  static const none = _KpiTrend(label: '—');
+
+  static _KpiTrend ratingDelta(double current, double? previous) {
+    if (previous == null) return none;
+    final d = current - previous;
+    if (d == 0) {
+      return const _KpiTrend(label: '0.0', positive: null);
+    }
+    final sign = d > 0 ? '+' : '';
+    return _KpiTrend(
+      label: '$sign${d.toStringAsFixed(1)}',
+      positive: d > 0,
+    );
   }
-  final p = ((current - previous) / previous) * 100;
-  final sign = p >= 0 ? '+' : '';
-  return '$sign${p.round()}%';
-}
 
-String _fmtGrowthDouble(double current, double? previous) {
-  if (previous == null) return '+0.0';
-  final d = current - previous;
-  final sign = d >= 0 ? '+' : '';
-  return '$sign${d.toStringAsFixed(1)}';
-}
+  static _KpiTrend countPercent(int current, int previous) {
+    if (previous <= 0) {
+      if (current <= 0) return none;
+      return const _KpiTrend(label: '+100%', positive: true);
+    }
+    final p = ((current - previous) / previous) * 100;
+    if (p == 0) {
+      return const _KpiTrend(label: '0%', positive: null);
+    }
+    final sign = p > 0 ? '+' : '';
+    return _KpiTrend(
+      label: '$sign${p.round()}%',
+      positive: p > 0,
+    );
+  }
 
-String _fmtGrowthPercentD(double current, double? previous) {
-  if (previous == null) return '+0%';
-  final d = current - previous;
-  final sign = d >= 0 ? '+' : '';
-  return '$sign${d.round()}%';
+  static _KpiTrend percentPoints(double current, double? previous) {
+    if (previous == null) return none;
+    final d = current - previous;
+    if (d == 0) {
+      return const _KpiTrend(label: '0%', positive: null);
+    }
+    final sign = d > 0 ? '+' : '';
+    return _KpiTrend(
+      label: '$sign${d.round()}%',
+      positive: d > 0,
+    );
+  }
 }
 
 class _KpiRow extends StatelessWidget {
@@ -900,7 +929,7 @@ class _KpiRow extends StatelessWidget {
               title: 'Average Rating',
               value: avg.toStringAsFixed(1),
               suffix: ' / 5.0',
-              growth: _fmtGrowthDouble(avg, d?.prosjecnaOcjenaPrethodno),
+              trend: _KpiTrend.ratingDelta(avg, d?.prosjecnaOcjenaPrethodno),
               subtitle: 'vs previous period',
               compact: compact,
               leading: Icon(
@@ -915,7 +944,7 @@ class _KpiRow extends StatelessWidget {
             child: _KpiCard(
               title: 'Total Reviews',
               value: '$total',
-              growth: _fmtGrowthPercent(total, d?.ukupnoPrethodno ?? 0),
+              trend: _KpiTrend.countPercent(total, d?.ukupnoPrethodno ?? 0),
               subtitle: 'vs previous period',
               compact: compact,
             ),
@@ -925,7 +954,7 @@ class _KpiRow extends StatelessWidget {
             child: _KpiCard(
               title: 'Positive Reviews',
               value: '${pos.toStringAsFixed(0)}%',
-              growth: _fmtGrowthPercentD(
+              trend: _KpiTrend.percentPoints(
                 pos,
                 d?.postotakPozitivnihPrethodno,
               ),
@@ -939,9 +968,9 @@ class _KpiRow extends StatelessWidget {
             child: _KpiCard(
               title: 'Response Rate',
               value: resp == null ? '—' : '${resp.toStringAsFixed(0)}%',
-              growth: resp == null
-                  ? '—'
-                  : _fmtGrowthPercentD(
+              trend: resp == null
+                  ? _KpiTrend.none
+                  : _KpiTrend.percentPoints(
                       resp,
                       d?.postotakOdgovoraPrethodno,
                     ),
@@ -983,7 +1012,7 @@ class _KpiCard extends StatelessWidget {
   const _KpiCard({
     required this.title,
     required this.value,
-    required this.growth,
+    required this.trend,
     required this.subtitle,
     required this.compact,
     this.suffix,
@@ -994,7 +1023,7 @@ class _KpiCard extends StatelessWidget {
   final String title;
   final String value;
   final String? suffix;
-  final String growth;
+  final _KpiTrend trend;
   final String subtitle;
   final bool compact;
   final Widget? leading;
@@ -1003,11 +1032,11 @@ class _KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final growthColor = growth == '—'
-        ? Colors.white38
-        : (growth.startsWith('+') || growth == '0%' || growth == '+0%')
-            ? LuxuryReviewsDashboardScreen.successGreen
-            : Colors.white70;
+    final growthColor = switch (trend.positive) {
+      true => LuxuryReviewsDashboardScreen.successGreen,
+      false => const Color(0xFFF87171),
+      null => Colors.white.withValues(alpha: 0.38),
+    };
 
     return _glassCard(
       radius: 20,
@@ -1047,7 +1076,7 @@ class _KpiCard extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    growth,
+                    trend.label,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: growthColor,
                       fontWeight: FontWeight.w800,
