@@ -927,7 +927,7 @@ class _FilterBar extends StatelessWidget {
               child: dropdown<String>(
                 value: vipFilter,
                 items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All VIP statuses')),
+                  DropdownMenuItem(value: 'all', child: Text('All statuses')),
                   DropdownMenuItem(value: 'vip', child: Text('VIP only')),
                   DropdownMenuItem(value: 'none', child: Text('Non-VIP')),
                 ],
