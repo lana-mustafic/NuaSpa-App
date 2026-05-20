@@ -5,10 +5,16 @@ import '../core/api/auth_repository.dart';
 import '../core/jwt_roles.dart';
 import '../core/auth/auth_events.dart';
 
-enum AuthStatus { unauthenticated, authenticating, authenticated, error }
+enum AuthStatus {
+  initializing,
+  unauthenticated,
+  authenticating,
+  authenticated,
+  error,
+}
 
 class AuthProvider extends ChangeNotifier {
-  AuthStatus _status = AuthStatus.unauthenticated;
+  AuthStatus _status = AuthStatus.initializing;
   final AuthRepository _repository = AuthRepository();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   List<String> _roles = [];
@@ -99,19 +105,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuthState() async {
+    _status = AuthStatus.initializing;
+    notifyListeners();
+
     try {
-      String? token = await _storage.read(key: 'jwt_token');
-      if (token != null) {
+      final token = await _storage.read(key: 'jwt_token');
+      if (isJwtSessionValid(token)) {
         await _refreshRolesFromToken();
         _status = AuthStatus.authenticated;
       } else {
+        if (token != null && token.isNotEmpty) {
+          await _storage.delete(key: 'jwt_token');
+        }
         _roles = [];
         _zaposlenikId = null;
+        _loggedInUsername = null;
         _status = AuthStatus.unauthenticated;
       }
     } catch (e) {
       _roles = [];
       _zaposlenikId = null;
+      _loggedInUsername = null;
       _status = AuthStatus.unauthenticated;
     }
     notifyListeners();

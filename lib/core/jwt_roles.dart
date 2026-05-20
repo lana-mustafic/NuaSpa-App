@@ -55,3 +55,32 @@ int? parseJwtIntClaim(String? token, String claimKey) {
   if (v is String) return int.tryParse(v);
   return null;
 }
+
+/// `true` ako token nedostaje, nije JWT ili je `exp` prošao (s malim skewom).
+bool isJwtExpired(
+  String? token, {
+  Duration clockSkew = const Duration(seconds: 30),
+}) {
+  final map = decodeJwtPayload(token);
+  if (map == null) return true;
+
+  final exp = map['exp'];
+  int? expSec;
+  if (exp is int) {
+    expSec = exp;
+  } else if (exp is num) {
+    expSec = exp.toInt();
+  } else if (exp is String) {
+    expSec = int.tryParse(exp);
+  }
+  if (expSec == null) return false;
+
+  final expiry = DateTime.fromMillisecondsSinceEpoch(expSec * 1000);
+  return DateTime.now().isAfter(expiry.add(clockSkew));
+}
+
+/// Token izgleda valjano za lokalnu sesiju (format + nije istekao).
+bool isJwtSessionValid(String? token) {
+  if (token == null || token.trim().isEmpty) return false;
+  return !isJwtExpired(token);
+}

@@ -71,6 +71,12 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authStatus = context.watch<AuthProvider>().status;
 
+    if (authStatus == AuthStatus.initializing) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (authStatus == AuthStatus.authenticated) {
       if (nuaspaUseMobileShell()) {
         if (kDebugMode) {

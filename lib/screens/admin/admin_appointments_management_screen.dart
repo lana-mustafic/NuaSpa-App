@@ -39,11 +39,18 @@ class _AdminAppointmentsManagementScreenState
   _AppointmentView _view = _AppointmentView.day;
   Rezervacija? _selected;
   int _handledCreateRequest = 0;
+  final ScrollController _mainScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    _mainScrollController.dispose();
+    super.dispose();
   }
 
   Future<_AppointmentsData> _load() async {
@@ -121,7 +128,10 @@ class _AdminAppointmentsManagementScreenState
                   children: [
                     Expanded(
                       child: Scrollbar(
+                        controller: _mainScrollController,
                         child: SingleChildScrollView(
+                          controller: _mainScrollController,
+                          primary: false,
                           padding: const EdgeInsets.fromLTRB(32, 24, 20, 40),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -792,9 +802,9 @@ class _FilterBar extends StatelessWidget {
               }
 
               return scroll
-                  ? Scrollbar(
-                      child: SingleChildScrollView(
+                  ? SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
+                        primary: false,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -887,7 +897,6 @@ class _FilterBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
                     )
                   : Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1108,9 +1117,9 @@ class _KpiCards extends StatelessWidget {
           );
         }
 
-        return Scrollbar(
-          child: SingleChildScrollView(
+        return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            primary: false,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1124,8 +1133,7 @@ class _KpiCards extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-        );
+          );
       },
     );
   }
@@ -1215,9 +1223,9 @@ class _AppointmentsTable extends StatelessWidget {
           ),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: Scrollbar(
-              child: SingleChildScrollView(
+            child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
+                primary: false,
                 child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 980),
               child: DataTable(
@@ -1320,10 +1328,9 @@ class _AppointmentsTable extends StatelessWidget {
                     ),
                 ],
               ),
-                ),
-              ),
             ),
           ),
+        ),
         ],
       ),
     );
