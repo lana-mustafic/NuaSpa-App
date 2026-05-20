@@ -189,35 +189,30 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
 
   void _openClientSheet(AdminClientRow c, List<Zaposlenik> th) {
     final tName = _therapistDisplay(c, th);
-    showDialog<void>(
+    showGeneralDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: NuaLuxuryTokens.voidViolet,
-        title: Text(c.punoIme),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(c.email, style: TextStyle(color: Colors.white.withValues(alpha: 0.75))),
-              const SizedBox(height: 6),
-              Text(
-                c.telefon.isEmpty ? '—' : c.telefon,
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
-              ),
-              const SizedBox(height: 14),
-              Text('VIP: ${c.isVip ? "Yes" : "No"}'),
-              Text('Therapist: $tName'),
-              Text('Visits: ${c.ukupnoPosjeta}'),
-              Text('Spending: ${c.ukupnoPotroseno.toStringAsFixed(0)} KM'),
-              Text('Last visit: ${_fmtVisit(c.zadnjaPosjeta)}'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, _) => _ClientDetailsOverlay(
+        client: c,
+        therapistLabel: tName,
+        fmtVisit: _fmtVisit,
       ),
+      transitionBuilder: (ctx, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -1038,6 +1033,532 @@ class _FilterBar extends StatelessWidget {
   }
 
   static String _tn(Zaposlenik z) => '${z.ime} ${z.prezime}'.trim();
+}
+
+/// Full-screen scrim + premium client profile modal.
+class _ClientDetailsOverlay extends StatelessWidget {
+  const _ClientDetailsOverlay({
+    required this.client,
+    required this.therapistLabel,
+    required this.fmtVisit,
+  });
+
+  final AdminClientRow client;
+  final String therapistLabel;
+  final String Function(DateTime? d) fmtVisit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(color: Colors.black.withValues(alpha: 0.55)),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: _ClientDetailsDialog(
+                client: client,
+                therapistLabel: therapistLabel,
+                fmtVisit: fmtVisit,
+                onClose: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientDetailsDialog extends StatelessWidget {
+  const _ClientDetailsDialog({
+    required this.client,
+    required this.therapistLabel,
+    required this.fmtVisit,
+    required this.onClose,
+  });
+
+  final AdminClientRow client;
+  final String therapistLabel;
+  final String Function(DateTime? d) fmtVisit;
+  final VoidCallback onClose;
+
+  static const Color _bg = Color(0xEB120A24);
+  static const double _width = 440;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasVisit = client.zadnjaPosjeta != null;
+    final lastVisitValue = hasVisit ? fmtVisit(client.zadnjaPosjeta) : 'No visits yet';
+    final lastVisitMuted = !hasVisit;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.28),
+                blurRadius: 40,
+                spreadRadius: -6,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 32,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            width: _width,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ClientDetailsHeader(
+                    client: client,
+                    onClose: onClose,
+                  ),
+                  const SizedBox(height: 20),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                  const SizedBox(height: 20),
+                  _ClientInfoRow(
+                    icon: Icons.workspace_premium_rounded,
+                    label: 'VIP Status',
+                    valueWidget: client.isVip
+                        ? _VipBadge()
+                        : Text(
+                            'Standard',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 18),
+                  _ClientInfoRow(
+                    icon: Icons.spa_outlined,
+                    label: 'Therapist',
+                    value: therapistLabel,
+                  ),
+                  const SizedBox(height: 18),
+                  _ClientInfoRow(
+                    icon: Icons.event_available_outlined,
+                    label: 'Total Visits',
+                    value: '${client.ukupnoPosjeta}',
+                  ),
+                  const SizedBox(height: 18),
+                  _ClientInfoRow(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Spending',
+                    value: '${client.ukupnoPotroseno.toStringAsFixed(0)} KM',
+                  ),
+                  const SizedBox(height: 18),
+                  _ClientInfoRow(
+                    icon: Icons.schedule_rounded,
+                    label: 'Last Visit',
+                    value: lastVisitValue,
+                    valueMuted: lastVisitMuted,
+                  ),
+                  const SizedBox(height: 24),
+                  _ClientDetailsCloseButton(onPressed: onClose),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _initials(String name) {
+    final p = name.trim().split(RegExp(r'\s+'));
+    if (p.isEmpty) return '?';
+    String ch(String s) =>
+        s.isEmpty ? '' : String.fromCharCode(s.runes.first).toUpperCase();
+    if (p.length == 1) return ch(p.first);
+    return '${ch(p.first)}${ch(p.last)}';
+  }
+}
+
+class _ClientDetailsHeader extends StatelessWidget {
+  const _ClientDetailsHeader({
+    required this.client,
+    required this.onClose,
+  });
+
+  final AdminClientRow client;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _AdminClientsDesktopScreenState._purple,
+                _AdminClientsDesktopScreenState._purple2,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _ClientDetailsDialog._initials(client.punoIme),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, right: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    client.punoIme,
+                    maxLines: 1,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 32,
+                      height: 1.1,
+                      color: _AdminClientsDesktopScreenState._textPrimary,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _ContactChip(
+                  icon: Icons.mail_outline_rounded,
+                  text: client.email,
+                ),
+                const SizedBox(height: 6),
+                _ContactChip(
+                  icon: Icons.phone_outlined,
+                  text: client.telefon.isEmpty ? '—' : client.telefon,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _ClientDetailsIconClose(onPressed: onClose),
+      ],
+    );
+  }
+}
+
+class _ContactChip extends StatelessWidget {
+  const _ContactChip({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  static const Color _lavender = Color(0xFFC8B6E8);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 15,
+          color: _lavender.withValues(alpha: 0.88),
+          shadows: [
+            Shadow(
+              color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.35),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.65),
+              height: 1.25,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClientDetailsIconClose extends StatefulWidget {
+  const _ClientDetailsIconClose({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_ClientDetailsIconClose> createState() => _ClientDetailsIconCloseState();
+}
+
+class _ClientDetailsIconCloseState extends State<_ClientDetailsIconClose> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.4),
+                    blurRadius: 14,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: widget.onPressed,
+            child: Icon(
+              Icons.close_rounded,
+              size: 20,
+              color: Colors.white.withValues(alpha: _hover ? 0.95 : 0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientInfoRow extends StatelessWidget {
+  const _ClientInfoRow({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.valueWidget,
+    this.valueMuted = false,
+  }) : assert(value != null || valueWidget != null);
+
+  final IconData icon;
+  final String label;
+  final String? value;
+  final Widget? valueWidget;
+  final bool valueMuted;
+
+  static const Color _lavender = Color(0xFFC8B6E8);
+
+  @override
+  Widget build(BuildContext context) {
+    final valueChild = valueWidget ??
+        Text(
+          value!,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: valueMuted
+                ? _lavender.withValues(alpha: 0.75)
+                : _AdminClientsDesktopScreenState._textPrimary,
+          ),
+        );
+
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: _lavender.withValues(alpha: 0.7),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          Flexible(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: valueChild,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VipBadge extends StatelessWidget {
+  static const Color _vipGreen = Color(0xFF22C55E);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: _vipGreen.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _vipGreen.withValues(alpha: 0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: _vipGreen.withValues(alpha: 0.25),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.workspace_premium_rounded,
+            size: 13,
+            color: _vipGreen.withValues(alpha: 0.95),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            'VIP',
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: _vipGreen,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientDetailsCloseButton extends StatefulWidget {
+  const _ClientDetailsCloseButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_ClientDetailsCloseButton> createState() =>
+      _ClientDetailsCloseButtonState();
+}
+
+class _ClientDetailsCloseButtonState extends State<_ClientDetailsCloseButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        height: 54,
+        transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            colors: [
+              _AdminClientsDesktopScreenState._purple,
+              _AdminClientsDesktopScreenState._purple2,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _AdminClientsDesktopScreenState._purple
+                  .withValues(alpha: _hover ? 0.55 : 0.38),
+              blurRadius: _hover ? 24 : 16,
+              offset: Offset(0, _hover ? 10 : 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: widget.onPressed,
+            child: Center(
+              child: Text(
+                'Close',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ClientsTableCard extends StatelessWidget {
