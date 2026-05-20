@@ -136,13 +136,8 @@ class _AdminAppointmentsManagementScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _AppointmentsHero(
-                                searchQuery: query,
-                                onSearchChanged: (q) => context
-                                    .read<DesktopNav>()
-                                    .setAppointmentSearchQuery(q),
-                              ),
-                              const SizedBox(height: _ApptUi.sectionGap),
+                              const _AppointmentsHero(),
+                              const SizedBox(height: 24),
                               _FilterBar(
                                 selectedDate: _selectedDate,
                                 therapists: data.therapists,
@@ -444,7 +439,9 @@ abstract final class _ApptUi {
 
   static const double kpiCardHeight = 200;
   static const double kpiCardMinWidth = 220;
-  static const double filterControlHeight = 52;
+  static const double filterControlHeight = 60;
+  static const double filterBarHeight = 110;
+  static const double heroMinHeight = 240;
   static const double sectionGap = 32;
   static const double sidebarMaxWidth = 360;
   static const double sidebarMinWidth = 300;
@@ -527,214 +524,189 @@ class _ApptGlass extends StatelessWidget {
 }
 
 class _AppointmentsHero extends StatelessWidget {
-  const _AppointmentsHero({
-    required this.searchQuery,
-    required this.onSearchChanged,
-  });
-
-  final String searchQuery;
-  final ValueChanged<String> onSearchChanged;
+  const _AppointmentsHero();
 
   @override
   Widget build(BuildContext context) {
-    return _ApptGlass(
-      radius: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final stack = c.maxWidth < 980;
-          final left = Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    colors: [_ApptUi.purple, _ApptUi.purple2],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _ApptUi.purple.withValues(alpha: 0.45),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.calendar_month_rounded,
-                  size: 48,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 28),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Appointments',
-                      style: GoogleFonts.inter(
-                        fontSize: stack ? 40 : 56,
-                        fontWeight: FontWeight.w700,
-                        height: 1.0,
-                        color: _ApptUi.textPrimary,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Manage, view and organize all spa appointments.',
-                      style: GoogleFonts.inter(
-                        fontSize: stack ? 16 : 18,
-                        height: 1.5,
-                        color: _ApptUi.lavender.withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-
-          final right = _HeroTopActions(
-            searchQuery: searchQuery,
-            onSearchChanged: onSearchChanged,
-            compact: stack,
-          );
-
-          if (stack) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                left,
-                const SizedBox(height: 20),
-                right,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: _ApptUi.heroMinHeight),
+          padding: const EdgeInsets.fromLTRB(56, 48, 56, 48),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A0F2E),
+                Color(0xFF120A24),
+                Color(0xFF1E1038),
               ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: left),
-              const SizedBox(width: 24),
-              right,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _ApptUi.purple.withValues(alpha: 0.18),
+                blurRadius: 40,
+                offset: const Offset(0, 14),
+              ),
+              BoxShadow(
+                color: _ApptUi.purple2.withValues(alpha: 0.08),
+                blurRadius: 64,
+                spreadRadius: -8,
+              ),
             ],
-          );
-        },
+          ),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final narrow = c.maxWidth < 920;
+              final titleSize = narrow
+                  ? 44.0
+                  : (c.maxWidth < 1200 ? 52.0 : 60.0);
+              final subtitleSize = narrow ? 18.0 : 21.0;
+
+              final iconTitle = Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: narrow ? 96 : 116,
+                    height: narrow ? 96 : 116,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_ApptUi.purple, _ApptUi.purple2],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _ApptUi.purple.withValues(alpha: 0.5),
+                          blurRadius: 28,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.calendar_month_rounded,
+                      size: narrow ? 44 : 52,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: narrow ? 22 : 32),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Appointments',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.w700,
+                            height: 1.05,
+                            color: _ApptUi.textPrimary,
+                            letterSpacing: -1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Manage, view and organize all spa appointments.',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: subtitleSize,
+                            height: 1.45,
+                            color: Colors.white.withValues(alpha: 0.65),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+
+              if (narrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    iconTitle,
+                    const SizedBox(height: 20),
+                    const Align(
+                      alignment: Alignment.centerRight,
+                      child: _HeroDecorIllustration(compact: true),
+                    ),
+                  ],
+                );
+              }
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 176),
+                    child: iconTitle,
+                  ),
+                  const Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: _HeroDecorIllustration(),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 }
 
-class _HeroTopActions extends StatelessWidget {
-  const _HeroTopActions({
-    required this.searchQuery,
-    required this.onSearchChanged,
-    required this.compact,
-  });
+class _HeroDecorIllustration extends StatelessWidget {
+  const _HeroDecorIllustration({this.compact = false});
 
-  final String searchQuery;
-  final ValueChanged<String> onSearchChanged;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        width: compact ? double.infinity : 300,
-        child: _HeroSearchField(
-          query: searchQuery,
-          onChanged: onSearchChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroSearchField extends StatefulWidget {
-  const _HeroSearchField({required this.query, required this.onChanged});
-
-  final String query;
-  final ValueChanged<String> onChanged;
-
-  @override
-  State<_HeroSearchField> createState() => _HeroSearchFieldState();
-}
-
-class _HeroSearchFieldState extends State<_HeroSearchField> {
-  late final TextEditingController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = TextEditingController(text: widget.query);
-  }
-
-  @override
-  void didUpdateWidget(_HeroSearchField old) {
-    super.didUpdateWidget(old);
-    if (old.query != widget.query && _c.text != widget.query) {
-      _c.text = widget.query;
-    }
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: TextField(
-        controller: _c,
-        onChanged: widget.onChanged,
-        style: GoogleFonts.inter(color: _ApptUi.textPrimary, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Search appointments, clients…',
-          hintStyle: GoogleFonts.inter(
-            color: Colors.white.withValues(alpha: 0.38),
-            fontSize: 14,
+    final size = compact ? 120.0 : 168.0;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.calendar_month_outlined,
+            size: size * 0.88,
+            color: _ApptUi.purple2.withValues(alpha: 0.35),
           ),
-          prefixIcon: Icon(
-            Icons.search,
-            color: Colors.white.withValues(alpha: 0.45),
-            size: 22,
-          ),
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: 12),
+          Positioned(
+            right: compact ? 8 : 14,
+            bottom: compact ? 10 : 18,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.all(compact ? 8 : 10),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: Text(
-                '⌘ K',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: _ApptUi.purple2.withValues(alpha: 0.35),
                 ),
+              ),
+              child: Icon(
+                Icons.schedule_rounded,
+                size: compact ? 20 : 26,
+                color: _ApptUi.lavender.withValues(alpha: 0.45),
               ),
             ),
           ),
-          suffixIconConstraints: const BoxConstraints(minHeight: 36),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        ),
+        ],
       ),
     );
   }
@@ -781,220 +753,108 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const gap = 22.0;
+
+    final datePill = _FilterPill(
+      icon: Icons.date_range_outlined,
+      label: _dateLabel(selectedDate),
+      onTap: onPickDate,
+    );
+    final therapistPill = _DropdownPill<int?>(
+      value: therapistId,
+      hint: 'All Therapists',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Therapists')),
+        for (final t in therapists)
+          DropdownMenuItem(
+            value: t.id,
+            child: Text('${t.ime} ${t.prezime}'),
+          ),
+      ],
+      onChanged: onTherapistChanged,
+    );
+    final servicePill = _DropdownPill<int?>(
+      value: serviceId,
+      hint: 'All Services',
+      items: [
+        const DropdownMenuItem(value: null, child: Text('All Services')),
+        for (final s in services)
+          DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+      ],
+      onChanged: onServiceChanged,
+    );
+    final statusPill = _DropdownPill<String>(
+      value: status,
+      hint: 'All Status',
+      items: const [
+        DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+        DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+        DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+        DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+      ],
+      onChanged: (v) {
+        if (v != null) onStatusChanged(v);
+      },
+    );
+    final newBtn = _GradientButton(
+      label: 'New Appointment',
+      onTap: onNew,
+      height: 64,
+      borderRadius: 20,
+      primary: true,
+    );
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ApptGlass(
-          radius: 24,
-          minHeight: 96,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+          radius: 28,
+          minHeight: _ApptUi.filterBarHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
           child: LayoutBuilder(
             builder: (context, c) {
-              final scroll = c.maxWidth < 960;
-              const gap = 18.0;
+              final useWrap = c.maxWidth < 1180;
 
-              Widget slot(Widget child, {required bool flex, double? scrollWidth}) {
-                if (scroll) {
-                  return SizedBox(width: scrollWidth ?? 160, child: child);
-                }
-                if (flex) return Expanded(child: child);
-                return child;
+              if (useWrap) {
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: 14,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    datePill,
+                    SizedBox(width: 200, child: therapistPill),
+                    SizedBox(width: 200, child: servicePill),
+                    SizedBox(width: 180, child: statusPill),
+                    newBtn,
+                  ],
+                );
               }
 
-              return scroll
-                  ? SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        primary: false,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                          slot(
-                            _FilterPill(
-                              icon: Icons.date_range_outlined,
-                              label: _dateLabel(selectedDate),
-                              onTap: onPickDate,
-                            ),
-                            flex: false,
-                            scrollWidth: 168,
-                          ),
-                          const SizedBox(width: gap),
-                          slot(
-                            _DropdownPill<int?>(
-                              value: therapistId,
-                              hint: 'All Therapists',
-                              items: [
-                                const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('All Therapists'),
-                                ),
-                                for (final t in therapists)
-                                  DropdownMenuItem(
-                                    value: t.id,
-                                    child: Text('${t.ime} ${t.prezime}'),
-                                  ),
-                              ],
-                              onChanged: onTherapistChanged,
-                            ),
-                            flex: false,
-                            scrollWidth: 188,
-                          ),
-                          const SizedBox(width: gap),
-                          slot(
-                            _DropdownPill<int?>(
-                              value: serviceId,
-                              hint: 'All Services',
-                              items: [
-                                const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('All Services'),
-                                ),
-                                for (final s in services)
-                                  DropdownMenuItem(
-                                    value: s.id,
-                                    child: Text(s.naziv),
-                                  ),
-                              ],
-                              onChanged: onServiceChanged,
-                            ),
-                            flex: false,
-                            scrollWidth: 188,
-                          ),
-                          const SizedBox(width: gap),
-                          slot(
-                            _DropdownPill<String>(
-                              value: status,
-                              hint: 'All Status',
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'All Status',
-                                  child: Text('All Status'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Confirmed',
-                                  child: Text('Confirmed'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Pending',
-                                  child: Text('Pending'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Cancelled',
-                                  child: Text('Cancelled'),
-                                ),
-                              ],
-                              onChanged: (v) {
-                                if (v != null) onStatusChanged(v);
-                              },
-                            ),
-                            flex: false,
-                            scrollWidth: 172,
-                          ),
-                          const SizedBox(width: gap),
-                          _GradientButton(
-                            label: 'New Appointment',
-                            onTap: onNew,
-                            compact: true,
-                          ),
-                        ],
-                      ),
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Row(
                       children: [
-                        slot(
-                          _FilterPill(
-                            icon: Icons.date_range_outlined,
-                            label: _dateLabel(selectedDate),
-                            onTap: onPickDate,
-                          ),
-                          flex: true,
-                        ),
+                        Flexible(flex: 2, child: datePill),
                         const SizedBox(width: gap),
-                        slot(
-                          _DropdownPill<int?>(
-                            value: therapistId,
-                            hint: 'All Therapists',
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('All Therapists'),
-                              ),
-                              for (final t in therapists)
-                                DropdownMenuItem(
-                                  value: t.id,
-                                  child: Text('${t.ime} ${t.prezime}'),
-                                ),
-                            ],
-                            onChanged: onTherapistChanged,
-                          ),
-                          flex: true,
-                        ),
+                        Flexible(flex: 2, child: therapistPill),
                         const SizedBox(width: gap),
-                        slot(
-                          _DropdownPill<int?>(
-                            value: serviceId,
-                            hint: 'All Services',
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('All Services'),
-                              ),
-                              for (final s in services)
-                                DropdownMenuItem(
-                                  value: s.id,
-                                  child: Text(s.naziv),
-                                ),
-                            ],
-                            onChanged: onServiceChanged,
-                          ),
-                          flex: true,
-                        ),
+                        Flexible(flex: 2, child: servicePill),
                         const SizedBox(width: gap),
-                        slot(
-                          _DropdownPill<String>(
-                            value: status,
-                            hint: 'All Status',
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'All Status',
-                                child: Text('All Status'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Confirmed',
-                                child: Text('Confirmed'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Pending',
-                                child: Text('Pending'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Cancelled',
-                                child: Text('Cancelled'),
-                              ),
-                            ],
-                            onChanged: (v) {
-                              if (v != null) onStatusChanged(v);
-                            },
-                          ),
-                          flex: true,
-                        ),
-                        const SizedBox(width: gap),
-                        _GradientButton(
-                          label: 'New Appointment',
-                          onTap: onNew,
-                        ),
+                        Flexible(flex: 2, child: statusPill),
                       ],
-                    );
+                    ),
+                  ),
+                  const SizedBox(width: gap),
+                  newBtn,
+                ],
+              );
             },
           ),
         ),
         const SizedBox(height: 20),
-        Row(
-          children: [
-            _ViewSwitcher(value: view, onChanged: onViewChanged),
-            const Spacer(),
-          ],
-        ),
+        _ViewSwitcher(value: view, onChanged: onViewChanged),
       ],
     );
   }
@@ -1798,7 +1658,7 @@ class _FilterPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: _ApptUi.filterControlHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 22),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(18),
@@ -1807,24 +1667,24 @@ class _FilterPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: _ApptUi.lavender.withValues(alpha: 0.85)),
-              const SizedBox(width: 10),
+              Icon(icon, size: 20, color: _ApptUi.lavender.withValues(alpha: 0.9)),
+              const SizedBox(width: 12),
               Flexible(
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: 15,
                     color: _ApptUi.textPrimary,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Icon(
                 Icons.expand_more_rounded,
-                size: 20,
-                color: Colors.white.withValues(alpha: 0.45),
+                size: 22,
+                color: Colors.white.withValues(alpha: 0.5),
               ),
             ],
           ),
@@ -1856,7 +1716,7 @@ class _DropdownPill<T> extends StatelessWidget {
         return Container(
           height: _ApptUi.filterControlHeight,
           width: canExpand ? constraints.maxWidth : null,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 22),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(18),
@@ -1869,17 +1729,22 @@ class _DropdownPill<T> extends StatelessWidget {
               hint: Text(
                 hint,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(fontSize: 14),
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  color: _ApptUi.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               dropdownColor: NuaLuxuryTokens.voidViolet,
               icon: Icon(
                 Icons.expand_more_rounded,
-                color: Colors.white.withValues(alpha: 0.45),
+                color: Colors.white.withValues(alpha: 0.5),
+                size: 22,
               ),
               style: GoogleFonts.inter(
                 color: _ApptUi.textPrimary,
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
+                fontSize: 15,
               ),
               items: items,
               onChanged: onChanged,
@@ -1895,93 +1760,118 @@ class _ViewSwitcher extends StatelessWidget {
   const _ViewSwitcher({required this.value, required this.onChanged});
   final _AppointmentView value;
   final ValueChanged<_AppointmentView> onChanged;
+
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final v in _AppointmentView.values)
-                _ViewPill(
-                  label: v.name[0].toUpperCase() + v.name.substring(1),
-                  active: value == v,
-                  onTap: () => onChanged(v),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final width = c.maxWidth >= 420 ? 420.0 : c.maxWidth;
+        return SizedBox(
+          width: width,
+          height: 70,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.035),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
                 ),
-            ],
+                child: Row(
+                  children: [
+                    for (final v in _AppointmentView.values)
+                      Expanded(
+                        child: _ViewPill(
+                          label: v.name[0].toUpperCase() + v.name.substring(1),
+                          active: value == v,
+                          onTap: () => onChanged(v),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _ViewPill extends StatelessWidget {
+class _ViewPill extends StatefulWidget {
   const _ViewPill({
     required this.label,
     required this.active,
     required this.onTap,
   });
+
   final String label;
   final bool active;
   final VoidCallback onTap;
+
+  @override
+  State<_ViewPill> createState() => _ViewPillState();
+}
+
+class _ViewPillState extends State<_ViewPill> {
+  bool _hover = false;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: active
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [_ApptUi.purple, _ApptUi.purple2],
-                  )
-                : null,
-            color: active ? null : Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(999),
-            border: active
-                ? Border.all(color: Colors.white.withValues(alpha: 0.12))
-                : null,
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: _ApptUi.purple.withValues(alpha: 0.45),
-                      blurRadius: 18,
-                      spreadRadius: 0,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-              color: active ? Colors.white : Colors.white.withValues(alpha: 0.5),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: widget.active
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [_ApptUi.purple, _ApptUi.purple2],
+                    )
+                  : null,
+              color: widget.active
+                  ? null
+                  : (_hover
+                        ? _ApptUi.purple.withValues(alpha: 0.12)
+                        : Colors.transparent),
+              borderRadius: BorderRadius.circular(18),
+              border: widget.active
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.12))
+                  : null,
+              boxShadow: widget.active
+                  ? [
+                      BoxShadow(
+                        color: _ApptUi.purple.withValues(alpha: 0.42),
+                        blurRadius: 16,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: widget.active
+                    ? Colors.white
+                    : _ApptUi.lavender.withValues(alpha: _hover ? 0.95 : 0.55),
+              ),
             ),
           ),
         ),
@@ -1995,6 +1885,7 @@ class _GradientButton extends StatefulWidget {
     required this.label,
     required this.onTap,
     this.compact = false,
+    this.primary = false,
     this.height = _ApptUi.filterControlHeight,
     this.borderRadius = 18,
     this.showIcon = true,
@@ -2003,6 +1894,7 @@ class _GradientButton extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool compact;
+  final bool primary;
   final double height;
   final double borderRadius;
   final bool showIcon;
@@ -2029,9 +1921,11 @@ class _GradientButtonState extends State<_GradientButton> {
             duration: const Duration(milliseconds: 200),
             height: widget.height,
             padding: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 16 : 20,
+              horizontal: widget.primary
+                  ? 32
+                  : (widget.compact ? 16 : 20),
             ),
-            transform: Matrix4.translationValues(0, _hover ? -1 : 0, 0),
+            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
             decoration: BoxDecoration(
               borderRadius: radius,
               gradient: const LinearGradient(
@@ -2041,9 +1935,9 @@ class _GradientButtonState extends State<_GradientButton> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _ApptUi.purple.withValues(alpha: _hover ? 0.38 : 0.24),
-                  blurRadius: _hover ? 18 : 12,
-                  offset: Offset(0, _hover ? 6 : 3),
+                  color: _ApptUi.purple.withValues(alpha: _hover ? 0.48 : 0.28),
+                  blurRadius: _hover ? 22 : 14,
+                  offset: Offset(0, _hover ? 8 : 4),
                 ),
               ],
             ),
@@ -2052,8 +1946,12 @@ class _GradientButtonState extends State<_GradientButton> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (widget.showIcon) ...[
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.add_rounded,
+                    color: Colors.white,
+                    size: widget.primary ? 22 : 18,
+                  ),
+                  SizedBox(width: widget.primary ? 10 : 8),
                 ],
                 Flexible(
                   child: Text(
@@ -2063,7 +1961,7 @@ class _GradientButtonState extends State<_GradientButton> {
                     softWrap: false,
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: widget.primary ? 16 : 14,
                       color: Colors.white,
                     ),
                   ),
