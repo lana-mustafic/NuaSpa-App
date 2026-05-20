@@ -764,31 +764,51 @@ class _ClientsHeroKpiSection extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final w = c.maxWidth;
-        final wide = w >= 1320;
-        final titleSize = w >= 1500 ? 64.0 : w >= 1100 ? 52.0 : 40.0;
-        final subtitleSize = w >= 1500 ? 24.0 : w >= 1100 ? 20.0 : 16.0;
+        // Keep hero + KPI on one row whenever there is reasonable desktop width
+        // (e.g. with right sidebar — avoids stacking KPI below the title).
+        final singleRow = w >= 720;
+        final compactHero = w < 1100;
+        final iconSize = compactHero ? 80.0 : 96.0;
+        final titleSize = compactHero ? 36.0 : (w >= 1400 ? 52.0 : 44.0);
+        final subtitleSize = compactHero ? 15.0 : 18.0;
+        const kpiGap = 16.0;
 
-        Widget kpiRow({bool scroll = false}) {
-          final row = Row(
-            mainAxisSize: scroll ? MainAxisSize.min : MainAxisSize.max,
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: 24),
-                _ClientsHeroKpiCard(
-                  label: cards[i].label,
-                  value: cards[i].value,
-                  icon: cards[i].icon,
-                ),
+        Widget kpiRow({required bool flex}) {
+          if (flex) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: kpiGap),
+                  Expanded(
+                    child: _ClientsHeroKpiCard(
+                      label: cards[i].label,
+                      value: cards[i].value,
+                      icon: cards[i].icon,
+                    ),
+                  ),
+                ],
               ],
-            ],
-          );
-          if (scroll) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: row,
             );
           }
-          return row;
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: kpiGap),
+                  SizedBox(
+                    width: 200,
+                    child: _ClientsHeroKpiCard(
+                      label: cards[i].label,
+                      value: cards[i].value,
+                      icon: cards[i].icon,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
         }
 
         Widget heroBlock() {
@@ -797,10 +817,10 @@ class _ClientsHeroKpiSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 110,
-                height: 110,
+                width: iconSize,
+                height: iconSize,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(compactHero ? 22 : 24),
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -812,40 +832,45 @@ class _ClientsHeroKpiSection extends StatelessWidget {
                   boxShadow: [
                     BoxShadow(
                       color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.45),
-                      blurRadius: 28,
-                      offset: const Offset(0, 10),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.people_alt_rounded,
-                  size: 52,
+                  size: iconSize * 0.46,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 32),
-              Flexible(
+              SizedBox(width: compactHero ? 20 : 28),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: compactHero ? 220 : 320),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Clients',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         fontSize: titleSize,
                         fontWeight: FontWeight.w700,
                         height: 1.0,
                         color: _AdminClientsDesktopScreenState._textPrimary,
-                        letterSpacing: -1.2,
+                        letterSpacing: -0.8,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       'Search, visits and VIP status.',
+                      maxLines: 2,
                       style: GoogleFonts.inter(
                         fontSize: subtitleSize,
                         fontWeight: FontWeight.w500,
-                        height: 1.25,
+                        height: 1.3,
                         color: _lavender.withValues(alpha: 0.82),
                       ),
                     ),
@@ -856,21 +881,14 @@ class _ClientsHeroKpiSection extends StatelessWidget {
           );
         }
 
-        Widget verticalDivider() => Container(
+        Widget verticalDivider({required double height}) => Container(
               width: 1,
-              height: 160,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
+              height: height,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
               color: Colors.white.withValues(alpha: 0.08),
             );
 
-        Widget horizontalDivider() => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 28),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            );
+        const sectionPadding = EdgeInsets.symmetric(horizontal: 28, vertical: 22);
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(28),
@@ -896,31 +914,34 @@ class _ClientsHeroKpiSection extends StatelessWidget {
                 ],
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: wide ? 42 : 28,
-                  vertical: wide ? 36 : 28,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 260),
-                  child: wide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            heroBlock(),
-                            verticalDivider(),
-                            const SizedBox(width: 40),
-                            Expanded(child: kpiRow()),
-                          ],
-                        )
-                      : Column(
+                padding: sectionPadding,
+                child: singleRow
+                    ? IntrinsicHeight(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             heroBlock(),
-                            horizontalDivider(),
-                            kpiRow(scroll: true),
+                            verticalDivider(height: 168),
+                            const SizedBox(width: 12),
+                            Expanded(child: kpiRow(flex: true)),
                           ],
                         ),
-                ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          heroBlock(),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Divider(
+                              height: 1,
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          kpiRow(flex: false),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -957,8 +978,8 @@ class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        width: 260,
-        height: 200,
+        width: double.infinity,
+        height: 188,
         transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.035),
@@ -1050,8 +1071,9 @@ class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
                 bottom: 0,
                 child: Align(
                   alignment: Alignment.bottomCenter,
-                  child: Container(
-                    width: 260 * 0.7,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.7,
+                    child: Container(
                     height: 3,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
@@ -1076,6 +1098,7 @@ class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
                   ),
                 ),
               ),
+            ),
             ],
           ),
         ),
@@ -2474,30 +2497,41 @@ class _ClientsTableCard extends StatelessWidget {
       );
     }
 
-    return _ClientsTableShell(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _TableHeaderRow(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-              itemCount: rows.length,
-              itemBuilder: (context, i) {
-                final c = rows[i];
-                final tLabel = therapistLabel(c);
-                return _TableDataRow(
-                  client: c,
-                  therapistLabel: tLabel,
-                  fmtVisit: fmtVisit,
-                  onView: () => onView(c),
-                  onMore: () => onMore(c),
-                );
-              },
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const headerH = 64.0;
+        final listH = (constraints.maxHeight - headerH).clamp(0.0, double.infinity);
+
+        return _ClientsTableShell(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _TableHeaderRow(),
+              if (listH > 0)
+                SizedBox(
+                  height: listH,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                    itemCount: rows.length,
+                    itemBuilder: (context, i) {
+                      final c = rows[i];
+                      final tLabel = therapistLabel(c);
+                      return _TableDataRow(
+                        client: c,
+                        therapistLabel: tLabel,
+                        fmtVisit: fmtVisit,
+                        onView: () => onView(c),
+                        onMore: () => onMore(c),
+                      );
+                    },
+                  ),
+                )
+              else
+                const SizedBox.shrink(),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
