@@ -136,6 +136,9 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     return n < 0 ? '-$buf' : buf.toString();
   }
 
+  String _apiErr(Object e) =>
+      ApiService.adminClientPatchErrorMessage(e) ?? 'Error: $e';
+
   List<AdminClientRow> _applyLocalFilters(
     List<AdminClientRow> raw,
     List<Zaposlenik> therapists,
@@ -325,7 +328,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
+                      SnackBar(content: Text(_apiErr(e))),
                     );
                   }
                 },
@@ -345,6 +348,201 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     telC.dispose();
   }
 
+  Future<void> _showEditClientDialog(
+    AdminClientRow row,
+    List<Zaposlenik> therapists,
+  ) async {
+    final imeC = TextEditingController(text: row.ime);
+    final prezC = TextEditingController(text: row.prezime);
+    final emailC = TextEditingController(text: row.email);
+    final telC = TextEditingController(text: row.telefon);
+    int? zId = row.preferiraniZaposlenikId;
+    var vip = row.isVipKlijent;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          return AlertDialog(
+            backgroundColor: NuaLuxuryTokens.voidViolet,
+            title: const Text('Edit client'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!row.isActive)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                        ),
+                        child: Text(
+                          'This account is deactivated. Saving changes does not reactivate it.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.orange.shade200,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    TextField(
+                      controller: imeC,
+                      decoration: const InputDecoration(labelText: 'First name'),
+                    ),
+                    TextField(
+                      controller: prezC,
+                      decoration: const InputDecoration(labelText: 'Last name'),
+                    ),
+                    TextField(
+                      controller: emailC,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    TextField(
+                      controller: telC,
+                      decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<int?>(
+                      value: zId,
+                      decoration: const InputDecoration(labelText: 'Preferred therapist'),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                        ...therapists.map(
+                          (z) => DropdownMenuItem<int?>(
+                            value: z.id,
+                            child: Text(_therapistName(z)),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setLocal(() => zId = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('VIP client'),
+                      value: vip,
+                      onChanged: (v) => setLocal(() => vip = v),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () async {
+                  final ime = imeC.text.trim();
+                  final prez = prezC.text.trim();
+                  final email = emailC.text.trim();
+                  if (ime.isEmpty || prez.isEmpty || email.isEmpty) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('First name, last name and email are required.')),
+                    );
+                    return;
+                  }
+                  try {
+                    await widget.api.patchAdminClient(
+                      id: row.id,
+                      ime: ime,
+                      prezime: prez,
+                      email: email,
+                      telefon: telC.text.trim(),
+                      isVipKlijent: vip,
+                      setZaposlenik: true,
+                      zaposlenikId: zId,
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    _reloadFromApi();
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Client updated.')),
+                    );
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text(_apiErr(e))),
+                    );
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    imeC.dispose();
+    prezC.dispose();
+    emailC.dispose();
+    telC.dispose();
+  }
+
+  Future<void> _confirmSetClientActive(
+    AdminClientRow row, {
+    required bool activate,
+  }) async {
+    final title = activate ? 'Reactivate client?' : 'Deactivate client?';
+    final body = activate
+        ? '${row.punoIme} will be able to sign in and book again.'
+        : '${row.punoIme} will not be able to sign in. Visit and payment history stay in the system.';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: NuaLuxuryTokens.voidViolet,
+        title: Text(title),
+        content: Text(
+          body,
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.75),
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: activate
+                  ? _AdminClientsDesktopScreenState._purple
+                  : Colors.red.shade700,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(activate ? 'Reactivate' : 'Deactivate'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    try {
+      await widget.api.patchAdminClient(
+        id: row.id,
+        status: activate,
+      );
+      if (!mounted) return;
+      _reloadFromApi();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(activate ? 'Client reactivated.' : 'Client deactivated.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_apiErr(e))),
+      );
+    }
+  }
+
   Future<void> _onClientMore(
     AdminClientRow row,
     List<Zaposlenik> therapists,
@@ -357,6 +555,14 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit client'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showEditClientDialog(row, therapists);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.workspace_premium_outlined),
                 title: Text(row.isVipKlijent ? 'Remove manual VIP' : 'Set manual VIP'),
@@ -379,65 +585,20 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   } catch (e) {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
+                      SnackBar(content: Text(_apiErr(e))),
                     );
                   }
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Change preferred therapist'),
-                onTap: () async {
+                leading: Icon(
+                  row.isActive ? Icons.person_off_outlined : Icons.person_outline,
+                  color: row.isActive ? Colors.red.shade300 : Colors.green.shade300,
+                ),
+                title: Text(row.isActive ? 'Deactivate account' : 'Reactivate account'),
+                onTap: () {
                   Navigator.pop(ctx);
-                  int? picked = row.preferiraniZaposlenikId;
-                  await showDialog<void>(
-                    context: context,
-                    builder: (dCtx) => StatefulBuilder(
-                      builder: (dCtx, setL) {
-                        return AlertDialog(
-                          backgroundColor: NuaLuxuryTokens.voidViolet,
-                          title: const Text('Preferred therapist'),
-                          content: DropdownButtonFormField<int?>(
-                            value: picked,
-                            items: [
-                              const DropdownMenuItem<int?>(value: null, child: Text('None')),
-                              ...therapists.map(
-                                (z) => DropdownMenuItem<int?>(
-                                  value: z.id,
-                                  child: Text(_therapistName(z)),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) => setL(() => picked = v),
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
-                            FilledButton(
-                              onPressed: () async {
-                                try {
-                                  await widget.api.patchAdminClient(
-                                    id: row.id,
-                                    setZaposlenik: true,
-                                    zaposlenikId: picked,
-                                  );
-                                  if (!dCtx.mounted) return;
-                                  Navigator.pop(dCtx);
-                                  if (!mounted) return;
-                                  _reloadFromApi();
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error: $e')),
-                                  );
-                                }
-                              },
-                              child: const Text('Save'),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  );
+                  _confirmSetClientActive(row, activate: !row.isActive);
                 },
               ),
             ],
@@ -1144,6 +1305,21 @@ class _ClientDetailsDialog extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   _ClientInfoRow(
+                    icon: Icons.verified_user_outlined,
+                    label: 'Account',
+                    valueWidget: Text(
+                      client.isActive ? 'Active' : 'Inactive',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: client.isActive
+                            ? const Color(0xFF22C55E)
+                            : Colors.orange.shade300,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _ClientInfoRow(
                     icon: Icons.workspace_premium_rounded,
                     label: 'VIP Status',
                     valueWidget: client.isVip
@@ -1755,7 +1931,9 @@ class _TableDataRowState extends State<_TableDataRow> {
     final c = widget.client;
     final hasVisit = c.zadnjaPosjeta != null;
 
-    return Padding(
+    return Opacity(
+      opacity: c.isActive ? 1.0 : 0.58,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
@@ -1829,6 +2007,7 @@ class _TableDataRowState extends State<_TableDataRow> {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -1907,6 +2086,26 @@ class _TableDataRowState extends State<_TableDataRow> {
                   ),
                 ],
               ),
+              if (!c.isActive) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    'Inactive',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.orange.shade200,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

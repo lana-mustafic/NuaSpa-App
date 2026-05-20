@@ -21,6 +21,9 @@ class AdminClientRow {
   /// Ručni VIP flag u bazi; [isVip] uključuje i heuristiku.
   final bool isVipKlijent;
 
+  /// Account active (API: status).
+  final bool isActive;
+
   const AdminClientRow({
     required this.id,
     required this.ime,
@@ -37,6 +40,7 @@ class AdminClientRow {
     this.terapeutIme,
     this.terapeutPrezime,
     this.isVipKlijent = false,
+    this.isActive = true,
   });
 
   String get punoIme => '$ime $prezime'.trim();
@@ -67,6 +71,7 @@ class AdminClientRow {
       terapeutIme: json['terapeutIme'] as String?,
       terapeutPrezime: json['terapeutPrezime'] as String?,
       isVipKlijent: (json['isVipKlijent'] as bool?) ?? false,
+      isActive: (json['status'] as bool?) ?? true,
     );
   }
 }

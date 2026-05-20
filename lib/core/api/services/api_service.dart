@@ -1094,12 +1094,22 @@ class ApiService {
 
   Future<AdminClientRow?> patchAdminClient({
     required int id,
+    String? ime,
+    String? prezime,
+    String? email,
+    String? telefon,
+    bool? status,
     bool? isVipKlijent,
     bool setZaposlenik = false,
     int? zaposlenikId,
     String? napomenaZaTerapeuta,
   }) async {
     final body = <String, dynamic>{};
+    if (ime != null) body['ime'] = ime;
+    if (prezime != null) body['prezime'] = prezime;
+    if (email != null) body['email'] = email;
+    if (telefon != null) body['telefon'] = telefon;
+    if (status != null) body['status'] = status;
     if (isVipKlijent != null) body['isVipKlijent'] = isVipKlijent;
     if (setZaposlenik) body['zaposlenikId'] = zaposlenikId ?? 0;
     if (napomenaZaTerapeuta != null) {
@@ -1113,6 +1123,36 @@ class ApiService {
     final data = response.data;
     if (data is! Map) return null;
     return AdminClientRow.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// Human-readable message from admin client API errors.
+  static String? adminClientPatchErrorMessage(Object error) {
+    if (error is! DioException) return null;
+    final data = error.response?.data;
+    if (data is String && data.trim().isNotEmpty) return data.trim();
+    if (data is Map) {
+      final msg = data['message'] ?? data['title'];
+      if (msg != null) return msg.toString();
+      final errors = data['errors'];
+      if (errors is Map) {
+        final parts = <String>[];
+        for (final entry in errors.entries) {
+          final v = entry.value;
+          if (v is List) {
+            parts.addAll(v.map((e) => e.toString()));
+          } else if (v != null) {
+            parts.add(v.toString());
+          }
+        }
+        if (parts.isNotEmpty) return parts.join(' ');
+      }
+    }
+    if (data is List && data.isNotEmpty) {
+      return data.map((e) => e.toString()).join(' ');
+    }
+    final code = error.response?.statusCode;
+    if (code == 409) return 'This action conflicts with existing data.';
+    return null;
   }
 
   Future<List<RezervacijaCalendarItem>> getRezervacijeCalendar({
