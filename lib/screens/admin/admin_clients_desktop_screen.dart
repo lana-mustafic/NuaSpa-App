@@ -352,137 +352,41 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     AdminClientRow row,
     List<Zaposlenik> therapists,
   ) async {
-    final imeC = TextEditingController(text: row.ime);
-    final prezC = TextEditingController(text: row.prezime);
-    final emailC = TextEditingController(text: row.email);
-    final telC = TextEditingController(text: row.telefon);
-    int? zId = row.preferiraniZaposlenikId;
-    var vip = row.isVipKlijent;
-
-    await showDialog<void>(
+    await showGeneralDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          return AlertDialog(
-            backgroundColor: NuaLuxuryTokens.voidViolet,
-            title: const Text('Edit client'),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!row.isActive)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
-                        ),
-                        child: Text(
-                          'This account is deactivated. Saving changes does not reactivate it.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.orange.shade200,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    TextField(
-                      controller: imeC,
-                      decoration: const InputDecoration(labelText: 'First name'),
-                    ),
-                    TextField(
-                      controller: prezC,
-                      decoration: const InputDecoration(labelText: 'Last name'),
-                    ),
-                    TextField(
-                      controller: emailC,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    TextField(
-                      controller: telC,
-                      decoration: const InputDecoration(labelText: 'Phone (optional)'),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<int?>(
-                      value: zId,
-                      decoration: const InputDecoration(labelText: 'Preferred therapist'),
-                      items: [
-                        const DropdownMenuItem<int?>(value: null, child: Text('None')),
-                        ...therapists.map(
-                          (z) => DropdownMenuItem<int?>(
-                            value: z.id,
-                            child: Text(_therapistName(z)),
-                          ),
-                        ),
-                      ],
-                      onChanged: (v) => setLocal(() => zId = v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('VIP client'),
-                      value: vip,
-                      onChanged: (v) => setLocal(() => vip = v),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              FilledButton(
-                onPressed: () async {
-                  final ime = imeC.text.trim();
-                  final prez = prezC.text.trim();
-                  final email = emailC.text.trim();
-                  if (ime.isEmpty || prez.isEmpty || email.isEmpty) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('First name, last name and email are required.')),
-                    );
-                    return;
-                  }
-                  try {
-                    await widget.api.patchAdminClient(
-                      id: row.id,
-                      ime: ime,
-                      prezime: prez,
-                      email: email,
-                      telefon: telC.text.trim(),
-                      isVipKlijent: vip,
-                      setZaposlenik: true,
-                      zaposlenikId: zId,
-                    );
-                    if (!ctx.mounted) return;
-                    Navigator.pop(ctx);
-                    _reloadFromApi();
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Client updated.')),
-                    );
-                  } catch (e) {
-                    if (!ctx.mounted) return;
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text(_apiErr(e))),
-                    );
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, _) => _ClientEditOverlay(
+        client: row,
+        therapists: therapists,
+        api: widget.api,
+        therapistName: _therapistName,
+        onSaved: () {
+          _reloadFromApi();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Client updated.')),
+            );
+          }
         },
+        formatError: _apiErr,
       ),
+      transitionBuilder: (ctx, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
-
-    imeC.dispose();
-    prezC.dispose();
-    emailC.dispose();
-    telC.dispose();
   }
 
   Future<void> _confirmSetClientActive(
@@ -1674,10 +1578,613 @@ class _VipBadge extends StatelessWidget {
   }
 }
 
-class _ClientDetailsCloseButton extends StatefulWidget {
-  const _ClientDetailsCloseButton({required this.onPressed});
+/// Full-screen scrim + premium edit client modal (matches view client styling).
+class _ClientEditOverlay extends StatelessWidget {
+  const _ClientEditOverlay({
+    required this.client,
+    required this.therapists,
+    required this.api,
+    required this.therapistName,
+    required this.onSaved,
+    required this.formatError,
+  });
+
+  final AdminClientRow client;
+  final List<Zaposlenik> therapists;
+  final ApiService api;
+  final String Function(Zaposlenik z) therapistName;
+  final VoidCallback onSaved;
+  final String Function(Object) formatError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(color: Colors.black.withValues(alpha: 0.55)),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: GestureDetector(
+                onTap: () {},
+                child: _ClientEditDialog(
+                  client: client,
+                  therapists: therapists,
+                  api: api,
+                  therapistName: therapistName,
+                  onClose: () => Navigator.of(context).pop(),
+                  onSaved: onSaved,
+                  formatError: formatError,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientEditDialog extends StatefulWidget {
+  const _ClientEditDialog({
+    required this.client,
+    required this.therapists,
+    required this.api,
+    required this.therapistName,
+    required this.onClose,
+    required this.onSaved,
+    required this.formatError,
+  });
+
+  final AdminClientRow client;
+  final List<Zaposlenik> therapists;
+  final ApiService api;
+  final String Function(Zaposlenik z) therapistName;
+  final VoidCallback onClose;
+  final VoidCallback onSaved;
+  final String Function(Object) formatError;
+
+  @override
+  State<_ClientEditDialog> createState() => _ClientEditDialogState();
+}
+
+class _ClientEditDialogState extends State<_ClientEditDialog> {
+  static const Color _bg = Color(0xEB120A24);
+  static const double _width = 440;
+
+  late final TextEditingController _imeC;
+  late final TextEditingController _prezC;
+  late final TextEditingController _emailC;
+  late final TextEditingController _telC;
+  late int? _zId;
+  late bool _vip;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _imeC = TextEditingController(text: widget.client.ime);
+    _prezC = TextEditingController(text: widget.client.prezime);
+    _emailC = TextEditingController(text: widget.client.email);
+    _telC = TextEditingController(text: widget.client.telefon);
+    _zId = widget.client.preferiraniZaposlenikId;
+    _vip = widget.client.isVipKlijent;
+    for (final c in [_imeC, _prezC]) {
+      c.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _imeC.dispose();
+    _prezC.dispose();
+    _emailC.dispose();
+    _telC.dispose();
+    super.dispose();
+  }
+
+  String get _displayName {
+    final n = '${_imeC.text.trim()} ${_prezC.text.trim()}'.trim();
+    return n.isEmpty ? widget.client.punoIme : n;
+  }
+
+  Future<void> _save() async {
+    final ime = _imeC.text.trim();
+    final prez = _prezC.text.trim();
+    final email = _emailC.text.trim();
+    if (ime.isEmpty || prez.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('First name, last name and email are required.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.api.patchAdminClient(
+        id: widget.client.id,
+        ime: ime,
+        prezime: prez,
+        email: email,
+        telefon: _telC.text.trim(),
+        isVipKlijent: _vip,
+        setZaposlenik: true,
+        zaposlenikId: _zId,
+      );
+      if (!mounted) return;
+      widget.onClose();
+      widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.formatError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fieldStyle = GoogleFonts.inter(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: _AdminClientsDesktopScreenState._textPrimary,
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.28),
+                blurRadius: 40,
+                spreadRadius: -6,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 32,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            width: _width,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                  const SizedBox(height: 20),
+                  if (!widget.client.isActive) ...[
+                    _inactiveBanner(),
+                    const SizedBox(height: 18),
+                  ],
+                  _ClientEditFieldRow(
+                    icon: Icons.badge_outlined,
+                    label: 'First name',
+                    child: TextField(
+                      controller: _imeC,
+                      style: fieldStyle,
+                      decoration: _fieldDecoration('Enter first name'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditFieldRow(
+                    icon: Icons.badge_outlined,
+                    label: 'Last name',
+                    child: TextField(
+                      controller: _prezC,
+                      style: fieldStyle,
+                      decoration: _fieldDecoration('Enter last name'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditFieldRow(
+                    icon: Icons.mail_outline_rounded,
+                    label: 'Email',
+                    child: TextField(
+                      controller: _emailC,
+                      style: fieldStyle,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _fieldDecoration('client@email.com'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditFieldRow(
+                    icon: Icons.phone_outlined,
+                    label: 'Phone',
+                    child: TextField(
+                      controller: _telC,
+                      style: fieldStyle,
+                      keyboardType: TextInputType.phone,
+                      decoration: _fieldDecoration('Optional'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditFieldRow(
+                    icon: Icons.spa_outlined,
+                    label: 'Therapist',
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: NuaLuxuryTokens.voidViolet,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          value: _zId,
+                          hint: Text(
+                            'None',
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 14,
+                            ),
+                          ),
+                          dropdownColor: NuaLuxuryTokens.voidViolet,
+                          icon: Icon(
+                            Icons.expand_more_rounded,
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
+                          style: fieldStyle,
+                          items: [
+                            DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'None',
+                                style: GoogleFonts.inter(fontSize: 14),
+                              ),
+                            ),
+                            ...widget.therapists.map(
+                              (z) => DropdownMenuItem<int?>(
+                                value: z.id,
+                                child: Text(
+                                  widget.therapistName(z),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: _saving
+                              ? null
+                              : (v) => setState(() => _zId = v),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditToggleRow(
+                    icon: Icons.workspace_premium_rounded,
+                    label: 'VIP client',
+                    value: _vip,
+                    onChanged: _saving ? null : (v) => setState(() => _vip = v),
+                  ),
+                  const SizedBox(height: 24),
+                  Opacity(
+                    opacity: _saving ? 0.65 : 1,
+                    child: _ClientDetailsCloseButton(
+                      onPressed: _saving ? () {} : _save,
+                      label: _saving ? 'Saving…' : 'Save changes',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Opacity(
+                    opacity: _saving ? 0.45 : 1,
+                    child: _ClientEditCancelButton(
+                      onPressed: _saving ? () {} : widget.onClose,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _AdminClientsDesktopScreenState._purple,
+                _AdminClientsDesktopScreenState._purple2,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _ClientDetailsDialog._initials(_displayName),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4, right: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit client',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    height: 1.1,
+                    color: _AdminClientsDesktopScreenState._textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Update profile and preferences',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.55),
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _ContactChip(
+                  icon: Icons.edit_outlined,
+                  text: _displayName,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _ClientDetailsIconClose(onPressed: widget.onClose),
+      ],
+    );
+  }
+
+  Widget _inactiveBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 18, color: Colors.orange.shade200),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Account is deactivated. Saving does not reactivate it.',
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                color: Colors.orange.shade100,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static InputDecoration _fieldDecoration(String hint) => InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.32),
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 2),
+      );
+}
+
+class _ClientEditFieldRow extends StatelessWidget {
+  const _ClientEditFieldRow({
+    required this.icon,
+    required this.label,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String label;
+  final Widget child;
+
+  static const Color _lavender = Color(0xFFC8B6E8);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: _lavender.withValues(alpha: 0.7)),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 88,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientEditToggleRow extends StatelessWidget {
+  const _ClientEditToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  static const Color _lavender = Color(0xFFC8B6E8);
+  static const Color _vipGreen = Color(0xFF22C55E);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: _lavender.withValues(alpha: 0.7)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          if (value) _VipBadge(),
+          const SizedBox(width: 10),
+          Switch(
+            value: value,
+            onChanged: onChanged == null
+                ? null
+                : (v) => onChanged!(v),
+            activeThumbColor: Colors.white,
+            activeTrackColor: _vipGreen.withValues(alpha: 0.55),
+            inactiveThumbColor: Colors.white.withValues(alpha: 0.85),
+            inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientEditCancelButton extends StatefulWidget {
+  const _ClientEditCancelButton({required this.onPressed});
 
   final VoidCallback onPressed;
+
+  @override
+  State<_ClientEditCancelButton> createState() => _ClientEditCancelButtonState();
+}
+
+class _ClientEditCancelButtonState extends State<_ClientEditCancelButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hover ? 0.14 : 0.08),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.onPressed,
+            child: Center(
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: _hover ? 0.88 : 0.62),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientDetailsCloseButton extends StatefulWidget {
+  const _ClientDetailsCloseButton({
+    required this.onPressed,
+    this.label = 'Close',
+  });
+
+  final VoidCallback onPressed;
+  final String label;
 
   @override
   State<_ClientDetailsCloseButton> createState() =>
@@ -1721,7 +2228,7 @@ class _ClientDetailsCloseButtonState extends State<_ClientDetailsCloseButton> {
             onTap: widget.onPressed,
             child: Center(
               child: Text(
-                'Close',
+                widget.label,
                 style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
