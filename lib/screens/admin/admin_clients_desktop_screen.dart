@@ -958,7 +958,7 @@ class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         width: 260,
-        height: 180,
+        height: 200,
         transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.035),
@@ -982,57 +982,66 @@ class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      child: Icon(
-                        widget.icon,
-                        size: 26,
-                        color: _AdminClientsDesktopScreenState._purple2,
-                      ),
-                    ),
-                    Column(
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 28),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxHeight < 140;
+                    final iconBox = compact ? 44.0 : 50.0;
+                    final valueSize = compact ? 38.0 : 48.0;
+                    final labelSize = compact ? 15.0 : 18.0;
+
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Container(
+                          width: iconBox,
+                          height: iconBox,
+                          decoration: BoxDecoration(
+                            color: _AdminClientsDesktopScreenState._purple
+                                .withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _AdminClientsDesktopScreenState._purple
+                                  .withValues(alpha: 0.28),
+                            ),
+                          ),
+                          child: Icon(
+                            widget.icon,
+                            size: iconBox * 0.48,
+                            color: _AdminClientsDesktopScreenState._purple2,
+                          ),
+                        ),
+                        const Spacer(),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
                             widget.value,
+                            maxLines: 1,
                             style: GoogleFonts.inter(
-                              fontSize: 56,
+                              fontSize: valueSize,
                               fontWeight: FontWeight.w700,
                               height: 1.0,
                               color: _AdminClientsDesktopScreenState._textPrimary,
-                              letterSpacing: -1.5,
+                              letterSpacing: -1.2,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: compact ? 4 : 6),
                         Text(
                           widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            fontSize: 22,
+                            fontSize: labelSize,
                             fontWeight: FontWeight.w500,
                             color: _lavender.withValues(alpha: 0.75),
-                            height: 1.2,
+                            height: 1.15,
                           ),
                         ),
                       ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
               Positioned(
