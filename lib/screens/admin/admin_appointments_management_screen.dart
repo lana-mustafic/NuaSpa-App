@@ -914,78 +914,198 @@ class _FilterBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: LayoutBuilder(
             builder: (context, c) {
-              final scroll = c.maxWidth < 900;
-              final filters = [
-                _FilterPill(
-                  icon: Icons.date_range_outlined,
-                  label: _dateLabel(selectedDate),
-                  onTap: onPickDate,
-                ),
-                _DropdownPill<int?>(
-                  value: therapistId,
-                  hint: 'All Therapists',
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Therapists')),
-                    for (final t in therapists)
-                      DropdownMenuItem(
-                        value: t.id,
-                        child: Text('${t.ime} ${t.prezime}'),
-                      ),
-                  ],
-                  onChanged: onTherapistChanged,
-                ),
-                _DropdownPill<int?>(
-                  value: serviceId,
-                  hint: 'All Services',
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Services')),
-                    for (final s in services)
-                      DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-                  ],
-                  onChanged: onServiceChanged,
-                ),
-                _DropdownPill<String>(
-                  value: status,
-                  hint: 'All Status',
-                  items: const [
-                    DropdownMenuItem(value: 'All Status', child: Text('All Status')),
-                    DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
-                    DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                    DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) onStatusChanged(v);
-                  },
-                ),
-                _GradientButton(label: 'New Appointment', onTap: onNew, compact: scroll),
-              ];
+              final scroll = c.maxWidth < 960;
+              const gap = 18.0;
 
-              if (scroll) {
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < filters.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 18),
-                        filters[i],
-                      ],
-                    ],
-                  ),
-                );
+              Widget slot(Widget child, {required bool flex, double? scrollWidth}) {
+                if (scroll) {
+                  return SizedBox(width: scrollWidth ?? 160, child: child);
+                }
+                if (flex) return Expanded(child: child);
+                return child;
               }
-              return Row(
-                children: [
-                  Expanded(child: filters[0]),
-                  const SizedBox(width: 18),
-                  Expanded(child: filters[1]),
-                  const SizedBox(width: 18),
-                  Expanded(child: filters[2]),
-                  const SizedBox(width: 18),
-                  Expanded(child: filters[3]),
-                  const SizedBox(width: 18),
-                  filters[4],
-                ],
-              );
+
+              return scroll
+                  ? SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          slot(
+                            _FilterPill(
+                              icon: Icons.date_range_outlined,
+                              label: _dateLabel(selectedDate),
+                              onTap: onPickDate,
+                            ),
+                            flex: false,
+                            scrollWidth: 168,
+                          ),
+                          const SizedBox(width: gap),
+                          slot(
+                            _DropdownPill<int?>(
+                              value: therapistId,
+                              hint: 'All Therapists',
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('All Therapists'),
+                                ),
+                                for (final t in therapists)
+                                  DropdownMenuItem(
+                                    value: t.id,
+                                    child: Text('${t.ime} ${t.prezime}'),
+                                  ),
+                              ],
+                              onChanged: onTherapistChanged,
+                            ),
+                            flex: false,
+                            scrollWidth: 176,
+                          ),
+                          const SizedBox(width: gap),
+                          slot(
+                            _DropdownPill<int?>(
+                              value: serviceId,
+                              hint: 'All Services',
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('All Services'),
+                                ),
+                                for (final s in services)
+                                  DropdownMenuItem(
+                                    value: s.id,
+                                    child: Text(s.naziv),
+                                  ),
+                              ],
+                              onChanged: onServiceChanged,
+                            ),
+                            flex: false,
+                            scrollWidth: 176,
+                          ),
+                          const SizedBox(width: gap),
+                          slot(
+                            _DropdownPill<String>(
+                              value: status,
+                              hint: 'All Status',
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'All Status',
+                                  child: Text('All Status'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Confirmed',
+                                  child: Text('Confirmed'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Pending',
+                                  child: Text('Pending'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Cancelled',
+                                  child: Text('Cancelled'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) onStatusChanged(v);
+                              },
+                            ),
+                            flex: false,
+                            scrollWidth: 160,
+                          ),
+                          const SizedBox(width: gap),
+                          _GradientButton(
+                            label: 'New Appointment',
+                            onTap: onNew,
+                            compact: true,
+                          ),
+                        ],
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        slot(
+                          _FilterPill(
+                            icon: Icons.date_range_outlined,
+                            label: _dateLabel(selectedDate),
+                            onTap: onPickDate,
+                          ),
+                          flex: true,
+                        ),
+                        const SizedBox(width: gap),
+                        slot(
+                          _DropdownPill<int?>(
+                            value: therapistId,
+                            hint: 'All Therapists',
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Therapists'),
+                              ),
+                              for (final t in therapists)
+                                DropdownMenuItem(
+                                  value: t.id,
+                                  child: Text('${t.ime} ${t.prezime}'),
+                                ),
+                            ],
+                            onChanged: onTherapistChanged,
+                          ),
+                          flex: true,
+                        ),
+                        const SizedBox(width: gap),
+                        slot(
+                          _DropdownPill<int?>(
+                            value: serviceId,
+                            hint: 'All Services',
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Services'),
+                              ),
+                              for (final s in services)
+                                DropdownMenuItem(
+                                  value: s.id,
+                                  child: Text(s.naziv),
+                                ),
+                            ],
+                            onChanged: onServiceChanged,
+                          ),
+                          flex: true,
+                        ),
+                        const SizedBox(width: gap),
+                        slot(
+                          _DropdownPill<String>(
+                            value: status,
+                            hint: 'All Status',
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'All Status',
+                                child: Text('All Status'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Confirmed',
+                                child: Text('Confirmed'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Pending',
+                                child: Text('Pending'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Cancelled',
+                                child: Text('Cancelled'),
+                              ),
+                            ],
+                            onChanged: (v) {
+                              if (v != null) onStatusChanged(v);
+                            },
+                          ),
+                          flex: true,
+                        ),
+                        const SizedBox(width: gap),
+                        _GradientButton(
+                          label: 'New Appointment',
+                          onTap: onNew,
+                        ),
+                      ],
+                    );
             },
           ),
         ),
@@ -1772,39 +1892,52 @@ class _DropdownPill<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
   });
+
   final T value;
   final String hint;
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          isExpanded: true,
-          value: value,
-          hint: Text(hint, style: GoogleFonts.inter(fontSize: 14)),
-          dropdownColor: NuaLuxuryTokens.voidViolet,
-          icon: Icon(
-            Icons.expand_more_rounded,
-            color: Colors.white.withValues(alpha: 0.45),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final canExpand = constraints.maxWidth.isFinite && constraints.maxWidth > 0;
+
+        return Container(
+          height: 52,
+          width: canExpand ? constraints.maxWidth : null,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
-          style: GoogleFonts.inter(
-            color: _ApptUi.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              isExpanded: canExpand,
+              value: value,
+              hint: Text(
+                hint,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+              dropdownColor: NuaLuxuryTokens.voidViolet,
+              icon: Icon(
+                Icons.expand_more_rounded,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+              style: GoogleFonts.inter(
+                color: _ApptUi.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+              items: items,
+              onChanged: onChanged,
+            ),
           ),
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
+        );
+      },
     );
   }
 }
