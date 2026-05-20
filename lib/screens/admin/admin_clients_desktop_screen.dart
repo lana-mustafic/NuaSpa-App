@@ -1060,44 +1060,39 @@ class _ClientsTableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading && rows.isEmpty) {
-      return const _Glass(
-        radius: 22,
-        child: Center(child: Padding(
-          padding: EdgeInsets.all(48),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        )),
-      );
-    }
-
-    if (!loading && rows.isEmpty) {
-      return _Glass(
-        radius: 22,
-        padding: const EdgeInsets.all(48),
+      return const _ClientsTableShell(
         child: Center(
-          child: Text(
-            'Nema klijenata za prikaz.',
-            style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6)),
+          child: Padding(
+            padding: EdgeInsets.all(48),
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
       );
     }
 
-    return _Glass(
-      radius: 22,
-      borderAlpha: 0.08,
+    if (!loading && rows.isEmpty) {
+      return _ClientsTableShell(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(48),
+            child: Text(
+              'No clients to display.',
+              style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return _ClientsTableShell(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TableHeaderRow(),
+          const _TableHeaderRow(),
           Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
               itemCount: rows.length,
-              separatorBuilder: (context, index) => Divider(
-                height: 1,
-                thickness: 1,
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
               itemBuilder: (context, i) {
                 final c = rows[i];
                 final tLabel = therapistLabel(c);
@@ -1117,35 +1112,89 @@ class _ClientsTableCard extends StatelessWidget {
   }
 }
 
+/// Dark glassmorphism CRM table container.
+class _ClientsTableShell extends StatelessWidget {
+  const _ClientsTableShell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B4DFF).withValues(alpha: 0.14),
+                blurRadius: 32,
+                spreadRadius: -4,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _TableHeaderRow extends StatelessWidget {
+  const _TableHeaderRow();
+
+  static const double _height = 64;
+  static const double _hPad = 28;
+
   @override
   Widget build(BuildContext context) {
     final s = GoogleFonts.inter(
-      fontSize: 12,
+      fontSize: 11.5,
       fontWeight: FontWeight.w700,
-      color: Colors.white.withValues(alpha: 0.72),
-      letterSpacing: 0.2,
+      color: Colors.white.withValues(alpha: 0.55),
+      letterSpacing: 0.35,
     );
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      height: _height,
+      padding: const EdgeInsets.symmetric(horizontal: _hPad),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
+        color: Colors.white.withValues(alpha: 0.04),
         border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
       ),
       child: Row(
         children: [
-          Expanded(flex: 22, child: Text('Klijent', style: s)),
-          Expanded(flex: 22, child: Text('Kontakt', style: s)),
-          Expanded(flex: 8, child: Text('VIP', style: s)),
-          Expanded(flex: 14, child: Text('Terapeut', style: s)),
-          Expanded(flex: 9, child: Text('Ukupno posjeta', style: s)),
-          Expanded(flex: 10, child: Text('Potrošnja', style: s)),
-          Expanded(flex: 12, child: Text('Zadnja posjeta', style: s)),
+          Expanded(flex: 26, child: Text('CLIENT', style: s)),
+          const SizedBox(width: 20),
+          Expanded(flex: 24, child: Text('CONTACT', style: s)),
+          const SizedBox(width: 16),
+          Expanded(flex: 11, child: Text('VIP STATUS', style: s)),
+          const SizedBox(width: 16),
+          Expanded(flex: 17, child: Text('THERAPIST', style: s)),
+          const SizedBox(width: 16),
+          Expanded(flex: 10, child: Text('TOTAL VISITS', style: s)),
+          const SizedBox(width: 16),
+          Expanded(flex: 11, child: Text('SPENDING', style: s)),
+          const SizedBox(width: 16),
+          Expanded(flex: 14, child: Text('LAST VISIT', style: s)),
+          const SizedBox(width: 16),
           SizedBox(
-            width: 88,
-            child: Align(alignment: Alignment.centerRight, child: Text('Akcije', style: s)),
+            width: 112,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text('ACTIONS', style: s),
+            ),
           ),
         ],
       ),
@@ -1173,170 +1222,390 @@ class _TableDataRow extends StatefulWidget {
 }
 
 class _TableDataRowState extends State<_TableDataRow> {
+  static const double _rowHeight = 120;
+  static const double _hPad = 28;
+  static const Color _vipGreen = Color(0xFF22C55E);
+  static const Color _lavender = Color(0xFFC8B6E8);
+
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
     final c = widget.client;
-    final bg = _hover
-        ? NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08)
-        : Colors.transparent;
+    final hasVisit = c.zadnjaPosjeta != null;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        color: bg,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 22,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.22),
-                    child: Text(
-                      _initials(c.punoIme),
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        color: Colors.white,
-                      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          height: _rowHeight,
+          padding: const EdgeInsets.symmetric(horizontal: _hPad),
+          decoration: BoxDecoration(
+            color: _hover
+                ? const Color(0xFF7B4DFF).withValues(alpha: 0.07)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _hover
+                  ? const Color(0xFF7B4DFF).withValues(alpha: 0.25)
+                  : Colors.transparent,
+              width: 1,
+            ),
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF7B4DFF).withValues(alpha: 0.12),
+                      blurRadius: 20,
+                      spreadRadius: 0,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      c.punoIme,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: _AdminClientsDesktopScreenState._textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Expanded(flex: 26, child: _clientColumn(c)),
+              const SizedBox(width: 20),
+              Expanded(flex: 24, child: _contactColumn(c)),
+              const SizedBox(width: 16),
+              Expanded(flex: 11, child: _vipColumn(c)),
+              const SizedBox(width: 16),
+              Expanded(flex: 17, child: _therapistColumn()),
+              const SizedBox(width: 16),
+              Expanded(flex: 10, child: _statColumn('${c.ukupnoPosjeta}', 'visits')),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 11,
+                child: _statColumn(
+                  '${c.ukupnoPotroseno.toStringAsFixed(0)} KM',
+                  'total spent',
+                ),
               ),
-            ),
-            Expanded(
-              flex: 22,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    c.email,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      color: Colors.white.withValues(alpha: 0.68),
+              const SizedBox(width: 16),
+              Expanded(flex: 14, child: _lastVisitColumn(hasVisit)),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 112,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _ActionIconButton(
+                      icon: Icons.visibility_outlined,
+                      onTap: widget.onView,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    c.telefon.isEmpty ? '—' : c.telefon,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      color: Colors.white.withValues(alpha: 0.52),
+                    const SizedBox(width: 10),
+                    _ActionIconButton(
+                      icon: Icons.more_horiz_rounded,
+                      onTap: widget.onMore,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _clientColumn(AdminClientRow c) {
+    return Row(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _AdminClientsDesktopScreenState._purple,
+                _AdminClientsDesktopScreenState._purple2,
+              ],
             ),
-            Expanded(
-              flex: 8,
-              child: c.isVip
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF064E3B).withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: _AdminClientsDesktopScreenState._success.withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Text(
-                        'VIP',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: _AdminClientsDesktopScreenState._success,
-                        ),
-                      ),
-                    )
-                  : Text(
-                      '—',
-                      style: GoogleFonts.inter(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.38),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _initials(c.punoIme),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: Colors.white,
+              letterSpacing: 0.5,
             ),
-            Expanded(
-              flex: 14,
-              child: Text(
-                widget.therapistLabel,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                c.punoIme,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.white.withValues(alpha: 0.78),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                  color: _AdminClientsDesktopScreenState._textPrimary,
+                  letterSpacing: -0.2,
                 ),
               ),
-            ),
-            Expanded(
-              flex: 9,
-              child: Text(
-                '${c.ukupnoPosjeta}',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.85),
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 10,
-              child: Text(
-                '${c.ukupnoPotroseno.toStringAsFixed(0)} KM',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.85),
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 12,
-              child: Text(
-                widget.fmtVisit(c.zadnjaPosjeta),
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.white.withValues(alpha: 0.72),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 88,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              const SizedBox(height: 6),
+              Row(
                 children: [
-                  _RoundIcon(icon: Icons.visibility_outlined, onTap: widget.onView),
-                  const SizedBox(width: 8),
-                  _RoundIcon(icon: Icons.more_horiz_rounded, onTap: widget.onMore),
+                  Icon(
+                    Icons.person_outline_rounded,
+                    size: 13,
+                    color: _lavender.withValues(alpha: 0.75),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      _fmtClientSince(c.datumRegistracije),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.48),
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _contactColumn(AdminClientRow c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _contactLine(Icons.mail_outline_rounded, c.email),
+        const SizedBox(height: 10),
+        _contactLine(
+          Icons.phone_outlined,
+          c.telefon.isEmpty ? '—' : c.telefon,
+        ),
+      ],
+    );
+  }
+
+  Widget _contactLine(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: _lavender.withValues(alpha: 0.9)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.78),
+              height: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _vipColumn(AdminClientRow c) {
+    if (!c.isVip) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '—',
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.32),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: _vipGreen.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _vipGreen.withValues(alpha: 0.45)),
+          boxShadow: [
+            BoxShadow(
+              color: _vipGreen.withValues(alpha: 0.22),
+              blurRadius: 12,
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.workspace_premium_rounded,
+              size: 14,
+              color: _vipGreen.withValues(alpha: 0.95),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'VIP',
+              style: GoogleFonts.inter(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: _vipGreen,
+                letterSpacing: 0.6,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _therapistColumn() {
+    return Row(
+      children: [
+        Icon(
+          Icons.spa_outlined,
+          size: 16,
+          color: _lavender.withValues(alpha: 0.65),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            widget.therapistLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: _lavender.withValues(alpha: 0.82),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statColumn(String value, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: _AdminClientsDesktopScreenState._textPrimary,
+            letterSpacing: -0.3,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: Colors.white.withValues(alpha: 0.42),
+            height: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _lastVisitColumn(bool hasVisit) {
+    if (!hasVisit) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '—',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.38),
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'No visits yet',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.38),
+              height: 1.2,
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          widget.fmtVisit(widget.client.zadnjaPosjeta),
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withValues(alpha: 0.72),
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Last visit',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: Colors.white.withValues(alpha: 0.38),
+            height: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _fmtClientSince(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final loc = d.toLocal();
+    return 'Client since ${months[loc.month - 1]} ${loc.day}, ${loc.year}';
   }
 
   String _initials(String name) {
@@ -1349,23 +1618,55 @@ class _TableDataRowState extends State<_TableDataRow> {
   }
 }
 
-class _RoundIcon extends StatelessWidget {
-  const _RoundIcon({required this.icon, required this.onTap});
+class _ActionIconButton extends StatefulWidget {
+  const _ActionIconButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
 
   @override
+  State<_ActionIconButton> createState() => _ActionIconButtonState();
+}
+
+class _ActionIconButtonState extends State<_ActionIconButton> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.78)),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF7B4DFF).withValues(alpha: 0.35),
+                    blurRadius: 14,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.onTap,
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: Colors.white.withValues(alpha: _hover ? 0.95 : 0.72),
+            ),
+          ),
         ),
       ),
     );
