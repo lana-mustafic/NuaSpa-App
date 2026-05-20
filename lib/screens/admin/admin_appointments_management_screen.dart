@@ -1,7 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -97,66 +101,87 @@ class _AdminAppointmentsManagementScreenState
             ? _selected!
             : (filtered.isNotEmpty ? filtered.first : null);
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(28, 12, 22, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FilterBar(
-                      selectedDate: _selectedDate,
-                      therapists: data.therapists,
-                      services: data.services,
-                      therapistId: _therapistId,
-                      serviceId: _serviceId,
-                      status: _status,
-                      view: _view,
-                      onPickDate: _pickDate,
-                      onTherapistChanged: (v) =>
-                          setState(() => _therapistId = v),
-                      onServiceChanged: (v) => setState(() => _serviceId = v),
-                      onStatusChanged: (v) => setState(() => _status = v),
-                      onViewChanged: (v) => setState(() => _view = v),
-                      onNew: () => _openCreate(data),
-                    ),
-                    const SizedBox(height: 20),
-                    _KpiCards(reservations: filtered),
-                    const SizedBox(height: 22),
-                    snap.connectionState == ConnectionState.waiting
-                        ? const SizedBox(
-                            height: 420,
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        : _AppointmentsTable(
-                            reservations: filtered,
-                            selectedId: selected?.id,
-                            onSelect: (r) => setState(() => _selected = r),
-                            onConfirmToggle: _toggleConfirmed,
-                            onCancel: _cancel,
-                            onDelete: _delete,
-                            onEdit: _edit,
-                          ),
-                  ],
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF07040F), Color(0xFF120A24)],
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 72,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(28, 20, 12, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _AppointmentsHero(
+                        selectedDate: _selectedDate,
+                        searchQuery: query,
+                        onSearchChanged: (q) =>
+                            context.read<DesktopNav>().setAppointmentSearchQuery(q),
+                        onPickDate: _pickDate,
+                      ),
+                      const SizedBox(height: 24),
+                      _FilterBar(
+                        selectedDate: _selectedDate,
+                        therapists: data.therapists,
+                        services: data.services,
+                        therapistId: _therapistId,
+                        serviceId: _serviceId,
+                        status: _status,
+                        view: _view,
+                        onPickDate: _pickDate,
+                        onTherapistChanged: (v) =>
+                            setState(() => _therapistId = v),
+                        onServiceChanged: (v) => setState(() => _serviceId = v),
+                        onStatusChanged: (v) => setState(() => _status = v),
+                        onViewChanged: (v) => setState(() => _view = v),
+                        onNew: () => _openCreate(data),
+                      ),
+                      const SizedBox(height: 24),
+                      _KpiCards(reservations: filtered),
+                      const SizedBox(height: 24),
+                      snap.connectionState == ConnectionState.waiting
+                          ? const SizedBox(
+                              height: 420,
+                              child: Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : _AppointmentsTable(
+                              reservations: filtered,
+                              selectedId: selected?.id,
+                              onSelect: (r) => setState(() => _selected = r),
+                              onConfirmToggle: _toggleConfirmed,
+                              onCancel: _cancel,
+                              onDelete: _delete,
+                              onEdit: _edit,
+                            ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            SizedBox(
-              width: 360,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 12, 28, 32),
-                child: _AppointmentDetailsPanel(
-                  appointment: selected,
-                  onEdit: selected == null ? null : () => _edit(selected),
-                  onConfirmToggle: _toggleConfirmed,
-                  onCancel: _cancel,
-                  onDelete: _delete,
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 28,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 20, 28, 32),
+                  child: _AppointmentDetailsPanel(
+                    appointment: selected,
+                    onEdit: selected == null ? null : () => _edit(selected),
+                    onConfirmToggle: _toggleConfirmed,
+                    onCancel: _cancel,
+                    onDelete: _delete,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -384,6 +409,461 @@ class _AdminAppointmentsManagementScreenState
   }
 }
 
+// ——— Premium appointments UI tokens ———
+abstract final class _ApptUi {
+  static const Color textPrimary = Color(0xFFF5F3FA);
+  static const Color lavender = Color(0xFFC8B6E8);
+  static const Color purple = Color(0xFF7B4DFF);
+  static const Color purple2 = Color(0xFF9D6BFF);
+}
+
+class _ApptGlass extends StatelessWidget {
+  const _ApptGlass({
+    required this.child,
+    this.padding,
+    this.radius = 26,
+    this.minHeight,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final double radius;
+  final double? minHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _ApptUi.purple.withValues(alpha: 0.12),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minHeight ?? 0),
+            child: Padding(
+              padding: padding ?? EdgeInsets.zero,
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppointmentsHero extends StatelessWidget {
+  const _AppointmentsHero({
+    required this.selectedDate,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.onPickDate,
+  });
+
+  final DateTime selectedDate;
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onPickDate;
+
+  static String _dateLabel(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final name = auth.displayName ?? 'Admin';
+    final initials = auth.userInitials ?? 'SA';
+
+    return _ApptGlass(
+      radius: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final stack = c.maxWidth < 980;
+          final left = Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: const LinearGradient(
+                    colors: [_ApptUi.purple, _ApptUi.purple2],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _ApptUi.purple.withValues(alpha: 0.45),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  size: 48,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 28),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Appointments',
+                      style: GoogleFonts.inter(
+                        fontSize: stack ? 40 : 56,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
+                        color: _ApptUi.textPrimary,
+                        letterSpacing: -1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Manage, view and organize all spa appointments.',
+                      style: GoogleFonts.inter(
+                        fontSize: stack ? 16 : 18,
+                        height: 1.5,
+                        color: _ApptUi.lavender.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final right = _HeroTopActions(
+            searchQuery: searchQuery,
+            onSearchChanged: onSearchChanged,
+            dateLabel: _dateLabel(selectedDate),
+            onPickDate: onPickDate,
+            adminName: name,
+            initials: initials,
+            compact: stack,
+          );
+
+          if (stack) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                left,
+                const SizedBox(height: 20),
+                right,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 24),
+              right,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeroTopActions extends StatelessWidget {
+  const _HeroTopActions({
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.dateLabel,
+    required this.onPickDate,
+    required this.adminName,
+    required this.initials,
+    required this.compact,
+  });
+
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
+  final String dateLabel;
+  final VoidCallback onPickDate;
+  final String adminName;
+  final String initials;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SizedBox(
+          width: compact ? double.infinity : 420,
+          child: _HeroSearchField(
+            query: searchQuery,
+            onChanged: onSearchChanged,
+          ),
+        ),
+        _HeroIconButton(icon: Icons.notifications_none_rounded),
+        _HeroDatePill(label: dateLabel, onTap: onPickDate),
+        _HeroProfileChip(name: adminName, initials: initials),
+      ],
+    );
+  }
+}
+
+class _HeroSearchField extends StatefulWidget {
+  const _HeroSearchField({required this.query, required this.onChanged});
+
+  final String query;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_HeroSearchField> createState() => _HeroSearchFieldState();
+}
+
+class _HeroSearchFieldState extends State<_HeroSearchField> {
+  late final TextEditingController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = TextEditingController(text: widget.query);
+  }
+
+  @override
+  void didUpdateWidget(_HeroSearchField old) {
+    super.didUpdateWidget(old);
+    if (old.query != widget.query && _c.text != widget.query) {
+      _c.text = widget.query;
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: TextField(
+        controller: _c,
+        onChanged: widget.onChanged,
+        style: GoogleFonts.inter(color: _ApptUi.textPrimary, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Search appointments, clients…',
+          hintStyle: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.38),
+            fontSize: 14,
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: Colors.white.withValues(alpha: 0.45),
+            size: 22,
+          ),
+          suffixIcon: Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Text(
+                '⌘ K',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
+          ),
+          suffixIconConstraints: const BoxConstraints(minHeight: 36),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroIconButton extends StatefulWidget {
+  const _HeroIconButton({required this.icon});
+  final IconData icon;
+
+  @override
+  State<_HeroIconButton> createState() => _HeroIconButtonState();
+}
+
+class _HeroIconButtonState extends State<_HeroIconButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: _ApptUi.purple.withValues(alpha: 0.3),
+                    blurRadius: 14,
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(widget.icon, color: Colors.white.withValues(alpha: 0.85)),
+      ),
+    );
+  }
+}
+
+class _HeroDatePill extends StatefulWidget {
+  const _HeroDatePill({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_HeroDatePill> createState() => _HeroDatePillState();
+}
+
+class _HeroDatePillState extends State<_HeroDatePill> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.05),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 18,
+                  color: _ApptUi.lavender.withValues(alpha: 0.9),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    color: _ApptUi.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 20,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroProfileChip extends StatelessWidget {
+  const _HeroProfileChip({required this.name, required this.initials});
+  final String name;
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _ApptUi.purple.withValues(alpha: 0.35),
+            child: Text(
+              initials,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: _ApptUi.textPrimary,
+                ),
+              ),
+              Text(
+                'Super Admin',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.selectedDate,
@@ -415,103 +895,109 @@ class _FilterBar extends StatelessWidget {
   final ValueChanged<_AppointmentView> onViewChanged;
   final VoidCallback onNew;
 
+  static String _dateLabel(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final datePill = _FilterPill(
-      icon: Icons.date_range_outlined,
-      label: _dateLabel(selectedDate),
-      onTap: onPickDate,
-    );
-    final therapistPill = _DropdownPill<int?>(
-      value: therapistId,
-      hint: 'All Therapists',
-      items: [
-        const DropdownMenuItem(value: null, child: Text('All Therapists')),
-        for (final t in therapists)
-          DropdownMenuItem(value: t.id, child: Text('${t.ime} ${t.prezime}')),
-      ],
-      onChanged: onTherapistChanged,
-    );
-    final servicePill = _DropdownPill<int?>(
-      value: serviceId,
-      hint: 'All Services',
-      items: [
-        const DropdownMenuItem(value: null, child: Text('All Services')),
-        for (final s in services)
-          DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-      ],
-      onChanged: onServiceChanged,
-    );
-    final statusPill = _DropdownPill<String>(
-      value: status,
-      hint: 'All Status',
-      items: const [
-        DropdownMenuItem(value: 'All Status', child: Text('All Status')),
-        DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
-        DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-        DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-      ],
-      onChanged: (v) {
-        if (v != null) onStatusChanged(v);
-      },
-    );
-    final viewSwitcher = _ViewSwitcher(value: view, onChanged: onViewChanged);
-    final newAppointmentButton = _GradientButton(
-      label: '+ New Appointment',
-      onTap: onNew,
-    );
-
-    // Row 1: all filters including All Status (horizontal scroll).
-    // Row 2: Day / Week / Month left, + New Appointment right (unchanged end position).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              datePill,
-              const SizedBox(width: 10),
-              therapistPill,
-              const SizedBox(width: 10),
-              servicePill,
-              const SizedBox(width: 10),
-              statusPill,
-            ],
+        _ApptGlass(
+          radius: 24,
+          minHeight: 88,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final scroll = c.maxWidth < 900;
+              final filters = [
+                _FilterPill(
+                  icon: Icons.date_range_outlined,
+                  label: _dateLabel(selectedDate),
+                  onTap: onPickDate,
+                ),
+                _DropdownPill<int?>(
+                  value: therapistId,
+                  hint: 'All Therapists',
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Therapists')),
+                    for (final t in therapists)
+                      DropdownMenuItem(
+                        value: t.id,
+                        child: Text('${t.ime} ${t.prezime}'),
+                      ),
+                  ],
+                  onChanged: onTherapistChanged,
+                ),
+                _DropdownPill<int?>(
+                  value: serviceId,
+                  hint: 'All Services',
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Services')),
+                    for (final s in services)
+                      DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+                  ],
+                  onChanged: onServiceChanged,
+                ),
+                _DropdownPill<String>(
+                  value: status,
+                  hint: 'All Status',
+                  items: const [
+                    DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+                    DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+                    DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+                    DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) onStatusChanged(v);
+                  },
+                ),
+                _GradientButton(label: 'New Appointment', onTap: onNew, compact: scroll),
+              ];
+
+              if (scroll) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < filters.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 18),
+                        filters[i],
+                      ],
+                    ],
+                  ),
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: filters[0]),
+                  const SizedBox(width: 18),
+                  Expanded(child: filters[1]),
+                  const SizedBox(width: 18),
+                  Expanded(child: filters[2]),
+                  const SizedBox(width: 18),
+                  Expanded(child: filters[3]),
+                  const SizedBox(width: 18),
+                  filters[4],
+                ],
+              );
+            },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: viewSwitcher,
-            ),
+            _ViewSwitcher(value: view, onChanged: onViewChanged),
             const Spacer(),
-            newAppointmentButton,
           ],
         ),
       ],
     );
-  }
-
-  String _dateLabel(DateTime d) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 }
 
@@ -562,8 +1048,8 @@ class _KpiCards extends StatelessWidget {
     ];
     return LayoutBuilder(
       builder: (context, c) {
-        const gap = 14.0;
-        const minCard = 168.0;
+        const gap = 24.0;
+        const minCard = 200.0;
         final rawW = c.maxWidth;
         final layoutW = rawW.isFinite && rawW > 0
             ? rawW
@@ -628,22 +1114,66 @@ class _AppointmentsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 26,
-      opacity: 0.38,
-      padding: const EdgeInsets.all(18),
+    if (reservations.isEmpty) {
+      return _ApptGlass(
+        radius: 28,
+        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 32),
+        child: Column(
+          children: [
+            Text(
+              'All Appointments',
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 32),
+            _ApptEmptyIllustration(icon: Icons.calendar_month_outlined),
+            const SizedBox(height: 24),
+            Text(
+              'No appointments found',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'There are no appointments for the selected date and filters.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                height: 1.45,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _ApptGlass(
+      radius: 28,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'All Appointments',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Text(
+              'All Appointments',
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          SingleChildScrollView(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 980),
@@ -651,8 +1181,17 @@ class _AppointmentsTable extends StatelessWidget {
                 showCheckboxColumn: false,
                 columnSpacing: 22,
                 horizontalMargin: 12,
+                headingRowHeight: 64,
+                dataRowMinHeight: 72,
+                dataRowMaxHeight: 88,
                 headingRowColor: WidgetStateProperty.all(
-                  Colors.white.withValues(alpha: 0.035),
+                  Colors.white.withValues(alpha: 0.05),
+                ),
+                headingTextStyle: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.35,
+                  color: _ApptUi.lavender.withValues(alpha: 0.75),
                 ),
                 columns: const [
                   DataColumn(label: Text('TIME')),
@@ -740,6 +1279,7 @@ class _AppointmentsTable extends StatelessWidget {
               ),
             ),
           ),
+          ),
         ],
       ),
     );
@@ -785,13 +1325,11 @@ class _AppointmentDetailsPanel extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: LuxuryGlassPanel(
-            borderRadius: 24,
-            blurSigma: 28,
-            opacity: 0.42,
-            padding: const EdgeInsets.all(20),
+          child: _ApptGlass(
+            radius: 28,
+            padding: const EdgeInsets.all(24),
             child: r == null
-                ? const Center(child: Text('Select an appointment.'))
+                ? _AppointmentSidebarEmpty()
                 : _AppointmentDetailsContent(appointment: r),
           ),
         ),
@@ -973,61 +1511,203 @@ class _KpiSpec {
   final Color color;
 }
 
-class _KpiCard extends StatelessWidget {
+class _KpiCard extends StatefulWidget {
   const _KpiCard({required this.spec});
   final _KpiSpec spec;
+
   @override
-  Widget build(BuildContext context) => LuxuryGlassPanel(
-    borderRadius: 24,
-    opacity: 0.38,
-    blurSigma: 22,
-    padding: const EdgeInsets.all(20),
-    child: Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: spec.color.withValues(alpha: 0.14),
+  State<_KpiCard> createState() => _KpiCardState();
+}
+
+class _KpiCardState extends State<_KpiCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = widget.spec;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        height: 170,
+        transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.035),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hover ? 0.14 : 0.08),
           ),
-          child: Icon(spec.icon, color: spec.color),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: spec.color.withValues(alpha: 0.25),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ]
+              : null,
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: Stack(
             children: [
-              Text(
-                spec.title,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.58),
-                  fontWeight: FontWeight.w800,
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: spec.color.withValues(alpha: 0.16),
+                        border: Border.all(color: spec.color.withValues(alpha: 0.35)),
+                      ),
+                      child: Icon(spec.icon, color: spec.color, size: 26),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              spec.value,
+                              style: GoogleFonts.inter(
+                                fontSize: 48,
+                                fontWeight: FontWeight.w700,
+                                color: _ApptUi.textPrimary,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            spec.title,
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: _ApptUi.lavender.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            spec.subtitle,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: spec.color.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                spec.value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                spec.subtitle,
-                style: TextStyle(
-                  color: spec.color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.65,
+                    child: Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: spec.color.withValues(alpha: 0.55),
+                            blurRadius: 12,
+                          ),
+                        ],
+                        gradient: LinearGradient(
+                          colors: [
+                            spec.color.withValues(alpha: 0),
+                            spec.color,
+                            spec.color.withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+}
+
+class _AppointmentSidebarEmpty extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _ApptEmptyIllustration(icon: Icons.event_note_outlined),
+            const SizedBox(height: 28),
+            Text(
+              'No appointment selected',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Select an appointment from the list to view details.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.45,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ApptEmptyIllustration extends StatelessWidget {
+  const _ApptEmptyIllustration({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _ApptUi.purple.withValues(alpha: 0.12),
+        boxShadow: [
+          BoxShadow(
+            color: _ApptUi.purple.withValues(alpha: 0.35),
+            blurRadius: 32,
+            spreadRadius: 4,
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 40, color: _ApptUi.purple2),
+    );
+  }
 }
 
 class _FilterPill extends StatelessWidget {
@@ -1039,24 +1719,50 @@ class _FilterPill extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
   @override
-  Widget build(BuildContext context) => InkWell(
-    borderRadius: BorderRadius.circular(18),
-    onTap: onTap,
-    child: LuxuryGlassPanel(
-      borderRadius: 18,
-      opacity: 0.28,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-        ],
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: _ApptUi.lavender.withValues(alpha: 0.85)),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: _ApptUi.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 20,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ],
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _DropdownPill<T> extends StatelessWidget {
@@ -1071,20 +1777,36 @@ class _DropdownPill<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
   @override
-  Widget build(BuildContext context) => LuxuryGlassPanel(
-    borderRadius: 18,
-    opacity: 0.28,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<T>(
-        value: value,
-        hint: Text(hint),
-        dropdownColor: NuaLuxuryTokens.voidViolet,
-        items: items,
-        onChanged: onChanged,
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-    ),
-  );
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          isExpanded: true,
+          value: value,
+          hint: Text(hint, style: GoogleFonts.inter(fontSize: 14)),
+          dropdownColor: NuaLuxuryTokens.voidViolet,
+          icon: Icon(
+            Icons.expand_more_rounded,
+            color: Colors.white.withValues(alpha: 0.45),
+          ),
+          style: GoogleFonts.inter(
+            color: _ApptUi.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
 }
 
 class _ViewSwitcher extends StatelessWidget {
@@ -1092,19 +1814,27 @@ class _ViewSwitcher extends StatelessWidget {
   final _AppointmentView value;
   final ValueChanged<_AppointmentView> onChanged;
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      for (final v in _AppointmentView.values)
-        Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: _ViewPill(
-            label: v.name[0].toUpperCase() + v.name.substring(1),
-            active: value == v,
-            onTap: () => onChanged(v),
-          ),
-        ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final v in _AppointmentView.values)
+            _ViewPill(
+              label: v.name[0].toUpperCase() + v.name.substring(1),
+              active: value == v,
+              onTap: () => onChanged(v),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ViewPill extends StatelessWidget {
@@ -1117,53 +1847,110 @@ class _ViewPill extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(999),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: active
-            ? NuaLuxuryTokens.softPurpleGlow
-            : Colors.white.withValues(alpha: 0.045),
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: active
+                ? const LinearGradient(colors: [_ApptUi.purple, _ApptUi.purple2])
+                : null,
+            color: active ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: _ApptUi.purple.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: active ? Colors.white : Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
-    ),
-  );
+    );
+  }
 }
 
-class _GradientButton extends StatelessWidget {
-  const _GradientButton({required this.label, required this.onTap});
+class _GradientButton extends StatefulWidget {
+  const _GradientButton({
+    required this.label,
+    required this.onTap,
+    this.compact = false,
+  });
   final String label;
   final VoidCallback onTap;
+  final bool compact;
+
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(18),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7B4DFF), Color(0xFF9D6BFF)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.28),
-            blurRadius: 22,
+  State<_GradientButton> createState() => _GradientButtonState();
+}
+
+class _GradientButtonState extends State<_GradientButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 52,
+            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 16 : 22),
+            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                colors: [_ApptUi.purple, _ApptUi.purple2],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _ApptUi.purple.withValues(alpha: _hover ? 0.5 : 0.32),
+                  blurRadius: _hover ? 24 : 16,
+                  offset: Offset(0, _hover ? 8 : 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontWeight: FontWeight.w900,
-          color: Color(0xFFF5F3FA),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _PersonCell extends StatelessWidget {
@@ -1501,11 +2288,9 @@ class _BottomEditBar extends StatelessWidget {
           onTap: onEdit ?? () {},
         ),
       ),
-      const SizedBox(width: 10),
-      PopupMenuButton<String>(
-        color: NuaLuxuryTokens.voidViolet,
+      const SizedBox(width: 12),
+      _MoreMenuButton(
         enabled: appointment != null,
-        icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (v) {
           final r = appointment;
           if (r == null) return;
@@ -1537,6 +2322,67 @@ class _BottomEditBar extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _MoreMenuButton extends StatefulWidget {
+  const _MoreMenuButton({
+    required this.enabled,
+    required this.onSelected,
+    required this.itemBuilder,
+  });
+
+  final bool enabled;
+  final ValueChanged<String> onSelected;
+  final List<PopupMenuEntry<String>> Function(BuildContext) itemBuilder;
+
+  @override
+  State<_MoreMenuButton> createState() => _MoreMenuButtonState();
+}
+
+class _MoreMenuButtonState extends State<_MoreMenuButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: widget.enabled && _hover ? 0.1 : 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(
+              alpha: widget.enabled && _hover ? 0.18 : 0.08,
+            ),
+          ),
+          boxShadow: widget.enabled && _hover
+              ? [
+                  BoxShadow(
+                    color: _ApptUi.purple.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                  ),
+                ]
+              : null,
+        ),
+        child: PopupMenuButton<String>(
+          padding: EdgeInsets.zero,
+          enabled: widget.enabled,
+          color: NuaLuxuryTokens.voidViolet,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          onSelected: widget.onSelected,
+          itemBuilder: widget.itemBuilder,
+          icon: Icon(
+            Icons.more_horiz_rounded,
+            color: Colors.white.withValues(alpha: widget.enabled ? 0.85 : 0.35),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AdminAppointmentDraft {
