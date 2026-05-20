@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../providers/auth_provider.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -120,11 +119,9 @@ class _AdminAppointmentsManagementScreenState
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _AppointmentsHero(
-                        selectedDate: _selectedDate,
                         searchQuery: query,
                         onSearchChanged: (q) =>
                             context.read<DesktopNav>().setAppointmentSearchQuery(q),
-                        onPickDate: _pickDate,
                       ),
                       const SizedBox(height: 24),
                       _FilterBar(
@@ -464,31 +461,15 @@ class _ApptGlass extends StatelessWidget {
 
 class _AppointmentsHero extends StatelessWidget {
   const _AppointmentsHero({
-    required this.selectedDate,
     required this.searchQuery,
     required this.onSearchChanged,
-    required this.onPickDate,
   });
 
-  final DateTime selectedDate;
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
-  final VoidCallback onPickDate;
-
-  static String _dateLabel(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
-  }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final name = auth.displayName ?? 'Admin';
-    final initials = auth.userInitials ?? 'SA';
-
     return _ApptGlass(
       radius: 28,
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
@@ -554,10 +535,6 @@ class _AppointmentsHero extends StatelessWidget {
           final right = _HeroTopActions(
             searchQuery: searchQuery,
             onSearchChanged: onSearchChanged,
-            dateLabel: _dateLabel(selectedDate),
-            onPickDate: onPickDate,
-            adminName: name,
-            initials: initials,
             compact: stack,
           );
 
@@ -589,40 +566,24 @@ class _HeroTopActions extends StatelessWidget {
   const _HeroTopActions({
     required this.searchQuery,
     required this.onSearchChanged,
-    required this.dateLabel,
-    required this.onPickDate,
-    required this.adminName,
-    required this.initials,
     required this.compact,
   });
 
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
-  final String dateLabel;
-  final VoidCallback onPickDate;
-  final String adminName;
-  final String initials;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: compact ? double.infinity : 420,
-          child: _HeroSearchField(
-            query: searchQuery,
-            onChanged: onSearchChanged,
-          ),
+    return Align(
+      alignment: Alignment.centerRight,
+      child: SizedBox(
+        width: compact ? double.infinity : 420,
+        child: _HeroSearchField(
+          query: searchQuery,
+          onChanged: onSearchChanged,
         ),
-        _HeroIconButton(icon: Icons.notifications_none_rounded),
-        _HeroDatePill(label: dateLabel, onTap: onPickDate),
-        _HeroProfileChip(name: adminName, initials: initials),
-      ],
+      ),
     );
   }
 }
@@ -707,158 +668,6 @@ class _HeroSearchFieldState extends State<_HeroSearchField> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
-      ),
-    );
-  }
-}
-
-class _HeroIconButton extends StatefulWidget {
-  const _HeroIconButton({required this.icon});
-  final IconData icon;
-
-  @override
-  State<_HeroIconButton> createState() => _HeroIconButtonState();
-}
-
-class _HeroIconButtonState extends State<_HeroIconButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.05),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: _hover
-              ? [
-                  BoxShadow(
-                    color: _ApptUi.purple.withValues(alpha: 0.3),
-                    blurRadius: 14,
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(widget.icon, color: Colors.white.withValues(alpha: 0.85)),
-      ),
-    );
-  }
-}
-
-class _HeroDatePill extends StatefulWidget {
-  const _HeroDatePill({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_HeroDatePill> createState() => _HeroDatePillState();
-}
-
-class _HeroDatePillState extends State<_HeroDatePill> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.05),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 18,
-                  color: _ApptUi.lavender.withValues(alpha: 0.9),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    color: _ApptUi.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.expand_more_rounded,
-                  size: 20,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroProfileChip extends StatelessWidget {
-  const _HeroProfileChip({required this.name, required this.initials});
-  final String name;
-  final String initials;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: _ApptUi.purple.withValues(alpha: 0.35),
-            child: Text(
-              initials,
-              style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 12),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: _ApptUi.textPrimary,
-                ),
-              ),
-              Text(
-                'Super Admin',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
