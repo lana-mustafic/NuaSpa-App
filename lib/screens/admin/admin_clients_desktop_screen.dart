@@ -514,8 +514,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final baseText = Theme.of(context).textTheme;
-
     return FutureBuilder<List<Zaposlenik>>(
       future: _therapistsFuture,
       builder: (context, thSnap) {
@@ -569,8 +567,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                 final content = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _TitleKpiRow(
-                      textTheme: baseText,
+                    _ClientsHeroKpiSection(
                       totalClients: totalClientsKpi,
                       vipCount: vipN,
                       visitsSum: visitsSum,
@@ -717,9 +714,9 @@ class _Glass extends StatelessWidget {
   }
 }
 
-class _TitleKpiRow extends StatelessWidget {
-  const _TitleKpiRow({
-    required this.textTheme,
+/// Premium hero + KPI glass section for Clients dashboard.
+class _ClientsHeroKpiSection extends StatelessWidget {
+  const _ClientsHeroKpiSection({
     required this.totalClients,
     required this.vipCount,
     required this.visitsSum,
@@ -728,7 +725,6 @@ class _TitleKpiRow extends StatelessWidget {
     required this.fmtInt,
   });
 
-  final TextTheme textTheme;
   final int totalClients;
   final int vipCount;
   final int visitsSum;
@@ -736,116 +732,206 @@ class _TitleKpiRow extends StatelessWidget {
   final bool loading;
   final String Function(int) fmtInt;
 
+  static const Color _lavender = Color(0xFFC8B6E8);
+
+  List<({String label, String value, IconData icon})> _cards() => [
+        (
+          label: 'Total Clients',
+          value: loading ? '…' : fmtInt(totalClients),
+          icon: Icons.groups_2_outlined,
+        ),
+        (
+          label: 'VIP Clients',
+          value: loading ? '…' : fmtInt(vipCount),
+          icon: Icons.workspace_premium_outlined,
+        ),
+        (
+          label: 'Total Visits',
+          value: loading ? '…' : fmtInt(visitsSum),
+          icon: Icons.event_available_outlined,
+        ),
+        (
+          label: 'Spending',
+          value: loading ? '…' : '${fmtInt(spendSum.round())} KM',
+          icon: Icons.account_balance_wallet_outlined,
+        ),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    final titleStyle = GoogleFonts.inter(
-      textStyle: textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w800,
-        color: _AdminClientsDesktopScreenState._textPrimary,
-        letterSpacing: -0.3,
-      ),
-    );
-    final subStyle = GoogleFonts.inter(
-      fontSize: 13.5,
-      color: Colors.white.withValues(alpha: 0.62),
-      height: 1.35,
-    );
+    final cards = _cards();
 
     return LayoutBuilder(
       builder: (context, c) {
-        final stackKpi = c.maxWidth < 1100;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Glass(
-                  radius: 18,
-                  padding: const EdgeInsets.all(12),
-                  child: Icon(
-                    Icons.people_alt_outlined,
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.95),
-                    size: 26,
-                  ),
+        final w = c.maxWidth;
+        final wide = w >= 1320;
+        final titleSize = w >= 1500 ? 64.0 : w >= 1100 ? 52.0 : 40.0;
+        final subtitleSize = w >= 1500 ? 24.0 : w >= 1100 ? 20.0 : 16.0;
+
+        Widget kpiRow({bool scroll = false}) {
+          final row = Row(
+            mainAxisSize: scroll ? MainAxisSize.min : MainAxisSize.max,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 24),
+                _ClientsHeroKpiCard(
+                  label: cards[i].label,
+                  value: cards[i].value,
+                  icon: cards[i].icon,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Clients', style: titleStyle),
-                      const SizedBox(height: 4),
-                      Text('Search, visits and VIP status.', style: subStyle),
+              ],
+            ],
+          );
+          if (scroll) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: row,
+            );
+          }
+          return row;
+        }
+
+        Widget heroBlock() {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(26),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _AdminClientsDesktopScreenState._purple,
+                      _AdminClientsDesktopScreenState._purple2,
                     ],
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.45),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
                 ),
-                if (!stackKpi) ...[
-                  const SizedBox(width: 12),
-                  _KpiMini(
-                    label: 'Total clients',
-                    value: loading ? '…' : fmtInt(totalClients),
-                    icon: Icons.groups_2_outlined,
+                child: const Icon(
+                  Icons.people_alt_rounded,
+                  size: 52,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 32),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Clients',
+                      style: GoogleFonts.inter(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
+                        color: _AdminClientsDesktopScreenState._textPrimary,
+                        letterSpacing: -1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Search, visits and VIP status.',
+                      style: GoogleFonts.inter(
+                        fontSize: subtitleSize,
+                        fontWeight: FontWeight.w500,
+                        height: 1.25,
+                        color: _lavender.withValues(alpha: 0.82),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        Widget verticalDivider() => Container(
+              width: 1,
+              height: 160,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              color: Colors.white.withValues(alpha: 0.08),
+            );
+
+        Widget horizontalDivider() => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            );
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF120A24).withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                boxShadow: [
+                  BoxShadow(
+                    color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.14),
+                    blurRadius: 36,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 14),
                   ),
-                  const SizedBox(width: 12),
-                  _KpiMini(
-                    label: 'VIP clients',
-                    value: loading ? '…' : fmtInt(vipCount),
-                    icon: Icons.workspace_premium_outlined,
-                  ),
-                  const SizedBox(width: 12),
-                  _KpiMini(
-                    label: 'Total visits',
-                    value: loading ? '…' : fmtInt(visitsSum),
-                    icon: Icons.bar_chart_rounded,
-                  ),
-                  const SizedBox(width: 12),
-                  _KpiMini(
-                    label: 'Spending',
-                    value: loading ? '…' : '${fmtInt(spendSum.round())} KM',
-                    icon: Icons.account_balance_wallet_outlined,
-                  ),
-                ],
-              ],
-            ),
-            if (stackKpi) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _KpiMini(
-                    label: 'Total clients',
-                    value: loading ? '…' : fmtInt(totalClients),
-                    icon: Icons.groups_2_outlined,
-                  ),
-                  _KpiMini(
-                    label: 'VIP clients',
-                    value: loading ? '…' : fmtInt(vipCount),
-                    icon: Icons.workspace_premium_outlined,
-                  ),
-                  _KpiMini(
-                    label: 'Total visits',
-                    value: loading ? '…' : fmtInt(visitsSum),
-                    icon: Icons.bar_chart_rounded,
-                  ),
-                  _KpiMini(
-                    label: 'Spending',
-                    value: loading ? '…' : '${fmtInt(spendSum.round())} KM',
-                    icon: Icons.account_balance_wallet_outlined,
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 28,
+                    offset: const Offset(0, 18),
                   ),
                 ],
               ),
-            ],
-          ],
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: wide ? 42 : 28,
+                  vertical: wide ? 36 : 28,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 260),
+                  child: wide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            heroBlock(),
+                            verticalDivider(),
+                            const SizedBox(width: 40),
+                            Expanded(child: kpiRow()),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            heroBlock(),
+                            horizontalDivider(),
+                            kpiRow(scroll: true),
+                          ],
+                        ),
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
   }
 }
 
-class _KpiMini extends StatelessWidget {
-  const _KpiMini({
+class _ClientsHeroKpiCard extends StatefulWidget {
+  const _ClientsHeroKpiCard({
     required this.label,
     required this.value,
     required this.icon,
@@ -856,42 +942,133 @@ class _KpiMini extends StatelessWidget {
   final IconData icon;
 
   @override
+  State<_ClientsHeroKpiCard> createState() => _ClientsHeroKpiCardState();
+}
+
+class _ClientsHeroKpiCardState extends State<_ClientsHeroKpiCard> {
+  static const Color _lavender = Color(0xFFC8B6E8);
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 148,
-      child: _Glass(
-        radius: 18,
-        borderAlpha: 0.065,
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.55)),
-                const Spacer(),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _AdminClientsDesktopScreenState._textPrimary,
-                height: 1.0,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        width: 260,
+        height: 180,
+        transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.035),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hover ? 0.14 : 0.08),
+          ),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.22),
+                    blurRadius: 28,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 12),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        size: 26,
+                        color: _AdminClientsDesktopScreenState._purple2,
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            widget.value,
+                            style: GoogleFonts.inter(
+                              fontSize: 56,
+                              fontWeight: FontWeight.w700,
+                              height: 1.0,
+                              color: _AdminClientsDesktopScreenState._textPrimary,
+                              letterSpacing: -1.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.label,
+                          style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w500,
+                            color: _lavender.withValues(alpha: 0.75),
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.55),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: 260 * 0.7,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _AdminClientsDesktopScreenState._purple.withValues(
+                            alpha: _hover ? 0.75 : 0.5,
+                          ),
+                          blurRadius: _hover ? 16 : 10,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                      gradient: LinearGradient(
+                        colors: [
+                          _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.0),
+                          _AdminClientsDesktopScreenState._purple,
+                          _AdminClientsDesktopScreenState._purple2,
+                          _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
