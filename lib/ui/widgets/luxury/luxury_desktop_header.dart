@@ -167,7 +167,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 hintText: isTherapists
                     ? 'Search therapists…'
                     : isAdminClients
-                        ? 'Search services & therapies…'
+                        ? 'Search clients…'
                         : isAppointments
                             ? 'Search clients, appointments…'
                             : isCalendar

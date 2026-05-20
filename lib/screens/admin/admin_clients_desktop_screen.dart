@@ -206,16 +206,16 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
               ),
               const SizedBox(height: 14),
-              Text('VIP: ${c.isVip ? "Da" : "Ne"}'),
-              Text('Terapeut: $tName'),
-              Text('Posjete: ${c.ukupnoPosjeta}'),
-              Text('Potrošnja: ${c.ukupnoPotroseno.toStringAsFixed(0)} KM'),
-              Text('Zadnja posjeta: ${_fmtVisit(c.zadnjaPosjeta)}'),
+              Text('VIP: ${c.isVip ? "Yes" : "No"}'),
+              Text('Therapist: $tName'),
+              Text('Visits: ${c.ukupnoPosjeta}'),
+              Text('Spending: ${c.ukupnoPotroseno.toStringAsFixed(0)} KM'),
+              Text('Last visit: ${_fmtVisit(c.zadnjaPosjeta)}'),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zatvori')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
         ],
       ),
     );
@@ -237,7 +237,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         builder: (ctx, setLocal) {
           return AlertDialog(
             backgroundColor: NuaLuxuryTokens.voidViolet,
-            title: const Text('Novi klijent'),
+            title: const Text('New client'),
             content: SizedBox(
               width: 420,
               child: SingleChildScrollView(
@@ -246,11 +246,11 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   children: [
                     TextField(
                       controller: imeC,
-                      decoration: const InputDecoration(labelText: 'Ime'),
+                      decoration: const InputDecoration(labelText: 'First name'),
                     ),
                     TextField(
                       controller: prezC,
-                      decoration: const InputDecoration(labelText: 'Prezime'),
+                      decoration: const InputDecoration(labelText: 'Last name'),
                     ),
                     TextField(
                       controller: emailC,
@@ -259,21 +259,21 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     ),
                     TextField(
                       controller: userC,
-                      decoration: const InputDecoration(labelText: 'Korisničko ime'),
+                      decoration: const InputDecoration(labelText: 'Username'),
                     ),
                     TextField(
                       controller: passC,
-                      decoration: const InputDecoration(labelText: 'Lozinka'),
+                      decoration: const InputDecoration(labelText: 'Password'),
                       obscureText: true,
                     ),
                     TextField(
                       controller: telC,
-                      decoration: const InputDecoration(labelText: 'Telefon (opcionalno)'),
+                      decoration: const InputDecoration(labelText: 'Phone (optional)'),
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<int?>(
                       value: zId,
-                      decoration: const InputDecoration(labelText: 'Preferirani terapeut'),
+                      decoration: const InputDecoration(labelText: 'Preferred therapist'),
                       items: [
                         const DropdownMenuItem<int?>(value: null, child: Text('—')),
                         ...therapists.map(
@@ -287,7 +287,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('VIP klijent'),
+                      title: const Text('VIP client'),
                       value: vip,
                       onChanged: (v) => setLocal(() => vip = v),
                     ),
@@ -296,7 +296,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Odustani')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
               FilledButton(
                 onPressed: () async {
                   final ime = imeC.text.trim();
@@ -306,7 +306,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   final pass = passC.text;
                   if (ime.isEmpty || prez.isEmpty || email.isEmpty || user.isEmpty || pass.length < 6) {
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Popuni obavezna polja (lozinka min. 6 znakova).')),
+                      const SnackBar(content: Text('Fill in required fields (password min. 6 characters).')),
                     );
                     return;
                   }
@@ -325,16 +325,16 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     Navigator.pop(ctx);
                     _reloadFromApi();
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Klijent je kreiran.')),
+                      const SnackBar(content: Text('Client created.')),
                     );
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Greška: $e')),
+                      SnackBar(content: Text('Error: $e')),
                     );
                   }
                 },
-                child: const Text('Spremi'),
+                child: const Text('Save'),
               ),
             ],
           );
@@ -364,7 +364,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.workspace_premium_outlined),
-                title: Text(row.isVipKlijent ? 'Ukloni ručni VIP' : 'Postavi ručni VIP'),
+                title: Text(row.isVipKlijent ? 'Remove manual VIP' : 'Set manual VIP'),
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
@@ -377,21 +377,21 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          row.isVipKlijent ? 'Ručni VIP uklonjen.' : 'Ručni VIP postavljen.',
+                          row.isVipKlijent ? 'Manual VIP removed.' : 'Manual VIP set.',
                         ),
                       ),
                     );
                   } catch (e) {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Greška: $e')),
+                      SnackBar(content: Text('Error: $e')),
                     );
                   }
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.person_outline),
-                title: const Text('Promijeni preferiranog terapeuta'),
+                title: const Text('Change preferred therapist'),
                 onTap: () async {
                   Navigator.pop(ctx);
                   int? picked = row.preferiraniZaposlenikId;
@@ -401,11 +401,11 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                       builder: (dCtx, setL) {
                         return AlertDialog(
                           backgroundColor: NuaLuxuryTokens.voidViolet,
-                          title: const Text('Preferirani terapeut'),
+                          title: const Text('Preferred therapist'),
                           content: DropdownButtonFormField<int?>(
                             value: picked,
                             items: [
-                              const DropdownMenuItem<int?>(value: null, child: Text('Nema')),
+                              const DropdownMenuItem<int?>(value: null, child: Text('None')),
                               ...therapists.map(
                                 (z) => DropdownMenuItem<int?>(
                                   value: z.id,
@@ -416,7 +416,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                             onChanged: (v) => setL(() => picked = v),
                           ),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Odustani')),
+                            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
                             FilledButton(
                               onPressed: () async {
                                 try {
@@ -432,11 +432,11 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                                 } catch (e) {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Greška: $e')),
+                                    SnackBar(content: Text('Error: $e')),
                                   );
                                 }
                               },
-                              child: const Text('Spremi'),
+                              child: const Text('Save'),
                             ),
                           ],
                         );
@@ -714,34 +714,34 @@ class _TitleKpiRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Klijenti', style: titleStyle),
+                      Text('Clients', style: titleStyle),
                       const SizedBox(height: 4),
-                      Text('Pretraga, posjete i VIP status.', style: subStyle),
+                      Text('Search, visits and VIP status.', style: subStyle),
                     ],
                   ),
                 ),
                 if (!stackKpi) ...[
                   const SizedBox(width: 12),
                   _KpiMini(
-                    label: 'Ukupno klijenata',
+                    label: 'Total clients',
                     value: loading ? '…' : fmtInt(totalClients),
                     icon: Icons.groups_2_outlined,
                   ),
                   const SizedBox(width: 12),
                   _KpiMini(
-                    label: 'VIP klijenti',
+                    label: 'VIP clients',
                     value: loading ? '…' : fmtInt(vipCount),
                     icon: Icons.workspace_premium_outlined,
                   ),
                   const SizedBox(width: 12),
                   _KpiMini(
-                    label: 'Ukupno posjeta',
+                    label: 'Total visits',
                     value: loading ? '…' : fmtInt(visitsSum),
                     icon: Icons.bar_chart_rounded,
                   ),
                   const SizedBox(width: 12),
                   _KpiMini(
-                    label: 'Potrošnja',
+                    label: 'Spending',
                     value: loading ? '…' : '${fmtInt(spendSum.round())} KM',
                     icon: Icons.account_balance_wallet_outlined,
                   ),
@@ -755,22 +755,22 @@ class _TitleKpiRow extends StatelessWidget {
                 runSpacing: 12,
                 children: [
                   _KpiMini(
-                    label: 'Ukupno klijenata',
+                    label: 'Total clients',
                     value: loading ? '…' : fmtInt(totalClients),
                     icon: Icons.groups_2_outlined,
                   ),
                   _KpiMini(
-                    label: 'VIP klijenti',
+                    label: 'VIP clients',
                     value: loading ? '…' : fmtInt(vipCount),
                     icon: Icons.workspace_premium_outlined,
                   ),
                   _KpiMini(
-                    label: 'Ukupno posjeta',
+                    label: 'Total visits',
                     value: loading ? '…' : fmtInt(visitsSum),
                     icon: Icons.bar_chart_rounded,
                   ),
                   _KpiMini(
-                    label: 'Potrošnja',
+                    label: 'Spending',
                     value: loading ? '…' : '${fmtInt(spendSum.round())} KM',
                     icon: Icons.account_balance_wallet_outlined,
                   ),
@@ -922,7 +922,7 @@ class _FilterBar extends StatelessWidget {
               child: TextField(
                 controller: apiSearch,
                 style: fieldStyle.copyWith(color: _AdminClientsDesktopScreenState._textPrimary),
-                decoration: deco('Pretraži klijente...').copyWith(
+                decoration: deco('Search clients...').copyWith(
                   prefixIcon: Icon(Icons.search, color: Colors.white.withValues(alpha: 0.45)),
                 ),
               ),
@@ -932,9 +932,9 @@ class _FilterBar extends StatelessWidget {
               child: dropdown<String>(
                 value: vipFilter,
                 items: const [
-                  DropdownMenuItem(value: 'all', child: Text('Svi VIP statusi')),
-                  DropdownMenuItem(value: 'vip', child: Text('Samo VIP')),
-                  DropdownMenuItem(value: 'none', child: Text('Bez VIP')),
+                  DropdownMenuItem(value: 'all', child: Text('All VIP statuses')),
+                  DropdownMenuItem(value: 'vip', child: Text('VIP only')),
+                  DropdownMenuItem(value: 'none', child: Text('Non-VIP')),
                 ],
                 onChanged: (v) {
                   if (v != null) onVip(v);
@@ -946,7 +946,7 @@ class _FilterBar extends StatelessWidget {
               child: dropdown<int?>(
                 value: therapistFilterIndex,
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Svi terapeuti')),
+                  const DropdownMenuItem<int?>(value: null, child: Text('All therapists')),
                   for (var i = 0; i < therapists.length; i++)
                     DropdownMenuItem<int?>(
                       value: i,
@@ -964,10 +964,10 @@ class _FilterBar extends StatelessWidget {
               child: dropdown<String>(
                 value: sortKey,
                 items: const [
-                  DropdownMenuItem(value: 'new', child: Text('Sortiraj: Novi prvo')),
-                  DropdownMenuItem(value: 'old', child: Text('Sortiraj: Stariji prvo')),
-                  DropdownMenuItem(value: 'visit', child: Text('Sortiraj: Zadnja posjeta')),
-                  DropdownMenuItem(value: 'name', child: Text('Sortiraj: Ime A–Ž')),
+                  DropdownMenuItem(value: 'new', child: Text('Sort: Newest first')),
+                  DropdownMenuItem(value: 'old', child: Text('Sort: Oldest first')),
+                  DropdownMenuItem(value: 'visit', child: Text('Sort: Last visit')),
+                  DropdownMenuItem(value: 'name', child: Text('Sort: Name A–Z')),
                 ],
                 onChanged: (v) {
                   if (v != null) onSort(v);
@@ -998,7 +998,7 @@ class _FilterBar extends StatelessWidget {
                     onTap: onAdd,
                     child: Center(
                       child: Text(
-                        '+ Dodaj klijenta',
+                        '+ Add client',
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
@@ -1706,7 +1706,7 @@ class _PaginationBar extends StatelessWidget {
           onPage: onPage,
         )),
         Text(
-          'Prikaži ',
+          'Show ',
           style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
         ),
         Theme(
@@ -1728,7 +1728,7 @@ class _PaginationBar extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Text(
-          total == 0 ? '0 klijenata' : '$start–$end od ${fmtInt(total)} klijenata',
+          total == 0 ? '0 clients' : '$start–$end of ${fmtInt(total)} clients',
           style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
         ),
       ],
@@ -1872,7 +1872,7 @@ class _RightPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Brza pretraga',
+                'Quick search',
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
@@ -1884,7 +1884,7 @@ class _RightPanel extends StatelessWidget {
                 controller: quickSearch,
                 style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.9), fontSize: 13.5),
                 decoration: InputDecoration(
-                  hintText: 'Ime, email ili broj telefona...',
+                  hintText: 'Name, email or phone number...',
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.38)),
                   isDense: true,
                   filled: true,
@@ -1918,7 +1918,7 @@ class _RightPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Nedavni klijenti',
+                  'Recent clients',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
@@ -1987,7 +1987,7 @@ class _RightPanel extends StatelessWidget {
                   child: TextButton(
                     onPressed: () {},
                     child: Text(
-                      'Pogledaj sve',
+                      'View all',
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w700,
                         color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.95),
@@ -2007,7 +2007,7 @@ class _RightPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Klijenti po terapeutima',
+                'Clients by therapist',
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
@@ -2087,7 +2087,7 @@ class _RightPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'VIP klijenti imaju pristup posebnim paketima i prioritetnim terminima.',
+                  'VIP clients have access to special packages and priority appointments.',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     height: 1.45,
@@ -2112,7 +2112,7 @@ class _RightPanel extends StatelessWidget {
   }
 
   static String _fmtShort(DateTime? d) {
-    if (d == null) return '—';
+    if (d == null) return 'No visits yet';
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     final loc = d.toLocal();
     return '${months[loc.month - 1]} ${loc.day}, ${loc.year}';
