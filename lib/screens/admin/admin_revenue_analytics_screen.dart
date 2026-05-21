@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
@@ -56,6 +58,8 @@ class _AdminRevenueAnalyticsScreenState
   _ReportPeriod _period = _ReportPeriod.days30;
   Future<_ReportsData>? _future;
   bool _exporting = false;
+  DateTimeRange? _appliedHeaderRange;
+  int _lastFiltersPulse = 0;
 
   @override
   void initState() {
@@ -75,23 +79,25 @@ class _AdminRevenueAnalyticsScreenState
     return (to.subtract(Duration(days: days)), to);
   }
 
-  void _reload() {
-    final (from, to) = _rangeFor(_period);
+  void _reload({DateTime? from, DateTime? to}) {
+    final (rangeFrom, rangeTo) = from != null && to != null
+        ? (from, to)
+        : _rangeFor(_period);
     setState(() {
       _future = () async {
         final results = await Future.wait([
-          _api.getAdminKpis(date: to),
-          _api.getRevenueSeries(from: from, to: to),
-          _api.getServicePopularity(from: from, to: to, take: 8),
-          _api.getTopSpenders(from: from, to: to, take: 8),
+          _api.getAdminKpis(date: rangeTo),
+          _api.getRevenueSeries(from: rangeFrom, to: rangeTo),
+          _api.getServicePopularity(from: rangeFrom, to: rangeTo, take: 8),
+          _api.getTopSpenders(from: rangeFrom, to: rangeTo, take: 8),
         ]);
         return _ReportsData(
           kpi: results[0] as AdminKpi?,
           revenue: results[1] as List<RevenuePoint>,
           popularity: results[2] as List<ServicePopularity>,
           spenders: results[3] as List<TopSpender>,
-          from: from,
-          to: to,
+          from: rangeFrom,
+          to: rangeTo,
         );
       }();
     });
@@ -99,8 +105,18 @@ class _AdminRevenueAnalyticsScreenState
 
   void _setPeriod(_ReportPeriod p) {
     if (_period == p) return;
-    setState(() => _period = p);
+    setState(() {
+      _period = p;
+      _appliedHeaderRange = null;
+    });
     _reload();
+  }
+
+  void _applyHeaderRange(DateTimeRange range) {
+    final from = _dayOnly(range.start);
+    final to = _dayOnly(range.end);
+    setState(() => _appliedHeaderRange = range);
+    _reload(from: from, to: to);
   }
 
   Future<void> _exportPdf() async {
@@ -124,6 +140,30 @@ class _AdminRevenueAnalyticsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.watch<DesktopNav>();
+    final headerRange = nav.headerDateRange;
+    if (_appliedHeaderRange != headerRange) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _appliedHeaderRange == headerRange) return;
+        _applyHeaderRange(headerRange);
+      });
+    }
+    if (nav.headerFiltersPulse != _lastFiltersPulse) {
+      _lastFiltersPulse = nav.headerFiltersPulse;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tip: use 7 / 30 / 90 day period chips below, or change the header date range.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            width: 420,
+          ),
+        );
+      });
+    }
+
     return FutureBuilder<_ReportsData>(
       future: _future,
       builder: (context, snap) {

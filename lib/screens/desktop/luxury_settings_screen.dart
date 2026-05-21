@@ -40,11 +40,95 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
   static const _storage = FlutterSecureStorage();
   _SessionSnapshot? _session;
   bool _loadingSession = true;
+  int _lastFiltersPulse = 0;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _accountKey = GlobalKey();
+  final GlobalKey _sessionKey = GlobalKey();
+  final GlobalKey _workspaceKey = GlobalKey();
+  final GlobalKey _appKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadSession();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSection(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
+  }
+
+  Future<void> _showSectionPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NuaLuxuryTokens.voidViolet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Jump to section',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFF5F3FA),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Account'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _scrollToSection(_accountKey);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('Session'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _scrollToSection(_sessionKey);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.dashboard_customize_outlined),
+                title: const Text('Workspace'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _scrollToSection(_workspaceKey);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Application'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _scrollToSection(_appKey);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadSession() async {
@@ -149,7 +233,13 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final nav = context.read<DesktopNav>();
+    final nav = context.watch<DesktopNav>();
+    if (nav.headerFiltersPulse != _lastFiltersPulse) {
+      _lastFiltersPulse = nav.headerFiltersPulse;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSectionPicker();
+      });
+    }
     final t = Theme.of(context);
     final fullName = _fullName(_session);
     final display = fullName.isNotEmpty
@@ -157,6 +247,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
         : (auth.displayName ?? 'Signed in');
 
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(32, 8, 32, 40),
       child: Align(
         alignment: Alignment.topCenter,
@@ -166,6 +257,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
             builder: (context, c) {
               final twoCol = c.maxWidth >= 720;
               final accountCol = _SettingsSection(
+                key: _accountKey,
                 title: 'Account',
                 icon: Icons.person_outline_rounded,
                 child: Column(
@@ -195,6 +287,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
               );
 
               final sessionCol = _SettingsSection(
+                key: _sessionKey,
                 title: 'Session',
                 icon: Icons.shield_outlined,
                 child: Column(
@@ -317,6 +410,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
                   if (auth.isAdmin) ...[
                     const SizedBox(height: 24),
                     _SettingsSection(
+                      key: _workspaceKey,
                       title: 'Workspace',
                       icon: Icons.dashboard_customize_outlined,
                       subtitle:
@@ -381,6 +475,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
                   ] else if (auth.isZaposlenik) ...[
                     const SizedBox(height: 24),
                     _SettingsSection(
+                      key: _workspaceKey,
                       title: 'Workspace',
                       icon: Icons.view_timeline_rounded,
                       subtitle: 'Your therapist tools in NuaSpa.',
@@ -402,6 +497,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
                   ] else ...[
                     const SizedBox(height: 24),
                     _SettingsSection(
+                      key: _workspaceKey,
                       title: 'Workspace',
                       icon: Icons.spa_outlined,
                       subtitle: 'Your booking experience.',
@@ -428,6 +524,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen> {
                   ],
                   const SizedBox(height: 24),
                   _SettingsSection(
+                    key: _appKey,
                     title: 'Application',
                     icon: Icons.info_outline_rounded,
                     child: Column(
@@ -536,6 +633,7 @@ class _RolePill extends StatelessWidget {
 
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
+    super.key,
     required this.title,
     required this.icon,
     required this.child,

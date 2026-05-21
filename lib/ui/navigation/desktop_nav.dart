@@ -19,7 +19,16 @@ enum DesktopRouteKey {
 }
 
 class DesktopNav extends ChangeNotifier {
+  static DateTimeRange defaultHeaderDateRange() {
+    final now = DateTime.now();
+    final end = DateTime(now.year, now.month, now.day);
+    final start = end.subtract(const Duration(days: 29));
+    return DateTimeRange(start: start, end: end);
+  }
+
   DesktopRouteKey _route = DesktopRouteKey.home;
+  DateTimeRange _headerDateRange = defaultHeaderDateRange();
+  int _headerFiltersPulse = 0;
   AdminSuiteRoute _adminSuiteTarget = AdminSuiteRoute.overview;
   int _adminSuiteMount = 0;
   bool _adminLandingSeeded = false;
@@ -39,6 +48,30 @@ class DesktopNav extends ChangeNotifier {
       _calendarSearchCtrl ??= TextEditingController();
 
   DesktopRouteKey get route => _route;
+
+  DateTimeRange get headerDateRange => _headerDateRange;
+
+  int get headerFiltersPulse => _headerFiltersPulse;
+
+  void setHeaderDateRange(DateTimeRange range) {
+    final start = DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    final normalized = DateTimeRange(
+      start: start.isBefore(end) ? start : end,
+      end: start.isBefore(end) ? end : start,
+    );
+    if (_headerDateRange.start == normalized.start &&
+        _headerDateRange.end == normalized.end) {
+      return;
+    }
+    _headerDateRange = normalized;
+    notifyListeners();
+  }
+
+  void pulseHeaderFilters() {
+    _headerFiltersPulse++;
+    notifyListeners();
+  }
 
   int get adminSuiteMount => _adminSuiteMount;
 

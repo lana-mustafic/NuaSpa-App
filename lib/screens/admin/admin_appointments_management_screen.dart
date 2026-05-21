@@ -39,6 +39,7 @@ class _AdminAppointmentsManagementScreenState
   _AppointmentView _view = _AppointmentView.day;
   Rezervacija? _selected;
   int _handledCreateRequest = 0;
+  int _lastFiltersPulse = 0;
   final ScrollController _mainScrollController = ScrollController();
 
   @override
@@ -76,6 +77,117 @@ class _AdminAppointmentsManagementScreenState
     setState(() => _future = _load());
   }
 
+  Future<void> _showFiltersSheet(_AppointmentsData data) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF140B24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        var therapistId = _therapistId;
+        var serviceId = _serviceId;
+        var status = _status;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Appointment filters',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFF5F3FA),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int?>(
+                      value: therapistId,
+                      decoration: const InputDecoration(labelText: 'Therapist'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All Therapists'),
+                        ),
+                        for (final t in data.therapists)
+                          DropdownMenuItem(
+                            value: t.id,
+                            child: Text('${t.ime} ${t.prezime}'),
+                          ),
+                      ],
+                      onChanged: (v) => setModalState(() => therapistId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      value: serviceId,
+                      decoration: const InputDecoration(labelText: 'Service'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All Services'),
+                        ),
+                        for (final s in data.services)
+                          DropdownMenuItem(
+                            value: s.id,
+                            child: Text(s.naziv),
+                          ),
+                      ],
+                      onChanged: (v) => setModalState(() => serviceId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: status,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'All Status',
+                          child: Text('All Status'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Confirmed',
+                          child: Text('Confirmed'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Pending',
+                          child: Text('Pending'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Cancelled',
+                          child: Text('Cancelled'),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setModalState(() => status = v);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _therapistId = therapistId;
+                          _serviceId = serviceId;
+                          _status = status;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      child: const Text('Apply filters'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<DesktopNav>();
@@ -99,6 +211,13 @@ class _AdminAppointmentsManagementScreenState
           _handledCreateRequest = nav.appointmentCreateRequest;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _openCreate(data);
+          });
+        }
+        if (nav.headerFiltersPulse != _lastFiltersPulse &&
+            snap.connectionState == ConnectionState.done) {
+          _lastFiltersPulse = nav.headerFiltersPulse;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showFiltersSheet(data);
           });
         }
         final filtered = _filter(data.reservations, query);
