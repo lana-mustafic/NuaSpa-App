@@ -113,8 +113,8 @@ class _AdminRevenueAnalyticsScreenState
       SnackBar(
         content: Text(
           ok
-              ? 'PDF izvještaj (Top 5 usluga) je preuzet i otvoren.'
-              : 'Izvoz PDF nije uspio. Provjerite backend i prijavu.',
+              ? 'PDF report (Top 5 services) downloaded and opened.'
+              : 'PDF export failed. Check backend connection and sign-in.',
         ),
         behavior: SnackBarBehavior.floating,
         width: 420,
@@ -139,14 +139,14 @@ class _AdminRevenueAnalyticsScreenState
 
         if (snap.hasError) {
           return _ReportsError(
-            message: 'Nije moguće učitati izvještaje.',
+            message: 'Unable to load reports.',
             onRetry: _reload,
           );
         }
 
         final data = snap.data;
         if (data == null) {
-          return _ReportsError(message: 'Nema podataka.', onRetry: _reload);
+          return _ReportsError(message: 'No data available.', onRetry: _reload);
         }
 
         final rev = data.revenue;
@@ -177,9 +177,9 @@ class _AdminRevenueAnalyticsScreenState
             : 0.0;
 
         final periodLabel = switch (_period) {
-          _ReportPeriod.days7 => '7 dana',
-          _ReportPeriod.days30 => '30 dana',
-          _ReportPeriod.days90 => '90 dana',
+          _ReportPeriod.days7 => '7 days',
+          _ReportPeriod.days30 => '30 days',
+          _ReportPeriod.days90 => '90 days',
         };
 
         return Stack(
@@ -214,25 +214,25 @@ class _AdminRevenueAnalyticsScreenState
                         _KpiGrid(
                           cards: [
                             _KpiSpec(
-                              title: 'Ukupni prihod',
+                              title: 'Total Revenue',
                               value: _fmtKm(totalRevenue),
                               subtitle: 'Period: $periodLabel',
                               icon: Icons.attach_money_rounded,
                               values: spark.isEmpty ? [totalRevenue] : spark,
                             ),
                             _KpiSpec(
-                              title: 'Uplate',
+                              title: 'Payments',
                               value: '$totalPayments',
-                              subtitle: 'Broj uplata u periodu',
+                              subtitle: 'Payments in selected period',
                               icon: Icons.payments_outlined,
                               values: rev
                                   .map((p) => p.brojRezervacija.toDouble())
                                   .toList(),
                             ),
                             _KpiSpec(
-                              title: 'Prosječan iznos',
+                              title: 'Average Amount',
                               value: _fmtKm(avgTicket),
-                              subtitle: 'Po uplati u periodu',
+                              subtitle: 'Per payment in period',
                               icon: Icons.account_balance_wallet_outlined,
                               values: rev
                                   .map((p) => p.brojRezervacija > 0
@@ -241,10 +241,10 @@ class _AdminRevenueAnalyticsScreenState
                                   .toList(),
                             ),
                             _KpiSpec(
-                              title: 'Prihod danas',
+                              title: 'Revenue Today',
                               value: _fmtKm(data.kpi?.prihodDanas ?? 0),
                               subtitle:
-                                  '${data.kpi?.rezervacijeDanas ?? 0} rezervacija danas',
+                                  '${data.kpi?.rezervacijeDanas ?? 0} bookings today',
                               icon: Icons.today_outlined,
                               values: rev.length >= 7
                                   ? rev
@@ -261,19 +261,19 @@ class _AdminRevenueAnalyticsScreenState
                           period: _period,
                           onPeriod: _setPeriod,
                           metrics: [
-                            ('Ovaj period', _fmtKm(totalRevenue)),
+                            ('This period', _fmtKm(totalRevenue)),
                             (
-                              'Trend (2. pol.)',
+                              'Trend (2nd half)',
                               '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(1)}%',
                             ),
                             (
-                              'Najbolji dan',
+                              'Best day',
                               bestDay == null
                                   ? '—'
                                   : '${_fmtDate(bestDay.datum)}\n${_fmtKm(bestDay.prihod)}',
                             ),
                             (
-                              'Najslabiji dan',
+                              'Worst day',
                               worstDay == null
                                   ? '—'
                                   : '${_fmtDate(worstDay.datum)}\n${_fmtKm(worstDay.prihod)}',
@@ -335,7 +335,7 @@ class _ReportsError extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Pokušaj ponovo'),
+              label: const Text('Try again'),
             ),
           ],
         ),
@@ -368,7 +368,7 @@ class _ReportsHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Izvještaji i analitika',
+                'Reports & Analytics',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.55,
@@ -377,7 +377,7 @@ class _ReportsHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Prihod, popularnost usluga i top klijenti — podaci iz NuaSpa backend-a ($periodLabel).',
+                'Revenue, service popularity, and top clients — live data from the NuaSpa backend ($periodLabel).',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.58),
                 ),
@@ -395,7 +395,7 @@ class _ReportsHeader extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Tooltip(
-          message: 'Preuzmi PDF — Top 5 usluga',
+          message: 'Download PDF — Top 5 services',
           child: FilledButton.icon(
             onPressed: exporting ? null : onExport,
             icon: exporting
@@ -405,7 +405,7 @@ class _ReportsHeader extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.picture_as_pdf_outlined),
-            label: Text(exporting ? 'Izvoz…' : 'PDF izvještaj'),
+            label: Text(exporting ? 'Exporting…' : 'PDF Report'),
           ),
         ),
       ],
@@ -573,7 +573,7 @@ class _RevenueChartCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Prihod kroz vrijeme',
+                    'Revenue Over Time',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                       color: const Color(0xFFF5F3FA),
@@ -604,7 +604,7 @@ class _RevenueChartCard extends StatelessWidget {
               child: values.isEmpty
                   ? Center(
                       child: Text(
-                        'Nema uplata u odabranom periodu.',
+                        'No payments in the selected period.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.55),
                         ),
@@ -845,7 +845,7 @@ class _RevenueByServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Prihod po usluzi',
+            'Revenue by Service',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w900,
               color: const Color(0xFFF5F3FA),
@@ -854,7 +854,7 @@ class _RevenueByServiceCard extends StatelessWidget {
           const SizedBox(height: 18),
           if (items.isEmpty)
             Text(
-              'Nema podataka za odabrani period.',
+              'No data for the selected period.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.white.withValues(alpha: 0.55),
               ),
@@ -903,7 +903,7 @@ class _TopSpendersCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Top klijenti',
+            'Top Clients',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w900,
               color: const Color(0xFFF5F3FA),
@@ -912,7 +912,7 @@ class _TopSpendersCard extends StatelessWidget {
           const SizedBox(height: 16),
           if (spenders.isEmpty)
             Text(
-              'Nema uplata od klijenata u periodu.',
+              'No client payments in the selected period.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.white.withValues(alpha: 0.55),
               ),
@@ -923,7 +923,7 @@ class _TopSpendersCard extends StatelessWidget {
                 rank: i + 1,
                 spender: _Spender(
                   spenders[i].imePrezime,
-                  '${spenders[i].brojPosjeta} posjeta',
+                  '${spenders[i].brojPosjeta} visits',
                   _fmtKm(spenders[i].ukupnoPotroseno),
                 ),
               ),
@@ -951,7 +951,7 @@ class _RevenueBreakdownTable extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Raspodjela prihoda po uslugama',
+            'Revenue Breakdown by Service',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
               color: const Color(0xFFF5F3FA),
@@ -964,7 +964,7 @@ class _RevenueBreakdownTable extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Text(
-                'Nema podataka za tablicu.',
+                'No data for the table.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.55),
                 ),
@@ -977,7 +977,7 @@ class _RevenueBreakdownTable extends StatelessWidget {
                   s.naziv,
                   s.prihod.toStringAsFixed(0),
                   total > 0 ? s.prihod / total : 0,
-                  '${s.brojRezervacija} uplata',
+                  '${s.brojRezervacija} payments',
                 ),
               ),
         ],
@@ -998,11 +998,11 @@ class _BreakdownHeader extends StatelessWidget {
     );
     return Row(
       children: [
-        Expanded(flex: 2, child: Text('USLUGA', style: style)),
-        Expanded(child: Text('PRIHOD (KM)', style: style)),
-        Expanded(flex: 2, child: Text('% UKUPNO', style: style)),
+        Expanded(flex: 2, child: Text('SERVICE', style: style)),
+        Expanded(child: Text('REVENUE (KM)', style: style)),
+        Expanded(flex: 2, child: Text('% OF TOTAL', style: style)),
         Expanded(
-          child: Text('UPLATE', textAlign: TextAlign.right, style: style),
+          child: Text('PAYMENTS', textAlign: TextAlign.right, style: style),
         ),
       ],
     );
