@@ -40,7 +40,7 @@ class AuthInterceptor extends Interceptor {
       await _storage.delete(key: 'jwt_token');
       AuthEvents.instance.emit(
         const AuthEventForceLogout(
-          message: 'Sesija je istekla. Prijavite se ponovo.',
+          message: 'Your session has expired. Please sign in again.',
         ),
       );
     }

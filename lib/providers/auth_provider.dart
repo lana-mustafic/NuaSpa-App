@@ -29,7 +29,7 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider() {
     _authEventsSub = AuthEvents.instance.stream.listen((event) async {
       if (event is AuthEventForceLogout) {
-        _infoMessage = event.message ?? 'Prijavite se ponovo.';
+        _infoMessage = event.message ?? 'Please sign in again.';
         await logout();
       }
     });
