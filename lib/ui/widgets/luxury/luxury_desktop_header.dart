@@ -109,7 +109,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
               children: [
                 Text(
                   isRevenue
-                      ? 'Revenue Analytics'
+                      ? 'Reports & Analytics'
                       : isAppointments
                       ? 'Appointments'
                       : isCalendar
@@ -131,7 +131,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 SizedBox(height: compact ? 2 : 4),
                 Text(
                   isRevenue
-                      ? "Track your spa's financial performance and insights."
+                      ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar

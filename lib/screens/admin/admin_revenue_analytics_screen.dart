@@ -203,14 +203,13 @@ class _AdminRevenueAnalyticsScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _ReportsHeader(
-                          periodLabel: periodLabel,
+                        _ReportsActionsBar(
                           rangeText:
                               '${_fmtDate(data.from)} — ${_fmtDate(data.to)}',
                           exporting: _exporting,
                           onExport: _exportPdf,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         _KpiGrid(
                           cards: [
                             _KpiSpec(
@@ -344,15 +343,13 @@ class _ReportsError extends StatelessWidget {
   }
 }
 
-class _ReportsHeader extends StatelessWidget {
-  const _ReportsHeader({
-    required this.periodLabel,
+class _ReportsActionsBar extends StatelessWidget {
+  const _ReportsActionsBar({
     required this.rangeText,
     required this.exporting,
     required this.onExport,
   });
 
-  final String periodLabel;
   final String rangeText;
   final bool exporting;
   final VoidCallback onExport;
@@ -361,39 +358,21 @@ class _ReportsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Reports & Analytics',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.55,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Revenue, service popularity, and top clients — live data from the NuaSpa backend ($periodLabel).',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.58),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                rangeText,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+        Icon(
+          Icons.date_range_outlined,
+          size: 18,
+          color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.9),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          rangeText,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.9),
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(width: 12),
+        const Spacer(),
         Tooltip(
           message: 'Download PDF — Top 5 services',
           child: FilledButton.icon(
