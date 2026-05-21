@@ -609,8 +609,8 @@ class _FilterBar extends StatelessWidget {
                 therapistPill,
                 servicePill,
                 statusPill,
-                _ViewSwitcher(value: view, onChanged: onViewChanged),
                 newBtn,
+                _ViewSwitcher(value: view, onChanged: onViewChanged),
               ],
             );
           }
@@ -624,9 +624,9 @@ class _FilterBar extends StatelessWidget {
               const SizedBox(width: gap),
               statusPill,
               const SizedBox(width: 16),
-              _ViewSwitcher(value: view, onChanged: onViewChanged),
-              const Spacer(),
               newBtn,
+              const Spacer(),
+              _ViewSwitcher(value: view, onChanged: onViewChanged),
             ],
           );
         },
