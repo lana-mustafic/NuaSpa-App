@@ -891,14 +891,16 @@ class ApiService {
     }
   }
 
-  Future<void> downloadReport() async {
+  Future<bool> downloadReport() async {
     try {
       final directory = await getApplicationDocumentsDirectory();
       final filePath = '${directory.path}/izvjestaj_top_usluge.pdf';
       await _dio.download('Izvjestaj/top-usluge', filePath);
       await OpenFile.open(filePath);
+      return true;
     } catch (e) {
       debugPrint('Greška pri downloadu: $e');
+      return false;
     }
   }
 

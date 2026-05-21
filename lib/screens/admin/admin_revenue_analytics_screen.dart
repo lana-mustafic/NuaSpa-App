@@ -3,77 +3,410 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api/services/api_service.dart';
+import '../../models/admin/admin_kpi.dart';
+import '../../models/admin/revenue_point.dart';
+import '../../models/admin/service_popularity.dart';
+import '../../models/admin/top_spender.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 
-class AdminRevenueAnalyticsScreen extends StatelessWidget {
+enum _ReportPeriod { days7, days30, days90 }
+
+String _fmtKm(num v) {
+  final d = v.toDouble();
+  if (d == d.roundToDouble()) return '${d.round()} KM';
+  return '${d.toStringAsFixed(2)} KM';
+}
+
+String _fmtDate(DateTime d) => '${d.day}.${d.month}.${d.year}';
+
+String _fmtShort(DateTime d) => '${d.day}.${d.month}.';
+
+class _ReportsData {
+  const _ReportsData({
+    required this.kpi,
+    required this.revenue,
+    required this.popularity,
+    required this.spenders,
+    required this.from,
+    required this.to,
+  });
+
+  final AdminKpi? kpi;
+  final List<RevenuePoint> revenue;
+  final List<ServicePopularity> popularity;
+  final List<TopSpender> spenders;
+  final DateTime from;
+  final DateTime to;
+}
+
+/// Admin Reports hub — live data from `api/Izvjestaj/*`.
+class AdminRevenueAnalyticsScreen extends StatefulWidget {
   const AdminRevenueAnalyticsScreen({super.key});
 
-  static const _revenue = [
-    2800.0,
-    2150.0,
-    3900.0,
-    4300.0,
-    5200.0,
-    6100.0,
-    7850.0,
-    6900.0,
-    8200.0,
-    7450.0,
-    9100.0,
-    8750.0,
-    9800.0,
-    8650.0,
-  ];
+  @override
+  State<AdminRevenueAnalyticsScreen> createState() =>
+      _AdminRevenueAnalyticsScreenState();
+}
+
+class _AdminRevenueAnalyticsScreenState
+    extends State<AdminRevenueAnalyticsScreen> {
+  final ApiService _api = ApiService();
+  _ReportPeriod _period = _ReportPeriod.days30;
+  Future<_ReportsData>? _future;
+  bool _exporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  (DateTime from, DateTime to) _rangeFor(_ReportPeriod p) {
+    final to = _dayOnly(DateTime.now());
+    final days = switch (p) {
+      _ReportPeriod.days7 => 6,
+      _ReportPeriod.days30 => 29,
+      _ReportPeriod.days90 => 89,
+    };
+    return (to.subtract(Duration(days: days)), to);
+  }
+
+  void _reload() {
+    final (from, to) = _rangeFor(_period);
+    setState(() {
+      _future = () async {
+        final results = await Future.wait([
+          _api.getAdminKpis(date: to),
+          _api.getRevenueSeries(from: from, to: to),
+          _api.getServicePopularity(from: from, to: to, take: 8),
+          _api.getTopSpenders(from: from, to: to, take: 8),
+        ]);
+        return _ReportsData(
+          kpi: results[0] as AdminKpi?,
+          revenue: results[1] as List<RevenuePoint>,
+          popularity: results[2] as List<ServicePopularity>,
+          spenders: results[3] as List<TopSpender>,
+          from: from,
+          to: to,
+        );
+      }();
+    });
+  }
+
+  void _setPeriod(_ReportPeriod p) {
+    if (_period == p) return;
+    setState(() => _period = p);
+    _reload();
+  }
+
+  Future<void> _exportPdf() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final ok = await _api.downloadReport();
+    if (!mounted) return;
+    setState(() => _exporting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'PDF izvještaj (Top 5 usluga) je preuzet i otvoren.'
+              : 'Izvoz PDF nije uspio. Provjerite backend i prijavu.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        width: 420,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        const Positioned(
-          top: 18,
-          right: 120,
-          child: _AmbientGlow(size: 310, color: Color(0x267B4DFF)),
-        ),
-        const Positioned(
-          left: 120,
-          bottom: 30,
-          child: _AmbientGlow(size: 260, color: Color(0x14D4AF7A)),
-        ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(28, 12, 22, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _KpiGrid(),
-                    const SizedBox(height: 22),
-                    _RevenueChartCard(values: _revenue),
-                    const SizedBox(height: 22),
-                    const _RevenueBreakdownTable(),
-                    const SizedBox(height: 80),
-                  ],
-                ),
-              ),
+    return FutureBuilder<_ReportsData>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(
-              width: 356,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(0, 12, 28, 32),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _RevenueByServiceCard(),
-                    SizedBox(height: 18),
-                    _TopSpendersCard(),
-                  ],
+          );
+        }
+
+        if (snap.hasError) {
+          return _ReportsError(
+            message: 'Nije moguće učitati izvještaje.',
+            onRetry: _reload,
+          );
+        }
+
+        final data = snap.data;
+        if (data == null) {
+          return _ReportsError(message: 'Nema podataka.', onRetry: _reload);
+        }
+
+        final rev = data.revenue;
+        final totalRevenue = rev.fold<double>(0, (s, p) => s + p.prihod);
+        final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojRezervacija);
+        final avgTicket = totalPayments > 0
+            ? totalRevenue / totalPayments
+            : 0.0;
+
+        final chartValues = rev.map((p) => p.prihod).toList();
+        final spark = chartValues.length <= 14
+            ? chartValues
+            : chartValues.sublist(chartValues.length - 14);
+
+        RevenuePoint? bestDay;
+        RevenuePoint? worstDay;
+        for (final p in rev) {
+          if (p.prihod <= 0) continue;
+          if (bestDay == null || p.prihod > bestDay.prihod) bestDay = p;
+          if (worstDay == null || p.prihod < worstDay.prihod) worstDay = p;
+        }
+
+        final mid = rev.length ~/ 2;
+        final firstHalf = rev.take(mid).fold<double>(0, (s, p) => s + p.prihod);
+        final secondHalf = rev.skip(mid).fold<double>(0, (s, p) => s + p.prihod);
+        final changePct = firstHalf > 0
+            ? ((secondHalf - firstHalf) / firstHalf * 100)
+            : 0.0;
+
+        final periodLabel = switch (_period) {
+          _ReportPeriod.days7 => '7 dana',
+          _ReportPeriod.days30 => '30 dana',
+          _ReportPeriod.days90 => '90 dana',
+        };
+
+        return Stack(
+          children: [
+            const Positioned(
+              top: 18,
+              right: 120,
+              child: _AmbientGlow(size: 310, color: Color(0x267B4DFF)),
+            ),
+            const Positioned(
+              left: 120,
+              bottom: 30,
+              child: _AmbientGlow(size: 260, color: Color(0x14D4AF7A)),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(28, 12, 22, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ReportsHeader(
+                          periodLabel: periodLabel,
+                          rangeText:
+                              '${_fmtDate(data.from)} — ${_fmtDate(data.to)}',
+                          exporting: _exporting,
+                          onExport: _exportPdf,
+                        ),
+                        const SizedBox(height: 20),
+                        _KpiGrid(
+                          cards: [
+                            _KpiSpec(
+                              title: 'Ukupni prihod',
+                              value: _fmtKm(totalRevenue),
+                              subtitle: 'Period: $periodLabel',
+                              icon: Icons.attach_money_rounded,
+                              values: spark.isEmpty ? [totalRevenue] : spark,
+                            ),
+                            _KpiSpec(
+                              title: 'Uplate',
+                              value: '$totalPayments',
+                              subtitle: 'Broj uplata u periodu',
+                              icon: Icons.payments_outlined,
+                              values: rev
+                                  .map((p) => p.brojRezervacija.toDouble())
+                                  .toList(),
+                            ),
+                            _KpiSpec(
+                              title: 'Prosječan iznos',
+                              value: _fmtKm(avgTicket),
+                              subtitle: 'Po uplati u periodu',
+                              icon: Icons.account_balance_wallet_outlined,
+                              values: rev
+                                  .map((p) => p.brojRezervacija > 0
+                                      ? p.prihod / p.brojRezervacija
+                                      : 0.0)
+                                  .toList(),
+                            ),
+                            _KpiSpec(
+                              title: 'Prihod danas',
+                              value: _fmtKm(data.kpi?.prihodDanas ?? 0),
+                              subtitle:
+                                  '${data.kpi?.rezervacijeDanas ?? 0} rezervacija danas',
+                              icon: Icons.today_outlined,
+                              values: rev.length >= 7
+                                  ? rev
+                                      .sublist(rev.length - 7)
+                                      .map((p) => p.prihod)
+                                      .toList()
+                                  : spark,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        _RevenueChartCard(
+                          points: rev,
+                          period: _period,
+                          onPeriod: _setPeriod,
+                          metrics: [
+                            ('Ovaj period', _fmtKm(totalRevenue)),
+                            (
+                              'Trend (2. pol.)',
+                              '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(1)}%',
+                            ),
+                            (
+                              'Najbolji dan',
+                              bestDay == null
+                                  ? '—'
+                                  : '${_fmtDate(bestDay.datum)}\n${_fmtKm(bestDay.prihod)}',
+                            ),
+                            (
+                              'Najslabiji dan',
+                              worstDay == null
+                                  ? '—'
+                                  : '${_fmtDate(worstDay.datum)}\n${_fmtKm(worstDay.prihod)}',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        _RevenueBreakdownTable(services: data.popularity),
+                        const SizedBox(height: 80),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(
+                  width: 356,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(0, 12, 28, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _RevenueByServiceCard(services: data.popularity),
+                        const SizedBox(height: 18),
+                        _TopSpendersCard(spenders: data.spenders),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _ReportsError extends StatelessWidget {
+  const _ReportsError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: LuxuryGlassPanel(
+        borderRadius: 24,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Pokušaj ponovo'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportsHeader extends StatelessWidget {
+  const _ReportsHeader({
+    required this.periodLabel,
+    required this.rangeText,
+    required this.exporting,
+    required this.onExport,
+  });
+
+  final String periodLabel;
+  final String rangeText;
+  final bool exporting;
+  final VoidCallback onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Izvještaji i analitika',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.55,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Prihod, popularnost usluga i top klijenti — podaci iz NuaSpa backend-a ($periodLabel).',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.58),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                rangeText,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.85),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Tooltip(
+          message: 'Preuzmi PDF — Top 5 usluga',
+          child: FilledButton.icon(
+            onPressed: exporting ? null : onExport,
+            icon: exporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            label: Text(exporting ? 'Izvoz…' : 'PDF izvještaj'),
+          ),
         ),
       ],
     );
@@ -81,41 +414,12 @@ class AdminRevenueAnalyticsScreen extends StatelessWidget {
 }
 
 class _KpiGrid extends StatelessWidget {
-  const _KpiGrid();
+  const _KpiGrid({required this.cards});
+
+  final List<_KpiSpec> cards;
 
   @override
   Widget build(BuildContext context) {
-    final cards = const [
-      _KpiSpec(
-        title: 'Total Revenue',
-        value: '12,450 KM',
-        subtitle: '+18.5% vs Apr 12 — May 11, 2025',
-        icon: Icons.attach_money_rounded,
-        values: [3, 4.2, 4.0, 5.8, 6.4, 7.9, 8.8],
-      ),
-      _KpiSpec(
-        title: 'Revenue from Services',
-        value: '9,870 KM',
-        subtitle: '+14.2% service revenue',
-        icon: Icons.spa_outlined,
-        values: [2.8, 3.5, 4.4, 4.2, 5.8, 6.7, 7.2],
-      ),
-      _KpiSpec(
-        title: 'Revenue from Packages',
-        value: '2,180 KM',
-        subtitle: '+22.8% package sales',
-        icon: Icons.card_giftcard_outlined,
-        values: [1.2, 1.5, 1.4, 1.8, 2.0, 2.7, 3.0],
-      ),
-      _KpiSpec(
-        title: 'Avg. Order Value',
-        value: '145 KM',
-        subtitle: '+6.1% average ticket',
-        icon: Icons.account_balance_wallet_outlined,
-        values: [1.8, 1.9, 2.2, 2.1, 2.35, 2.48, 2.56],
-      ),
-    ];
-
     return LayoutBuilder(
       builder: (context, c) {
         final cols = c.maxWidth >= 1040
@@ -148,6 +452,12 @@ class _RevenueKpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final spark = spec.values.isEmpty
+        ? const [0.0, 0.0]
+        : (spec.values.length <= 14
+              ? spec.values
+              : spec.values.sublist(spec.values.length - 14));
+
     return LuxuryGlassPanel(
       borderRadius: 24,
       blurSigma: 24,
@@ -174,14 +484,6 @@ class _RevenueKpiCard extends StatelessWidget {
                         alpha: 0.26,
                       ),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                          alpha: 0.18,
-                        ),
-                        blurRadius: 18,
-                      ),
-                    ],
                   ),
                   child: Icon(
                     spec.icon,
@@ -193,7 +495,7 @@ class _RevenueKpiCard extends StatelessWidget {
                 SizedBox(
                   width: 88,
                   height: 42,
-                  child: _MiniLine(values: spec.values),
+                  child: _MiniLine(values: spark),
                 ),
               ],
             ),
@@ -220,8 +522,8 @@ class _RevenueKpiCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: const Color(0xFF4ADE80),
-                fontWeight: FontWeight.w800,
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -232,15 +534,30 @@ class _RevenueKpiCard extends StatelessWidget {
 }
 
 class _RevenueChartCard extends StatelessWidget {
-  const _RevenueChartCard({required this.values});
+  const _RevenueChartCard({
+    required this.points,
+    required this.period,
+    required this.onPeriod,
+    required this.metrics,
+  });
 
-  final List<double> values;
+  final List<RevenuePoint> points;
+  final _ReportPeriod period;
+  final void Function(_ReportPeriod) onPeriod;
+  final List<(String, String)> metrics;
 
   @override
   Widget build(BuildContext context) {
+    final values = points.map((p) => p.prihod).toList();
+    final maxVal = values.isEmpty ? 1.0 : values.reduce(math.max);
+    final minVal = 0.0;
+    final maxY = maxVal <= 0 ? 100.0 : maxVal * 1.15;
+    final interval = maxY <= 500 ? 100.0 : (maxY / 5).ceilToDouble();
+
     final spots = [
       for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
     ];
+
     return LuxuryGlassPanel(
       borderRadius: 24,
       blurSigma: 28,
@@ -256,147 +573,167 @@ class _RevenueChartCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Revenue Over Time',
+                    'Prihod kroz vrijeme',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                       color: const Color(0xFFF5F3FA),
                     ),
                   ),
                 ),
-                const _RangePill(label: 'Daily', active: true),
+                _RangePill(
+                  label: '7d',
+                  active: period == _ReportPeriod.days7,
+                  onTap: () => onPeriod(_ReportPeriod.days7),
+                ),
                 const SizedBox(width: 8),
-                const _RangePill(label: 'Weekly'),
+                _RangePill(
+                  label: '30d',
+                  active: period == _ReportPeriod.days30,
+                  onTap: () => onPeriod(_ReportPeriod.days30),
+                ),
                 const SizedBox(width: 8),
-                const _RangePill(label: 'Monthly'),
-                const SizedBox(width: 8),
-                const _IconGlassButton(icon: Icons.more_horiz_rounded),
+                _RangePill(
+                  label: '90d',
+                  active: period == _ReportPeriod.days90,
+                  onTap: () => onPeriod(_ReportPeriod.days90),
+                ),
               ],
             ),
             const SizedBox(height: 18),
             Expanded(
-              child: LineChart(
-                LineChartData(
-                  minY: 2000,
-                  maxY: 10000,
-                  gridData: FlGridData(
-                    drawVerticalLine: false,
-                    horizontalInterval: 2000,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: Colors.white.withValues(alpha: 0.055),
-                      strokeWidth: 0.8,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    topTitles: const AxisTitles(),
-                    rightTitles: const AxisTitles(),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 38,
-                        interval: 2000,
-                        getTitlesWidget: (v, _) => Text(
-                          '${(v / 1000).round()}K',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.42),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+              child: values.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Nema uplata u odabranom periodu.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    )
+                  : LineChart(
+                      LineChartData(
+                        minY: minVal,
+                        maxY: maxY,
+                        gridData: FlGridData(
+                          drawVerticalLine: false,
+                          horizontalInterval: interval,
+                          getDrawingHorizontalLine: (_) => FlLine(
+                            color: Colors.white.withValues(alpha: 0.055),
+                            strokeWidth: 0.8,
                           ),
                         ),
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 28,
-                        interval: 4,
-                        getTitlesWidget: (v, _) {
-                          final labels = {
-                            0: 'May 12',
-                            4: 'May 20',
-                            8: 'May 28',
-                            12: 'Jun 9',
-                          };
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              labels[v.round()] ?? '',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.42),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          topTitles: const AxisTitles(),
+                          rightTitles: const AxisTitles(),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 42,
+                              interval: interval,
+                              getTitlesWidget: (v, _) => Text(
+                                v >= 1000
+                                    ? '${(v / 1000).toStringAsFixed(v >= 10000 ? 0 : 1)}k'
+                                    : v.toStringAsFixed(0),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.42),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  lineTouchData: LineTouchData(
-                    enabled: true,
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipItems: (items) => items
-                          .map(
-                            (item) => LineTooltipItem(
-                              'May 27, 2025\n${item.y.toStringAsFixed(0)} KM',
-                              const TextStyle(
-                                color: Color(0xFFF5F3FA),
-                                fontWeight: FontWeight.w800,
-                                height: 1.45,
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: points.length >= 2,
+                              reservedSize: 28,
+                              interval: math.max(1, (points.length / 4).floor())
+                                  .toDouble(),
+                              getTitlesWidget: (v, _) {
+                                final i = v.round();
+                                if (i < 0 || i >= points.length) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    _fmtShort(points[i].datum),
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.42,
+                                      ),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        lineTouchData: LineTouchData(
+                          enabled: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipItems: (items) => items.map((item) {
+                              final idx = item.spotIndex;
+                              final date = idx >= 0 && idx < points.length
+                                  ? _fmtDate(points[idx].datum)
+                                  : '';
+                              return LineTooltipItem(
+                                '$date\n${item.y.toStringAsFixed(0)} KM',
+                                const TextStyle(
+                                  color: Color(0xFFF5F3FA),
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.45,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: spots,
+                            isCurved: true,
+                            barWidth: 3.2,
+                            isStrokeCapRound: true,
+                            dotData: FlDotData(
+                              show: points.length <= 31,
+                              getDotPainter: (_, __, ___, ____) =>
+                                  FlDotCirclePainter(
+                                    radius: 3.2,
+                                    color: Colors.white.withValues(
+                                      alpha: 0.86,
+                                    ),
+                                    strokeWidth: 4,
+                                    strokeColor: NuaLuxuryTokens.softPurpleGlow
+                                        .withValues(alpha: 0.36),
+                                  ),
+                            ),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF7B4DFF), Color(0xFF9D6BFF)],
+                            ),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  NuaLuxuryTokens.softPurpleGlow.withValues(
+                                    alpha: 0.22,
+                                  ),
+                                  NuaLuxuryTokens.softPurpleGlow.withValues(
+                                    alpha: 0.015,
+                                  ),
+                                ],
                               ),
                             ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      barWidth: 3.2,
-                      isStrokeCapRound: true,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, bar, index) =>
-                            FlDotCirclePainter(
-                              radius: 3.2,
-                              color: Colors.white.withValues(alpha: 0.86),
-                              strokeWidth: 4,
-                              strokeColor: NuaLuxuryTokens.softPurpleGlow
-                                  .withValues(alpha: 0.36),
-                            ),
-                      ),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF7B4DFF), Color(0xFF9D6BFF)],
-                      ),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            NuaLuxuryTokens.softPurpleGlow.withValues(
-                              alpha: 0.22,
-                            ),
-                            NuaLuxuryTokens.softPurpleGlow.withValues(
-                              alpha: 0.015,
-                            ),
-                          ],
-                        ),
-                      ),
-                      shadow: Shadow(
-                        color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                          alpha: 0.55,
-                        ),
-                        blurRadius: 18,
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(height: 18),
-            const _ChartMetrics(),
+            _ChartMetrics(metrics: metrics),
           ],
         ),
       ),
@@ -405,23 +742,20 @@ class _RevenueChartCard extends StatelessWidget {
 }
 
 class _ChartMetrics extends StatelessWidget {
-  const _ChartMetrics();
+  const _ChartMetrics({required this.metrics});
+
+  final List<(String, String)> metrics;
 
   @override
   Widget build(BuildContext context) {
-    final metrics = const [
-      ('This Period', '12,450 KM'),
-      ('Previous Period', '10,510 KM'),
-      ('Change', '18.5% ↑'),
-      ('Best Day', 'May 27, 2025\n7,850 KM'),
-      ('Worst Day', 'May 15, 2025\n2,150 KM'),
-    ];
-
     return Row(
       children: [
         for (var i = 0; i < metrics.length; i++) ...[
           Expanded(
-            child: _MetricText(label: metrics[i].$1, value: metrics[i].$2),
+            child: _MetricText(
+              label: metrics[i].$1,
+              value: metrics[i].$2,
+            ),
           ),
           if (i != metrics.length - 1)
             Container(
@@ -471,21 +805,35 @@ class _MetricText extends StatelessWidget {
 }
 
 class _RevenueByServiceCard extends StatelessWidget {
-  const _RevenueByServiceCard();
+  const _RevenueByServiceCard({required this.services});
+
+  static const _colors = [
+    Color(0xFF7B4DFF),
+    Color(0xFF9D6BFF),
+    Color(0xFFC8B6E8),
+    Color(0xFFD4AF7A),
+    Color(0xFF4ADE80),
+    Color(0xFF5EEAD4),
+    Color(0xFFFF8A80),
+    Color(0xFF60A5FA),
+  ];
+
+  final List<ServicePopularity> services;
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
-      _ServiceRevenue('Swedish Massage', '34%', '4,230 KM', Color(0xFF7B4DFF)),
-      _ServiceRevenue(
-        'Deep Tissue Massage',
-        '24%',
-        '2,980 KM',
-        Color(0xFF9D6BFF),
-      ),
-      _ServiceRevenue('Facials', '18%', '2,240 KM', Color(0xFFC8B6E8)),
-      _ServiceRevenue('Aromatherapy', '14%', '1,740 KM', Color(0xFFD4AF7A)),
-      _ServiceRevenue('Other Services', '10%', '1,260 KM', Color(0xFF4ADE80)),
+    final total = services.fold<double>(0, (s, x) => s + x.prihod);
+    final items = [
+      for (var i = 0; i < services.length; i++)
+        _ServiceRevenue(
+          services[i].naziv,
+          total > 0
+              ? '${(services[i].prihod / total * 100).round()}%'
+              : '0%',
+          _fmtKm(services[i].prihod),
+          _colors[i % _colors.length],
+          total > 0 ? services[i].prihod / total * 100 : 0,
+        ),
     ];
 
     return LuxuryGlassPanel(
@@ -497,33 +845,42 @@ class _RevenueByServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Revenue by Service',
+            'Prihod po usluzi',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w900,
               color: const Color(0xFFF5F3FA),
             ),
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 200,
-            child: PieChart(
-              PieChartData(
-                centerSpaceRadius: 58,
-                sectionsSpace: 3,
-                sections: [
-                  for (final item in items)
-                    PieChartSectionData(
-                      value: double.parse(item.percent.replaceAll('%', '')),
-                      color: item.color,
-                      radius: 34,
-                      showTitle: false,
-                    ),
-                ],
+          if (items.isEmpty)
+            Text(
+              'Nema podataka za odabrani period.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            )
+          else ...[
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  centerSpaceRadius: 58,
+                  sectionsSpace: 3,
+                  sections: [
+                    for (final item in items)
+                      PieChartSectionData(
+                        value: item.chartValue,
+                        color: item.color,
+                        radius: 34,
+                        showTitle: false,
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          for (final item in items) _ServiceRevenueRow(item: item),
+            const SizedBox(height: 16),
+            for (final item in items) _ServiceRevenueRow(item: item),
+          ],
         ],
       ),
     );
@@ -531,18 +888,12 @@ class _RevenueByServiceCard extends StatelessWidget {
 }
 
 class _TopSpendersCard extends StatelessWidget {
-  const _TopSpendersCard();
+  const _TopSpendersCard({required this.spenders});
+
+  final List<TopSpender> spenders;
 
   @override
   Widget build(BuildContext context) {
-    final spenders = const [
-      _Spender('Sarah Johnson', '12 appointments', '1,850 KM'),
-      _Spender('Marko Petrović', '8 appointments', '1,420 KM'),
-      _Spender('Emma Wilson', '10 appointments', '1,250 KM'),
-      _Spender('Ana Kovač', '7 appointments', '980 KM'),
-      _Spender('Ivana Babić', '6 appointments', '875 KM'),
-    ];
-
     return LuxuryGlassPanel(
       borderRadius: 24,
       blurSigma: 26,
@@ -551,29 +902,31 @@ class _TopSpendersCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Top Spenders',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFFF5F3FA),
-                  ),
-                ),
-              ),
-              Text(
-                'View All',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: NuaLuxuryTokens.champagneGold,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
+          Text(
+            'Top klijenti',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFFF5F3FA),
+            ),
           ),
           const SizedBox(height: 16),
-          for (var i = 0; i < spenders.length; i++)
-            _SpenderRow(rank: i + 1, spender: spenders[i]),
+          if (spenders.isEmpty)
+            Text(
+              'Nema uplata od klijenata u periodu.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            )
+          else
+            for (var i = 0; i < spenders.length; i++)
+              _SpenderRow(
+                rank: i + 1,
+                spender: _Spender(
+                  spenders[i].imePrezime,
+                  '${spenders[i].brojPosjeta} posjeta',
+                  _fmtKm(spenders[i].ukupnoPotroseno),
+                ),
+              ),
         ],
       ),
     );
@@ -581,26 +934,24 @@ class _TopSpendersCard extends StatelessWidget {
 }
 
 class _RevenueBreakdownTable extends StatelessWidget {
-  const _RevenueBreakdownTable();
+  const _RevenueBreakdownTable({required this.services});
+
+  final List<ServicePopularity> services;
 
   @override
   Widget build(BuildContext context) {
-    final rows = const [
-      _Breakdown('Services', '9,870', 0.79, '+14.2%', true),
-      _Breakdown('Packages', '2,180', 0.18, '+22.8%', true),
-      _Breakdown('Gift Cards', '280', 0.02, '-3.4%', false),
-      _Breakdown('Other', '120', 0.01, '+1.8%', true),
-    ];
+    final total = services.fold<double>(0, (s, x) => s + x.prihod);
+
     return LuxuryGlassPanel(
       borderRadius: 24,
       blurSigma: 24,
       opacity: 0.36,
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Revenue Breakdown',
+            'Raspodjela prihoda po uslugama',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
               color: const Color(0xFFF5F3FA),
@@ -609,7 +960,26 @@ class _RevenueBreakdownTable extends StatelessWidget {
           const SizedBox(height: 18),
           const _BreakdownHeader(),
           const SizedBox(height: 8),
-          for (final row in rows) _BreakdownRow(row: row),
+          if (services.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                'Nema podataka za tablicu.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
+            )
+          else
+            for (final s in services)
+              _BreakdownRow(
+                row: _Breakdown(
+                  s.naziv,
+                  s.prihod.toStringAsFixed(0),
+                  total > 0 ? s.prihod / total : 0,
+                  '${s.brojRezervacija} uplata',
+                ),
+              ),
         ],
       ),
     );
@@ -628,11 +998,11 @@ class _BreakdownHeader extends StatelessWidget {
     );
     return Row(
       children: [
-        Expanded(flex: 2, child: Text('CATEGORY', style: style)),
-        Expanded(child: Text('REVENUE (KM)', style: style)),
-        Expanded(flex: 2, child: Text('% OF TOTAL', style: style)),
+        Expanded(flex: 2, child: Text('USLUGA', style: style)),
+        Expanded(child: Text('PRIHOD (KM)', style: style)),
+        Expanded(flex: 2, child: Text('% UKUPNO', style: style)),
         Expanded(
-          child: Text('CHANGE', textAlign: TextAlign.right, style: style),
+          child: Text('UPLATE', textAlign: TextAlign.right, style: style),
         ),
       ],
     );
@@ -684,7 +1054,7 @@ class _BreakdownRow extends StatelessWidget {
                       value: row.percent,
                       minHeight: 8,
                       backgroundColor: Colors.white.withValues(alpha: 0.07),
-                      valueColor: AlwaysStoppedAnimation(
+                      valueColor: const AlwaysStoppedAnimation(
                         NuaLuxuryTokens.softPurpleGlow,
                       ),
                     ),
@@ -706,13 +1076,11 @@ class _BreakdownRow extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              row.change,
+              row.visits,
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: row.positive
-                    ? const Color(0xFF4ADE80)
-                    : const Color(0xFFFF5E7A),
-                fontWeight: FontWeight.w900,
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -729,12 +1097,14 @@ class _MiniLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (values.isEmpty) return const SizedBox.shrink();
     final minY = values.reduce(math.min);
     final maxY = values.reduce(math.max);
+    final pad = maxY == minY ? 1.0 : 0.0;
     return LineChart(
       LineChartData(
-        minY: minY,
-        maxY: maxY,
+        minY: minY - pad,
+        maxY: maxY + pad,
         gridData: const FlGridData(show: false),
         titlesData: const FlTitlesData(show: false),
         borderData: FlBorderData(show: false),
@@ -753,10 +1123,6 @@ class _MiniLine extends StatelessWidget {
               show: true,
               color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12),
             ),
-            shadow: Shadow(
-              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.5),
-              blurRadius: 10,
-            ),
           ),
         ],
       ),
@@ -765,53 +1131,45 @@ class _MiniLine extends StatelessWidget {
 }
 
 class _RangePill extends StatelessWidget {
-  const _RangePill({required this.label, this.active = false});
+  const _RangePill({
+    required this.label,
+    this.active = false,
+    required this.onTap,
+  });
 
   final String label;
   final bool active;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: active
-            ? NuaLuxuryTokens.softPurpleGlow
-            : Colors.white.withValues(alpha: 0.045),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active
-              ? NuaLuxuryTokens.softPurpleGlow
-              : Colors.white.withValues(alpha: 0.1),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: active
+                ? NuaLuxuryTokens.softPurpleGlow
+                : Colors.white.withValues(alpha: 0.045),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active
+                  ? NuaLuxuryTokens.softPurpleGlow
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: const Color(0xFFF5F3FA),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: const Color(0xFFF5F3FA),
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _IconGlassButton extends StatelessWidget {
-  const _IconGlassButton({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Icon(icon, size: 19),
     );
   }
 }
@@ -833,12 +1191,6 @@ class _ServiceRevenueRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: item.color,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: item.color.withValues(alpha: 0.45),
-                  blurRadius: 8,
-                ),
-              ],
             ),
           ),
           const SizedBox(width: 10),
@@ -860,7 +1212,7 @@ class _ServiceRevenueRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 70,
+            width: 80,
             child: Text(
               item.revenue,
               textAlign: TextAlign.right,
@@ -1016,12 +1368,19 @@ class _KpiSpec {
 }
 
 class _ServiceRevenue {
-  const _ServiceRevenue(this.label, this.percent, this.revenue, this.color);
+  const _ServiceRevenue(
+    this.label,
+    this.percent,
+    this.revenue,
+    this.color,
+    this.chartValue,
+  );
 
   final String label;
   final String percent;
   final String revenue;
   final Color color;
+  final double chartValue;
 }
 
 class _Spender {
@@ -1037,13 +1396,11 @@ class _Breakdown {
     this.category,
     this.revenue,
     this.percent,
-    this.change,
-    this.positive,
+    this.visits,
   );
 
   final String category;
   final String revenue;
   final double percent;
-  final String change;
-  final bool positive;
+  final String visits;
 }
