@@ -112,7 +112,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   isRevenue
                       ? 'Reports & Analytics'
                       : isCommandCenter
-                      ? 'Dashboard'
+                      ? 'Good morning, Admin!'
                       : isAppointments
                       ? 'Appointments'
                       : isCalendar
@@ -136,7 +136,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   isRevenue
                       ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
                       : isCommandCenter
-                      ? 'Live overview of bookings, revenue, clients, payments, and reviews.'
+                      ? "Here's what's happening at NuaSpa today."
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar
@@ -160,7 +160,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: compact ? 12 : 22),
-          if (!isRevenue) ...[
+          if (!isRevenue && !isCommandCenter) ...[
             ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: compact ? 340 : 380,
