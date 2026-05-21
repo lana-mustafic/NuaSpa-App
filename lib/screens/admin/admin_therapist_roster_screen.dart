@@ -5,6 +5,7 @@ import '../../core/api/services/api_service.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/admin/therapist_kpi.dart';
 import '../../models/zaposlenik.dart';
+import '../../models/zaposlenik_status.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
@@ -69,7 +70,7 @@ class _AdminTherapistRosterScreenState
               s.isEmpty ||
               t.specializations.any((x) => x.toLowerCase().contains(s));
           final matchesStatus =
-              _status == 'All Status' || t.rosterStatus == _status;
+              _status == 'All Status' || t.employmentStatus.label == _status;
           return matchesSearch && matchesSpecialty && matchesStatus;
         }).toList();
         final maxPage = filtered.isEmpty
@@ -211,6 +212,7 @@ class _AdminTherapistRosterScreenState
     return _RosterTherapist(
       zaposlenik: therapist,
       name: '${therapist.ime} ${therapist.prezime}'.trim(),
+      employmentStatus: therapist.status,
       role: appointmentCount >= 20 ? 'Senior Therapist' : 'Therapist',
       rating: rating,
       reviews: appointmentCount,
@@ -375,9 +377,9 @@ class _TherapistActionBar extends StatelessWidget {
           value: status,
           values: const [
             'All Status',
-            'Available',
-            'Partially Booked',
-            'Offline',
+            'Active',
+            'Inactive',
+            'On Leave',
           ],
           onChanged: onStatusChanged,
         ),
@@ -706,7 +708,11 @@ class _TherapistProfile extends StatelessWidget {
                 width: 15,
                 height: 15,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6EE7B7),
+                  color: t.employmentStatus == ZaposlenikStatus.active
+                      ? const Color(0xFF6EE7B7)
+                      : t.employmentStatus == ZaposlenikStatus.onLeave
+                          ? const Color(0xFFE8C872)
+                          : const Color(0xFFF87171),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: NuaLuxuryTokens.deepIndigo,
@@ -740,11 +746,19 @@ class _TherapistProfile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                t.role,
+                '${t.role} · ${t.employmentStatus.label}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: NuaLuxuryTokens.lavenderWhisper.withValues(
                     alpha: 0.62,
                   ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                t.weekLoadLabel,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 11),
@@ -1207,6 +1221,7 @@ class _RosterTherapist {
   const _RosterTherapist({
     required this.zaposlenik,
     required this.name,
+    required this.employmentStatus,
     required this.role,
     required this.rating,
     required this.reviews,
@@ -1217,6 +1232,7 @@ class _RosterTherapist {
 
   final Zaposlenik zaposlenik;
   final String name;
+  final ZaposlenikStatus employmentStatus;
   final String role;
   final double? rating;
   final int reviews;
@@ -1224,14 +1240,14 @@ class _RosterTherapist {
   final List<DateTime> weekDays;
   final List<_AvailabilityStatus> weekStatuses;
 
-  String get rosterStatus {
+  String get weekLoadLabel {
     if (weekStatuses.every((x) => x == _AvailabilityStatus.available)) {
-      return 'Available';
+      return 'Open week';
     }
     if (weekStatuses.every((x) => x == _AvailabilityStatus.unavailable)) {
-      return 'Offline';
+      return 'Fully booked';
     }
-    return 'Partially Booked';
+    return 'Partially booked';
   }
 }
 

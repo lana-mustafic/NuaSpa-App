@@ -376,12 +376,35 @@ class _AdminAppointmentsManagementScreenState
   Future<void> _openCreate(_AppointmentsData data) async {
     final prefillZaposlenikId =
         context.read<DesktopNav>().takeAppointmentPrefillZaposlenikId();
-    final draft = await showDialog<_AdminAppointmentDraft>(
+    final draft = await showGeneralDialog<_AdminAppointmentDraft>(
       context: context,
-      builder: (_) => _AdminAppointmentCreateDialog(
-        data: data,
-        initialZaposlenikId: prefillZaposlenikId,
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: const SizedBox.expand(),
+            ),
+            FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: Center(
+                child: _AdminAppointmentCreateDialog(
+                  data: data,
+                  initialZaposlenikId: prefillZaposlenikId,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
     if (draft == null || !mounted) return;
     final created = await _api.createRezervacija(
@@ -2273,6 +2296,24 @@ class _AdminAppointmentCreateDialogState
   late int? _serviceId;
   late int? _therapistId;
 
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  bool get _canCreate =>
+      _clientId != null && _serviceId != null && _therapistId != null;
+
   @override
   void initState() {
     super.initState();
@@ -2287,95 +2328,340 @@ class _AdminAppointmentCreateDialogState
     }
   }
 
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('New Appointment'),
-    content: SizedBox(
-      width: 560,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DropdownButtonFormField<int>(
-            value: _clientId,
-            decoration: const InputDecoration(labelText: 'Client'),
-            items: [
-              for (final client in widget.data.clients)
-                DropdownMenuItem(
-                  value: client.id,
-                  child: Text(
-                    client.punoIme.isEmpty ? client.email : client.punoIme,
-                  ),
-                ),
-            ],
-            onChanged: (v) => setState(() => _clientId = v),
-          ),
-          const SizedBox(height: 12),
-          ListTile(
-            leading: const Icon(Icons.schedule_outlined),
-            title: Text(_dateTime.toLocal().toString().split('.').first),
-            subtitle: const Text('Date & time'),
-            onTap: _pickDateTime,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _serviceId,
-            decoration: const InputDecoration(labelText: 'Service'),
-            items: [
-              for (final s in widget.data.services)
-                DropdownMenuItem(
-                  value: s.id,
-                  child: Text('${s.naziv} · ${s.trajanjeMinuta} min'),
-                ),
-            ],
-            onChanged: (v) => setState(() => _serviceId = v),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _therapistId,
-            decoration: const InputDecoration(labelText: 'Therapist'),
-            items: [
-              for (final t in widget.data.therapists)
-                DropdownMenuItem(
-                  value: t.id,
-                  child: Text('${t.ime} ${t.prezime}'),
-                ),
-            ],
-            onChanged: (v) => setState(() => _therapistId = v),
-          ),
-          if (widget.data.clients.isEmpty ||
-              widget.data.services.isEmpty ||
-              widget.data.therapists.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 14),
+  String _fmtDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    final h = local.hour;
+    final hour12 = h % 12 == 0 ? 12 : h % 12;
+    final ampm = h >= 12 ? 'PM' : 'AM';
+    final min = local.minute.toString().padLeft(2, '0');
+    return '${_months[local.month - 1]} ${local.day}, ${local.year} at $hour12:$min $ampm';
+  }
+
+  String _clientLabel() {
+    if (_clientId == null) return 'Select a client';
+    for (final c in widget.data.clients) {
+      if (c.id == _clientId) {
+        final name = c.punoIme.isEmpty ? c.email : c.punoIme;
+        return name.isEmpty ? 'Client #${c.id}' : name;
+      }
+    }
+    return 'Select a client';
+  }
+
+  String _serviceLabel() {
+    if (_serviceId == null) return 'Select a service';
+    for (final s in widget.data.services) {
+      if (s.id == _serviceId) {
+        return '${s.naziv} • ${s.trajanjeMinuta} min';
+      }
+    }
+    return 'Select a service';
+  }
+
+  String _therapistLabel() {
+    if (_therapistId == null) return 'Select a therapist';
+    for (final t in widget.data.therapists) {
+      if (t.id == _therapistId) {
+        return '${t.ime} ${t.prezime}'.trim();
+      }
+    }
+    return 'Select a therapist';
+  }
+
+  Future<void> _pickFromList<T>({
+    required String title,
+    required List<({int id, String label})> options,
+    required int? currentId,
+    required ValueChanged<int> onPick,
+  }) async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: const Color(0xFF120A24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
-                'Clients, services and therapists must be loaded before creating an appointment.',
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _ApptUi.textPrimary,
+                ),
               ),
             ),
-        ],
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, i) {
+                  final o = options[i];
+                  final selected = o.id == currentId;
+                  return ListTile(
+                    title: Text(
+                      o.label,
+                      style: TextStyle(
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                        color: _ApptUi.textPrimary,
+                      ),
+                    ),
+                    trailing: selected
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: _ApptUi.purple2,
+                          )
+                        : null,
+                    onTap: () => Navigator.pop(ctx, o.id),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed:
-            _clientId == null || _serviceId == null || _therapistId == null
-            ? null
-            : () => Navigator.pop(
-                context,
-                _AdminAppointmentDraft(
-                  clientId: _clientId!,
-                  dateTime: _dateTime,
-                  serviceId: _serviceId!,
-                  therapistId: _therapistId!,
+    );
+    if (picked != null) onPick(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final missingData = widget.data.clients.isEmpty ||
+        widget.data.services.isEmpty ||
+        widget.data.therapists.isEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 760, maxWidth: 820),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xEB120A24),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _ApptUi.purple.withValues(alpha: 0.25),
+                    blurRadius: 90,
+                    offset: const Offset(0, 24),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(42, 36, 42, 36),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: const LinearGradient(
+                              colors: [_ApptUi.purple, _ApptUi.purple2],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _ApptUi.purple.withValues(alpha: 0.45),
+                                blurRadius: 28,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.event_available_rounded,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'New Appointment',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5,
+                                  color: _ApptUi.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Fill in the details to create a new spa appointment.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.45,
+                                  color: _ApptUi.lavender.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _PremiumModalCloseButton(
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    _PremiumApptFieldCard(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Client',
+                      value: _clientLabel(),
+                      trailing: const Icon(
+                        Icons.expand_more_rounded,
+                        color: Color(0x99FFFFFF),
+                      ),
+                      enabled: widget.data.clients.isNotEmpty,
+                      onTap: widget.data.clients.isEmpty
+                          ? null
+                          : () => _pickFromList(
+                                title: 'Select client',
+                                currentId: _clientId,
+                                options: [
+                                  for (final c in widget.data.clients)
+                                    (
+                                      id: c.id,
+                                      label: c.punoIme.isEmpty
+                                          ? c.email
+                                          : c.punoIme,
+                                    ),
+                                ],
+                                onPick: (id) => setState(() => _clientId = id),
+                              ),
+                    ),
+                    const SizedBox(height: 14),
+                    _PremiumApptFieldCard(
+                      icon: Icons.schedule_rounded,
+                      label: 'Date & Time',
+                      value: _fmtDateTime(_dateTime),
+                      trailing: Icon(
+                        Icons.calendar_month_outlined,
+                        color: _ApptUi.purple2.withValues(alpha: 0.9),
+                      ),
+                      onTap: _pickDateTime,
+                    ),
+                    const SizedBox(height: 14),
+                    _PremiumApptFieldCard(
+                      icon: Icons.spa_outlined,
+                      label: 'Service',
+                      value: _serviceLabel(),
+                      trailing: const Icon(
+                        Icons.expand_more_rounded,
+                        color: Color(0x99FFFFFF),
+                      ),
+                      enabled: widget.data.services.isNotEmpty,
+                      onTap: widget.data.services.isEmpty
+                          ? null
+                          : () => _pickFromList(
+                                title: 'Select service',
+                                currentId: _serviceId,
+                                options: [
+                                  for (final s in widget.data.services)
+                                    (
+                                      id: s.id,
+                                      label:
+                                          '${s.naziv} • ${s.trajanjeMinuta} min',
+                                    ),
+                                ],
+                                onPick: (id) => setState(() => _serviceId = id),
+                              ),
+                    ),
+                    const SizedBox(height: 14),
+                    _PremiumApptFieldCard(
+                      icon: Icons.badge_outlined,
+                      label: 'Therapist',
+                      value: _therapistLabel(),
+                      trailing: const Icon(
+                        Icons.expand_more_rounded,
+                        color: Color(0x99FFFFFF),
+                      ),
+                      enabled: widget.data.therapists.isNotEmpty,
+                      onTap: widget.data.therapists.isEmpty
+                          ? null
+                          : () => _pickFromList(
+                                title: 'Select therapist',
+                                currentId: _therapistId,
+                                options: [
+                                  for (final t in widget.data.therapists)
+                                    (
+                                      id: t.id,
+                                      label: '${t.ime} ${t.prezime}'.trim(),
+                                    ),
+                                ],
+                                onPick: (id) =>
+                                    setState(() => _therapistId = id),
+                              ),
+                    ),
+                    if (missingData) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Clients, services, and therapists must be loaded before creating an appointment.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Container(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _PremiumModalCancelButton(
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 16),
+                        _PremiumModalCreateButton(
+                          enabled: _canCreate && !missingData,
+                          onPressed: _canCreate && !missingData
+                              ? () => Navigator.pop(
+                                    context,
+                                    _AdminAppointmentDraft(
+                                      clientId: _clientId!,
+                                      dateTime: _dateTime,
+                                      serviceId: _serviceId!,
+                                      therapistId: _therapistId!,
+                                    ),
+                                  )
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-        child: const Text('Create'),
+            ),
+          ),
+        ),
       ),
-    ],
-  );
+    );
+  }
 
   Future<void> _pickDateTime() async {
     final date = await showDatePicker(
@@ -2383,11 +2669,31 @@ class _AdminAppointmentCreateDialogState
       initialDate: _dateTime,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: NuaLuxuryTokens.softPurpleGlow,
+            surface: NuaLuxuryTokens.voidViolet,
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_dateTime),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: NuaLuxuryTokens.softPurpleGlow,
+            surface: NuaLuxuryTokens.voidViolet,
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
     );
     if (time == null || !mounted) return;
     setState(
@@ -2397,6 +2703,311 @@ class _AdminAppointmentCreateDialogState
         date.day,
         time.hour,
         time.minute,
+      ),
+    );
+  }
+}
+
+class _PremiumApptFieldCard extends StatefulWidget {
+  const _PremiumApptFieldCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.trailing,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Widget trailing;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  State<_PremiumApptFieldCard> createState() => _PremiumApptFieldCardState();
+}
+
+class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.enabled && widget.onTap != null;
+    return MouseRegion(
+      onEnter: (_) {
+        if (active) setState(() => _hover = true);
+      },
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: active ? widget.onTap : null,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 92,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _hover
+                    ? _ApptUi.purple.withValues(alpha: 0.45)
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
+              boxShadow: _hover
+                  ? [
+                      BoxShadow(
+                        color: _ApptUi.purple.withValues(alpha: 0.12),
+                        blurRadius: 24,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: _ApptUi.purple.withValues(alpha: 0.18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _ApptUi.purple2.withValues(alpha: 0.2),
+                        blurRadius: 16,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    size: 28,
+                    color: _ApptUi.purple2,
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _ApptUi.lavender.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: active
+                              ? _ApptUi.textPrimary
+                              : _ApptUi.textPrimary.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                widget.trailing,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumModalCloseButton extends StatefulWidget {
+  const _PremiumModalCloseButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_PremiumModalCloseButton> createState() =>
+      _PremiumModalCloseButtonState();
+}
+
+class _PremiumModalCloseButtonState extends State<_PremiumModalCloseButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.06),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              boxShadow: _hover
+                  ? [
+                      BoxShadow(
+                        color: _ApptUi.purple.withValues(alpha: 0.35),
+                        blurRadius: 20,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              Icons.close_rounded,
+              color: Colors.white.withValues(alpha: 0.88),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumModalCancelButton extends StatefulWidget {
+  const _PremiumModalCancelButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_PremiumModalCancelButton> createState() =>
+      _PremiumModalCancelButtonState();
+}
+
+class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 140,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumModalCreateButton extends StatefulWidget {
+  const _PremiumModalCreateButton({
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_PremiumModalCreateButton> createState() =>
+      _PremiumModalCreateButtonState();
+}
+
+class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.enabled && widget.onPressed != null;
+    return MouseRegion(
+      onEnter: (_) {
+        if (active) setState(() => _hover = true);
+      },
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+            width: 260,
+            height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                colors: active
+                    ? const [_ApptUi.purple, _ApptUi.purple2]
+                    : [
+                        _ApptUi.purple.withValues(alpha: 0.35),
+                        _ApptUi.purple2.withValues(alpha: 0.35),
+                      ],
+              ),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: _ApptUi.purple.withValues(
+                          alpha: _hover ? 0.55 : 0.38,
+                        ),
+                        blurRadius: _hover ? 32 : 22,
+                        offset: Offset(0, _hover ? 10 : 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.event_available_rounded,
+                  color: Colors.white.withValues(alpha: active ? 1 : 0.5),
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Create Appointment',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withValues(alpha: active ? 1 : 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -17,7 +17,12 @@ import '../../screens/desktop/luxury_reviews_dashboard_screen.dart';
 import '../../screens/desktop/luxury_settings_screen.dart';
 import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
+import '../../screens/therapist/therapist_appointments_screen.dart';
+import '../../screens/therapist/therapist_dashboard_screen.dart';
+import '../../screens/therapist/therapist_profile_screen.dart';
+import '../../screens/therapist/therapist_reviews_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
+import '../../screens/therapist/therapist_services_screen.dart';
 import '../navigation/desktop_nav.dart';
 import '../theme/nua_luxury_tokens.dart';
 import '../widgets/luxury/luxury_desktop_header.dart';
@@ -73,9 +78,9 @@ class _DesktopShellState extends State<DesktopShell> {
   void _scheduleAdminLandingSeed() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<DesktopNav>().seedAdminLandingIfNeeded(
-            context.read<AuthProvider>().isAdmin,
-          );
+      final auth = context.read<AuthProvider>();
+      context.read<DesktopNav>().seedAdminLandingIfNeeded(auth.isAdmin);
+      context.read<DesktopNav>().seedTherapistLandingIfNeeded(auth.isZaposlenik);
     });
   }
 
@@ -152,14 +157,34 @@ class _DesktopShellState extends State<DesktopShell> {
 
     final therapistItems = <LuxurySideItem>[
       LuxurySideItem(
-        route: DesktopRouteKey.home,
-        label: 'Pulse',
-        icon: Icons.home_outlined,
+        route: DesktopRouteKey.therapistDashboard,
+        label: 'My Dashboard',
+        icon: Icons.space_dashboard_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.therapistAppointments,
+        label: 'My Appointments',
+        icon: Icons.event_note_outlined,
       ),
       LuxurySideItem(
         route: DesktopRouteKey.schedule,
-        label: 'Schedule',
+        label: 'My Schedule',
         icon: Icons.view_timeline_rounded,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.therapistServices,
+        label: 'My Services',
+        icon: Icons.spa_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.therapistReviews,
+        label: 'My Reviews',
+        icon: Icons.reviews_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.therapistProfile,
+        label: 'Profile',
+        icon: Icons.person_outline,
       ),
     ];
 
@@ -238,7 +263,29 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.favorites:
           return const FavoritesScreen();
         case DesktopRouteKey.schedule:
-          return const TherapistScheduleScreen();
+          return auth.isZaposlenik
+              ? const TherapistScheduleScreen()
+              : widget.home;
+        case DesktopRouteKey.therapistDashboard:
+          return auth.isZaposlenik
+              ? const TherapistDashboardScreen()
+              : widget.home;
+        case DesktopRouteKey.therapistAppointments:
+          return auth.isZaposlenik
+              ? const TherapistAppointmentsScreen()
+              : widget.home;
+        case DesktopRouteKey.therapistServices:
+          return auth.isZaposlenik
+              ? const TherapistServicesScreen()
+              : widget.home;
+        case DesktopRouteKey.therapistReviews:
+          return auth.isZaposlenik
+              ? const TherapistReviewsScreen()
+              : widget.home;
+        case DesktopRouteKey.therapistProfile:
+          return auth.isZaposlenik
+              ? const TherapistProfileScreen()
+              : widget.home;
         case DesktopRouteKey.admin:
           return auth.isAdmin
               ? AdminSuiteScreen(initialRoute: nav.adminSuiteTarget)

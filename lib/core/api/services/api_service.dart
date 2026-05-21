@@ -21,6 +21,7 @@ import '../../../models/admin/admin_activity_feed_item.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
+import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
@@ -87,6 +88,96 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.getUslugaById: $e');
       return null;
+    }
+  }
+
+  Future<List<Zaposlenik>> getZaposleniciForService(int uslugaId) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/for-service/$uslugaId',
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getZaposleniciForService: $e');
+      return [];
+    }
+  }
+
+  Future<Zaposlenik?> getTherapistMe() async {
+    try {
+      final response = await _dio.get<dynamic>('Zaposlenik/me');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Zaposlenik.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMe: $e');
+      return null;
+    }
+  }
+
+  Future<Zaposlenik?> patchTherapistMe({
+    String? telefon,
+    String? jezici,
+  }) async {
+    try {
+      final response = await _dio.patch<dynamic>(
+        'Zaposlenik/me',
+        data: {
+          if (telefon != null) 'telefon': telefon,
+          if (jezici != null) 'jezici': jezici,
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Zaposlenik.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.patchTherapistMe: $e');
+      return null;
+    }
+  }
+
+  Future<TherapistDashboard?> getTherapistDashboard({DateTime? day}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (day != null) {
+        final d = DateTime(day.year, day.month, day.day);
+        query['day'] = d.toIso8601String();
+      }
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/me/dashboard',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return TherapistDashboard.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistDashboard: $e');
+      return null;
+    }
+  }
+
+  Future<List<TherapistReviewRow>> getTherapistMyReviews({
+    int maxReviews = 30,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/me/reviews',
+        queryParameters: {'maxReviews': maxReviews},
+      );
+      final data = response.data;
+      if (data is! List) return <TherapistReviewRow>[];
+      return data
+          .map<TherapistReviewRow>(
+            (e) => TherapistReviewRow.fromJson(e as Map<String, dynamic>),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyReviews: $e');
+      return <TherapistReviewRow>[];
     }
   }
 
@@ -361,14 +452,20 @@ class ApiService {
   Future<List<DateTime>> getDostupniTermini({
     required int zaposlenikId,
     required DateTime datum,
+    int? uslugaId,
   }) async {
     try {
       final d = DateTime(datum.year, datum.month, datum.day);
       final dateStr =
           '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final query = <String, dynamic>{
+        'zaposlenikId': zaposlenikId,
+        'datum': dateStr,
+      };
+      if (uslugaId != null) query['uslugaId'] = uslugaId;
       final response = await _dio.get<dynamic>(
         'Rezervacija/dostupni-termini',
-        queryParameters: {'zaposlenikId': zaposlenikId, 'datum': dateStr},
+        queryParameters: query,
       );
       final data = response.data;
       if (data is! List) return [];

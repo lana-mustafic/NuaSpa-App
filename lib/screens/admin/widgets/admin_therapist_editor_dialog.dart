@@ -7,7 +7,9 @@ import '../../../core/api/services/api_service.dart';
 import '../../../models/kategorija_usluga.dart';
 import '../../../models/usluga.dart';
 import '../../../models/zaposlenik.dart';
+import '../../../models/zaposlenik_status.dart';
 import '../../../ui/theme/luxury_modal_style.dart';
+import '../../../ui/theme/nua_luxury_tokens.dart';
 
 /// Add / edit therapist — shared by roster and profile screens.
 Future<Zaposlenik?> showAdminTherapistEditorDialog(
@@ -103,6 +105,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   List<Usluga> _services = [];
 
   int? _categoryId;
+  ZaposlenikStatus _status = ZaposlenikStatus.active;
   final Set<int> _selectedServiceIds = {};
   String? _specializationError;
 
@@ -148,6 +151,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
         _categories = categories;
         _services = services;
         _categoryId = categoryId;
+        _status = widget.existing?.status ?? ZaposlenikStatus.active;
         _selectedServiceIds
           ..clear()
           ..addAll(selectedIds);
@@ -268,6 +272,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
         obrazovanje:
             _obrazovanje.text.trim().isEmpty ? null : _obrazovanje.text.trim(),
         kategorijaUslugaId: _categoryId,
+        status: _status,
       ),
     );
   }
@@ -372,6 +377,34 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                               v == null || v.trim().isEmpty
                                                   ? 'Surname is required.'
                                                   : null,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      _LuxuryTherapistField(
+                                        label: 'Status',
+                                        icon: Icons.badge_outlined,
+                                        child: DropdownButtonFormField<
+                                            ZaposlenikStatus>(
+                                          value: _status,
+                                          dropdownColor:
+                                              NuaLuxuryTokens.voidViolet,
+                                          decoration:
+                                              LuxuryModalStyle.fieldDecoration(
+                                            hint: 'Employment status',
+                                          ),
+                                          items: [
+                                            for (final s
+                                                in ZaposlenikStatus.values)
+                                              DropdownMenuItem(
+                                                value: s,
+                                                child: Text(s.label),
+                                              ),
+                                          ],
+                                          onChanged: (v) {
+                                            if (v != null) {
+                                              setState(() => _status = v);
+                                            }
+                                          },
                                         ),
                                       ),
                                       const SizedBox(height: 18),

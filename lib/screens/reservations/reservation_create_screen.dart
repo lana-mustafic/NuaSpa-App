@@ -34,8 +34,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   int? _selectedServiceId;
   int? _selectedTherapistId;
   DateTime? _selectedSlot;
+  List<Zaposlenik> _therapists = [];
   List<DateTime> _availableSlots = [];
   bool _loadingSlots = false;
+  bool _loadingTherapists = false;
 
   Future<_ReservationBootstrap>? _bootstrapFuture;
   bool _bootstrapStarted = false;
@@ -64,11 +66,39 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       setState(() {
         _bootstrapFuture = Future(() async {
           await sp.fetchServices();
-          final therapists = await _apiService.getZaposlenici();
-          return _ReservationBootstrap(therapists);
+          return _ReservationBootstrap(const []);
         });
       });
     });
+  }
+
+  Future<void> _loadTherapistsForService(int? serviceId) async {
+    if (!mounted) return;
+    if (serviceId == null) {
+      setState(() {
+        _therapists = [];
+        _selectedTherapistId = null;
+        _selectedSlot = null;
+      });
+      return;
+    }
+    setState(() {
+      _loadingTherapists = true;
+      _selectedSlot = null;
+    });
+    final list = await _apiService.getZaposleniciForService(serviceId);
+    if (!mounted) return;
+    setState(() {
+      _therapists = list;
+      _loadingTherapists = false;
+      if (list.isEmpty) {
+        _selectedTherapistId = null;
+      } else if (_selectedTherapistId == null ||
+          !list.any((t) => t.id == _selectedTherapistId)) {
+        _selectedTherapistId = list.first.id;
+      }
+    });
+    await _loadSlots();
   }
 
   Future<void> _pickDate() async {
@@ -101,6 +131,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     final slots = await _apiService.getDostupniTermini(
       zaposlenikId: tid,
       datum: day,
+      uslugaId: _selectedServiceId,
     );
 
     if (!mounted) return;
@@ -195,10 +226,13 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                   .toList(),
               onChanged: services.isEmpty
                   ? null
-                  : (value) {
+                  : (value) async {
                       setState(() {
                         _selectedServiceId = value;
+                        _selectedTherapistId = null;
+                        _selectedSlot = null;
                       });
+                      await _loadTherapistsForService(value);
                     },
             ),
           ),
@@ -212,9 +246,11 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
-              hint: therapists.isEmpty
-                  ? const Text('Nema terapeuta')
-                  : const Text('Odaberite terapeuta'),
+              hint: _loadingTherapists
+                  ? const Text('Učitavanje terapeuta…')
+                  : therapists.isEmpty
+                      ? const Text('Nema dostupnih terapeuta za uslugu')
+                      : const Text('Odaberite terapeuta'),
               value: _effectiveDropdownValue(_selectedTherapistId, therapistIds),
               items: therapists
                   .map(
@@ -396,20 +432,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final therapists = snapshot.data!.therapists;
+            final therapists = _therapists;
 
-            // Ako je ID izvan liste (npr. nakon promjene podataka), vrati na prvu valjanu stavku.
             final serviceIds = services.map((s) => s.id).toSet();
-            final therapistIds = therapists.map((t) => t.id).toSet();
-            final needsSanitize = (_selectedServiceId != null &&
-                    !serviceIds.contains(_selectedServiceId)) ||
-                (_selectedTherapistId != null &&
-                    !therapistIds.contains(_selectedTherapistId));
-
-            final needsDefaults = (services.isNotEmpty &&
-                    _selectedServiceId == null) ||
-                (therapists.isNotEmpty && _selectedTherapistId == null) ||
-                needsSanitize;
+            final needsDefaults = services.isNotEmpty && _selectedServiceId == null;
             if (needsDefaults && !_defaultsPostFramePending) {
               _defaultsPostFramePending = true;
               WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -417,21 +443,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                 if (!mounted) return;
                 final freshAll =
                     context.read<ServiceProvider>().allServices;
-                setState(() {
-                  if (freshAll.isEmpty) {
-                    _selectedServiceId = null;
-                  } else if (_selectedServiceId == null ||
-                      !freshAll.any((u) => u.id == _selectedServiceId)) {
-                    _selectedServiceId = freshAll.first.id;
-                  }
-                  if (therapists.isEmpty) {
-                    _selectedTherapistId = null;
-                  } else if (_selectedTherapistId == null ||
-                      !therapists.any((t) => t.id == _selectedTherapistId)) {
-                    _selectedTherapistId = therapists.first.id;
-                  }
-                });
-                await _loadSlots();
+                if (freshAll.isEmpty) return;
+                final firstId = freshAll.first.id;
+                setState(() => _selectedServiceId = firstId);
+                await _loadTherapistsForService(firstId);
               });
             }
 

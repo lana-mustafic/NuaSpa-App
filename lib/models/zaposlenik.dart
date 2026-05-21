@@ -1,3 +1,5 @@
+import 'zaposlenik_status.dart';
+
 class Zaposlenik {
   final int id;
   final String ime;
@@ -11,6 +13,7 @@ class Zaposlenik {
   final String? obrazovanje;
   final String? lokacija;
   final DateTime? datumZaposlenja;
+  final ZaposlenikStatus status;
 
   Zaposlenik({
     required this.id,
@@ -25,7 +28,10 @@ class Zaposlenik {
     this.obrazovanje,
     this.lokacija,
     this.datumZaposlenja,
+    this.status = ZaposlenikStatus.active,
   });
+
+  String get fullName => '${ime.trim()} ${prezime.trim()}'.trim();
 
   factory Zaposlenik.fromJson(Map<String, dynamic> json) {
     final dz = json['datumZaposlenja'];
@@ -45,6 +51,7 @@ class Zaposlenik {
       lokacija: json['lokacija'] as String?,
       datumZaposlenja:
           dz == null ? null : DateTime.tryParse(dz.toString()),
+      status: ZaposlenikStatus.fromApi(json['status']),
     );
   }
 
@@ -63,6 +70,7 @@ class Zaposlenik {
       if (lokacija != null && lokacija!.trim().isNotEmpty) 'lokacija': lokacija,
       if (datumZaposlenja != null)
         'datumZaposlenja': datumZaposlenja!.toIso8601String(),
+      'status': status.apiValue,
     };
   }
 
@@ -79,6 +87,7 @@ class Zaposlenik {
     String? obrazovanje,
     String? lokacija,
     DateTime? datumZaposlenja,
+    ZaposlenikStatus? status,
   }) {
     return Zaposlenik(
       id: id ?? this.id,
@@ -94,6 +103,7 @@ class Zaposlenik {
       obrazovanje: obrazovanje ?? this.obrazovanje,
       lokacija: lokacija ?? this.lokacija,
       datumZaposlenja: datumZaposlenja ?? this.datumZaposlenja,
+      status: status ?? this.status,
     );
   }
 }

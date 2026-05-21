@@ -410,6 +410,18 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
     final isReviews = nav.route == DesktopRouteKey.reviews;
     final isSettings = nav.route == DesktopRouteKey.settings;
+    final isTherapistDash =
+        nav.route == DesktopRouteKey.therapistDashboard;
+    final isTherapistAppts =
+        nav.route == DesktopRouteKey.therapistAppointments;
+    final isTherapistSchedule = nav.route == DesktopRouteKey.schedule &&
+        auth.isZaposlenik;
+    final isTherapistServices =
+        nav.route == DesktopRouteKey.therapistServices;
+    final isTherapistReviews =
+        nav.route == DesktopRouteKey.therapistReviews;
+    final isTherapistProfile =
+        nav.route == DesktopRouteKey.therapistProfile;
     final isAdminClients = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final isAdminPayments = nav.route == DesktopRouteKey.admin &&
@@ -457,6 +469,18 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Calendar'
                       : isTherapists
                       ? 'Therapists'
+                      : isTherapistDash
+                      ? 'My Dashboard'
+                      : isTherapistAppts
+                      ? 'My Appointments'
+                      : isTherapistSchedule
+                      ? 'My Schedule'
+                      : isTherapistServices
+                      ? 'My Services'
+                      : isTherapistReviews
+                      ? 'My Reviews'
+                      : isTherapistProfile
+                      ? 'Profile'
                       : isSettings
                       ? 'Settings'
                       : auth.isAdmin
@@ -483,6 +507,16 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Manage your spa schedule and appointments.'
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
+                      : isTherapistDash
+                      ? 'Your day at a glance — appointments, ratings, and revenue.'
+                      : isTherapistAppts || isTherapistSchedule
+                      ? 'Your assigned bookings and schedule.'
+                      : isTherapistServices
+                      ? 'Treatments you are certified to perform.'
+                      : isTherapistReviews
+                      ? 'Feedback from clients you have served.'
+                      : isTherapistProfile
+                      ? 'Update your contact details.'
                       : isSettings
                       ? 'Account, session, workspace shortcuts, and application details.'
                       : auth.isAdmin

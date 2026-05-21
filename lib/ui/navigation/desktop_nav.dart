@@ -15,6 +15,11 @@ enum DesktopRouteKey {
   adminCalendar,
   favorites,
   schedule,
+  therapistDashboard,
+  therapistAppointments,
+  therapistServices,
+  therapistReviews,
+  therapistProfile,
   admin,
 }
 
@@ -32,6 +37,7 @@ class DesktopNav extends ChangeNotifier {
   AdminSuiteRoute _adminSuiteTarget = AdminSuiteRoute.overview;
   int _adminSuiteMount = 0;
   bool _adminLandingSeeded = false;
+  bool _therapistLandingSeeded = false;
 
   /// Jednokratni upit za [ServiceCatalogScreen] nakon navigacije iz globalne tračice.
   String? _pendingCatalogSearch;
@@ -91,6 +97,16 @@ class DesktopNav extends ChangeNotifier {
     _adminLandingSeeded = true;
     if (_route == DesktopRouteKey.home) {
       _route = DesktopRouteKey.commandCenter;
+      notifyListeners();
+    }
+  }
+
+  /// Default landing for therapist portal (My Dashboard).
+  void seedTherapistLandingIfNeeded(bool isZaposlenik) {
+    if (!isZaposlenik || _therapistLandingSeeded) return;
+    _therapistLandingSeeded = true;
+    if (_route == DesktopRouteKey.home) {
+      _route = DesktopRouteKey.therapistDashboard;
       notifyListeners();
     }
   }
