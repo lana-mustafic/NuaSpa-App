@@ -72,6 +72,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final nav = context.watch<DesktopNav>();
     final theme = Theme.of(context);
     final day = selectedDay ?? DateTime.now();
+    final isCommandCenter = nav.route == DesktopRouteKey.commandCenter;
     final isTherapists = nav.route == DesktopRouteKey.therapists;
     final isRevenue = nav.route == DesktopRouteKey.revenueAnalytics;
     final isAppointments = nav.route == DesktopRouteKey.reservations;
@@ -110,6 +111,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 Text(
                   isRevenue
                       ? 'Reports & Analytics'
+                      : isCommandCenter
+                      ? 'Dashboard'
                       : isAppointments
                       ? 'Appointments'
                       : isCalendar
@@ -132,6 +135,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 Text(
                   isRevenue
                       ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
+                      : isCommandCenter
+                      ? 'Live overview of bookings, revenue, clients, payments, and reviews.'
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar

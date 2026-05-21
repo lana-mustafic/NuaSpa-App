@@ -7,9 +7,14 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_activity_feed_item.dart';
 import '../../models/admin/admin_client_row.dart';
+import '../../models/admin/admin_client_stats.dart';
+import '../../models/admin/admin_finance_dashboard.dart';
 import '../../models/admin/admin_kpi.dart';
+import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
+import '../../models/desktop_home_overview.dart';
+import '../../screens/admin/admin_suite_route.dart';
 import '../../models/rezervacija.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
@@ -31,19 +36,64 @@ class AdminCommandCenterScreen extends StatefulWidget {
 class _CcData {
   const _CcData({
     required this.kpi,
+    required this.kpiYesterday,
     required this.revenue,
     required this.popularity,
     required this.bookings,
+    required this.yesterdayBookings,
     required this.therapists,
     required this.activityFeed,
+    required this.homeOverview,
+    required this.clientStats,
+    required this.financeToday,
+    required this.reviews,
   });
 
   final AdminKpi? kpi;
+  final AdminKpi? kpiYesterday;
   final List<RevenuePoint> revenue;
   final List<ServicePopularity> popularity;
   final List<Rezervacija> bookings;
+  final List<Rezervacija> yesterdayBookings;
   final List<Zaposlenik> therapists;
   final List<AdminActivityFeedItem> activityFeed;
+  final DesktopHomeOverview? homeOverview;
+  final AdminClientStats? clientStats;
+  final AdminFinanceDashboard? financeToday;
+  final AdminReviewsDashboard? reviews;
+}
+
+String _formatDayLabel(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[d.month - 1]} ${d.day}, ${d.year}';
+}
+
+String _pctTrendLabel(num current, num previous) {
+  final c = current.toDouble();
+  final p = previous.toDouble();
+  if (p <= 0) {
+    if (c <= 0) return 'Flat vs yesterday';
+    return 'Up from yesterday';
+  }
+  final pct = ((c - p) / p) * 100;
+  return '${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}% vs yesterday';
+}
+
+bool? _pctTrendUp(num current, num previous) {
+  final c = current.toDouble();
+  final p = previous.toDouble();
+  if (p <= 0 && c <= 0) return null;
+  if (p <= 0) return true;
+  return c >= p;
+}
+
+List<double> _bookingCountSpark(List<RevenuePoint> rev) {
+  if (rev.isEmpty) return const [0, 0];
+  final take = rev.length <= 14 ? rev : rev.sublist(rev.length - 14);
+  return take.map((p) => p.brojRezervacija.toDouble()).toList();
 }
 
 class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
@@ -66,24 +116,46 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
 
   void _reload() {
     final day = _dayOnly(widget.filterDay);
+    final yesterday = day.subtract(const Duration(days: 1));
     final from30 = day.subtract(const Duration(days: 29));
+    final reviewsFrom = day.subtract(const Duration(days: 29));
     setState(() {
       _future = () async {
         final results = await Future.wait([
           _api.getAdminKpis(date: day),
+          _api.getAdminKpis(date: yesterday),
           _api.getRevenueSeries(from: from30, to: day),
           _api.getServicePopularity(from: day, to: day, take: 8),
           _api.getRezervacijeFiltered(datum: day, includeOtkazane: true),
+          _api.getRezervacijeFiltered(datum: yesterday, includeOtkazane: true),
           _api.getZaposlenici(),
           _api.getAdminActivityFeed(day: day, take: 16),
+          _api.getDesktopHomeOverview(day: day),
+          _api.getAdminClientStats(),
+          _api.getAdminFinanceDashboard(
+            from: day,
+            toInclusive: day,
+            pageSize: 1,
+          ),
+          _api.getAdminReviewsDashboard(
+            from: reviewsFrom,
+            toInclusive: day,
+            pageSize: 1,
+          ),
         ]);
         return _CcData(
           kpi: results[0] as AdminKpi?,
-          revenue: results[1] as List<RevenuePoint>,
-          popularity: results[2] as List<ServicePopularity>,
-          bookings: results[3] as List<Rezervacija>,
-          therapists: results[4] as List<Zaposlenik>,
-          activityFeed: results[5] as List<AdminActivityFeedItem>,
+          kpiYesterday: results[1] as AdminKpi?,
+          revenue: results[2] as List<RevenuePoint>,
+          popularity: results[3] as List<ServicePopularity>,
+          bookings: results[4] as List<Rezervacija>,
+          yesterdayBookings: results[5] as List<Rezervacija>,
+          therapists: results[6] as List<Zaposlenik>,
+          activityFeed: results[7] as List<AdminActivityFeedItem>,
+          homeOverview: results[8] as DesktopHomeOverview?,
+          clientStats: results[9] as AdminClientStats?,
+          financeToday: results[10] as AdminFinanceDashboard?,
+          reviews: results[11] as AdminReviewsDashboard?,
         );
       }();
     });
@@ -116,14 +188,59 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           );
         }
 
+        if (snap.hasError) {
+          return Center(
+            child: LuxuryGlassPanel(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Unable to load dashboard.',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Try again'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         final d = snap.data;
+        final day = _dayOnly(widget.filterDay);
         final kpi = d?.kpi;
+        final kpiYesterday = d?.kpiYesterday;
         final rev = d?.revenue ?? const <RevenuePoint>[];
         final pop = d?.popularity ?? const <ServicePopularity>[];
         final bookings = d?.bookings ?? const <Rezervacija>[];
+        final yesterdayBookings =
+            d?.yesterdayBookings ?? const <Rezervacija>[];
         final therapists = d?.therapists ?? const <Zaposlenik>[];
         final activityFeed =
             d?.activityFeed ?? const <AdminActivityFeedItem>[];
+        final homeOverview = d?.homeOverview;
+        final clientStats = d?.clientStats;
+        final financeToday = d?.financeToday;
+        final reviews = d?.reviews;
+
+        final bookingsToday = kpi?.rezervacijeDanas ?? bookings.length;
+        final bookingsYesterday =
+            kpiYesterday?.rezervacijeDanas ?? yesterdayBookings.length;
+        final revenueToday = (kpi?.prihodDanas ?? 0).toDouble();
+        final revenueYesterday = (kpiYesterday?.prihodDanas ?? 0).toDouble();
+        final therapistCount = kpi?.aktivniTerapeuti ?? therapists.length;
+        final rating = kpi?.prosjecnaOcjena ?? reviews?.prosjecnaOcjena ?? 0;
+        final ratingPrev = reviews?.prosjecnaOcjenaPrethodno;
+        final newClients7d = homeOverview?.noviKlijentiZadnjih7Dana;
+        final unpaidToday = financeToday?.kpi.neplaceneRezervacije ?? 0;
+        final paidToday = financeToday?.kpi.placeneRezervacije ?? 0;
 
         return LayoutBuilder(
           builder: (context, c) {
@@ -151,75 +268,96 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Cinematic operations cockpit for luxury bookings, revenue, therapists, and guest sentiment.',
+                            'Snapshot for ${_formatDayLabel(day)} — appointments, revenue, clients, payments, and reviews from live NuaSpa data.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: NuaLuxuryTokens.lavenderWhisper.withValues(
                                 alpha: 0.58,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 18),
+                          const _DashboardQuickActions(),
+                          const SizedBox(height: 22),
                           LayoutBuilder(
                             builder: (_, cc) {
                               final cols = cc.maxWidth >= 1060
                                   ? 4
                                   : (cc.maxWidth >= 720 ? 2 : 1);
-                              final revenueToday = (kpi?.prihodDanas ?? 2450)
-                                  .toDouble();
-                              final therapistCount =
-                                  kpi?.aktivniTerapeuti ?? therapists.length;
                               final kpis = [
                                 LuxuryKpiCard(
-                                  label: 'Total Bookings',
-                                  value: '${kpi?.rezervacijeDanas ?? 28}',
-                                  subtitle: 'Appointments scheduled today',
-                                  trendLabel: '+12% vs yesterday',
-                                  trendUp: true,
+                                  label: 'Bookings Today',
+                                  value: '$bookingsToday',
+                                  subtitle:
+                                      '${bookings.where((b) => !b.isOtkazana && b.isPotvrdjena).length} confirmed · ${bookings.where((b) => !b.isOtkazana && !b.isPotvrdjena).length} pending',
+                                  trendLabel: _pctTrendLabel(
+                                    bookingsToday,
+                                    bookingsYesterday,
+                                  ),
+                                  trendUp: _pctTrendUp(
+                                    bookingsToday,
+                                    bookingsYesterday,
+                                  ),
                                   icon: Icons.calendar_today_outlined,
-                                  sparkline: _spark(rev, 28),
+                                  sparkline: _bookingCountSpark(rev),
                                 ),
                                 LuxuryKpiCard(
                                   label: 'Revenue Today',
                                   value:
                                       '${revenueToday.toStringAsFixed(0)} KM',
-                                  subtitle: 'Premium service revenue',
-                                  trendLabel: '+8.4% collected',
-                                  trendUp: true,
+                                  subtitle: paidToday > 0 || unpaidToday > 0
+                                      ? '$paidToday paid · $unpaidToday unpaid'
+                                      : 'Collected payments for selected day',
+                                  trendLabel: _pctTrendLabel(
+                                    revenueToday,
+                                    revenueYesterday,
+                                  ),
+                                  trendUp: _pctTrendUp(
+                                    revenueToday,
+                                    revenueYesterday,
+                                  ),
                                   icon: Icons.monetization_on_outlined,
                                   sparkline: _spark(rev, revenueToday),
                                 ),
                                 LuxuryKpiCard(
-                                  label: 'Active Therapists',
-                                  value: '$therapistCount',
-                                  subtitle: 'Wellness experts online',
-                                  trendLabel: 'Fully staffed',
+                                  label: 'Clients',
+                                  value:
+                                      '${clientStats?.ukupnoKlijenata ?? 0}',
+                                  subtitle: newClients7d != null
+                                      ? '$newClients7d new in last 7 days · ${clientStats?.vipKlijenata ?? 0} VIP'
+                                      : '${clientStats?.ukupnoPosjeta ?? 0} total visits',
+                                  trendLabel: clientStats != null
+                                      ? '${clientStats.ukupnaPotrosnja.toStringAsFixed(0)} KM lifetime spend'
+                                      : 'Client registry',
                                   trendUp: null,
-                                  icon: Icons.group_outlined,
+                                  icon: Icons.people_outline,
                                   sparkline: [
-                                    for (var i = 0; i < 9; i++)
-                                      (therapistCount <= 0
-                                              ? 12
-                                              : therapistCount) +
-                                          math.sin(i * 0.75) * 0.45,
+                                    (clientStats?.ukupnoKlijenata ?? 0)
+                                        .toDouble(),
+                                    (newClients7d ?? 0).toDouble(),
+                                    (clientStats?.vipKlijenata ?? 0).toDouble(),
                                   ],
                                 ),
                                 LuxuryKpiCard(
-                                  label: 'Client Satisfaction Score',
-                                  value:
-                                      '${(kpi?.prosjecnaOcjena ?? 4.8).toStringAsFixed(1)} / 5',
-                                  subtitle: 'Gold-star guest experience',
-                                  trendLabel: '★★★★★',
-                                  trendUp: true,
+                                  label: 'Guest Rating',
+                                  value: rating > 0
+                                      ? '${rating.toStringAsFixed(1)} / 5'
+                                      : '—',
+                                  subtitle: reviews != null
+                                      ? '${reviews.ukupno} reviews (30d window)'
+                                      : 'Average review score',
+                                  trendLabel: ratingPrev != null
+                                      ? _pctTrendLabel(rating, ratingPrev)
+                                      : (reviews != null
+                                            ? '${reviews.postotakPozitivnih.toStringAsFixed(0)}% positive (30d)'
+                                            : 'All-time average'),
+                                  trendUp: ratingPrev != null
+                                      ? _pctTrendUp(rating, ratingPrev)
+                                      : null,
                                   icon: Icons.star_border_rounded,
-                                  sparkline: const [
-                                    4.6,
-                                    4.7,
-                                    4.74,
-                                    4.72,
-                                    4.8,
-                                    4.78,
-                                    4.85,
-                                    4.8,
+                                  sparkline: [
+                                    if (ratingPrev != null) ratingPrev,
+                                    rating,
+                                    rating,
                                   ],
                                 ),
                               ];
@@ -237,14 +375,20 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                               );
                             },
                           ),
-                          const SizedBox(height: 30),
+                          const SizedBox(height: 28),
+                          _AnalyticsRow(revenue: rev, popularity: pop),
+                          const SizedBox(height: 28),
                           _AppointmentsHeader(
+                            bookingCount: bookings.length,
+                            onOpenAppointments: () => context
+                                .read<DesktopNav>()
+                                .goTo(DesktopRouteKey.reservations),
                             onOpenCalendar: () => context
                                 .read<DesktopNav>()
                                 .goTo(DesktopRouteKey.adminCalendar),
-                            onOpenServicesCatalog: () => context
+                            onNewAppointment: () => context
                                 .read<DesktopNav>()
-                                .goTo(DesktopRouteKey.catalog),
+                                .requestAppointmentCreate(),
                           ),
                           const SizedBox(height: 14),
                           _BookingsTable(bookings: bookings),
@@ -261,6 +405,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     popularity: pop,
                     therapists: therapists,
                     activityFeed: activityFeed,
+                    therapistCount: therapistCount,
                   ),
                 ),
               ],
@@ -272,14 +417,95 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   }
 }
 
-class _AppointmentsHeader extends StatelessWidget {
-  const _AppointmentsHeader({
-    required this.onOpenCalendar,
-    required this.onOpenServicesCatalog,
+class _DashboardQuickActions extends StatelessWidget {
+  const _DashboardQuickActions();
+
+  @override
+  Widget build(BuildContext context) {
+    final nav = context.read<DesktopNav>();
+    final actions = [
+      _QuickAction(
+        icon: Icons.event_note_outlined,
+        label: 'Appointments',
+        onTap: () => nav.goTo(DesktopRouteKey.reservations),
+      ),
+      _QuickAction(
+        icon: Icons.date_range_rounded,
+        label: 'Calendar',
+        onTap: () => nav.goTo(DesktopRouteKey.adminCalendar),
+      ),
+      _QuickAction(
+        icon: Icons.people_outline,
+        label: 'Clients',
+        onTap: () => nav.goToAdminSuite(AdminSuiteRoute.clients),
+      ),
+      _QuickAction(
+        icon: Icons.payments_outlined,
+        label: 'Payments',
+        onTap: () => nav.goToAdminSuite(AdminSuiteRoute.finance),
+      ),
+      _QuickAction(
+        icon: Icons.area_chart_rounded,
+        label: 'Reports',
+        onTap: () => nav.goTo(DesktopRouteKey.revenueAnalytics),
+      ),
+      _QuickAction(
+        icon: Icons.reviews_outlined,
+        label: 'Reviews',
+        onTap: () => nav.goTo(DesktopRouteKey.reviews),
+      ),
+      _QuickAction(
+        icon: Icons.spa_outlined,
+        label: 'Therapists',
+        onTap: () => nav.goTo(DesktopRouteKey.therapists),
+      ),
+      _QuickAction(
+        icon: Icons.diamond_outlined,
+        label: 'Services',
+        onTap: () => nav.goTo(DesktopRouteKey.catalog),
+      ),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: actions
+          .map(
+            (a) => _ControlPill(
+              icon: a.icon,
+              label: a.label,
+              onTap: a.onTap,
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _QuickAction {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
   });
 
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+}
+
+class _AppointmentsHeader extends StatelessWidget {
+  const _AppointmentsHeader({
+    required this.bookingCount,
+    required this.onOpenAppointments,
+    required this.onOpenCalendar,
+    required this.onNewAppointment,
+  });
+
+  final int bookingCount;
+  final VoidCallback onOpenAppointments;
   final VoidCallback onOpenCalendar;
-  final VoidCallback onOpenServicesCatalog;
+  final VoidCallback onNewAppointment;
 
   @override
   Widget build(BuildContext context) {
@@ -287,27 +513,48 @@ class _AppointmentsHeader extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            'Upcoming Appointments',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFFF5F3FA),
-              letterSpacing: -0.2,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Appointments for selected day',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFFF5F3FA),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                bookingCount == 0
+                    ? 'No rows for this date — change the date in the header or open full list.'
+                    : '$bookingCount shown (use header date to change day)',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
+                    alpha: 0.55,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         _ControlPill(
-          icon: Icons.tune_rounded,
-          label: 'All Services',
-          trailing: Icons.keyboard_arrow_down_rounded,
-          onTap: onOpenServicesCatalog,
+          icon: Icons.list_alt_rounded,
+          label: 'All appointments',
+          onTap: onOpenAppointments,
         ),
         const SizedBox(width: 10),
         _ControlPill(
           icon: Icons.calendar_month_outlined,
-          label: 'View Calendar',
-          highlighted: true,
+          label: 'Calendar',
           onTap: onOpenCalendar,
+        ),
+        const SizedBox(width: 10),
+        _ControlPill(
+          icon: Icons.add_rounded,
+          label: 'New',
+          highlighted: true,
+          onTap: onNewAppointment,
         ),
       ],
     );
@@ -396,15 +643,18 @@ class _RightDashboardSidebar extends StatelessWidget {
     required this.popularity,
     required this.therapists,
     required this.activityFeed,
+    required this.therapistCount,
   });
 
   final List<Rezervacija> bookings;
   final List<ServicePopularity> popularity;
   final List<Zaposlenik> therapists;
   final List<AdminActivityFeedItem> activityFeed;
+  final int therapistCount;
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.read<DesktopNav>();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(0, 10, 28, 32),
       child: Column(
@@ -416,7 +666,11 @@ class _RightDashboardSidebar extends StatelessWidget {
           const SizedBox(height: 16),
           _TopServicesTodayCard(popularity: popularity),
           const SizedBox(height: 16),
-          _TherapistPresenceCard(therapists: therapists),
+          _TherapistPresenceCard(
+            therapists: therapists,
+            totalCount: therapistCount,
+            onOpenRoster: () => nav.goTo(DesktopRouteKey.therapists),
+          ),
         ],
       ),
     );
@@ -477,86 +731,60 @@ class _UpcomingTodayCard extends StatelessWidget {
               color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.62),
             ),
           ),
-          const SizedBox(height: 18),
-          const _UpcomingAmbientPanel(),
+          const SizedBox(height: 14),
+          _UpcomingSlotsList(bookings: active),
         ],
       ),
     );
   }
 }
 
-class _UpcomingAmbientPanel extends StatelessWidget {
-  const _UpcomingAmbientPanel();
+class _UpcomingSlotsList extends StatelessWidget {
+  const _UpcomingSlotsList({required this.bookings});
+
+  final List<Rezervacija> bookings;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        height: 112,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.20),
-              NuaLuxuryTokens.champagneGold.withValues(alpha: 0.10),
-              Colors.white.withValues(alpha: 0.035),
-            ],
-          ),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.16),
-              blurRadius: 26,
-            ),
-          ],
+    final theme = Theme.of(context);
+    final upcoming = bookings.take(3).toList();
+    if (upcoming.isEmpty) {
+      return Text(
+        'No active slots on this day.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -18,
-              top: -30,
-              child: Container(
-                width: 116,
-                height: 116,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.16),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 18,
-              top: 20,
-              child: Text(
-                'Luxury flow',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 18,
-              top: 46,
-              right: 88,
-              child: Text(
-                'Soft capacity pacing for therapists, rooms, and guest arrivals.',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                    alpha: 0.58,
+      );
+    }
+    return Column(
+      children: [
+        for (final r in upcoming)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text(
+                  _formatTimeAmPm(r.datumRezervacije),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: NuaLuxuryTokens.champagneGold,
                   ),
-                  height: 1.35,
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${r.korisnikIme ?? 'Guest'} · ${r.uslugaNaziv ?? 'Service'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }
@@ -847,36 +1075,87 @@ class _ServiceLegendRow extends StatelessWidget {
 }
 
 class _TherapistPresenceCard extends StatelessWidget {
-  const _TherapistPresenceCard({required this.therapists});
+  const _TherapistPresenceCard({
+    required this.therapists,
+    required this.totalCount,
+    required this.onOpenRoster,
+  });
 
   final List<Zaposlenik> therapists;
+  final int totalCount;
+  final VoidCallback onOpenRoster;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final visible = therapists.take(5).toList();
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
       opacity: 0.34,
       blurSigma: 22,
       padding: const EdgeInsets.all(18),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final t in visible)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: CircleAvatar(
-                radius: 17,
-                backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
-                  alpha: 0.42,
-                ),
+          Row(
+            children: [
+              Expanded(
                 child: Text(
-                  '${_initial(t.ime)}${_initial(t.prezime)}',
-                  style: const TextStyle(
-                    fontSize: 10,
+                  'Therapists',
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
+              InkWell(
+                onTap: onOpenRoster,
+                child: Text(
+                  'View all',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: NuaLuxuryTokens.champagneGold,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$totalCount in roster',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (visible.isEmpty)
+            Text(
+              'No therapists loaded.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.5),
+              ),
+            )
+          else
+            Row(
+              children: [
+                for (final t in visible)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: CircleAvatar(
+                      radius: 17,
+                      backgroundColor:
+                          NuaLuxuryTokens.softPurpleGlow.withValues(
+                        alpha: 0.42,
+                      ),
+                      child: Text(
+                        '${_initial(t.ime)}${_initial(t.prezime)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
@@ -936,8 +1215,6 @@ String _formatTimeAmPm(DateTime d) {
   return '$hour:$minute $suffix';
 }
 
-// Kept as a ready-to-restore deep analytics section for later admin iterations.
-// ignore: unused_element
 class _AnalyticsRow extends StatelessWidget {
   const _AnalyticsRow({required this.revenue, required this.popularity});
 
@@ -1287,6 +1564,8 @@ class _BookingsTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sorted = [...bookings]
+      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
     return LuxuryGlassPanel(
       borderRadius: NuaLuxuryTokens.radiusXl,
       opacity: 0.39,
@@ -1311,14 +1590,14 @@ class _BookingsTable extends StatelessWidget {
               DataColumn(label: Text('DURATION')),
               DataColumn(label: Text('STATUS')),
             ],
-            rows: bookings.isEmpty
+            rows: sorted.isEmpty
                 ? [
                     DataRow(
                       cells: List.generate(6, (_) => const DataCell(Text('—'))),
                     ),
                   ]
                 : [
-                    for (final r in bookings)
+                    for (final r in sorted)
                       DataRow(
                         cells: [
                           DataCell(
