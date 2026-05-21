@@ -372,15 +372,13 @@ class _DashboardLayout extends StatelessWidget {
                       ],
                     );
                   }
-                  return IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 3, child: chart),
-                        const SizedBox(width: _DashUi.gap),
-                        Expanded(flex: 2, child: actions),
-                      ],
-                    ),
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: chart),
+                      const SizedBox(width: _DashUi.gap),
+                      Expanded(flex: 2, child: actions),
+                    ],
                   );
                 },
               ),
@@ -823,33 +821,35 @@ class _QuickActionsCard extends StatelessWidget {
       ),
     ];
 
+    Widget rowPair(_QuickActionTile a, _QuickActionTile b) {
+      return Row(
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: 8),
+          Expanded(child: b),
+        ],
+      );
+    }
+
     return _DashGlass(
-      child: SizedBox(
-        height: 320,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: _DashUi.textPrimary,
-              ),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Quick Actions',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: _DashUi.textPrimary,
             ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.15,
-                physics: const NeverScrollableScrollPhysics(),
-                children: items,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          rowPair(items[0], items[1]),
+          const SizedBox(height: 8),
+          rowPair(items[2], items[3]),
+        ],
       ),
     );
   }
@@ -884,11 +884,13 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(14),
               color: widget.color.withValues(alpha: _hover ? 0.2 : 0.1),
               border: Border.all(
                 color: widget.color.withValues(alpha: _hover ? 0.5 : 0.28),
@@ -897,23 +899,28 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   ? [
                       BoxShadow(
                         color: widget.color.withValues(alpha: 0.35),
-                        blurRadius: 20,
+                        blurRadius: 14,
                       ),
                     ]
                   : null,
             ),
-            child: Column(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(widget.icon, color: widget.color, size: 28),
-                const SizedBox(height: 10),
-                Text(
-                  widget.label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _DashUi.textPrimary,
+                Icon(widget.icon, color: widget.color, size: 18),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: _DashUi.textPrimary,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ],
