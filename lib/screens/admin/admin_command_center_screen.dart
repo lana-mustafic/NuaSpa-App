@@ -535,68 +535,77 @@ class _DashboardKpiCardState extends State<_DashboardKpiCard> {
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        height: double.infinity,
         transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
         child: _DashGlass(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: s.accent.withValues(alpha: 0.18),
-                      border: Border.all(
-                        color: s.accent.withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: s.accent.withValues(
-                            alpha: _hover ? 0.45 : 0.25,
-                          ),
-                          blurRadius: 18,
-                        ),
-                      ],
-                    ),
-                    child: Icon(s.icon, color: s.accent, size: 22),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: s.accent.withValues(alpha: 0.18),
+                  border: Border.all(
+                    color: s.accent.withValues(alpha: 0.35),
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: s.accent.withValues(
+                        alpha: _hover ? 0.45 : 0.25,
+                      ),
+                      blurRadius: 18,
+                    ),
+                  ],
+                ),
+                child: Icon(s.icon, color: s.accent, size: 20),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               Text(
                 s.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: _DashUi.textSecondary,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 s.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: FontWeight.w800,
                   color: _DashUi.textPrimary,
-                  letterSpacing: -0.6,
+                  letterSpacing: -0.5,
+                  height: 1.1,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 s.growth,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: trendColor,
                 ),
               ),
-              const Spacer(),
-              LuxuryMiniSparkline(
-                values: s.sparkline,
-                height: 40,
+              const SizedBox(height: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: LuxuryMiniSparkline(
+                    values: s.sparkline,
+                    height: 32,
+                  ),
+                ),
               ),
             ],
           ),
