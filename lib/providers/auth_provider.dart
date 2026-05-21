@@ -62,6 +62,7 @@ class AuthProvider extends ChangeNotifier {
     final token = await _storage.read(key: 'jwt_token');
     _roles = parseJwtRoles(token);
     _zaposlenikId = parseJwtIntClaim(token, 'ZaposlenikId');
+    _loggedInUsername ??= parseJwtStringClaim(token, 'unique_name');
   }
 
   Future<bool> login(String username, String password) async {
@@ -78,9 +79,8 @@ class AuthProvider extends ChangeNotifier {
       if (response.data != null && response.data['token'] != null) {
         final token = response.data['token'];
         await _storage.write(key: 'jwt_token', value: token);
-        await _refreshRolesFromToken();
-
         _loggedInUsername = username.trim();
+        await _refreshRolesFromToken();
         _status = AuthStatus.authenticated;
         notifyListeners();
         return true;
@@ -112,6 +112,7 @@ class AuthProvider extends ChangeNotifier {
       final token = await _storage.read(key: 'jwt_token');
       if (isJwtSessionValid(token)) {
         await _refreshRolesFromToken();
+        _loggedInUsername ??= parseJwtStringClaim(token, 'unique_name');
         _status = AuthStatus.authenticated;
       } else {
         if (token != null && token.isNotEmpty) {

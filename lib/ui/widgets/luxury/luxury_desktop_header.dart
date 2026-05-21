@@ -78,6 +78,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final isAppointments = nav.route == DesktopRouteKey.reservations;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
     final isReviews = nav.route == DesktopRouteKey.reviews;
+    final isSettings = nav.route == DesktopRouteKey.settings;
     final isAdminClients = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final isAdminPayments = nav.route == DesktopRouteKey.admin &&
@@ -119,6 +120,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Calendar'
                       : isTherapists
                       ? 'Therapists'
+                      : isSettings
+                      ? 'Settings'
                       : auth.isAdmin
                       ? 'Welcome back, Admin'
                       : 'Welcome back, ${auth.displayName ?? 'NuaSpa'}',
@@ -143,6 +146,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Manage your spa schedule and appointments.'
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
+                      : isSettings
+                      ? 'Account, session, workspace shortcuts, and application details.'
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
@@ -160,7 +165,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: compact ? 12 : 22),
-          if (!isRevenue && !isCommandCenter) ...[
+          if (!isRevenue && !isCommandCenter && !isSettings) ...[
             ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: compact ? 340 : 380,

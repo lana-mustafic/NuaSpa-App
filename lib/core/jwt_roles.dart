@@ -56,6 +56,33 @@ int? parseJwtIntClaim(String? token, String claimKey) {
   return null;
 }
 
+String? parseJwtStringClaim(String? token, String claimKey) {
+  final map = decodeJwtPayload(token);
+  if (map == null) return null;
+  final v = map[claimKey];
+  if (v == null) return null;
+  final s = v.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
+/// JWT `exp` claim as local [DateTime], or null if missing.
+DateTime? parseJwtExpiry(String? token) {
+  final map = decodeJwtPayload(token);
+  if (map == null) return null;
+
+  final exp = map['exp'];
+  int? expSec;
+  if (exp is int) {
+    expSec = exp;
+  } else if (exp is num) {
+    expSec = exp.toInt();
+  } else if (exp is String) {
+    expSec = int.tryParse(exp);
+  }
+  if (expSec == null) return null;
+  return DateTime.fromMillisecondsSinceEpoch(expSec * 1000);
+}
+
 /// `true` ako token nedostaje, nije JWT ili je `exp` prošao (s malim skewom).
 bool isJwtExpired(
   String? token, {
