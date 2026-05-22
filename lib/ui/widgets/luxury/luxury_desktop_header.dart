@@ -521,7 +521,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistSchedule
                       ? 'Manage your daily bookings and availability.'
                       : isTherapistServices
-                      ? 'Treatments you are certified to perform.'
+                      ? 'View treatments you are certified to perform at NuaSpa.'
                       : isTherapistReviews
                       ? 'Feedback from clients you have served.'
                       : isTherapistProfile
