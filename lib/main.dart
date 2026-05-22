@@ -117,16 +117,23 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadPreporuke();
-    final n = DateTime.now();
-    final day = DateTime(n.year, n.month, n.day);
-    _homeDayFuture = () async {
-      final bookings = await _api.getRezervacijeFiltered(
-        datum: day,
-        includeOtkazane: false,
-      );
-      final overview = await _api.getDesktopHomeOverview(day: day);
-      return (bookings: bookings, overview: overview);
-    }();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (auth.isZaposlenik) return;
+      final n = DateTime.now();
+      final day = DateTime(n.year, n.month, n.day);
+      setState(() {
+        _homeDayFuture = () async {
+          final bookings = await _api.getRezervacijeFiltered(
+            datum: day,
+            includeOtkazane: false,
+          );
+          final overview = await _api.getDesktopHomeOverview(day: day);
+          return (bookings: bookings, overview: overview);
+        }();
+      });
+    });
   }
 
   @override

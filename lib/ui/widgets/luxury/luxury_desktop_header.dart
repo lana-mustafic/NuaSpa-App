@@ -422,6 +422,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
         nav.route == DesktopRouteKey.therapistReviews;
     final isTherapistProfile =
         nav.route == DesktopRouteKey.therapistProfile;
+    final isTherapistPortal = auth.isZaposlenik &&
+        (isTherapistDash ||
+            isTherapistAppts ||
+            isTherapistSchedule ||
+            isTherapistServices ||
+            isTherapistReviews ||
+            isTherapistProfile);
     final isAdminClients = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final isAdminPayments = nav.route == DesktopRouteKey.admin &&
@@ -470,7 +477,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapists
                       ? 'Therapists'
                       : isTherapistDash
-                      ? 'My Dashboard'
+                      ? 'Good morning, Therapist! 👋'
                       : isTherapistAppts
                       ? 'My Appointments'
                       : isTherapistSchedule
@@ -508,7 +515,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : isTherapistDash
-                      ? 'Your day at a glance — appointments, ratings, and revenue.'
+                      ? 'Here\'s your overview for today.'
                       : isTherapistAppts || isTherapistSchedule
                       ? 'Your assigned bookings and schedule.'
                       : isTherapistServices
@@ -545,7 +552,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 compact: compact,
                 showShortcutHint: auth.isAdmin,
                 controller: isCalendar ? nav.calendarSearchController : null,
-                hintText: isTherapists
+                hintText: isTherapistPortal
+                    ? 'Search clients, services…'
+                    : isTherapists
                     ? 'Search therapists…'
                     : isAdminClients
                         ? 'Search clients…'
@@ -700,10 +709,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
                           NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
                       child: Text(
                         auth.userInitials ??
-                            (auth.displayName != null &&
-                                    auth.displayName!.isNotEmpty
-                                ? auth.displayName![0].toUpperCase()
-                                : null) ??
+                            (auth.isZaposlenik
+                                ? 'TH'
+                                : (auth.displayName != null &&
+                                        auth.displayName!.isNotEmpty
+                                    ? auth.displayName![0].toUpperCase()
+                                    : null)) ??
                             '•',
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
@@ -717,7 +728,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          auth.isAdmin ? 'Admin' : (auth.displayName ?? 'NuaSpa'),
+                          auth.isAdmin
+                              ? 'Admin'
+                              : (auth.isZaposlenik
+                                  ? (auth.displayName ?? 'therapist')
+                                  : (auth.displayName ?? 'NuaSpa')),
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),

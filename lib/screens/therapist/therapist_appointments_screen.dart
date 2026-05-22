@@ -30,7 +30,10 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
   }
 
   void _reload() {
-    setState(() => _future = _api.getRezervacije());
+    final future = _api.getRezervacije();
+    setState(() {
+      _future = future;
+    });
   }
 
   List<Rezervacija> _applyFilter(List<Rezervacija> all) {

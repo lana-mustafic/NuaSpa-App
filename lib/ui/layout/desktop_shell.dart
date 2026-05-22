@@ -251,6 +251,9 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.settings:
           return const LuxurySettingsScreen();
         case DesktopRouteKey.home:
+          if (auth.isZaposlenik) {
+            return const TherapistDashboardScreen();
+          }
           return widget.home;
         case DesktopRouteKey.catalog:
           return const ServiceCatalogScreen();

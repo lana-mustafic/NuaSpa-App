@@ -8,11 +8,13 @@ class LuxuryMiniSparkline extends StatelessWidget {
     required this.values,
     this.height = 52,
     this.strokeWidth = 2.2,
+    this.accentColor,
   });
 
   final List<double> values;
   final double height;
   final double strokeWidth;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +28,7 @@ class LuxuryMiniSparkline extends StatelessWidget {
         painter: _SparkPainter(
           values: values,
           strokeWidth: strokeWidth,
+          accentColor: accentColor,
         ),
       ),
     );
@@ -36,10 +39,12 @@ class _SparkPainter extends CustomPainter {
   _SparkPainter({
     required this.values,
     required this.strokeWidth,
+    this.accentColor,
   });
 
   final List<double> values;
   final double strokeWidth;
+  final Color? accentColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -61,12 +66,13 @@ class _SparkPainter extends CustomPainter {
       }
     }
 
+    final accent = accentColor ?? NuaLuxuryTokens.softPurpleGlow;
     final glow = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth + 4
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..color = NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.22)
+      ..color = accent.withValues(alpha: 0.22)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawPath(path, glow);
 
@@ -77,9 +83,11 @@ class _SparkPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round
       ..shader = LinearGradient(
         colors: [
-          NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
-          NuaLuxuryTokens.lavenderWhisper,
-          NuaLuxuryTokens.softPurpleGlow,
+          accent.withValues(alpha: 0.35),
+          accentColor != null
+              ? accent.withValues(alpha: 0.85)
+              : NuaLuxuryTokens.lavenderWhisper,
+          accent,
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawPath(path, line);
