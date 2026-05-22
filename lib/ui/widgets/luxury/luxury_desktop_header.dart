@@ -519,7 +519,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistAppts
                       ? 'Your assigned bookings and daily schedule.'
                       : isTherapistSchedule
-                      ? 'Your assigned bookings and schedule.'
+                      ? 'Manage your daily bookings and availability.'
                       : isTherapistServices
                       ? 'Treatments you are certified to perform.'
                       : isTherapistReviews
