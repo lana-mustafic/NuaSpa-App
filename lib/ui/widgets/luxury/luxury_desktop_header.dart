@@ -525,7 +525,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistReviews
                       ? 'Client feedback from appointments you performed.'
                       : isTherapistProfile
-                      ? 'Update your contact details.'
+                      ? 'Manage your therapist profile, contact details, and professional identity.'
                       : isSettings
                       ? 'Manage your account, session security, and workspace preferences.'
                       : auth.isAdmin
