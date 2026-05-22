@@ -73,6 +73,47 @@ List<KategorijaUsluga> _categoriesFromServices(List<Usluga> services) {
   return out;
 }
 
+String _durationLabel(Usluga u) {
+  if (u.trajanjeMinuta > 0) return '${u.trajanjeMinuta} min';
+  final m = RegExp(r'(\d+)').firstMatch(u.trajanje);
+  if (m != null) return '${m.group(1)} min';
+  return u.trajanje;
+}
+
+String _tierLabel(Usluga u, List<Usluga> linked) {
+  if (linked.isEmpty) return 'Standard';
+  final prices = linked.map((e) => e.cijena).toList()..sort();
+  final median = prices[prices.length ~/ 2];
+  final name = u.naziv.toLowerCase();
+  if (name.contains('facial') && u.cijena <= median) return 'Standard';
+  if (u.trajanjeMinuta >= 75 || u.cijena > median) return 'Premium';
+  return 'Standard';
+}
+
+List<Usluga> _sortServices(List<Usluga> list, String mode) {
+  final copy = [...list];
+  switch (mode) {
+    case 'Z to A':
+      copy.sort((a, b) => b.naziv.compareTo(a.naziv));
+    case 'Duration':
+      copy.sort((a, b) => b.trajanjeMinuta.compareTo(a.trajanjeMinuta));
+    case 'Price: High to Low':
+      copy.sort((a, b) => b.cijena.compareTo(a.cijena));
+    default:
+      copy.sort((a, b) => a.naziv.compareTo(b.naziv));
+  }
+  return copy;
+}
+
+List<(String, int)> _topCertificationRows(List<String> tags) {
+  const weights = [40, 30, 20, 10];
+  final rows = <(String, int)>[];
+  for (var i = 0; i < tags.length && i < 4; i++) {
+    rows.add((tags[i], weights[i]));
+  }
+  return rows;
+}
+
 class TherapistServicesScreen extends StatefulWidget {
   const TherapistServicesScreen({super.key});
 
@@ -85,9 +126,9 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
   Future<_ServicesData>? _future;
-  final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   int? _categoryFilterId;
+  String _sortMode = 'A to Z';
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
 
@@ -104,7 +145,6 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
@@ -120,11 +160,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
         final me = results[0] as Zaposlenik?;
         final all = results[1] as List<Usluga>;
         if (me == null) {
-          return const _ServicesData(
-            me: null,
-            linked: [],
-            categories: [],
-          );
+          return const _ServicesData(me: null, linked: [], categories: []);
         }
         final linked = _linkedServices(me, all);
         return _ServicesData(
@@ -137,17 +173,79 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
   }
 
   List<Usluga> _filterList(List<Usluga> linked) {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    return linked.where((u) {
+    var list = linked.where((u) {
       if (_categoryFilterId != null &&
           u.kategorijaUslugaId != _categoryFilterId) {
         return false;
       }
-      if (q.isEmpty) return true;
-      final blob =
-          '${u.naziv} ${u.kategorija} ${u.opis}'.toLowerCase();
-      return blob.contains(q);
+      return true;
     }).toList();
+    return _sortServices(list, _sortMode);
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        width: 440,
+      ),
+    );
+  }
+
+  void _openFilterSheet(List<KategorijaUsluga> categories) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _SvcUi.bgBottom,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Filter by category',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: _SvcUi.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _FilterChip(
+                      label: 'All',
+                      selected: _categoryFilterId == null,
+                      onTap: () {
+                        setState(() => _categoryFilterId = null);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    for (final c in categories)
+                      _FilterChip(
+                        label: c.naziv,
+                        selected: _categoryFilterId == c.id,
+                        onTap: () {
+                          setState(() => _categoryFilterId = c.id);
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -169,7 +267,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
             if (snap.connectionState == ConnectionState.waiting) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [
+                children: const [
                   SizedBox(height: 200),
                   Center(
                     child: SizedBox(
@@ -192,15 +290,15 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                   _SvcGlass(
                     child: Column(
                       children: [
-                        const Text(
+                        Text(
                           'Could not load your service list.',
-                          style: TextStyle(
+                          style: GoogleFonts.inter(
                             fontWeight: FontWeight.w800,
                             color: _SvcUi.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 14),
-                        _PrimaryGradientButton(
+                        _PrimaryButton(
                           label: 'Try again',
                           icon: Icons.refresh_rounded,
                           onTap: _reload,
@@ -212,26 +310,25 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
               );
             }
 
-            final filtered = _filterList(data.linked);
             final tags = _specializationTags(me.specijalizacija);
+            final filtered = _filterList(data.linked);
+            final katName = me.kategorijaUslugaNaziv?.trim();
 
             return FadeTransition(
               opacity: _fadeAnim,
               child: LayoutBuilder(
                 builder: (context, c) {
                   final wide = c.maxWidth >= 1100;
-                  final main = _MainServicesColumn(
+                  final main = _MainColumn(
                     me: me,
                     linked: data.linked,
                     filtered: filtered,
-                    categories: data.categories,
                     tags: tags,
-                    categoryFilterId: _categoryFilterId,
-                    searchCtrl: _searchCtrl,
-                    scrollCtrl: _scrollCtrl,
-                    onSearchChanged: () => setState(() {}),
-                    onCategory: (id) => setState(() => _categoryFilterId = id),
-                    onRefresh: _reload,
+                    categoryName: katName,
+                    categoriesCount: data.categories.length,
+                    sortMode: _sortMode,
+                    onSort: (v) => setState(() => _sortMode = v),
+                    onFilter: () => _openFilterSheet(data.categories),
                     onOpenService: (id) {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -240,10 +337,17 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                       );
                     },
                   );
-                  final sidebar = _ServicesSidebar(
+                  final sidebar = _Sidebar(
                     me: me,
                     linkedCount: data.linked.length,
                     tags: tags,
+                    onRequestCert: () => _snack(
+                      'Your admin will review certification requests for additional treatments.',
+                    ),
+                    onUpdateAvailability: () {
+                      _snack('Availability updates are coordinated with your spa admin.');
+                      context.read<DesktopNav>().goTo(DesktopRouteKey.schedule);
+                    },
                   );
 
                   return SingleChildScrollView(
@@ -285,6 +389,33 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
   }
 }
 
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: _SvcUi.purple.withValues(alpha: 0.35),
+      checkmarkColor: Colors.white,
+      labelStyle: GoogleFonts.inter(
+        fontWeight: FontWeight.w700,
+        color: selected ? Colors.white : _SvcUi.textSecondary,
+      ),
+    );
+  }
+}
+
 class _ServicesShell extends StatelessWidget {
   const _ServicesShell({required this.child});
 
@@ -305,16 +436,16 @@ class _ServicesShell extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: -40,
-          left: 100,
+          top: -50,
+          right: 60,
           child: Container(
-            width: 280,
-            height: 280,
+            width: 260,
+            height: 260,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  _SvcUi.purple.withValues(alpha: 0.18),
+                  _SvcUi.purple.withValues(alpha: 0.2),
                   Colors.transparent,
                 ],
               ),
@@ -327,76 +458,53 @@ class _ServicesShell extends StatelessWidget {
   }
 }
 
-class _MainServicesColumn extends StatelessWidget {
-  const _MainServicesColumn({
+class _MainColumn extends StatelessWidget {
+  const _MainColumn({
     required this.me,
     required this.linked,
     required this.filtered,
-    required this.categories,
     required this.tags,
-    required this.categoryFilterId,
-    required this.searchCtrl,
-    required this.scrollCtrl,
-    required this.onSearchChanged,
-    required this.onCategory,
-    required this.onRefresh,
+    required this.categoryName,
+    required this.categoriesCount,
+    required this.sortMode,
+    required this.onSort,
+    required this.onFilter,
     required this.onOpenService,
   });
 
   final Zaposlenik me;
   final List<Usluga> linked;
   final List<Usluga> filtered;
-  final List<KategorijaUsluga> categories;
   final List<String> tags;
-  final int? categoryFilterId;
-  final TextEditingController searchCtrl;
-  final ScrollController scrollCtrl;
-  final VoidCallback onSearchChanged;
-  final ValueChanged<int?> onCategory;
-  final VoidCallback onRefresh;
+  final String? categoryName;
+  final int categoriesCount;
+  final String sortMode;
+  final ValueChanged<String> onSort;
+  final VoidCallback onFilter;
   final ValueChanged<int> onOpenService;
 
   @override
   Widget build(BuildContext context) {
-    final katName = me.kategorijaUslugaNaziv?.trim();
-    final hasCategory = (me.kategorijaUslugaId ?? 0) > 0 &&
-        katName != null &&
-        katName.isNotEmpty;
+    final catLabel = categoryName ?? 'your profile';
+    final heroSubtitle =
+        'Treatments in $catLabel — ${linked.length} service${linked.length == 1 ? '' : 's'} linked to your profile.';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ServicesHeroCard(
-          categoryName: hasCategory ? katName : null,
-          totalServices: linked.length,
+        _HeroCard(
+          subtitle: heroSubtitle,
+          linkedCount: linked.length,
+          categoriesCount: categoriesCount,
           certifiedCount: tags.length,
         ),
         const SizedBox(height: _SvcUi.gap),
-        _KpiRow(
-          total: linked.length,
-          categories: categories.length,
-          certified: tags.length,
-          hasCategory: hasCategory,
-        ),
-        const SizedBox(height: _SvcUi.gap),
-        _FilterBar(
-          searchCtrl: searchCtrl,
-          categories: categories,
-          categoryFilterId: categoryFilterId,
-          onSearchChanged: onSearchChanged,
-          onCategory: onCategory,
-          onRefresh: onRefresh,
-          resultCount: filtered.length,
-        ),
-        const SizedBox(height: _SvcUi.gap),
-        if (tags.isNotEmpty) ...[
-          _CertifiedTagsCard(tags: tags),
-          const SizedBox(height: _SvcUi.gap),
-        ],
-        _ServicesCatalogCard(
-          filtered: filtered,
-          hasCategory: hasCategory,
-          categoryName: katName,
+        _LinkedServicesCard(
+          services: filtered,
+          allLinked: linked,
+          sortMode: sortMode,
+          onSort: onSort,
+          onFilter: onFilter,
           onOpenService: onOpenService,
         ),
       ],
@@ -404,197 +512,156 @@ class _MainServicesColumn extends StatelessWidget {
   }
 }
 
-class _ServicesHeroCard extends StatelessWidget {
-  const _ServicesHeroCard({
-    required this.categoryName,
-    required this.totalServices,
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    required this.subtitle,
+    required this.linkedCount,
+    required this.categoriesCount,
     required this.certifiedCount,
   });
 
-  final String? categoryName;
-  final int totalServices;
+  final String subtitle;
+  final int linkedCount;
+  final int categoriesCount;
   final int certifiedCount;
 
   @override
   Widget build(BuildContext context) {
     return _SvcGlass(
       radius: _SvcUi.heroRadius,
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 200),
-        child: Row(
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: const LinearGradient(
-                  colors: [_SvcUi.purple, _SvcUi.lavender],
+      padding: const EdgeInsets.all(24),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final stack = c.maxWidth < 760;
+          final illustration = const _SpaHeroIllustration();
+          final content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    colors: [
+                      _SvcUi.purple.withValues(alpha: 0.5),
+                      _SvcUi.lavender.withValues(alpha: 0.35),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: _SvcUi.lavender.withValues(alpha: 0.5),
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: _SvcUi.purple.withValues(alpha: 0.4),
-                    blurRadius: 28,
+                child: Text(
+                  'Certified Therapist',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: Colors.white,
                   ),
-                ],
+                ),
               ),
-              child: const Icon(
-                Icons.spa_rounded,
-                size: 44,
-                color: Colors.white,
+              const SizedBox(height: 14),
+              Text(
+                'Your Service Catalog',
+                style: GoogleFonts.inter(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: _SvcUi.textPrimary,
+                  letterSpacing: -0.5,
+                ),
               ),
-            ),
-            const SizedBox(width: 22),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: _SvcUi.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Text(
-                    'Your Service Catalog',
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: _SvcUi.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    categoryName != null
-                        ? 'Treatments in $categoryName — $totalServices services linked to your profile.'
-                        : certifiedCount > 0
-                        ? 'Certified for $certifiedCount treatments from your specialization profile.'
-                        : 'Treatments you are certified to perform at NuaSpa.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: _SvcUi.textSecondary,
-                    ),
-                  ),
+                  _HeroStat(value: '$linkedCount', label: 'Linked Services'),
+                  _HeroStat(value: '$categoriesCount', label: 'Categories'),
+                  _HeroStat(value: '$certifiedCount', label: 'Certified Tags'),
                 ],
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+
+          if (stack) {
+            return Column(
+              children: [
+                illustration,
+                const SizedBox(height: 20),
+                content,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              illustration,
+              const SizedBox(width: 28),
+              Expanded(child: content),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _KpiRow extends StatelessWidget {
-  const _KpiRow({
-    required this.total,
-    required this.categories,
-    required this.certified,
-    required this.hasCategory,
-  });
-
-  final int total;
-  final int categories;
-  final int certified;
-  final bool hasCategory;
+class _SpaHeroIllustration extends StatelessWidget {
+  const _SpaHeroIllustration();
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final cols = c.maxWidth >= 900 ? 3 : 1;
-        final w = (c.maxWidth - 16 * (cols - 1)) / cols;
-        final cards = [
-          _MiniKpi(
-            label: 'Linked Services',
-            value: '$total',
-            icon: Icons.design_services_rounded,
-            accent: _SvcUi.purple,
-          ),
-          _MiniKpi(
-            label: 'Categories',
-            value: '$categories',
-            icon: Icons.category_rounded,
-            accent: _SvcUi.lavender,
-          ),
-          _MiniKpi(
-            label: hasCategory ? 'Certified Tags' : 'Specializations',
-            value: '$certified',
-            icon: Icons.verified_rounded,
-            accent: _SvcUi.gold,
-          ),
-        ];
-        return Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: [
-            for (final card in cards)
-              SizedBox(
-                width: w.clamp(200, c.maxWidth),
-                child: card,
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MiniKpi extends StatelessWidget {
-  const _MiniKpi({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SvcGlass(
-      padding: const EdgeInsets.all(18),
-      child: Row(
+    return SizedBox(
+      width: 200,
+      height: 160,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 160,
+            height: 160,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: accent.withValues(alpha: 0.14),
-              border: Border.all(color: accent.withValues(alpha: 0.35)),
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  _SvcUi.purple.withValues(alpha: 0.35),
+                  _SvcUi.lavender.withValues(alpha: 0.05),
+                ],
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.28),
-                  blurRadius: 14,
+                  color: _SvcUi.purple.withValues(alpha: 0.35),
+                  blurRadius: 40,
+                  spreadRadius: 4,
                 ),
               ],
             ),
-            child: Icon(icon, color: accent, size: 22),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _SvcUi.textSecondary,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: _SvcUi.textPrimary,
-                  ),
-                ),
-              ],
-            ),
+          const Icon(Icons.spa_rounded, size: 56, color: _SvcUi.lavender),
+          Positioned(
+            left: 12,
+            bottom: 28,
+            child: _IllustrationOrb(icon: Icons.water_drop_outlined, size: 36),
+          ),
+          Positioned(
+            right: 8,
+            top: 24,
+            child: _IllustrationOrb(icon: Icons.self_improvement_rounded, size: 32),
+          ),
+          Positioned(
+            right: 28,
+            bottom: 16,
+            child: _IllustrationOrb(icon: Icons.dry_cleaning_outlined, size: 28),
           ),
         ],
       ),
@@ -602,100 +669,63 @@ class _MiniKpi extends StatelessWidget {
   }
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.searchCtrl,
-    required this.categories,
-    required this.categoryFilterId,
-    required this.onSearchChanged,
-    required this.onCategory,
-    required this.onRefresh,
-    required this.resultCount,
-  });
+class _IllustrationOrb extends StatelessWidget {
+  const _IllustrationOrb({required this.icon, required this.size});
 
-  final TextEditingController searchCtrl;
-  final List<KategorijaUsluga> categories;
-  final int? categoryFilterId;
-  final VoidCallback onSearchChanged;
-  final ValueChanged<int?> onCategory;
-  final VoidCallback onRefresh;
-  final int resultCount;
+  final IconData icon;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return _SvcGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _SvcGlass(
-                  radius: 14,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: TextField(
-                    controller: searchCtrl,
-                    onChanged: (_) => onSearchChanged(),
-                    style: GoogleFonts.inter(color: _SvcUi.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Search services…',
-                      hintStyle: GoogleFonts.inter(
-                        color: _SvcUi.textSecondary,
-                        fontSize: 14,
-                      ),
-                      border: InputBorder.none,
-                      prefixIcon: Icon(
-                        Icons.search_rounded,
-                        color: _SvcUi.lavender.withValues(alpha: 0.85),
-                      ),
-                      suffixIcon: searchCtrl.text.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 20),
-                              onPressed: () {
-                                searchCtrl.clear();
-                                onSearchChanged();
-                              },
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              _GlassIconButton(
-                icon: Icons.refresh_rounded,
-                onTap: onRefresh,
-              ),
-            ],
+    return Container(
+      width: size + 16,
+      height: size + 16,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: _SvcUi.purple.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: _SvcUi.purple.withValues(alpha: 0.25),
+            blurRadius: 12,
           ),
-          if (categories.length > 1) ...[
-            const SizedBox(height: 14),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _CategoryPill(
-                    label: 'All services',
-                    selected: categoryFilterId == null,
-                    onTap: () => onCategory(null),
-                  ),
-                  for (final c in categories) ...[
-                    const SizedBox(width: 8),
-                    _CategoryPill(
-                      label: c.naziv,
-                      selected: categoryFilterId == c.id,
-                      onTap: () => onCategory(c.id),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
+        ],
+      ),
+      child: Icon(icon, size: size * 0.55, color: _SvcUi.lavender),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            '$resultCount service${resultCount == 1 ? '' : 's'} shown',
+            value,
             style: GoogleFonts.inter(
-              fontSize: 12,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: _SvcUi.textPrimary,
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: _SvcUi.textSecondary,
             ),
@@ -706,203 +736,124 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-class _CategoryPill extends StatefulWidget {
-  const _CategoryPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_CategoryPill> createState() => _CategoryPillState();
-}
-
-class _CategoryPillState extends State<_CategoryPill> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            gradient: widget.selected
-                ? const LinearGradient(
-                    colors: [_SvcUi.purple, _SvcUi.lavender],
-                  )
-                : null,
-            color: widget.selected
-                ? null
-                : Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
-            border: Border.all(
-              color: widget.selected
-                  ? _SvcUi.lavender.withValues(alpha: 0.5)
-                  : Colors.white.withValues(alpha: 0.12),
-            ),
-          ),
-          child: Text(
-            widget.label,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: widget.selected ? Colors.white : _SvcUi.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CertifiedTagsCard extends StatelessWidget {
-  const _CertifiedTagsCard({required this.tags});
-
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SvcGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Certified Treatments',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _SvcUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'From your therapist profile specialization.',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _SvcUi.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final tag in tags)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    color: _SvcUi.purple.withValues(alpha: 0.12),
-                    border: Border.all(
-                      color: _SvcUi.lavender.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    tag,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w800,
-                      color: _SvcUi.textPrimary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ServicesCatalogCard extends StatelessWidget {
-  const _ServicesCatalogCard({
-    required this.filtered,
-    required this.hasCategory,
-    required this.categoryName,
+class _LinkedServicesCard extends StatelessWidget {
+  const _LinkedServicesCard({
+    required this.services,
+    required this.allLinked,
+    required this.sortMode,
+    required this.onSort,
+    required this.onFilter,
     required this.onOpenService,
   });
 
-  final List<Usluga> filtered;
-  final bool hasCategory;
-  final String? categoryName;
+  final List<Usluga> services;
+  final List<Usluga> allLinked;
+  final String sortMode;
+  final ValueChanged<String> onSort;
+  final VoidCallback onFilter;
   final ValueChanged<int> onOpenService;
 
   @override
   Widget build(BuildContext context) {
     return _SvcGlass(
       radius: _SvcUi.heroRadius,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Linked Services',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: _SvcUi.textPrimary,
+          LayoutBuilder(
+            builder: (context, c) {
+              final stack = c.maxWidth < 640;
+              final header = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your Linked Services',
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: _SvcUi.textPrimary,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasCategory
-                ? 'Services in your assigned category from the NuaSpa catalog.'
-                : 'Services matched to your specialization tags.',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _SvcUi.textSecondary,
-            ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'These are the services you are certified to perform.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: _SvcUi.textSecondary,
+                    ),
+                  ),
+                ],
+              );
+              final actions = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SortDropdown(value: sortMode, onChanged: onSort),
+                  const SizedBox(width: 8),
+                  _GlassIconButton(
+                    icon: Icons.tune_rounded,
+                    tooltip: 'Filter',
+                    onTap: onFilter,
+                  ),
+                ],
+              );
+              if (stack) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    header,
+                    const SizedBox(height: 14),
+                    actions,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: header),
+                  actions,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
-          if (filtered.isEmpty)
-            _ServicesEmptyState(
-              hasCategory: hasCategory,
-              categoryName: categoryName,
+          if (services.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.spa_outlined,
+                    size: 48,
+                    color: _SvcUi.lavender.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No linked services match your filters.',
+                    style: GoogleFonts.inter(
+                      color: _SvcUi.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             )
           else
-            LayoutBuilder(
-              builder: (context, c) {
-                final cross = c.maxWidth >= 1100
-                    ? 3
-                    : c.maxWidth >= 700
-                    ? 2
-                    : 1;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cross,
-                    childAspectRatio: 0.92,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
+            Column(
+              children: [
+                for (var i = 0; i < services.length; i++) ...[
+                  _ServiceRow(
+                    service: services[i],
+                    tier: _tierLabel(services[i], allLinked),
+                    onViewDetails: () => onOpenService(services[i].id),
                   ),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, i) {
-                    return _ServiceGridCard(
-                      service: filtered[i],
-                      onTap: () => onOpenService(filtered[i].id),
-                    );
-                  },
-                );
-              },
+                  if (i < services.length - 1)
+                    Divider(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                ],
+              ],
             ),
         ],
       ),
@@ -910,103 +861,109 @@ class _ServicesCatalogCard extends StatelessWidget {
   }
 }
 
-class _ServiceGridCard extends StatefulWidget {
-  const _ServiceGridCard({
+class _SortDropdown extends StatelessWidget {
+  const _SortDropdown({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  static const _options = [
+    'A to Z',
+    'Z to A',
+    'Duration',
+    'Price: High to Low',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: _SvcUi.bgBottom,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _SvcUi.textPrimary,
+          ),
+          icon: Icon(
+            Icons.expand_more_rounded,
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+          items: [
+            for (final o in _options)
+              DropdownMenuItem(value: o, child: Text(o)),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceRow extends StatefulWidget {
+  const _ServiceRow({
     required this.service,
-    required this.onTap,
+    required this.tier,
+    required this.onViewDetails,
   });
 
   final Usluga service;
-  final VoidCallback onTap;
+  final String tier;
+  final VoidCallback onViewDetails;
 
   @override
-  State<_ServiceGridCard> createState() => _ServiceGridCardState();
+  State<_ServiceRow> createState() => _ServiceRowState();
 }
 
-class _ServiceGridCardState extends State<_ServiceGridCard> {
+class _ServiceRowState extends State<_ServiceRow> {
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
     final u = widget.service;
+    final isPremium = widget.tier == 'Premium';
+    final tierColor = isPremium ? _SvcUi.gold : _SvcUi.lavender;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _SvcUi.purple.withValues(alpha: _hover ? 0.45 : 0.2),
-              ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _SvcUi.purple.withValues(alpha: 0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        color: _hover ? Colors.white.withValues(alpha: 0.04) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 720;
+            final thumb = _ServiceThumbnail(service: u);
+            final info = Expanded(
+              child: Row(
                 children: [
-                  Expanded(
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          u.slikaUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            color: _SvcUi.purple.withValues(alpha: 0.15),
-                            child: const Icon(
-                              Icons.spa_outlined,
-                              size: 48,
-                              color: _SvcUi.lavender,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.15),
-                              ),
-                            ),
-                            child: Text(
-                              u.kategorija,
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: _SvcUi.purple.withValues(alpha: 0.2),
+                    ),
+                    child: const Icon(
+                      Icons.spa_outlined,
+                      size: 18,
+                      color: _SvcUi.lavender,
                     ),
                   ),
-                  Container(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1015,42 +972,188 @@ class _ServiceGridCardState extends State<_ServiceGridCard> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
                             fontSize: 15,
+                            fontWeight: FontWeight.w800,
                             color: _SvcUi.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
-                          '${u.cijenaKm} · ${u.trajanje}',
+                          _durationLabel(u),
                           style: GoogleFonts.inter(
-                            fontSize: 12,
+                            fontSize: 13,
                             color: _SvcUi.textSecondary,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              'View details',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: _SvcUi.lavender,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 14,
-                              color: _SvcUi.lavender.withValues(alpha: 0.9),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
                 ],
+              ),
+            );
+            final badge = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: tierColor.withValues(alpha: 0.15),
+                border: Border.all(color: tierColor.withValues(alpha: 0.45)),
+              ),
+              child: Text(
+                widget.tier,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: tierColor,
+                ),
+              ),
+            );
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [thumb, const SizedBox(width: 14), info]),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      badge,
+                      const Spacer(),
+                      _OutlinedButton(
+                        label: 'View Details',
+                        onTap: widget.onViewDetails,
+                      ),
+                      const SizedBox(width: 4),
+                      PopupMenuButton<String>(
+                        tooltip: 'More',
+                        color: _SvcUi.bgBottom,
+                        icon: Icon(
+                          Icons.more_vert_rounded,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        onSelected: (v) {
+                          if (v == 'view') widget.onViewDetails();
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Text('View Details'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                thumb,
+                const SizedBox(width: 16),
+                info,
+                const SizedBox(width: 12),
+                badge,
+                const SizedBox(width: 12),
+                _OutlinedButton(
+                  label: 'View Details',
+                  onTap: widget.onViewDetails,
+                ),
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  color: _SvcUi.bgBottom,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                  onSelected: (v) {
+                    if (v == 'view') widget.onViewDetails();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'view',
+                      child: Text('View Details'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceThumbnail extends StatelessWidget {
+  const _ServiceThumbnail({required this.service});
+
+  final Usluga service;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 64,
+        height: 48,
+        child: Image.network(
+          service.slikaUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => Container(
+            color: _SvcUi.purple.withValues(alpha: 0.2),
+            child: const Icon(Icons.spa_outlined, color: _SvcUi.lavender),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OutlinedButton extends StatefulWidget {
+  const _OutlinedButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_OutlinedButton> createState() => _OutlinedButtonState();
+}
+
+class _OutlinedButtonState extends State<_OutlinedButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _SvcUi.purple.withValues(alpha: _hover ? 0.65 : 0.4),
+              ),
+              color: _SvcUi.purple.withValues(alpha: _hover ? 0.15 : 0.08),
+            ),
+            child: Center(
+              child: Text(
+                widget.label,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _SvcUi.textPrimary,
+                ),
               ),
             ),
           ),
@@ -1060,77 +1163,26 @@ class _ServiceGridCardState extends State<_ServiceGridCard> {
   }
 }
 
-class _ServicesEmptyState extends StatelessWidget {
-  const _ServicesEmptyState({
-    required this.hasCategory,
-    required this.categoryName,
-  });
-
-  final bool hasCategory;
-  final String? categoryName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _SvcUi.purple.withValues(alpha: 0.12),
-              border: Border.all(color: _SvcUi.purple.withValues(alpha: 0.35)),
-            ),
-            child: const Icon(
-              Icons.spa_outlined,
-              size: 48,
-              color: _SvcUi.lavender,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Text(
-            'No services to show',
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: _SvcUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            hasCategory
-                ? 'No catalog services found for ${categoryName ?? 'your category'}.\nAsk your administrator to link treatments.'
-                : 'No services assigned yet.\nAsk your administrator to set your category or specialization.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              height: 1.5,
-              color: _SvcUi.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ServicesSidebar extends StatelessWidget {
-  const _ServicesSidebar({
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
     required this.me,
     required this.linkedCount,
     required this.tags,
+    required this.onRequestCert,
+    required this.onUpdateAvailability,
   });
 
   final Zaposlenik me;
   final int linkedCount;
   final List<String> tags;
+  final VoidCallback onRequestCert;
+  final VoidCallback onUpdateAvailability;
 
   @override
   Widget build(BuildContext context) {
     final nav = context.read<DesktopNav>();
-    final katName = me.kategorijaUslugaNaziv?.trim();
+    final katName = me.kategorijaUslugaNaziv?.trim() ?? '—';
+    final topRows = _topCertificationRows(tags);
 
     return Column(
       children: [
@@ -1147,22 +1199,14 @@ class _ServicesSidebar extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              if (katName != null && katName.isNotEmpty) ...[
-                _SidebarRow(
-                  icon: Icons.category_rounded,
-                  label: 'Category',
-                  value: katName,
-                ),
-                const SizedBox(height: 12),
-              ],
-              _SidebarRow(
-                icon: Icons.design_services_rounded,
-                label: 'Linked services',
+              _SummaryLine(label: 'Category', value: katName),
+              const SizedBox(height: 10),
+              _SummaryLine(
+                label: 'Linked Services',
                 value: '$linkedCount',
               ),
-              const SizedBox(height: 12),
-              _SidebarRow(
-                icon: Icons.verified_rounded,
+              const SizedBox(height: 10),
+              _SummaryLine(
                 label: 'Certifications',
                 value: '${tags.length}',
               ),
@@ -1170,27 +1214,117 @@ class _ServicesSidebar extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        _TopSpecializationsCard(tags: tags),
+        _SvcGlass(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Top Certified Treatments',
+                style: GoogleFonts.inter(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: _SvcUi.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (topRows.isEmpty)
+                Text(
+                  'No certification tags on your profile yet.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: _SvcUi.textSecondary,
+                  ),
+                )
+              else
+                for (var i = 0; i < topRows.length; i++) ...[
+                  _ProgressRow(
+                    label: topRows[i].$1,
+                    percent: topRows[i].$2,
+                  ),
+                  if (i < topRows.length - 1) const SizedBox(height: 14),
+                ],
+            ],
+          ),
+        ),
         const SizedBox(height: 18),
-        _QuickActionsCard(
-          onAppointments: () =>
-              nav.goTo(DesktopRouteKey.therapistAppointments),
-          onSchedule: () => nav.goTo(DesktopRouteKey.schedule),
-          onReviews: () => nav.goTo(DesktopRouteKey.therapistReviews),
+        _SvcGlass(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Quick Actions',
+                style: GoogleFonts.inter(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: _SvcUi.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _QuickRow(
+                icon: Icons.event_note_rounded,
+                label: 'My Appointments',
+                onTap: () => nav.goTo(DesktopRouteKey.therapistAppointments),
+              ),
+              const SizedBox(height: 10),
+              _QuickRow(
+                icon: Icons.calendar_month_rounded,
+                label: 'My Schedule',
+                onTap: () => nav.goTo(DesktopRouteKey.schedule),
+              ),
+              const SizedBox(height: 10),
+              _QuickRow(
+                icon: Icons.reviews_outlined,
+                label: 'My Reviews',
+                onTap: () => nav.goTo(DesktopRouteKey.therapistReviews),
+              ),
+              const SizedBox(height: 10),
+              _QuickRow(
+                icon: Icons.event_available_rounded,
+                label: 'Update Availability',
+                onTap: onUpdateAvailability,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _SvcGlass(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Want to add more services?',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: _SvcUi.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Contact admin to get certified for more treatments.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: _SvcUi.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _PrimaryButton(
+                label: 'Request Certification',
+                icon: Icons.verified_outlined,
+                onTap: onRequestCert,
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _SidebarRow extends StatelessWidget {
-  const _SidebarRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _SummaryLine extends StatelessWidget {
+  const _SummaryLine({required this.label, required this.value});
 
-  final IconData icon;
   final String label;
   final String value;
 
@@ -1198,8 +1332,6 @@ class _SidebarRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: _SvcUi.lavender),
-        const SizedBox(width: 12),
         Expanded(
           child: Text(
             label,
@@ -1212,56 +1344,12 @@ class _SidebarRow extends StatelessWidget {
         Text(
           value,
           style: GoogleFonts.inter(
+            fontSize: 14,
             fontWeight: FontWeight.w800,
             color: _SvcUi.textPrimary,
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TopSpecializationsCard extends StatelessWidget {
-  const _TopSpecializationsCard({required this.tags});
-
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    final weights = [40, 30, 20, 10];
-    final rows = <(String, int)>[];
-    for (var i = 0; i < tags.length && i < 4; i++) {
-      rows.add((tags[i], weights[i]));
-    }
-
-    return _SvcGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Top Certified Treatments',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _SvcUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (rows.isEmpty)
-            Text(
-              'No specialization tags on your profile yet.',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: _SvcUi.textSecondary,
-              ),
-            )
-          else
-            for (var i = 0; i < rows.length; i++) ...[
-              _ProgressRow(label: rows[i].$1, percent: rows[i].$2),
-              if (i < rows.length - 1) const SizedBox(height: 14),
-            ],
-        ],
-      ),
     );
   }
 }
@@ -1274,52 +1362,53 @@ class _ProgressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _SvcUi.textPrimary,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _SvcUi.textPrimary,
+                ),
+              ),
             ),
-          ),
+            Text(
+              '$percent%',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _SvcUi.textSecondary,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: SizedBox(
-              height: 8,
-              child: Stack(
-                children: [
-                  Container(color: Colors.white.withValues(alpha: 0.08)),
-                  FractionallySizedBox(
-                    widthFactor: percent / 100,
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_SvcUi.purple, _SvcUi.lavender],
-                        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 8,
+            child: Stack(
+              children: [
+                Container(color: Colors.white.withValues(alpha: 0.08)),
+                FractionallySizedBox(
+                  widthFactor: percent / 100,
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_SvcUi.purple, _SvcUi.lavender],
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '$percent%',
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: _SvcUi.textSecondary,
           ),
         ),
       ],
@@ -1327,57 +1416,8 @@ class _ProgressRow extends StatelessWidget {
   }
 }
 
-class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({
-    required this.onAppointments,
-    required this.onSchedule,
-    required this.onReviews,
-  });
-
-  final VoidCallback onAppointments;
-  final VoidCallback onSchedule;
-  final VoidCallback onReviews;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SvcGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Quick Actions',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _SvcUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _QuickActionRow(
-            icon: Icons.event_note_rounded,
-            label: 'My Appointments',
-            onTap: onAppointments,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionRow(
-            icon: Icons.calendar_month_rounded,
-            label: 'My Schedule',
-            onTap: onSchedule,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionRow(
-            icon: Icons.reviews_outlined,
-            label: 'My Reviews',
-            onTap: onReviews,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionRow extends StatefulWidget {
-  const _QuickActionRow({
+class _QuickRow extends StatefulWidget {
+  const _QuickRow({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -1388,10 +1428,10 @@ class _QuickActionRow extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_QuickActionRow> createState() => _QuickActionRowState();
+  State<_QuickRow> createState() => _QuickRowState();
 }
 
-class _QuickActionRowState extends State<_QuickActionRow> {
+class _QuickRowState extends State<_QuickRow> {
   bool _hover = false;
 
   @override
@@ -1475,41 +1515,35 @@ class _SvcGlass extends StatelessWidget {
   }
 }
 
-class _GlassIconButton extends StatefulWidget {
-  const _GlassIconButton({required this.icon, required this.onTap});
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
 
   @override
-  State<_GlassIconButton> createState() => _GlassIconButtonState();
-}
-
-class _GlassIconButtonState extends State<_GlassIconButton> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+    return Tooltip(
+      message: tooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: widget.onTap,
+          onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 52,
-            height: 52,
+          child: Container(
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.05),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: _hover ? 0.2 : 0.1),
-              ),
+              color: Colors.white.withValues(alpha: 0.05),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
-            child: Icon(widget.icon, color: Colors.white.withValues(alpha: 0.9)),
+            child: Icon(icon, color: Colors.white.withValues(alpha: 0.85)),
           ),
         ),
       ),
@@ -1517,8 +1551,8 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
   }
 }
 
-class _PrimaryGradientButton extends StatefulWidget {
-  const _PrimaryGradientButton({
+class _PrimaryButton extends StatefulWidget {
+  const _PrimaryButton({
     required this.label,
     required this.icon,
     required this.onTap,
@@ -1529,10 +1563,10 @@ class _PrimaryGradientButton extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_PrimaryGradientButton> createState() => _PrimaryGradientButtonState();
+  State<_PrimaryButton> createState() => _PrimaryButtonState();
 }
 
-class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
+class _PrimaryButtonState extends State<_PrimaryButton> {
   bool _hover = false;
 
   @override
@@ -1548,7 +1582,7 @@ class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               gradient: LinearGradient(
@@ -1565,6 +1599,7 @@ class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
               ],
             ),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(widget.icon, color: Colors.white, size: 20),
