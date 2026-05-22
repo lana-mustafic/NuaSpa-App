@@ -477,7 +477,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapists
                       ? 'Therapists'
                       : isTherapistDash
-                      ? 'Good morning, Therapist! 👋'
+                      ? 'Good morning, Therapist!'
                       : isTherapistAppts
                       ? 'My Appointments'
                       : isTherapistSchedule
