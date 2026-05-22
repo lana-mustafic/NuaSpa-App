@@ -516,7 +516,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : isTherapistDash
                       ? 'Here\'s your overview for today.'
-                      : isTherapistAppts || isTherapistSchedule
+                      : isTherapistAppts
+                      ? 'Your assigned bookings and daily schedule.'
+                      : isTherapistSchedule
                       ? 'Your assigned bookings and schedule.'
                       : isTherapistServices
                       ? 'Treatments you are certified to perform.'
