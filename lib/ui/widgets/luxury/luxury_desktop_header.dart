@@ -527,7 +527,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistProfile
                       ? 'Update your contact details.'
                       : isSettings
-                      ? 'Account, session, workspace shortcuts, and application details.'
+                      ? 'Manage your account, session security, and workspace preferences.'
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
