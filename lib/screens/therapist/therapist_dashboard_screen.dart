@@ -314,13 +314,13 @@ class _TherapistKpiCardState extends State<_TherapistKpiCard> {
         height: double.infinity,
         transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
         child: _TherapistDashGlass(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   color: s.accent.withValues(alpha: 0.14),
@@ -335,9 +335,9 @@ class _TherapistKpiCardState extends State<_TherapistKpiCard> {
                     ),
                   ],
                 ),
-                child: Icon(s.icon, color: s.accent, size: 22),
+                child: Icon(s.icon, color: s.accent, size: 20),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               Text(
                 s.label,
                 maxLines: 1,
@@ -346,22 +346,23 @@ class _TherapistKpiCardState extends State<_TherapistKpiCard> {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: _TdUi.textSecondary,
+                  height: 1.2,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 s.value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: FontWeight.w800,
                   color: _TdUi.textPrimary,
                   letterSpacing: -0.6,
-                  height: 1.05,
+                  height: 1.0,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 s.trend,
                 maxLines: 1,
@@ -370,13 +371,18 @@ class _TherapistKpiCardState extends State<_TherapistKpiCard> {
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: _TdUi.textSecondary,
+                  height: 1.2,
                 ),
               ),
-              const Spacer(),
-              LuxuryMiniSparkline(
-                values: s.sparkline,
-                height: 32,
-                accentColor: s.accent,
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: LuxuryMiniSparkline(
+                    values: s.sparkline,
+                    height: 28,
+                    accentColor: s.accent,
+                  ),
+                ),
               ),
             ],
           ),
