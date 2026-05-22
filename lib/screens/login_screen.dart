@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/platform/nua_spa_platform.dart';
 import '../providers/auth_provider.dart';
 import '../ui/theme/nua_luxury_tokens.dart';
+import 'auth/accept_invite_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -436,7 +437,24 @@ class _LoginFormCard extends StatelessWidget {
                   isLoading: isLoading,
                   onPressed: isLoading ? null : onSubmit,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (_) => const AcceptInviteScreen(),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                  label: const Text('Activate therapist invitation'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: NuaLuxuryTokens.softPurpleGlow,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(
                   'Authorized staff only. Contact your administrator if you need access.',
                   textAlign: TextAlign.center,

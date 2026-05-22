@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/format/km_format.dart';
+import '../../models/admin/therapist_account_status.dart';
 import '../../models/admin/therapist_admin_profile.dart';
 import '../../models/admin/therapist_kpi.dart';
 import '../../models/admin/therapist_top_service.dart';
@@ -12,11 +13,16 @@ import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../catalog/service_details_screen.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
+import 'widgets/admin_therapist_portal_access_card.dart';
 
 class _TherapistScreenBundle {
-  const _TherapistScreenBundle({required this.profile});
+  const _TherapistScreenBundle({
+    required this.profile,
+    required this.accountStatus,
+  });
 
   final TherapistAdminProfile? profile;
+  final TherapistAccountStatus? accountStatus;
 }
 
 /// Simplified luxury therapist profile — overview-focused layout.
@@ -93,13 +99,19 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
         .subtract(const Duration(days: 30));
     final toD = DateTime(now.year, now.month, now.day);
 
-    final profile = await _api.getTherapistAdminProfile(
-      zaposlenikId: _therapist.id,
-      from: fromD,
-      to: toD,
-    );
+    final results = await Future.wait([
+      _api.getTherapistAdminProfile(
+        zaposlenikId: _therapist.id,
+        from: fromD,
+        to: toD,
+      ),
+      _api.getTherapistAccountStatus(_therapist.id),
+    ]);
 
-    return _TherapistScreenBundle(profile: profile);
+    return _TherapistScreenBundle(
+      profile: results[0] as TherapistAdminProfile?,
+      accountStatus: results[1] as TherapistAccountStatus?,
+    );
   }
 
   Future<void> _editProfile() async {
@@ -159,6 +171,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
         future: _bundleFuture,
         builder: (context, snap) {
           final profile = snap.data?.profile;
+          final accountStatus = snap.data?.accountStatus;
           final kpi = profile?.kpi;
           final schedule = profile?.sedmicniRaspored ?? const [];
           final topServices = profile?.topUsluge ?? const [];
@@ -196,6 +209,12 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                     linkedEmail: profile?.povezanEmail,
                     location: location,
                     tags: tags,
+                  ),
+                  const SizedBox(height: 18),
+                  AdminTherapistPortalAccessCard(
+                    therapist: t,
+                    accountStatus: accountStatus,
+                    onChanged: _reload,
                   ),
                   const SizedBox(height: 22),
                   _TabRow(

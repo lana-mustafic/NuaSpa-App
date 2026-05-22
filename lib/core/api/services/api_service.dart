@@ -21,6 +21,7 @@ import '../../../models/admin/admin_activity_feed_item.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
+import '../../../models/admin/therapist_account_status.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
@@ -312,6 +313,96 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.patchTherapistInternaNapomena: $e');
       return null;
+    }
+  }
+
+  Future<TherapistAccountStatus?> getTherapistAccountStatus(int zaposlenikId) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'admin/therapists/$zaposlenikId/account/status',
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return TherapistAccountStatus.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistAccountStatus: $e');
+      return null;
+    }
+  }
+
+  Future<TherapistInviteResult?> inviteTherapistAccount({
+    required int zaposlenikId,
+    String? email,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'admin/therapists/$zaposlenikId/account/invite',
+        data: email == null || email.trim().isEmpty ? null : {'email': email.trim()},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return TherapistInviteResult.fromJson(data);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map<String, dynamic>) {
+        return TherapistInviteResult.fromJson(data);
+      }
+      debugPrint('Greška u ApiService.inviteTherapistAccount: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.inviteTherapistAccount: $e');
+      return null;
+    }
+  }
+
+  Future<InviteValidationResult?> validateInviteToken(String token) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Account/validate-invite',
+        queryParameters: {'token': token},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return InviteValidationResult.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.validateInviteToken: $e');
+      return null;
+    }
+  }
+
+  /// Returns `(success, message)` — message is user-facing in both cases.
+  Future<({bool success, String message})> acceptTherapistInvite({
+    required String token,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Account/accept-invite',
+        data: {
+          'token': token,
+          'password': password,
+          'confirmPassword': confirmPassword,
+        },
+      );
+      final data = response.data;
+      final msg = data is Map<String, dynamic>
+          ? (data['message'] as String? ?? 'Account activated.')
+          : 'Account activated.';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final msg = data is Map && data['message'] != null
+          ? data['message'].toString()
+          : 'Could not activate account. Check your link and try again.';
+      debugPrint('Greška u ApiService.acceptTherapistInvite: $e');
+      return (success: false, message: msg);
+    } catch (e) {
+      debugPrint('Greška u ApiService.acceptTherapistInvite: $e');
+      return (
+        success: false,
+        message: 'Network error. Please try again.',
+      );
     }
   }
 
