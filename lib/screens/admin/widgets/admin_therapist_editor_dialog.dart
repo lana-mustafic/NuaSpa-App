@@ -104,6 +104,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   late final TextEditingController _email = TextEditingController(
     text: widget.existing?.email ?? '',
   );
+  late final FocusNode _emailFocus = FocusNode();
   late final TextEditingController _jezici = TextEditingController(
     text: widget.existing?.jezici ?? '',
   );
@@ -124,23 +125,36 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   bool _sendPortalInvite = false;
   bool _invitePreferenceSetByUser = false;
 
+  static final _emailPattern = RegExp(
+    r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+  );
+
   bool get _hasValidInviteEmail {
     final t = _email.text.trim();
-    return t.contains('@') && t.contains('.');
+    return _emailPattern.hasMatch(t);
   }
 
   @override
   void initState() {
     super.initState();
-    _email.addListener(_onEmailChanged);
+    _email.addListener(_syncPortalInviteOption);
+    _emailFocus.addListener(_onEmailFocusChanged);
     _bootstrap();
   }
 
-  void _onEmailChanged() {
+  void _onEmailFocusChanged() {
+    if (!_emailFocus.hasFocus) {
+      _syncPortalInviteOption();
+    }
+  }
+
+  void _syncPortalInviteOption() {
     if (!widget.isNew) return;
     setState(() {
       if (!_hasValidInviteEmail) {
-        _sendPortalInvite = false;
+        if (_sendPortalInvite) {
+          _sendPortalInvite = false;
+        }
         return;
       }
       if (!_invitePreferenceSetByUser) {
@@ -321,7 +335,10 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     _ime.dispose();
     _prezime.dispose();
     _telefon.dispose();
+    _email.removeListener(_syncPortalInviteOption);
+    _emailFocus.removeListener(_onEmailFocusChanged);
     _email.dispose();
+    _emailFocus.dispose();
     _jezici.dispose();
     _obrazovanje.dispose();
     super.dispose();
@@ -570,9 +587,15 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         icon: Icons.mail_outline_rounded,
                                         child: _LuxuryTextInput(
                                           controller: _email,
+                                          focusNode: _emailFocus,
                                           hint: 'therapist@nuaspa.ba',
                                           keyboardType:
                                               TextInputType.emailAddress,
+                                          autofillHints: const [
+                                            AutofillHints.email,
+                                          ],
+                                          onChanged: (_) =>
+                                              _syncPortalInviteOption(),
                                           validator: (v) {
                                             final t = v?.trim() ?? '';
                                             if (widget.isNew &&
@@ -581,8 +604,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                               return 'Email is required to send a portal invitation.';
                                             }
                                             if (t.isEmpty) return null;
-                                            if (!t.contains('@') ||
-                                                !t.contains('.')) {
+                                            if (!_emailPattern.hasMatch(t)) {
                                               return 'Enter a valid email.';
                                             }
                                             return null;
@@ -593,7 +615,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         const SizedBox(height: 14),
                                         _PortalInviteOption(
                                           value: _sendPortalInvite,
-                                          enabled: _hasValidInviteEmail,
+                                          hasValidEmail: _hasValidInviteEmail,
                                           onChanged: (v) {
                                             setState(() {
                                               _sendPortalInvite = v;
@@ -819,6 +841,9 @@ class _LuxuryTextInput extends StatefulWidget {
     required this.hint,
     this.validator,
     this.keyboardType,
+    this.focusNode,
+    this.autofillHints,
+    this.onChanged,
     this.maxLines = 1,
     this.minHeight = 54,
   });
@@ -827,6 +852,9 @@ class _LuxuryTextInput extends StatefulWidget {
   final String hint;
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
+  final FocusNode? focusNode;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onChanged;
   final int maxLines;
   final double minHeight;
 
@@ -839,7 +867,10 @@ class _LuxuryTextInputState extends State<_LuxuryTextInput> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
+      focusNode: widget.focusNode,
       keyboardType: widget.keyboardType,
+      autofillHints: widget.autofillHints,
+      onChanged: widget.onChanged,
       validator: widget.validator,
       maxLines: widget.maxLines,
       style: GoogleFonts.inter(
@@ -1085,12 +1116,12 @@ class _SpecialtyChipState extends State<_SpecialtyChip> {
 class _PortalInviteOption extends StatelessWidget {
   const _PortalInviteOption({
     required this.value,
-    required this.enabled,
+    required this.hasValidEmail,
     required this.onChanged,
   });
 
   final bool value;
-  final bool enabled;
+  final bool hasValidEmail;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -1101,17 +1132,15 @@ class _PortalInviteOption extends StatelessWidget {
         color: Colors.white.withValues(alpha: 0.04),
         border: Border.all(
           color: LuxuryModalStyle.accentPurple.withValues(
-            alpha: enabled ? 0.22 : 0.08,
+            alpha: hasValidEmail ? 0.22 : 0.12,
           ),
         ),
       ),
       child: CheckboxListTile(
         value: value,
-        onChanged: enabled
-            ? (v) {
-                if (v != null) onChanged(v);
-              }
-            : null,
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
         activeColor: LuxuryModalStyle.accentPurple,
         checkColor: const Color(0xFFF5F3FA),
         controlAffinity: ListTileControlAffinity.leading,
@@ -1125,9 +1154,9 @@ class _PortalInviteOption extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          enabled
+          hasValidEmail
               ? 'After saving, they receive an activation link to set their own password (valid 72 hours).'
-              : 'Enter a work email above to enable portal invitation.',
+              : 'Enter a valid work email above (e.g. name@nuaspa.ba), then enable this option.',
           style: GoogleFonts.inter(
             fontSize: 12,
             height: 1.4,
