@@ -115,12 +115,12 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
   }
 
   Future<void> _editProfile() async {
-    final saved = await showAdminTherapistEditorDialog(
+    final editorResult = await showAdminTherapistEditorDialog(
       context,
       existing: _therapist,
     );
-    if (!mounted || saved == null) return;
-    final result = await _api.updateZaposlenik(saved);
+    if (!mounted || editorResult == null) return;
+    final result = await _api.updateZaposlenik(editorResult.therapist);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

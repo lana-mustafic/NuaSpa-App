@@ -11,6 +11,7 @@ import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import 'admin_therapist_profile_screen.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
+import 'widgets/admin_therapist_invite_feedback.dart';
 
 class AdminTherapistRosterScreen extends StatefulWidget {
   const AdminTherapistRosterScreen({super.key});
@@ -302,26 +303,46 @@ class _AdminTherapistRosterScreenState
   }
 
   Future<void> _editTherapist(_RosterTherapist? existing) async {
-    final saved = await showAdminTherapistEditorDialog(
+    final editorResult = await showAdminTherapistEditorDialog(
       context,
       existing: existing?.zaposlenik,
     );
-    if (saved == null || !mounted) return;
+    if (editorResult == null || !mounted) return;
 
-    final result = existing == null
-        ? await _api.createZaposlenik(saved)
-        : await _api.updateZaposlenik(saved);
+    final isNew = existing == null;
+    final result = isNew
+        ? await _api.createZaposlenik(editorResult.therapist)
+        : await _api.updateZaposlenik(editorResult.therapist);
     if (!mounted) return;
+
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Greška pri čuvanju terapeuta.')),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result == null
-              ? 'Greška pri čuvanju terapeuta.'
-              : 'Terapeut sačuvan.',
+          isNew ? 'Therapist added.' : 'Therapist saved.',
         ),
       ),
     );
-    if (result != null) _reload();
+
+    if (isNew && editorResult.sendPortalInvite) {
+      final email = result.email?.trim().isNotEmpty == true
+          ? result.email
+          : editorResult.therapist.email;
+      final invite = await _api.inviteTherapistAccount(
+        zaposlenikId: result.id,
+        email: email,
+      );
+      if (!mounted) return;
+      await showTherapistPortalInviteFeedback(context, invite);
+    }
+
+    _reload();
   }
 
   Future<void> _deleteTherapist(_RosterTherapist therapist) async {

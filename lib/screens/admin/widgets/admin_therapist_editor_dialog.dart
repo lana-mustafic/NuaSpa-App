@@ -11,12 +11,25 @@ import '../../../models/zaposlenik_status.dart';
 import '../../../ui/theme/luxury_modal_style.dart';
 import '../../../ui/theme/nua_luxury_tokens.dart';
 
+/// Result from add / edit therapist dialog.
+class AdminTherapistEditorResult {
+  const AdminTherapistEditorResult({
+    required this.therapist,
+    this.sendPortalInvite = false,
+  });
+
+  final Zaposlenik therapist;
+
+  /// Only used when creating a new therapist (after save on server).
+  final bool sendPortalInvite;
+}
+
 /// Add / edit therapist — shared by roster and profile screens.
-Future<Zaposlenik?> showAdminTherapistEditorDialog(
+Future<AdminTherapistEditorResult?> showAdminTherapistEditorDialog(
   BuildContext context, {
   Zaposlenik? existing,
 }) {
-  return showGeneralDialog<Zaposlenik>(
+  return showGeneralDialog<AdminTherapistEditorResult>(
     context: context,
     barrierDismissible: true,
     barrierLabel: existing == null ? 'Close add therapist' : 'Close edit therapist',
@@ -108,11 +121,25 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   ZaposlenikStatus _status = ZaposlenikStatus.active;
   final Set<int> _selectedServiceIds = {};
   String? _specializationError;
+  bool _sendPortalInvite = true;
+
+  bool get _hasValidInviteEmail {
+    final t = _email.text.trim();
+    return t.contains('@') && t.contains('.');
+  }
 
   @override
   void initState() {
     super.initState();
+    _email.addListener(_onEmailChanged);
     _bootstrap();
+  }
+
+  void _onEmailChanged() {
+    if (!widget.isNew) return;
+    if (!_hasValidInviteEmail && _sendPortalInvite) {
+      setState(() => _sendPortalInvite = false);
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -261,18 +288,22 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
 
     Navigator.pop(
       context,
-      Zaposlenik(
-        id: widget.existing?.id ?? 0,
-        ime: _ime.text.trim(),
-        prezime: _prezime.text.trim(),
-        specijalizacija: _buildSpecijalizacija(),
-        telefon: _telefon.text.trim().isEmpty ? null : _telefon.text.trim(),
-        email: _email.text.trim().isEmpty ? null : _email.text.trim(),
-        jezici: _jezici.text.trim().isEmpty ? null : _jezici.text.trim(),
-        obrazovanje:
-            _obrazovanje.text.trim().isEmpty ? null : _obrazovanje.text.trim(),
-        kategorijaUslugaId: _categoryId,
-        status: _status,
+      AdminTherapistEditorResult(
+        therapist: Zaposlenik(
+          id: widget.existing?.id ?? 0,
+          ime: _ime.text.trim(),
+          prezime: _prezime.text.trim(),
+          specijalizacija: _buildSpecijalizacija(),
+          telefon: _telefon.text.trim().isEmpty ? null : _telefon.text.trim(),
+          email: _email.text.trim().isEmpty ? null : _email.text.trim(),
+          jezici: _jezici.text.trim().isEmpty ? null : _jezici.text.trim(),
+          obrazovanje: _obrazovanje.text.trim().isEmpty
+              ? null
+              : _obrazovanje.text.trim(),
+          kategorijaUslugaId: _categoryId,
+          status: _status,
+        ),
+        sendPortalInvite: widget.isNew && _sendPortalInvite,
       ),
     );
   }
@@ -537,6 +568,11 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                               TextInputType.emailAddress,
                                           validator: (v) {
                                             final t = v?.trim() ?? '';
+                                            if (widget.isNew &&
+                                                _sendPortalInvite &&
+                                                t.isEmpty) {
+                                              return 'Email is required to send a portal invitation.';
+                                            }
                                             if (t.isEmpty) return null;
                                             if (!t.contains('@') ||
                                                 !t.contains('.')) {
@@ -546,6 +582,17 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           },
                                         ),
                                       ),
+                                      if (widget.isNew) ...[
+                                        const SizedBox(height: 14),
+                                        _PortalInviteOption(
+                                          value: _sendPortalInvite,
+                                          enabled: _hasValidInviteEmail,
+                                          onChanged: (v) {
+                                            setState(() => _sendPortalInvite = v);
+                                            _formKey.currentState?.validate();
+                                          },
+                                        ),
+                                      ],
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
                                         label: 'Languages (optional)',
@@ -1018,6 +1065,63 @@ class _SpecialtyChipState extends State<_SpecialtyChip> {
                   ? const Color(0xFFF5F3FA)
                   : Colors.white.withValues(alpha: 0.78),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortalInviteOption extends StatelessWidget {
+  const _PortalInviteOption({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.04),
+        border: Border.all(
+          color: LuxuryModalStyle.accentPurple.withValues(
+            alpha: enabled ? 0.22 : 0.08,
+          ),
+        ),
+      ),
+      child: CheckboxListTile(
+        value: enabled ? value : false,
+        onChanged: enabled
+            ? (v) {
+                if (v != null) onChanged(v);
+              }
+            : null,
+        activeColor: LuxuryModalStyle.accentPurple,
+        checkColor: const Color(0xFFF5F3FA),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        title: Text(
+          'Send therapist portal invitation',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFFF5F3FA),
+          ),
+        ),
+        subtitle: Text(
+          enabled
+              ? 'After saving, they receive an activation link to set their own password (valid 72 hours).'
+              : 'Enter a work email above to enable portal invitation.',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            height: 1.4,
+            color: Colors.white.withValues(alpha: 0.55),
           ),
         ),
       ),
