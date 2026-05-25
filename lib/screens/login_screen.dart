@@ -109,32 +109,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         vertical: 20,
                       ),
                       child: wide
-                          ? IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Expanded(
-                                    flex: 5,
-                                    child: _LoginBrandPanel(),
-                                  ),
-                                  const SizedBox(width: 28),
-                                  Expanded(
-                                    flex: 4,
-                                    child: _LoginFormCard(
-                                      formKey: _formKey,
-                                      usernameController: _usernameController,
-                                      passwordController: _passwordController,
-                                      passwordVisible: _isPasswordVisible,
-                                      isLoading: isLoading,
-                                      onTogglePassword: () => setState(
-                                        () => _isPasswordVisible =
-                                            !_isPasswordVisible,
-                                      ),
-                                      onSubmit: _submit,
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Expanded(
+                                  flex: 5,
+                                  child: _LoginBrandPanel(),
+                                ),
+                                const SizedBox(width: 28),
+                                Expanded(
+                                  flex: 4,
+                                  child: _LoginFormCard(
+                                    formKey: _formKey,
+                                    usernameController: _usernameController,
+                                    passwordController: _passwordController,
+                                    passwordVisible: _isPasswordVisible,
+                                    isLoading: isLoading,
+                                    onTogglePassword: () => setState(
+                                      () => _isPasswordVisible =
+                                          !_isPasswordVisible,
                                     ),
+                                    onSubmit: _submit,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             )
                           : _LoginFormCard(
                               formKey: _formKey,
@@ -320,10 +318,11 @@ class _LoginFormCard extends StatelessWidget {
           ),
           child: Form(
             key: formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 if (showBrandHeader) ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -464,7 +463,8 @@ class _LoginFormCard extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.42),
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
