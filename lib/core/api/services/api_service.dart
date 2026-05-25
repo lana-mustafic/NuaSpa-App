@@ -334,25 +334,74 @@ class ApiService {
     required int zaposlenikId,
     String? email,
   }) async {
+    if (zaposlenikId <= 0) {
+      return const TherapistInviteResult(
+        success: false,
+        message: 'Therapist must be saved before sending an invitation.',
+      );
+    }
+
+    final payload = <String, dynamic>{};
+    final trimmedEmail = email?.trim();
+    if (trimmedEmail != null && trimmedEmail.isNotEmpty) {
+      payload['email'] = trimmedEmail;
+    }
+
     try {
       final response = await _dio.post<dynamic>(
         'admin/therapists/$zaposlenikId/account/invite',
-        data: email == null || email.trim().isEmpty ? null : {'email': email.trim()},
+        data: payload,
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
       return TherapistInviteResult.fromJson(data);
     } on DioException catch (e) {
-      final data = e.response?.data;
-      if (data is Map<String, dynamic>) {
-        return TherapistInviteResult.fromJson(data);
+      final parsed = _parseTherapistInviteResult(e.response?.data);
+      if (parsed != null) return parsed;
+
+      final status = e.response?.statusCode;
+      debugPrint(
+        'Greška u ApiService.inviteTherapistAccount ($status): $e',
+      );
+      if (status == 404) {
+        return const TherapistInviteResult(
+          success: false,
+          message:
+              'Invite endpoint not found. Restart the API server to load therapist invite routes.',
+        );
       }
-      debugPrint('Greška u ApiService.inviteTherapistAccount: $e');
-      return null;
+      if (status == 401 || status == 403) {
+        return const TherapistInviteResult(
+          success: false,
+          message: 'Not authorized to send therapist invitations.',
+        );
+      }
+      return TherapistInviteResult(
+        success: false,
+        message: e.message ?? 'Invite request failed.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.inviteTherapistAccount: $e');
-      return null;
+      return TherapistInviteResult(
+        success: false,
+        message: 'Invite request failed: $e',
+      );
     }
+  }
+
+  TherapistInviteResult? _parseTherapistInviteResult(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return TherapistInviteResult.fromJson(data);
+    }
+    if (data is Map) {
+      return TherapistInviteResult.fromJson(
+        Map<String, dynamic>.from(data),
+      );
+    }
+    if (data is String && data.trim().isNotEmpty) {
+      return TherapistInviteResult(success: false, message: data.trim());
+    }
+    return null;
   }
 
   Future<InviteValidationResult?> validateInviteToken(String token) async {

@@ -331,15 +331,23 @@ class _AdminTherapistRosterScreenState
     );
 
     if (isNew && editorResult.sendPortalInvite) {
-      final email = result.email?.trim().isNotEmpty == true
-          ? result.email
-          : editorResult.therapist.email;
-      final invite = await _api.inviteTherapistAccount(
-        zaposlenikId: result.id,
-        email: email,
-      );
-      if (!mounted) return;
-      await showTherapistPortalInviteFeedback(context, invite);
+      final email = (result.email ?? editorResult.therapist.email)?.trim();
+      if (email == null || email.isEmpty || !email.contains('@')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Therapist saved, but invitation was skipped — work email is missing.',
+            ),
+          ),
+        );
+      } else {
+        final invite = await _api.inviteTherapistAccount(
+          zaposlenikId: result.id,
+          email: email,
+        );
+        if (!mounted) return;
+        await showTherapistPortalInviteFeedback(context, invite);
+      }
     }
 
     _reload();

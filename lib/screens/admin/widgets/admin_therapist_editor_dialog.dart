@@ -121,7 +121,8 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   ZaposlenikStatus _status = ZaposlenikStatus.active;
   final Set<int> _selectedServiceIds = {};
   String? _specializationError;
-  bool _sendPortalInvite = true;
+  bool _sendPortalInvite = false;
+  bool _invitePreferenceSetByUser = false;
 
   bool get _hasValidInviteEmail {
     final t = _email.text.trim();
@@ -137,9 +138,15 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
 
   void _onEmailChanged() {
     if (!widget.isNew) return;
-    if (!_hasValidInviteEmail && _sendPortalInvite) {
-      setState(() => _sendPortalInvite = false);
-    }
+    setState(() {
+      if (!_hasValidInviteEmail) {
+        _sendPortalInvite = false;
+        return;
+      }
+      if (!_invitePreferenceSetByUser) {
+        _sendPortalInvite = true;
+      }
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -588,7 +595,10 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           value: _sendPortalInvite,
                                           enabled: _hasValidInviteEmail,
                                           onChanged: (v) {
-                                            setState(() => _sendPortalInvite = v);
+                                            setState(() {
+                                              _sendPortalInvite = v;
+                                              _invitePreferenceSetByUser = true;
+                                            });
                                             _formKey.currentState?.validate();
                                           },
                                         ),
@@ -1096,7 +1106,7 @@ class _PortalInviteOption extends StatelessWidget {
         ),
       ),
       child: CheckboxListTile(
-        value: enabled ? value : false,
+        value: value,
         onChanged: enabled
             ? (v) {
                 if (v != null) onChanged(v);
