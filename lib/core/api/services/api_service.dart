@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../api_client.dart';
+import '../api_error_messages.dart';
 import '../../../models/usluga.dart';
 import '../../../models/preporucena_usluga.dart';
 import '../../../models/kategorija_usluga.dart';
@@ -502,6 +503,41 @@ class ApiService {
       return (
         success: false,
         message: 'Network error. Please try again.',
+      );
+    }
+  }
+
+  /// Promjena vlastite lozinke (potrebna trenutna lozinka).
+  Future<({bool success, String message})> changePassword({
+    required String staraLozinka,
+    required String novaLozinka,
+    required String potvrdaNoveLozinke,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Account/change-password',
+        data: {
+          'staraLozinka': staraLozinka,
+          'novaLozinka': novaLozinka,
+          'potvrdaNoveLozinke': potvrdaNoveLozinke,
+        },
+      );
+      final data = response.data;
+      final msg = data is Map
+          ? (data['message'] as String? ?? 'Lozinka je uspješno promijenjena.')
+          : 'Lozinka je uspješno promijenjena.';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      return (
+        success: false,
+        message: ApiErrorMessages.fromDio(e) ??
+            'Lozinka nije promijenjena. Provjerite unos.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.changePassword: $e');
+      return (
+        success: false,
+        message: 'Mrežna greška. Pokušajte ponovo.',
       );
     }
   }
@@ -1393,6 +1429,8 @@ class ApiService {
     bool setZaposlenik = false,
     int? zaposlenikId,
     String? napomenaZaTerapeuta,
+    String? novaLozinka,
+    String? potvrdaNoveLozinke,
   }) async {
     final body = <String, dynamic>{};
     if (ime != null) body['ime'] = ime;
@@ -1404,6 +1442,10 @@ class ApiService {
     if (setZaposlenik) body['zaposlenikId'] = zaposlenikId ?? 0;
     if (napomenaZaTerapeuta != null) {
       body['napomenaZaTerapeuta'] = napomenaZaTerapeuta;
+    }
+    if (novaLozinka != null && novaLozinka.isNotEmpty) {
+      body['novaLozinka'] = novaLozinka;
+      body['potvrdaNoveLozinke'] = potvrdaNoveLozinke ?? novaLozinka;
     }
 
     final response = await _dio.patch<dynamic>(
@@ -1417,31 +1459,9 @@ class ApiService {
 
   /// Human-readable message from admin client API errors.
   static String? adminClientPatchErrorMessage(Object error) {
-    if (error is! DioException) return null;
-    final data = error.response?.data;
-    if (data is String && data.trim().isNotEmpty) return data.trim();
-    if (data is Map) {
-      final msg = data['message'] ?? data['title'];
-      if (msg != null) return msg.toString();
-      final errors = data['errors'];
-      if (errors is Map) {
-        final parts = <String>[];
-        for (final entry in errors.entries) {
-          final v = entry.value;
-          if (v is List) {
-            parts.addAll(v.map((e) => e.toString()));
-          } else if (v != null) {
-            parts.add(v.toString());
-          }
-        }
-        if (parts.isNotEmpty) return parts.join(' ');
-      }
+    if (error is DioException) {
+      return ApiErrorMessages.fromDio(error);
     }
-    if (data is List && data.isNotEmpty) {
-      return data.map((e) => e.toString()).join(' ');
-    }
-    final code = error.response?.statusCode;
-    if (code == 409) return 'This action conflicts with existing data.';
     return null;
   }
 

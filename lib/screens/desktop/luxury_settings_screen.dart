@@ -5,8 +5,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api/services/api_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/jwt_roles.dart';
+import '../../core/validation/nua_validators.dart';
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
@@ -459,7 +461,14 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
     );
     final showSession = _matchesSearch(
       query,
-      ['Session', 'Active', 'Expires', _formatExpiry(_session?.expiresAt)],
+      [
+        'Session',
+        'Active',
+        'Expires',
+        'Password',
+        'Lozinka',
+        _formatExpiry(_session?.expiresAt),
+      ],
     );
     final showWorkspace = _matchesSearch(
       query,
@@ -578,6 +587,13 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
                     ),
                   ],
                 ),
+                const SizedBox(height: 22),
+                Divider(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+                const SizedBox(height: 22),
+                const _ChangePasswordPanel(),
               ],
             ),
           ),
@@ -1719,6 +1735,211 @@ class _SidebarQuickRowState extends State<_SidebarQuickRow> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChangePasswordPanel extends StatefulWidget {
+  const _ChangePasswordPanel();
+
+  @override
+  State<_ChangePasswordPanel> createState() => _ChangePasswordPanelState();
+}
+
+class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
+  final _api = ApiService();
+  final _formKey = GlobalKey<FormState>();
+  final _oldC = TextEditingController();
+  final _newC = TextEditingController();
+  final _confirmC = TextEditingController();
+  var _obscureOld = true;
+  var _obscureNew = true;
+  var _obscureConfirm = true;
+  var _saving = false;
+  var _attemptedSubmit = false;
+
+  @override
+  void dispose() {
+    _oldC.dispose();
+    _newC.dispose();
+    _confirmC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _attemptedSubmit = true);
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final result = await _api.changePassword(
+      staraLozinka: _oldC.text,
+      novaLozinka: _newC.text,
+      potvrdaNoveLozinke: _confirmC.text,
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    if (result.success) {
+      _oldC.clear();
+      _newC.clear();
+      _confirmC.clear();
+      setState(() => _attemptedSubmit = false);
+    }
+  }
+
+  InputDecoration _decoration(String label, {Widget? suffix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: GoogleFonts.inter(
+        color: Colors.white.withValues(alpha: 0.55),
+        fontSize: 13,
+      ),
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: 0.04),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: _SetUi.lavender, width: 1.2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.red.shade300),
+      ),
+      suffixIcon: suffix,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Promjena lozinke',
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _SetUi.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Unesite trenutnu lozinku i novu lozinku s potvrdom.',
+          style: GoogleFonts.inter(
+            fontSize: 12.5,
+            height: 1.45,
+            color: _SetUi.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Form(
+          key: _formKey,
+          autovalidateMode: _attemptedSubmit
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _oldC,
+                obscureText: _obscureOld,
+                style: GoogleFonts.inter(color: _SetUi.textPrimary),
+                decoration: _decoration(
+                  'Trenutna lozinka',
+                  suffix: IconButton(
+                    icon: Icon(
+                      _obscureOld
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureOld = !_obscureOld),
+                  ),
+                ),
+                validator: (v) => NuaValidators.requiredText(
+                  v,
+                  fieldLabel: 'Trenutna lozinka',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _newC,
+                obscureText: _obscureNew,
+                style: GoogleFonts.inter(color: _SetUi.textPrimary),
+                decoration: _decoration(
+                  'Nova lozinka',
+                  suffix: IconButton(
+                    icon: Icon(
+                      _obscureNew
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureNew = !_obscureNew),
+                  ),
+                ),
+                validator: NuaValidators.password,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _confirmC,
+                obscureText: _obscureConfirm,
+                style: GoogleFonts.inter(color: _SetUi.textPrimary),
+                decoration: _decoration(
+                  'Potvrda nove lozinke',
+                  suffix: IconButton(
+                    icon: Icon(
+                      _obscureConfirm
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.white54,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
+                ),
+                validator: (v) =>
+                    NuaValidators.confirmPassword(v, _newC.text),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: _saving ? null : _submit,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.lock_reset_rounded, size: 20),
+            label: Text(_saving ? 'Spremanje…' : 'Spremi novu lozinku'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _SetUi.purple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

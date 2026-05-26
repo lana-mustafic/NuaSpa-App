@@ -4,7 +4,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/api/api_error_messages.dart';
 import '../../core/api/services/api_service.dart';
+import '../../core/validation/nua_validators.dart';
+import '../../widgets/forms/luxury_validated_field.dart';
 import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/zaposlenik.dart';
@@ -136,8 +139,10 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     return n < 0 ? '-$buf' : buf.toString();
   }
 
-  String _apiErr(Object e) =>
-      ApiService.adminClientPatchErrorMessage(e) ?? 'Error: $e';
+  String _apiErr(Object e) => ApiErrorMessages.fromObject(
+        e,
+        fallback: ApiService.adminClientPatchErrorMessage(e),
+      );
 
   List<AdminClientRow> _applyLocalFilters(
     List<AdminClientRow> raw,
@@ -220,14 +225,19 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   Future<void> _showCreateClientDialog(List<Zaposlenik> therapists) async {
+    final formKey = GlobalKey<FormState>();
     final imeC = TextEditingController();
     final prezC = TextEditingController();
     final emailC = TextEditingController();
     final userC = TextEditingController();
-    final passC = TextEditingController(text: 'NuaSpaKlijent1!');
+    final passC = TextEditingController();
+    final confirmPassC = TextEditingController();
     final telC = TextEditingController();
     int? zId;
     var vip = false;
+    var attemptedSubmit = false;
+    var obscurePass = true;
+    var obscureConfirm = true;
 
     await showDialog<void>(
       context: context,
@@ -235,87 +245,135 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         builder: (ctx, setLocal) {
           return AlertDialog(
             backgroundColor: NuaLuxuryTokens.voidViolet,
-            title: const Text('New client'),
+            title: const Text('Novi klijent'),
             content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: imeC,
-                      decoration: const InputDecoration(labelText: 'First name'),
-                    ),
-                    TextField(
-                      controller: prezC,
-                      decoration: const InputDecoration(labelText: 'Last name'),
-                    ),
-                    TextField(
-                      controller: emailC,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    TextField(
-                      controller: userC,
-                      decoration: const InputDecoration(labelText: 'Username'),
-                    ),
-                    TextField(
-                      controller: passC,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      obscureText: true,
-                    ),
-                    TextField(
-                      controller: telC,
-                      decoration: const InputDecoration(labelText: 'Phone (optional)'),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<int?>(
-                      value: zId,
-                      decoration: const InputDecoration(labelText: 'Preferred therapist'),
-                      items: [
-                        const DropdownMenuItem<int?>(value: null, child: Text('—')),
-                        ...therapists.map(
-                          (z) => DropdownMenuItem<int?>(
-                            value: z.id,
-                            child: Text(_therapistName(z)),
+              width: 440,
+              child: Form(
+                key: formKey,
+                autovalidateMode: attemptedSubmit
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: imeC,
+                        decoration: const InputDecoration(labelText: 'Ime'),
+                        validator: (v) => NuaValidators.requiredText(v, fieldLabel: 'Ime'),
+                      ),
+                      TextFormField(
+                        controller: prezC,
+                        decoration: const InputDecoration(labelText: 'Prezime'),
+                        validator: (v) =>
+                            NuaValidators.requiredText(v, fieldLabel: 'Prezime'),
+                      ),
+                      TextFormField(
+                        controller: emailC,
+                        decoration: const InputDecoration(labelText: 'E-mail'),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: NuaValidators.email,
+                      ),
+                      TextFormField(
+                        controller: userC,
+                        decoration:
+                            const InputDecoration(labelText: 'Korisničko ime'),
+                        validator: NuaValidators.userName,
+                      ),
+                      TextFormField(
+                        controller: passC,
+                        obscureText: obscurePass,
+                        decoration: InputDecoration(
+                          labelText: 'Lozinka',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePass
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () =>
+                                setLocal(() => obscurePass = !obscurePass),
                           ),
                         ),
-                      ],
-                      onChanged: (v) => setLocal(() => zId = v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('VIP client'),
-                      value: vip,
-                      onChanged: (v) => setLocal(() => vip = v),
-                    ),
-                  ],
+                        validator: NuaValidators.password,
+                      ),
+                      TextFormField(
+                        controller: confirmPassC,
+                        obscureText: obscureConfirm,
+                        decoration: InputDecoration(
+                          labelText: 'Potvrda lozinke',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureConfirm
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setLocal(
+                              () => obscureConfirm = !obscureConfirm,
+                            ),
+                          ),
+                        ),
+                        validator: (v) =>
+                            NuaValidators.confirmPassword(v, passC.text),
+                      ),
+                      TextFormField(
+                        controller: telC,
+                        decoration: const InputDecoration(
+                          labelText: 'Telefon (opcionalno)',
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: NuaValidators.phoneOptional,
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int?>(
+                        value: zId,
+                        decoration: const InputDecoration(
+                          labelText: 'Preferirani terapeut',
+                        ),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('—'),
+                          ),
+                          ...therapists.map(
+                            (z) => DropdownMenuItem<int?>(
+                              value: z.id,
+                              child: Text(_therapistName(z)),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setLocal(() => zId = v),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('VIP klijent'),
+                        value: vip,
+                        onChanged: (v) => setLocal(() => vip = v),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Odustani'),
+              ),
               FilledButton(
                 onPressed: () async {
-                  final ime = imeC.text.trim();
-                  final prez = prezC.text.trim();
-                  final email = emailC.text.trim();
-                  final user = userC.text.trim();
-                  final pass = passC.text;
-                  if (ime.isEmpty || prez.isEmpty || email.isEmpty || user.isEmpty || pass.length < 6) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Fill in required fields (password min. 6 characters).')),
-                    );
-                    return;
-                  }
+                  setLocal(() => attemptedSubmit = true);
+                  if (!formKey.currentState!.validate()) return;
                   try {
                     await widget.api.createAdminClient(
-                      ime: ime,
-                      prezime: prez,
-                      email: email,
-                      userName: user,
-                      password: pass,
-                      telefon: telC.text.trim().isEmpty ? null : telC.text.trim(),
+                      ime: imeC.text.trim(),
+                      prezime: prezC.text.trim(),
+                      email: emailC.text.trim(),
+                      userName: userC.text.trim(),
+                      password: passC.text,
+                      telefon: telC.text.trim().isEmpty
+                          ? null
+                          : telC.text.trim(),
                       zaposlenikId: zId,
                       isVipKlijent: vip,
                     );
@@ -323,7 +381,9 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     Navigator.pop(ctx);
                     _reloadFromApi();
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Client created.')),
+                      const SnackBar(
+                        content: Text('Klijent je uspješno kreiran.'),
+                      ),
                     );
                   } catch (e) {
                     if (!ctx.mounted) return;
@@ -332,7 +392,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     );
                   }
                 },
-                child: const Text('Save'),
+                child: const Text('Spremi'),
               ),
             ],
           );
@@ -345,6 +405,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     emailC.dispose();
     userC.dispose();
     passC.dispose();
+    confirmPassC.dispose();
     telC.dispose();
   }
 
@@ -367,7 +428,9 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
           _reloadFromApi();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Client updated.')),
+              const SnackBar(
+                content: Text('Podaci klijenta su uspješno ažurirani.'),
+              ),
             );
           }
         },
@@ -1870,13 +1933,20 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   static const Color _bg = Color(0xEB120A24);
   static const double _width = 440;
 
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _imeC;
   late final TextEditingController _prezC;
   late final TextEditingController _emailC;
   late final TextEditingController _telC;
+  late final TextEditingController _newPassC;
+  late final TextEditingController _confirmPassC;
   late int? _zId;
   late bool _vip;
   bool _saving = false;
+  bool _changePassword = false;
+  bool _attemptedSubmit = false;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
@@ -1885,6 +1955,8 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _prezC = TextEditingController(text: widget.client.prezime);
     _emailC = TextEditingController(text: widget.client.email);
     _telC = TextEditingController(text: widget.client.telefon);
+    _newPassC = TextEditingController();
+    _confirmPassC = TextEditingController();
     _zId = widget.client.preferiraniZaposlenikId;
     _vip = widget.client.isVipKlijent;
     for (final c in [_imeC, _prezC]) {
@@ -1898,6 +1970,8 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _prezC.dispose();
     _emailC.dispose();
     _telC.dispose();
+    _newPassC.dispose();
+    _confirmPassC.dispose();
     super.dispose();
   }
 
@@ -1907,17 +1981,12 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   }
 
   Future<void> _save() async {
+    setState(() => _attemptedSubmit = true);
+    if (!_formKey.currentState!.validate()) return;
+
     final ime = _imeC.text.trim();
     final prez = _prezC.text.trim();
     final email = _emailC.text.trim();
-    if (ime.isEmpty || prez.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('First name, last name and email are required.'),
-        ),
-      );
-      return;
-    }
     setState(() => _saving = true);
     try {
       await widget.api.patchAdminClient(
@@ -1929,6 +1998,12 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
         isVipKlijent: _vip,
         setZaposlenik: true,
         zaposlenikId: _zId,
+        novaLozinka: _changePassword && _newPassC.text.isNotEmpty
+            ? _newPassC.text
+            : null,
+        potvrdaNoveLozinke: _changePassword && _confirmPassC.text.isNotEmpty
+            ? _confirmPassC.text
+            : null,
       );
       if (!mounted) return;
       widget.onClose();
@@ -1941,6 +2016,22 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String? _newPasswordValidator(String? value) {
+    if (!_changePassword) return null;
+    if (value == null || value.isEmpty) {
+      return 'Unesite novu lozinku ili isključite opciju „Izmijeni lozinku”.';
+    }
+    return NuaValidators.passwordOptional(value);
+  }
+
+  String? _confirmNewPasswordValidator(String? value) {
+    if (!_changePassword) return null;
+    if (_newPassC.text.isEmpty && (value == null || value.isEmpty)) {
+      return null;
+    }
+    return NuaValidators.confirmPasswordOptional(value, _newPassC.text);
   }
 
   @override
@@ -1978,10 +2069,15 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
             width: _width,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: Form(
+                key: _formKey,
+                autovalidateMode: _attemptedSubmit
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   _buildHeader(),
                   const SizedBox(height: 20),
                   Divider(
@@ -1994,47 +2090,110 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                     _inactiveBanner(),
                     const SizedBox(height: 18),
                   ],
-                  _ClientEditFieldRow(
+                  LuxuryValidatedField(
                     icon: Icons.badge_outlined,
-                    label: 'First name',
-                    child: TextField(
-                      controller: _imeC,
-                      style: fieldStyle,
-                      decoration: _fieldDecoration('Enter first name'),
-                    ),
+                    label: 'Ime',
+                    controller: _imeC,
+                    hint: 'Unesite ime',
+                    enabled: !_saving,
+                    validator: (v) =>
+                        NuaValidators.requiredText(v, fieldLabel: 'Ime'),
                   ),
                   const SizedBox(height: 14),
-                  _ClientEditFieldRow(
+                  LuxuryValidatedField(
                     icon: Icons.badge_outlined,
-                    label: 'Last name',
-                    child: TextField(
-                      controller: _prezC,
-                      style: fieldStyle,
-                      decoration: _fieldDecoration('Enter last name'),
-                    ),
+                    label: 'Prezime',
+                    controller: _prezC,
+                    hint: 'Unesite prezime',
+                    enabled: !_saving,
+                    validator: (v) =>
+                        NuaValidators.requiredText(v, fieldLabel: 'Prezime'),
                   ),
                   const SizedBox(height: 14),
-                  _ClientEditFieldRow(
+                  LuxuryValidatedField(
                     icon: Icons.mail_outline_rounded,
-                    label: 'Email',
-                    child: TextField(
-                      controller: _emailC,
-                      style: fieldStyle,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: _fieldDecoration('client@email.com'),
-                    ),
+                    label: 'E-mail',
+                    controller: _emailC,
+                    hint: 'klijent@email.ba',
+                    keyboardType: TextInputType.emailAddress,
+                    enabled: !_saving,
+                    validator: NuaValidators.email,
                   ),
                   const SizedBox(height: 14),
-                  _ClientEditFieldRow(
+                  LuxuryValidatedField(
                     icon: Icons.phone_outlined,
-                    label: 'Phone',
-                    child: TextField(
-                      controller: _telC,
-                      style: fieldStyle,
-                      keyboardType: TextInputType.phone,
-                      decoration: _fieldDecoration('Optional'),
-                    ),
+                    label: 'Telefon',
+                    controller: _telC,
+                    hint: 'Opcionalno',
+                    keyboardType: TextInputType.phone,
+                    enabled: !_saving,
+                    validator: NuaValidators.phoneOptional,
                   ),
+                  const SizedBox(height: 14),
+                  _ClientEditToggleRow(
+                    icon: Icons.lock_outline_rounded,
+                    label: 'Izmijeni lozinku',
+                    value: _changePassword,
+                    onChanged: _saving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _changePassword = v;
+                              if (!v) {
+                                _newPassC.clear();
+                                _confirmPassC.clear();
+                              }
+                            });
+                          },
+                  ),
+                  if (_changePassword) ...[
+                    const SizedBox(height: 14),
+                    LuxuryValidatedField(
+                      icon: Icons.vpn_key_outlined,
+                      label: 'Nova',
+                      controller: _newPassC,
+                      hint: 'Nova lozinka',
+                      obscureText: _obscureNew,
+                      enabled: !_saving,
+                      validator: _newPasswordValidator,
+                      suffix: IconButton(
+                        icon: Icon(
+                          _obscureNew
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
+                        onPressed: _saving
+                            ? null
+                            : () => setState(() => _obscureNew = !_obscureNew),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    LuxuryValidatedField(
+                      icon: Icons.vpn_key_outlined,
+                      label: 'Potvrda',
+                      controller: _confirmPassC,
+                      hint: 'Potvrda nove lozinke',
+                      obscureText: _obscureConfirm,
+                      enabled: !_saving,
+                      validator: _confirmNewPasswordValidator,
+                      suffix: IconButton(
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
+                        onPressed: _saving
+                            ? null
+                            : () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm,
+                                ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   _ClientEditFieldRow(
                     icon: Icons.spa_outlined,
@@ -2103,11 +2262,12 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                   const SizedBox(height: 12),
                   Opacity(
                     opacity: _saving ? 0.45 : 1,
-                    child: _ClientEditCancelButton(
+                    child:                   _ClientEditCancelButton(
                       onPressed: _saving ? () {} : widget.onClose,
                     ),
                   ),
                 ],
+                ),
               ),
             ),
           ),
@@ -2220,17 +2380,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     );
   }
 
-  static InputDecoration _fieldDecoration(String hint) => InputDecoration(
-        isDense: true,
-        border: InputBorder.none,
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(
-          color: Colors.white.withValues(alpha: 0.32),
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 2),
-      );
 }
 
 class _ClientEditFieldRow extends StatelessWidget {
