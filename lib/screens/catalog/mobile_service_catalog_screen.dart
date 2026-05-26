@@ -7,7 +7,9 @@ import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
-import '../../providers/service_provider.dart';
+import '../../providers/notification_provider.dart';
+import '../../screens/news/obavijesti_screen.dart';
+import '../../ui/widgets/notifications_panel.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
 import '../../ui/widgets/load_retry_panel.dart';
@@ -56,6 +58,40 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     if (ok) {
       await context.read<ServiceProvider>().fetchServices();
     }
+  }
+
+  Future<void> _openNotifications(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const NotificationsPanel(),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ObavijestiScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.newspaper_outlined),
+                  label: const Text('Obavijesti (novosti)'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _confirmDeleteService(Usluga u) async {
@@ -276,8 +312,8 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                     ],
                     _GlassCircleButton(
                       icon: Icons.notifications_none_rounded,
-                      badgeCount: 2,
-                      onTap: () {},
+                      badgeCount: context.watch<NotificationProvider>().unreadCount,
+                      onTap: () => _openNotifications(context),
                     ),
                     const SizedBox(width: 10),
                     _GlassCircleButton(

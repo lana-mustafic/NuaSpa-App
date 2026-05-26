@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/api/services/api_service.dart';
-import '../../../models/admin/admin_activity_feed_item.dart';
+import '../../../providers/notification_provider.dart';
+import '../../widgets/notifications_panel.dart';
+import '../../../screens/news/obavijesti_screen.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../screens/admin/admin_suite_route.dart';
 import '../../navigation/desktop_nav.dart';
@@ -144,21 +145,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     }
   }
 
-  Future<void> _showNotifications(
-    BuildContext context,
-    AuthProvider auth,
-    DateTime day,
-  ) async {
-    if (!auth.isAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Notifications are available for admin accounts.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
+  Future<void> _showNotifications(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: NuaLuxuryTokens.voidViolet,
@@ -173,105 +160,20 @@ class LuxuryDesktopHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFFF5F3FA),
+                const NotificationsPanel(),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ObavijestiScreen(),
                       ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _fmtDay(day),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                          alpha: 0.65,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Recent activity from bookings, payments, and reviews.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                      alpha: 0.6,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 320,
-                  child: FutureBuilder<List<AdminActivityFeedItem>>(
-                    future: ApiService().getAdminActivityFeed(day: day, take: 12),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        );
-                      }
-                      final items = snap.data ?? [];
-                      if (items.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'No activity for this day.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        );
-                      }
-                      return ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final item = items[i];
-                          final icon = switch (item.tip) {
-                            'payment' => Icons.payments_outlined,
-                            'review' => Icons.reviews_outlined,
-                            'client' => Icons.person_outline,
-                            _ => Icons.event_note_outlined,
-                          };
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              icon,
-                              color: NuaLuxuryTokens.champagneGold,
-                            ),
-                            title: Text(
-                              item.naslov,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFF5F3FA),
-                              ),
-                            ),
-                            subtitle: item.podnaslov != null
-                                ? Text(
-                                    item.podnaslov!,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          );
-                        },
-                      );
-                    },
-                  ),
+                    );
+                  },
+                  icon: const Icon(Icons.newspaper_outlined),
+                  label: const Text('Obavijesti (novosti)'),
                 ),
               ],
             ),
@@ -446,9 +348,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ? 'Therapist'
             : 'Client';
 
-    final badgeCount = notificationCount > 0
-        ? notificationCount
-        : (auth.isAdmin ? 1 : 0);
+    final badgeCount = notificationCount;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -635,7 +535,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
             const SizedBox(width: 14),
           ],
           _HeaderIconGlass(
-            onTap: () => _showNotifications(context, auth, day),
+            onTap: () => _showNotifications(context),
             child: Badge(
               isLabelVisible: badgeCount > 0,
               label: Text('$badgeCount'),

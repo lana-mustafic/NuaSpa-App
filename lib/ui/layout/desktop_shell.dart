@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../screens/admin/admin_appointments_management_screen.dart';
 import '../../screens/admin/admin_calendar_screen.dart';
 import '../../screens/admin/admin_command_center_screen.dart';
@@ -349,11 +350,9 @@ class _DesktopShellState extends State<DesktopShell> {
                               selectedDay: _filterDay,
                               onDateChanged: (d) =>
                                   setState(() => _filterDay = d),
-                              notificationCount:
-                                  nav.route == DesktopRouteKey.adminCalendar ||
-                                          nav.route == DesktopRouteKey.reviews
-                                      ? 3
-                                      : 0,
+                              notificationCount: context
+                                  .watch<NotificationProvider>()
+                                  .unreadCount,
                             ),
                             Expanded(
                               child: AnimatedSwitcher(

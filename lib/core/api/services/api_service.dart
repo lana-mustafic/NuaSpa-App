@@ -14,6 +14,8 @@ import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/cancel_rezervacija_result.dart';
+import '../../../models/sistemska_notifikacija.dart';
+import '../../../models/obavijest.dart';
 import '../../../models/admin/admin_client_row.dart';
 import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
@@ -1638,6 +1640,71 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.updateRadnoVrijeme: $e');
+      return [];
+    }
+  }
+
+  Future<List<SistemskaNotifikacija>> getSistemskaNotifikacije({int take = 50}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'SistemskaNotifikacija',
+        queryParameters: {'take': take},
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => SistemskaNotifikacija.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getSistemskaNotifikacije: $e');
+      return [];
+    }
+  }
+
+  Future<int> getSistemskaNotifikacijeUnreadCount() async {
+    try {
+      final response = await _dio.get<dynamic>('SistemskaNotifikacija/unread-count');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return 0;
+      return (data['brojNeprocitanih'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      debugPrint('Greška u ApiService.getSistemskaNotifikacijeUnreadCount: $e');
+      return 0;
+    }
+  }
+
+  Future<bool> markSistemskaNotifikacijaRead(int id) async {
+    try {
+      await _dio.patch<void>('SistemskaNotifikacija/$id/procitana');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.markSistemskaNotifikacijaRead: $e');
+      return false;
+    }
+  }
+
+  Future<bool> markAllSistemskaNotifikacijeRead() async {
+    try {
+      await _dio.patch<void>('SistemskaNotifikacija/procitaj-sve');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.markAllSistemskaNotifikacijeRead: $e');
+      return false;
+    }
+  }
+
+  Future<List<Obavijest>> getObavijesti() async {
+    try {
+      final response = await _dio.get<dynamic>('Obavijest');
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => Obavijest.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getObavijesti: $e');
       return [];
     }
   }

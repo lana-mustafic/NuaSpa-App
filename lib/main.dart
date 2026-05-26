@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/notification_provider.dart';
 import 'providers/service_provider.dart'; // DODANO
 import 'screens/login_screen.dart';
 import 'screens/catalog/service_details_screen.dart';
@@ -35,6 +36,7 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthState()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(
           create: (_) => ServiceProvider(),
         ), // DODANO: Registracija kataloga
@@ -65,12 +67,25 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
   Widget build(BuildContext context) {
-    final authStatus = context.watch<AuthProvider>().status;
+    final auth = context.watch<AuthProvider>();
+    final authStatus = auth.status;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<NotificationProvider>().setPollingActive(
+            authStatus == AuthStatus.authenticated,
+          );
+    });
 
     if (authStatus == AuthStatus.initializing) {
       return const Scaffold(
