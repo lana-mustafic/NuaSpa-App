@@ -761,9 +761,23 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   }
 
   Widget _buildFooter() {
+    final categoriesMissing = !_loading && _categories.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (categoriesMissing) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
+            child: Text(
+              'Nema kategorija usluga. Dodajte kategoriju prije kreiranja terapeuta.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        ],
         Divider(
           height: 1,
           thickness: 1,
@@ -778,9 +792,16 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _TherapistSaveButton(
-                  enabled: !_loading && _loadError == null,
-                  onPressed: _save,
+                child: Tooltip(
+                  message: categoriesMissing
+                      ? 'Dodajte barem jednu kategoriju usluga.'
+                      : (_loadError ?? ''),
+                  child: _TherapistSaveButton(
+                    enabled: !_loading &&
+                        _loadError == null &&
+                        _categories.isNotEmpty,
+                    onPressed: _save,
+                  ),
                 ),
               ),
             ],

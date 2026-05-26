@@ -1940,13 +1940,18 @@ class _ActionsMenu extends StatelessWidget {
       PopupMenuItem(
         value: 'delete',
         enabled: !appointment.isPlacena,
-        child: Text(
-          'Delete permanently',
-          style: TextStyle(
-            color: appointment.isPlacena
-                ? Colors.white.withValues(alpha: 0.35)
-                : const Color(0xFFFF5E7A),
-            fontWeight: FontWeight.w800,
+        child: Tooltip(
+          message: appointment.isPlacena
+              ? 'Plaćeni termini se ne mogu trajno obrisati.'
+              : 'Trajno obriši termin',
+          child: Text(
+            'Delete permanently',
+            style: TextStyle(
+              color: appointment.isPlacena
+                  ? Colors.white.withValues(alpha: 0.35)
+                  : const Color(0xFFFF5E7A),
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -2542,6 +2547,9 @@ class _AdminAppointmentCreateDialogState
                         color: Color(0x99FFFFFF),
                       ),
                       enabled: widget.data.clients.isNotEmpty,
+                      disabledReason: widget.data.clients.isEmpty
+                          ? 'Nema klijenata u bazi. Dodajte klijenta prije kreiranja termina.'
+                          : null,
                       onTap: widget.data.clients.isEmpty
                           ? null
                           : () => _pickFromList(
@@ -2583,6 +2591,9 @@ class _AdminAppointmentCreateDialogState
                         color: Color(0x99FFFFFF),
                       ),
                       enabled: widget.data.services.isNotEmpty,
+                      disabledReason: widget.data.services.isEmpty
+                          ? 'Nema usluga u bazi. Dodajte uslugu prije kreiranja termina.'
+                          : null,
                       onTap: widget.data.services.isEmpty
                           ? null
                           : () => _pickFromList(
@@ -2612,6 +2623,9 @@ class _AdminAppointmentCreateDialogState
                         color: Color(0x99FFFFFF),
                       ),
                       enabled: widget.data.therapists.isNotEmpty,
+                      disabledReason: widget.data.therapists.isEmpty
+                          ? 'Nema terapeuta u bazi. Dodajte terapeuta prije kreiranja termina.'
+                          : null,
                       onTap: widget.data.therapists.isEmpty
                           ? null
                           : () => _pickFromList(
@@ -2667,6 +2681,9 @@ class _AdminAppointmentCreateDialogState
                         const SizedBox(width: 16),
                         _PremiumModalCreateButton(
                           enabled: !missingData,
+                          disabledTooltip: missingData
+                              ? 'Prije kreiranja termina učitajte klijente, usluge i terapeute.'
+                              : null,
                           onPressed: missingData
                               ? null
                               : () {
@@ -2753,6 +2770,7 @@ class _PremiumApptFieldCard extends StatefulWidget {
     required this.trailing,
     this.onTap,
     this.enabled = true,
+    this.disabledReason,
   });
 
   final IconData icon;
@@ -2761,6 +2779,7 @@ class _PremiumApptFieldCard extends StatefulWidget {
   final Widget trailing;
   final VoidCallback? onTap;
   final bool enabled;
+  final String? disabledReason;
 
   @override
   State<_PremiumApptFieldCard> createState() => _PremiumApptFieldCardState();
@@ -2772,7 +2791,7 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
   @override
   Widget build(BuildContext context) {
     final active = widget.enabled && widget.onTap != null;
-    return MouseRegion(
+    final card = MouseRegion(
       onEnter: (_) {
         if (active) setState(() => _hover = true);
       },
@@ -2861,6 +2880,11 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
         ),
       ),
     );
+    final reason = widget.disabledReason?.trim();
+    if (!widget.enabled && reason != null && reason.isNotEmpty) {
+      return Tooltip(message: reason, child: card);
+    }
+    return card;
   }
 }
 
@@ -2971,10 +2995,12 @@ class _PremiumModalCreateButton extends StatefulWidget {
   const _PremiumModalCreateButton({
     required this.enabled,
     required this.onPressed,
+    this.disabledTooltip,
   });
 
   final bool enabled;
   final VoidCallback? onPressed;
+  final String? disabledTooltip;
 
   @override
   State<_PremiumModalCreateButton> createState() =>
@@ -2987,7 +3013,7 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
   @override
   Widget build(BuildContext context) {
     final active = widget.enabled && widget.onPressed != null;
-    return MouseRegion(
+    final button = MouseRegion(
       onEnter: (_) {
         if (active) setState(() => _hover = true);
       },
@@ -3047,6 +3073,11 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
         ),
       ),
     );
+    final tip = widget.disabledTooltip?.trim();
+    if (!widget.enabled && tip != null && tip.isNotEmpty) {
+      return Tooltip(message: tip, child: button);
+    }
+    return button;
   }
 }
 
