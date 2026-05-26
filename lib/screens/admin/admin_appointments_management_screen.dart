@@ -64,7 +64,7 @@ class _AdminAppointmentsManagementScreenState
     ]);
     final reservations = results[0] as List<Rezervacija>;
     reservations.sort(
-      (a, b) => a.datumRezervacije.compareTo(b.datumRezervacije),
+      (a, b) => b.datumRezervacije.compareTo(a.datumRezervacije),
     );
     return _AppointmentsData(
       reservations: reservations,
