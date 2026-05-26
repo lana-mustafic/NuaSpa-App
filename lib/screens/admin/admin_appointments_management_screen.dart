@@ -291,7 +291,7 @@ class _AdminAppointmentsManagementScreenState
                                           setState(() => _selected = r),
                                       onConfirmToggle: _toggleConfirmed,
                                       onCancel: _cancel,
-                                      onDelete: _delete,
+                                      onDelete: (_) {},
                                       onEdit: _edit,
                                     ),
                             ],
@@ -311,7 +311,7 @@ class _AdminAppointmentsManagementScreenState
                               : () => _edit(selected),
                           onConfirmToggle: _toggleConfirmed,
                           onCancel: _cancel,
-                          onDelete: _delete,
+                          onDelete: (_) {},
                         ),
                       ),
                     ),
@@ -450,7 +450,10 @@ class _AdminAppointmentsManagementScreenState
         content: TextField(
           controller: reasonCtrl,
           maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Reason (optional)'),
+          decoration: const InputDecoration(
+            labelText: 'Razlog otkazivanja',
+            hintText: 'Obavezno unesite razlog',
+          ),
         ),
         actions: [
           TextButton(
@@ -458,62 +461,28 @@ class _AdminAppointmentsManagementScreenState
             child: const Text('Back'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              if (reasonCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx, true);
+            },
             child: const Text('Cancel'),
           ),
         ],
       ),
     );
     if (yes != true || !mounted) return;
+    final reason = reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      _toast('Razlog otkazivanja je obavezan.');
+      return;
+    }
     final ok = await _api.cancelRezervacija(
       r.id,
-      razlogOtkaza: reasonCtrl.text,
+      razlogOtkaza: reason,
     );
     if (!mounted) return;
     _toast(ok ? 'Appointment cancelled.' : 'Cancellation failed.');
     if (ok) _reload();
-  }
-
-  Future<void> _delete(Rezervacija r) async {
-    if (r.isPlacena) {
-      _toast('Paid appointments cannot be deleted.');
-      return;
-    }
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete appointment?'),
-        content: const Text(
-          'This permanently removes the appointment from the schedule. '
-          'This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Back'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5E7A),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (yes != true || !mounted) return;
-    final err = await _api.deleteRezervacijaAdmin(r.id);
-    if (!mounted) return;
-    if (err != null) {
-      _toast(err);
-      return;
-    }
-    _toast('Appointment deleted.');
-    setState(() {
-      if (_selected?.id == r.id) _selected = null;
-      _future = _load();
-    });
   }
 
   Future<void> _edit(Rezervacija r) async {
@@ -1136,13 +1105,29 @@ class _AppointmentsTable extends StatelessWidget {
     return '$hour:${l.minute.toString().padLeft(2, '0')} ${l.hour >= 12 ? 'PM' : 'AM'}';
   }
 
-  static String _status(Rezervacija r) =>
-      r.isOtkazana ? 'Cancelled' : (r.isPotvrdjena ? 'Confirmed' : 'Pending');
-  static Color _statusColor(Rezervacija r) => r.isOtkazana
-      ? const Color(0xFFFF5E7A)
-      : (r.isPotvrdjena
-            ? NuaLuxuryTokens.softPurpleGlow
-            : const Color(0xFFF5B942));
+  static String _status(Rezervacija r) {
+    switch (r.status) {
+      case 'Completed':
+        return 'Completed';
+      case 'Cancelled':
+        return 'Cancelled';
+      case 'Confirmed':
+        return 'Confirmed';
+      default:
+        break;
+    }
+    if (r.isOtkazana) return 'Cancelled';
+    if (r.isPotvrdjena) return 'Confirmed';
+    return 'Pending';
+  }
+
+  static Color _statusColor(Rezervacija r) {
+    final label = _status(r);
+    if (label == 'Cancelled') return const Color(0xFFFF5E7A);
+    if (label == 'Completed') return const Color(0xFF4ADE80);
+    if (label == 'Confirmed') return NuaLuxuryTokens.softPurpleGlow;
+    return const Color(0xFFF5B942);
+  }
   static String _category(String? service) =>
       (service ?? '').toLowerCase().contains('massage')
       ? 'Relaxation'
@@ -2011,30 +1996,11 @@ class _ActionsMenu extends StatelessWidget {
       if (v == 'edit') onEdit(appointment);
       if (v == 'toggle') onConfirmToggle(appointment);
       if (v == 'cancel') onCancel(appointment);
-      if (v == 'delete') onDelete(appointment);
     },
     itemBuilder: (_) => [
       const PopupMenuItem(value: 'edit', child: Text('Edit')),
       const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
       const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-      PopupMenuItem(
-        value: 'delete',
-        enabled: !appointment.isPlacena,
-        child: Tooltip(
-          message: appointment.isPlacena
-              ? 'Plaćeni termini se ne mogu trajno obrisati.'
-              : 'Trajno obriši termin',
-          child: Text(
-            'Delete permanently',
-            style: TextStyle(
-              color: appointment.isPlacena
-                  ? Colors.white.withValues(alpha: 0.35)
-                  : const Color(0xFFFF5E7A),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ),
     ],
   );
 }
@@ -2264,27 +2230,11 @@ class _BottomEditBar extends StatelessWidget {
           if (r == null) return;
           if (v == 'toggle') onConfirmToggle(r);
           if (v == 'cancel') onCancel(r);
-          if (v == 'delete') onDelete(r);
         },
         itemBuilder: (ctx) {
-          final r = appointment;
-          final paid = r?.isPlacena ?? true;
           return [
             const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
             const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-            PopupMenuItem(
-              value: 'delete',
-              enabled: !paid,
-              child: Text(
-                'Delete permanently',
-                style: TextStyle(
-                  color: paid
-                      ? Colors.white.withValues(alpha: 0.35)
-                      : const Color(0xFFFF5E7A),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
           ];
         },
       ),

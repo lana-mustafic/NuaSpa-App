@@ -1,6 +1,7 @@
 class Rezervacija {
   final int id;
   final DateTime datumRezervacije;
+  final String status;
   final bool isPotvrdjena;
   final bool isPlacena;
   final bool isOtkazana;
@@ -24,6 +25,7 @@ class Rezervacija {
   Rezervacija({
     required this.id,
     required this.datumRezervacije,
+    this.status = 'Pending',
     required this.isPotvrdjena,
     required this.isPlacena,
     required this.isOtkazana,
@@ -48,6 +50,7 @@ class Rezervacija {
     return Rezervacija(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
+      status: (json['status'] as String?) ?? 'Pending',
       isPotvrdjena: json['isPotvrdjena'] as bool,
       isPlacena: (json['isPlacena'] as bool?) ?? false,
       isOtkazana: (json['isOtkazana'] as bool?) ?? false,
