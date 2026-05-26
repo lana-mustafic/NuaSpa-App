@@ -507,6 +507,30 @@ class ApiService {
     }
   }
 
+  /// Server-side odjava (opoziv JWT tokena).
+  Future<({bool success, String message})> logout() async {
+    try {
+      final response = await _dio.post<dynamic>('Account/logout');
+      final data = response.data;
+      final msg = data is Map
+          ? (data['message'] as String? ?? 'Uspješno ste se odjavili.')
+          : 'Uspješno ste se odjavili.';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      return (
+        success: false,
+        message: ApiErrorMessages.fromDio(e) ??
+            'Odjava nije uspjela. Lokalna sesija će biti obrisana.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.logout: $e');
+      return (
+        success: false,
+        message: 'Odjava nije uspjela. Lokalna sesija će biti obrisana.',
+      );
+    }
+  }
+
   /// Promjena vlastite lozinke (potrebna trenutna lozinka).
   Future<({bool success, String message})> changePassword({
     required String staraLozinka,

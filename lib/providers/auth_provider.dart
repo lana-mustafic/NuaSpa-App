@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
 import '../core/api/auth_repository.dart';
+import '../core/api/services/api_service.dart';
 import '../core/jwt_roles.dart';
 import '../core/auth/auth_events.dart';
 
@@ -133,6 +134,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    try {
+      await ApiService().logout();
+    } catch (_) {
+      // Lokalna sesija se briše čak i ako server nije dostupan.
+    }
     await _storage.delete(key: 'jwt_token');
     _roles = [];
     _zaposlenikId = null;
