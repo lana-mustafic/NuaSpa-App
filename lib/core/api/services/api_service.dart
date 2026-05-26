@@ -108,6 +108,28 @@ class ApiService {
     }
   }
 
+  /// Terapeuti vezani za kategoriju usluge (npr. recenzije na service details).
+  Future<List<Zaposlenik>> getZaposleniciForCategory(
+    int kategorijaUslugaId, {
+    bool bookableOnly = true,
+  }) async {
+    if (kategorijaUslugaId <= 0) return [];
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/for-category/$kategorijaUslugaId',
+        queryParameters: {'bookableOnly': bookableOnly},
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getZaposleniciForCategory: $e');
+      return [];
+    }
+  }
+
   Future<Zaposlenik?> getTherapistMe() async {
     try {
       final response = await _dio.get<dynamic>('Zaposlenik/me');

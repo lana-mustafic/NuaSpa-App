@@ -97,7 +97,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   Future<Usluga?> _loadServiceAndTherapists() async {
     final service = await _apiService.getUslugaById(widget.serviceId);
     if (service != null && mounted) {
-      await _loadTherapistsForService(service);
+      await _loadTherapistsForCategory(service);
     }
     return service;
   }
@@ -115,25 +115,24 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     });
   }
 
-  Future<void> _loadTherapistsForService(Usluga service) async {
+  Future<void> _loadTherapistsForCategory(Usluga service) async {
     if (_therapistsLoading || _therapistsLoadedForUslugaId == service.id) {
       return;
     }
     setState(() => _therapistsLoading = true);
-    final all = await _apiService.getZaposlenici();
-    if (!mounted) return;
     final kat = service.kategorijaUslugaId;
-    final filtered = kat > 0
-        ? all.where((z) => z.kategorijaUslugaId == kat).toList()
-        : all;
+    final therapists = kat > 0
+        ? await _apiService.getZaposleniciForCategory(kat)
+        : <Zaposlenik>[];
+    if (!mounted) return;
     setState(() {
-      _therapists = filtered;
+      _therapists = therapists;
       _therapistsLoading = false;
       _therapistsLoadedForUslugaId = service.id;
-      if (filtered.length == 1) {
-        _selectedZaposlenikId = filtered.first.id;
+      if (therapists.length == 1) {
+        _selectedZaposlenikId = therapists.first.id;
       } else if (_selectedZaposlenikId != null &&
-          !filtered.any((z) => z.id == _selectedZaposlenikId)) {
+          !therapists.any((z) => z.id == _selectedZaposlenikId)) {
         _selectedZaposlenikId = null;
       }
     });
