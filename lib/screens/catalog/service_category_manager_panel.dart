@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/validation/nua_validators.dart';
 import '../../models/kategorija_usluga.dart';
 
 /// Luxury modal palette for service category management.
@@ -94,41 +95,52 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
 
   Future<void> _editCategory(KategorijaUsluga? existing) async {
     final ctrl = TextEditingController(text: existing?.naziv ?? '');
+    final formKey = GlobalKey<FormState>();
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _CategoryModalStyle.bgMid,
         title: Text(
-          existing == null ? 'New category' : 'Edit category',
+          existing == null ? 'Nova kategorija' : 'Uredi kategoriju',
           style: _CategoryModalStyle.titleStyle(ctx).copyWith(fontSize: 18),
         ),
-        content: TextField(
-          controller: ctrl,
-          style: const TextStyle(color: _CategoryModalStyle.textPrimary),
-          decoration: InputDecoration(
-            labelText: 'Name',
-            labelStyle: const TextStyle(color: _CategoryModalStyle.textMuted),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.12),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: ctrl,
+            autofocus: true,
+            style: const TextStyle(color: _CategoryModalStyle.textPrimary),
+            decoration: InputDecoration(
+              labelText: 'Naziv kategorije',
+              labelStyle: const TextStyle(color: _CategoryModalStyle.textMuted),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
               ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: _CategoryModalStyle.accentPurple),
+              ),
+              errorStyle: const TextStyle(height: 1.2),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _CategoryModalStyle.accentPurple),
-            ),
+            validator: NuaValidators.categoryName,
           ),
-          autofocus: true,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('Odustani'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text('Spremi'),
           ),
         ],
       ),
@@ -139,13 +151,6 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
 
     if (saved != true || !mounted) return;
 
-    if (naziv.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name is required.')),
-      );
-      return;
-    }
-
     final ok = existing == null
         ? await _api.createKategorijaUsluga(naziv) != null
         : await _api.updateKategorijaUsluga(
@@ -155,7 +160,15 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Saved.' : 'Error saving.')),
+      SnackBar(
+        content: Text(
+          ok
+              ? (existing == null
+                  ? 'Kategorija je uspješno dodana.'
+                  : 'Kategorija je uspješno ažurirana.')
+              : 'Spremanje kategorije nije uspjelo.',
+        ),
+      ),
     );
     if (ok) _reload();
   }

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/validation/nua_validators.dart';
+import '../../widgets/forms/luxury_modal_text_field.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/usluga.dart';
 import '../../ui/theme/luxury_modal_style.dart';
@@ -48,7 +50,7 @@ Future<bool> showServiceEditorDialog(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'No categories yet. Open Service categories and add at least one.',
+          'Nema kategorija. Dodajte barem jednu kategoriju usluga.',
         ),
       ),
     );
@@ -119,7 +121,9 @@ Future<bool> showServiceEditorDialog(
 
   if (naziv.isEmpty || cijena <= 0 || katId <= 0) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Check name, price and category.')),
+      const SnackBar(
+        content: Text('Provjerite naziv, cijenu i kategoriju usluge.'),
+      ),
     );
     return false;
   }
@@ -172,7 +176,15 @@ Future<bool> showServiceEditorDialog(
 
   if (!context.mounted) return false;
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(ok ? 'Saved.' : 'Error saving.')),
+    SnackBar(
+      content: Text(
+        ok
+            ? (existing == null
+                ? 'Usluga je uspješno dodana.'
+                : 'Usluga je uspješno ažurirana.')
+            : 'Spremanje usluge nije uspjelo. Provjerite unos.',
+      ),
+    ),
   );
   return ok;
 }
@@ -194,6 +206,7 @@ class _LuxuryServiceEditorShell extends StatefulWidget {
 }
 
 class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nazivCtrl;
   late final TextEditingController _cijenaCtrl;
   late final TextEditingController _trajanjeCtrl;
@@ -203,6 +216,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
   late int _categoryId;
   String? _localImagePath;
   bool _closeHover = false;
+  bool _attemptedSubmit = false;
 
   @override
   void initState() {
@@ -237,17 +251,14 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
   void _close() => Navigator.of(context).pop();
 
   void _submit() {
-    final naziv = _nazivCtrl.text.trim();
-    final cijena = double.tryParse(_cijenaCtrl.text.replaceAll(',', '.')) ?? 0;
-    final trajanje = int.tryParse(_trajanjeCtrl.text.trim()) ?? 60;
-    final opis = _opisCtrl.text.trim();
+    setState(() => _attemptedSubmit = true);
+    if (!_formKey.currentState!.validate()) return;
+    if (_categoryId <= 0) return;
 
-    if (naziv.isEmpty || cijena <= 0 || _categoryId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Check name, price and category.')),
-      );
-      return;
-    }
+    final naziv = _nazivCtrl.text.trim();
+    final cijena = double.parse(_cijenaCtrl.text.trim().replaceAll(',', '.'));
+    final trajanje = int.parse(_trajanjeCtrl.text.trim());
+    final opis = _opisCtrl.text.trim();
 
     Navigator.of(context).pop(
       _ServiceEditorFormData(
@@ -314,17 +325,20 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                       controller: _scrollCtrl,
                       primary: false,
                       padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
-                      child: Column(
+                      child: Form(
+                        key: _formKey,
+                        autovalidateMode: _attemptedSubmit
+                            ? AutovalidateMode.onUserInteraction
+                            : AutovalidateMode.disabled,
+                        child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _LuxuryField(
-                            label: 'Service name',
-                            child: TextField(
+                            label: 'Naziv usluge',
+                            child: LuxuryModalTextField(
                               controller: _nazivCtrl,
-                              style: LuxuryModalStyle.fieldStyle(context),
-                              decoration: LuxuryModalStyle.fieldDecoration(
-                                hint: 'e.g. Swedish Massage',
-                              ),
+                              hint: 'npr. Švedska masaža',
+                              validator: NuaValidators.serviceName,
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -332,32 +346,26 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                             children: [
                               Expanded(
                                 child: _LuxuryField(
-                                  label: 'Price (KM)',
-                                  child: TextField(
+                                  label: 'Cijena (KM)',
+                                  child: LuxuryModalTextField(
                                     controller: _cijenaCtrl,
-                                    keyboardType: TextInputType.number,
-                                    style:
-                                        LuxuryModalStyle.fieldStyle(context),
-                                    decoration:
-                                        LuxuryModalStyle.fieldDecoration(
-                                      hint: '80.00',
+                                    hint: '80.00',
+                                    keyboardType: const TextInputType.numberWithOptions(
+                                      decimal: true,
                                     ),
+                                    validator: NuaValidators.positivePrice,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: _LuxuryField(
-                                  label: 'Duration (minutes)',
-                                  child: TextField(
+                                  label: 'Trajanje (min)',
+                                  child: LuxuryModalTextField(
                                     controller: _trajanjeCtrl,
+                                    hint: '60',
                                     keyboardType: TextInputType.number,
-                                    style:
-                                        LuxuryModalStyle.fieldStyle(context),
-                                    decoration:
-                                        LuxuryModalStyle.fieldDecoration(
-                                      hint: '60',
-                                    ),
+                                    validator: NuaValidators.durationMinutes,
                                   ),
                                 ),
                               ),
@@ -365,25 +373,24 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                           ),
                           const SizedBox(height: 18),
                           _LuxuryField(
-                            label: 'Description',
+                            label: 'Opis',
                             child: SizedBox(
                               height: 120,
-                              child: TextField(
+                              child: LuxuryModalTextField(
                                 controller: _opisCtrl,
+                                hint:
+                                    'Opišite tretman, benefite i iskustvo...',
                                 maxLines: null,
                                 expands: true,
+                                minHeight: 120,
                                 textAlignVertical: TextAlignVertical.top,
-                                style: LuxuryModalStyle.fieldStyle(context),
-                                decoration: LuxuryModalStyle.fieldDecoration(
-                                  hint:
-                                      'Describe the treatment, benefits and experience...',
-                                  contentPadding: const EdgeInsets.fromLTRB(
-                                    18,
-                                    16,
-                                    18,
-                                    16,
-                                  ),
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  16,
+                                  18,
+                                  16,
                                 ),
+                                validator: NuaValidators.serviceDescription,
                               ),
                             ),
                           ),
@@ -417,6 +424,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                   ),
                           ),
                         ],
+                        ),
                       ),
                     ),
                   ),

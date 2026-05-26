@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/api/services/api_service.dart';
+import '../../../core/validation/nua_validators.dart';
+import '../../../widgets/forms/luxury_modal_text_field.dart';
 import '../../../models/kategorija_usluga.dart';
 import '../../../models/usluga.dart';
 import '../../../models/zaposlenik.dart';
@@ -124,14 +126,11 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   String? _specializationError;
   bool _sendPortalInvite = false;
   bool _invitePreferenceSetByUser = false;
-
-  static final _emailPattern = RegExp(
-    r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-  );
+  bool _attemptedSubmit = false;
 
   bool get _hasValidInviteEmail {
     final t = _email.text.trim();
-    return _emailPattern.hasMatch(t);
+    return NuaValidators.emailPattern.hasMatch(t);
   }
 
   @override
@@ -298,11 +297,13 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
 
   void _save() {
     if (_loading || _loadError != null) return;
+    setState(() => _attemptedSubmit = true);
     if (!_formKey.currentState!.validate()) return;
     if (_categoryId == null) return;
     if (_selectedServiceIds.isEmpty) {
       setState(() {
-        _specializationError = 'Select at least one specialty.';
+        _specializationError =
+            'Odaberite barem jednu specijalizaciju (uslugu).';
       });
       return;
     }
@@ -393,6 +394,9 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                             )
                           : Form(
                               key: _formKey,
+                              autovalidateMode: _attemptedSubmit
+                                  ? AutovalidateMode.onUserInteraction
+                                  : AutovalidateMode.disabled,
                               child: Scrollbar(
                                 controller: _scrollCtrl,
                                 thumbVisibility: true,
@@ -410,28 +414,27 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         CrossAxisAlignment.stretch,
                                     children: [
                                       _LuxuryTherapistField(
-                                        label: 'Name',
+                                        label: 'Ime',
                                         icon: Icons.person_outline_rounded,
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _ime,
-                                          hint: 'Enter therapist name',
-                                          validator: (v) =>
-                                              v == null || v.trim().isEmpty
-                                                  ? 'Name is required.'
-                                                  : null,
+                                          hint: 'Unesite ime terapeuta',
+                                          validator: (v) => NuaValidators
+                                              .requiredText(v, fieldLabel: 'Ime'),
                                         ),
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Surname',
+                                        label: 'Prezime',
                                         icon: Icons.person_outline_rounded,
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _prezime,
-                                          hint: 'Enter therapist surname',
-                                          validator: (v) =>
-                                              v == null || v.trim().isEmpty
-                                                  ? 'Surname is required.'
-                                                  : null,
+                                          hint: 'Unesite prezime terapeuta',
+                                          validator: (v) => NuaValidators
+                                              .requiredText(
+                                            v,
+                                            fieldLabel: 'Prezime',
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(height: 18),
@@ -573,22 +576,23 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Phone (optional)',
+                                        label: 'Telefon',
                                         icon: Icons.phone_outlined,
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _telefon,
-                                          hint: 'Enter phone number',
+                                          hint: '+387 61 123 456 (opcionalno)',
                                           keyboardType: TextInputType.phone,
+                                          validator: NuaValidators.phoneOptional,
                                         ),
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Email (optional)',
+                                        label: 'E-mail',
                                         icon: Icons.mail_outline_rounded,
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _email,
                                           focusNode: _emailFocus,
-                                          hint: 'therapist@nuaspa.ba',
+                                          hint: 'terapeut@nuaspa.ba',
                                           keyboardType:
                                               TextInputType.emailAddress,
                                           autofillHints: const [
@@ -596,19 +600,13 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           ],
                                           onChanged: (_) =>
                                               _syncPortalInviteOption(),
-                                          validator: (v) {
-                                            final t = v?.trim() ?? '';
-                                            if (widget.isNew &&
-                                                _sendPortalInvite &&
-                                                t.isEmpty) {
-                                              return 'Email is required to send a portal invitation.';
-                                            }
-                                            if (t.isEmpty) return null;
-                                            if (!_emailPattern.hasMatch(t)) {
-                                              return 'Enter a valid email.';
-                                            }
-                                            return null;
-                                          },
+                                          validator: (v) =>
+                                              NuaValidators
+                                                  .emailOptionalOrRequiredForInvite(
+                                            v,
+                                            inviteEnabled: widget.isNew &&
+                                                _sendPortalInvite,
+                                          ),
                                         ),
                                       ),
                                       if (widget.isNew) ...[
@@ -631,9 +629,9 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         icon: Icons.translate_rounded,
                                         helper:
                                             'e.g. English, Bosnian',
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _jezici,
-                                          hint: 'English, Bosnian',
+                                          hint: 'Engleski, Bosanski',
                                         ),
                                       ),
                                       const SizedBox(height: 18),
@@ -642,7 +640,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         icon: Icons.school_outlined,
                                         helper:
                                             'Certifications, degrees, training',
-                                        child: _LuxuryTextInput(
+                                        child: LuxuryModalTextField(
                                           controller: _obrazovanje,
                                           hint:
                                               'Certified Massage Therapist (CMT)',
@@ -831,93 +829,6 @@ class _LuxuryTherapistField extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _LuxuryTextInput extends StatefulWidget {
-  const _LuxuryTextInput({
-    required this.controller,
-    required this.hint,
-    this.validator,
-    this.keyboardType,
-    this.focusNode,
-    this.autofillHints,
-    this.onChanged,
-    this.maxLines = 1,
-    this.minHeight = 54,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final String? Function(String?)? validator;
-  final TextInputType? keyboardType;
-  final FocusNode? focusNode;
-  final Iterable<String>? autofillHints;
-  final ValueChanged<String>? onChanged;
-  final int maxLines;
-  final double minHeight;
-
-  @override
-  State<_LuxuryTextInput> createState() => _LuxuryTextInputState();
-}
-
-class _LuxuryTextInputState extends State<_LuxuryTextInput> {
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: widget.controller,
-      focusNode: widget.focusNode,
-      keyboardType: widget.keyboardType,
-      autofillHints: widget.autofillHints,
-      onChanged: widget.onChanged,
-      validator: widget.validator,
-      maxLines: widget.maxLines,
-      style: GoogleFonts.inter(
-        fontSize: 15,
-        color: const Color(0xFFF5F3FA),
-      ),
-      decoration: InputDecoration(
-        hintText: widget.hint,
-        hintStyle: GoogleFonts.inter(
-          fontSize: 15,
-          color: Colors.white.withValues(alpha: 0.45),
-        ),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.04),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        constraints: BoxConstraints(minHeight: widget.minHeight),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: LuxuryModalStyle.accentPurple.withValues(alpha: 0.65),
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFFF6B8A)),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFFF6B8A)),
-        ),
-      ).copyWith(
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: LuxuryModalStyle.accentPurple.withValues(alpha: 0.65),
-          ),
-        ),
-      ),
     );
   }
 }

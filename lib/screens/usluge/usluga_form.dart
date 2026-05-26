@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nuaspa_app/core/validation/nua_validators.dart';
 import 'package:nuaspa_app/widgets/forms/custom_text_field.dart';
 
 class UslugaForm extends StatefulWidget {
@@ -41,13 +42,15 @@ class _UslugaFormState extends State<UslugaForm> {
                 const SizedBox(height: 20),
                 
                 CustomTextField(
-                  label: "Naziv usluge", 
-                  controller: _nazivController
+                  label: 'Naziv usluge',
+                  controller: _nazivController,
+                  validator: NuaValidators.serviceName,
                 ),
-                
                 CustomTextField(
-                  label: "Cijena", 
+                  label: 'Cijena (KM)',
                   controller: _cijenaController,
+                  isNumeric: true,
+                  validator: NuaValidators.positivePrice,
                 ),
                 
                 const SizedBox(height: 20),

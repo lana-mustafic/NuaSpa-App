@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/validation/nua_validators.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -415,7 +416,9 @@ class _AdminAppointmentsManagementScreenState
     );
     if (!mounted) return;
     _toast(
-      created == null ? 'Appointment creation failed.' : 'Appointment created.',
+      created == null
+          ? 'Kreiranje termina nije uspjelo.'
+          : 'Termin je uspješno kreiran.',
     );
     if (created != null) {
       setState(() {
@@ -532,7 +535,11 @@ class _AdminAppointmentsManagementScreenState
       isVip: draft.isVip,
     );
     if (!mounted) return;
-    _toast(updated == null ? 'Edit failed.' : 'Appointment updated.');
+    _toast(
+      updated == null
+          ? 'Ažuriranje termina nije uspjelo.'
+          : 'Termin je uspješno ažuriran.',
+    );
     if (updated != null) {
       setState(() => _selected = updated);
       _reload();
@@ -2295,6 +2302,7 @@ class _AdminAppointmentCreateDialogState
   late int? _clientId;
   late int? _serviceId;
   late int? _therapistId;
+  String? _formError;
 
   static const _months = [
     'Jan',
@@ -2548,7 +2556,10 @@ class _AdminAppointmentCreateDialogState
                                           : c.punoIme,
                                     ),
                                 ],
-                                onPick: (id) => setState(() => _clientId = id),
+                                onPick: (id) => setState(() {
+                                  _clientId = id;
+                                  _formError = null;
+                                }),
                               ),
                     ),
                     const SizedBox(height: 14),
@@ -2585,7 +2596,10 @@ class _AdminAppointmentCreateDialogState
                                           '${s.naziv} • ${s.trajanjeMinuta} min',
                                     ),
                                 ],
-                                onPick: (id) => setState(() => _serviceId = id),
+                                onPick: (id) => setState(() {
+                                  _serviceId = id;
+                                  _formError = null;
+                                }),
                               ),
                     ),
                     const SizedBox(height: 14),
@@ -2610,17 +2624,31 @@ class _AdminAppointmentCreateDialogState
                                       label: '${t.ime} ${t.prezime}'.trim(),
                                     ),
                                 ],
-                                onPick: (id) =>
-                                    setState(() => _therapistId = id),
+                                onPick: (id) => setState(() {
+                                  _therapistId = id;
+                                  _formError = null;
+                                }),
                               ),
                     ),
                     if (missingData) ...[
                       const SizedBox(height: 16),
                       Text(
-                        'Clients, services, and therapists must be loaded before creating an appointment.',
+                        'Prije kreiranja termina učitajte klijente, usluge i terapeute.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ],
+                    if (_formError != null) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        _formError!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: Color(0xFFFF6B8A),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -2638,9 +2666,18 @@ class _AdminAppointmentCreateDialogState
                         ),
                         const SizedBox(width: 16),
                         _PremiumModalCreateButton(
-                          enabled: _canCreate && !missingData,
-                          onPressed: _canCreate && !missingData
-                              ? () => Navigator.pop(
+                          enabled: !missingData,
+                          onPressed: missingData
+                              ? null
+                              : () {
+                                  if (!_canCreate) {
+                                    setState(() {
+                                      _formError =
+                                          'Odaberite klijenta, uslugu i terapeuta.';
+                                    });
+                                    return;
+                                  }
+                                  Navigator.pop(
                                     context,
                                     _AdminAppointmentDraft(
                                       clientId: _clientId!,
@@ -2648,8 +2685,8 @@ class _AdminAppointmentCreateDialogState
                                       serviceId: _serviceId!,
                                       therapistId: _therapistId!,
                                     ),
-                                  )
-                              : null,
+                                  );
+                                },
                         ),
                       ],
                     ),
@@ -3039,73 +3076,90 @@ class _AppointmentEditDialog extends StatefulWidget {
 }
 
 class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
+  final _formKey = GlobalKey<FormState>();
   late DateTime _dateTime = widget.appointment.datumRezervacije;
   late int? _serviceId = _initialServiceId();
   late int? _therapistId = _initialTherapistId();
   late bool _isVip = widget.appointment.isVip;
+  bool _attemptedSubmit = false;
+
+  void _trySave() {
+    setState(() => _attemptedSubmit = true);
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _AppointmentEditDraft(
+        dateTime: _dateTime,
+        serviceId: _serviceId!,
+        therapistId: _therapistId!,
+        isVip: _isVip,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Edit Appointment'),
+    title: const Text('Uredi termin'),
     content: SizedBox(
       width: 520,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.schedule_outlined),
-            title: Text(_dateTime.toLocal().toString().split('.').first),
-            onTap: _pickDateTime,
-          ),
-          DropdownButtonFormField<int>(
-            value: _serviceId,
-            decoration: const InputDecoration(labelText: 'Service'),
-            items: [
-              for (final s in widget.services)
-                DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-            ],
-            onChanged: (v) => setState(() => _serviceId = v),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _therapistId,
-            decoration: const InputDecoration(labelText: 'Therapist'),
-            items: [
-              for (final t in widget.therapists)
-                DropdownMenuItem(
-                  value: t.id,
-                  child: Text('${t.ime} ${t.prezime}'),
-                ),
-            ],
-            onChanged: (v) => setState(() => _therapistId = v),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('VIP appointment'),
-            value: _isVip,
-            onChanged: (v) => setState(() => _isVip = v),
-          ),
-        ],
+      child: Form(
+        key: _formKey,
+        autovalidateMode: _attemptedSubmit
+            ? AutovalidateMode.onUserInteraction
+            : AutovalidateMode.disabled,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: Text(_dateTime.toLocal().toString().split('.').first),
+              subtitle: const Text('Datum i vrijeme'),
+              onTap: _pickDateTime,
+            ),
+            DropdownButtonFormField<int>(
+              value: _serviceId,
+              decoration: const InputDecoration(labelText: 'Usluga'),
+              items: [
+                for (final s in widget.services)
+                  DropdownMenuItem(value: s.id, child: Text(s.naziv)),
+              ],
+              onChanged: (v) => setState(() => _serviceId = v),
+              validator: (v) =>
+                  NuaValidators.selectionRequired(v, fieldLabel: 'uslugu'),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: _therapistId,
+              decoration: const InputDecoration(labelText: 'Terapeut'),
+              items: [
+                for (final t in widget.therapists)
+                  DropdownMenuItem(
+                    value: t.id,
+                    child: Text('${t.ime} ${t.prezime}'),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _therapistId = v),
+              validator: (v) =>
+                  NuaValidators.selectionRequired(v, fieldLabel: 'terapeuta'),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('VIP termin'),
+              value: _isVip,
+              onChanged: (v) => setState(() => _isVip = v),
+            ),
+          ],
+        ),
       ),
     ),
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: const Text('Odustani'),
       ),
       FilledButton(
-        onPressed: _serviceId == null || _therapistId == null
-            ? null
-            : () => Navigator.pop(
-                context,
-                _AppointmentEditDraft(
-                  dateTime: _dateTime,
-                  serviceId: _serviceId!,
-                  therapistId: _therapistId!,
-                  isVip: _isVip,
-                ),
-              ),
-        child: const Text('Save'),
+        onPressed: _trySave,
+        child: const Text('Spremi'),
       ),
     ],
   );
