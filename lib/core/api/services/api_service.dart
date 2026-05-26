@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../api_client.dart';
+import '../paged_list_parser.dart';
 import '../api_error_messages.dart';
 import '../../../models/usluga.dart';
 import '../../../models/preporucena_usluga.dart';
@@ -39,7 +40,9 @@ class ApiService {
   /// Opcionalni filteri mapiraju na [UslugaSearchObject] na backendu.
   Future<List<Usluga>> getUsluge({String? naziv, double? maxCijena}) async {
     try {
-      final query = <String, dynamic>{};
+      final query = <String, dynamic>{
+        'pageSize': 100,
+      };
       if (naziv != null && naziv.trim().isNotEmpty) {
         query['Naziv'] = naziv.trim();
       }
@@ -49,18 +52,13 @@ class ApiService {
 
       final response = await _dio.get<dynamic>(
         'Usluga',
-        queryParameters: query.isEmpty ? null : query,
+        queryParameters: query,
       );
 
-      final data = response.data;
-      if (data is! List) {
-        debugPrint('Neočekivan odgovor za Usluga: $data');
-        return [];
-      }
-
-      return data
-          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return parsePagedItems(
+        response.data,
+        (json) => Usluga.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getUsluge: $e');
       return [];
@@ -239,12 +237,14 @@ class ApiService {
 
   Future<List<Zaposlenik>> getZaposlenici() async {
     try {
-      final response = await _dio.get<dynamic>('Zaposlenik');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik',
+        queryParameters: {'pageSize': 100},
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => Zaposlenik.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getZaposlenici: $e');
       return [];
@@ -571,12 +571,14 @@ class ApiService {
 
   Future<List<Rezervacija>> getRezervacije() async {
     try {
-      final response = await _dio.get<dynamic>('Rezervacija');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Rezervacija.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final response = await _dio.get<dynamic>(
+        'Rezervacija',
+        queryParameters: {'pageSize': 100},
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => Rezervacija.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacije: $e');
       return [];
@@ -592,7 +594,7 @@ class ApiService {
     int? zaposlenikId,
   }) async {
     try {
-      final query = <String, dynamic>{};
+      final query = <String, dynamic>{'pageSize': 100};
       if (datum != null) {
         final d = DateTime(datum.year, datum.month, datum.day);
         query['Datum'] =
@@ -610,13 +612,12 @@ class ApiService {
 
       final response = await _dio.get<dynamic>(
         'Rezervacija',
-        queryParameters: query.isEmpty ? null : query,
+        queryParameters: query,
       );
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Rezervacija.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return parsePagedItems(
+        response.data,
+        (json) => Rezervacija.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
       return [];
@@ -816,13 +817,12 @@ class ApiService {
     try {
       final response = await _dio.get<dynamic>(
         'Recenzija',
-        queryParameters: {'uslugaId': uslugaId},
+        queryParameters: {'uslugaId': uslugaId, 'pageSize': 50},
       );
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Recenzija.fromJson(e as Map<String, dynamic>))
-          .toList();
+      return parsePagedItems(
+        response.data,
+        (json) => Recenzija.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getRecenzijeByUsluga: $e');
       return [];
@@ -911,12 +911,14 @@ class ApiService {
 
   Future<List<KategorijaUsluga>> getKategorijeUsluga() async {
     try {
-      final response = await _dio.get<dynamic>('KategorijaUsluga');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => KategorijaUsluga.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final response = await _dio.get<dynamic>(
+        'KategorijaUsluga',
+        queryParameters: {'pageSize': 100},
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => KategorijaUsluga.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getKategorijeUsluga: $e');
       return [];
@@ -1374,22 +1376,22 @@ class ApiService {
 
   Future<List<AdminClientRow>> getAdminClients({
     String? q,
-    int take = 200,
+    int page = 1,
+    int pageSize = 100,
   }) async {
     try {
       final response = await _dio.get<dynamic>(
         'AdminKlijent',
         queryParameters: {
           if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
-          'take': take,
+          'page': page,
+          'pageSize': pageSize,
         },
       );
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => AdminClientRow.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      return parsePagedItems(
+        response.data,
+        (json) => AdminClientRow.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getAdminClients: $e');
       return [];
@@ -1667,13 +1669,14 @@ class ApiService {
 
   Future<List<Obavijest>> getObavijesti() async {
     try {
-      final response = await _dio.get<dynamic>('Obavijest');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => Obavijest.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      final response = await _dio.get<dynamic>(
+        'Obavijest',
+        queryParameters: {'pageSize': 50},
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => Obavijest.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getObavijesti: $e');
       return [];
