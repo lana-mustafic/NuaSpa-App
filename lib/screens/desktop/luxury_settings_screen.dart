@@ -647,7 +647,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
                 if (kDebugMode) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Override at build: --dart-define=NUASPA_API_BASE_URL=…',
+                    'Override: --dart-define=API_BASE_URL=… ili --dart-define-from-file=.env',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       color: _SetUi.textSecondary,

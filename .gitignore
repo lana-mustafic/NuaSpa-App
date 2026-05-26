@@ -1,3 +1,6 @@
+# Lokalna konfiguracija (kopiraj iz .env.example)
+.env
+
 # Miscellaneous
 *.class
 *.log

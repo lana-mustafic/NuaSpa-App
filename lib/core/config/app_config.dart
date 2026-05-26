@@ -1,43 +1,50 @@
-import 'package:flutter/foundation.dart';
-
-/// Compile-time i zadani API endpointi za NuaSpa backend.
+/// Centralna konfiguracija Flutter klijenta.
 ///
-/// Override pri buildu ili runu:
-/// `flutter run -d windows --dart-define=NUASPA_API_BASE_URL=http://192.168.1.5:5088/api/`
+/// Postavi URL pri runu/buildu (preporučeno):
+/// `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5088/api/`
+///
+/// Ili učitaj iz `.env` datoteke:
+/// `flutter run --dart-define-from-file=.env`
 abstract final class AppConfig {
-  static const String _defineKey = 'NUASPA_API_BASE_URL';
+  static const String _primaryDefineKey = 'API_BASE_URL';
+  static const String _legacyDefineKey = 'NUASPA_API_BASE_URL';
 
-  /// Eksplicitni base URL (mora uključivati path do API-ja, npr. …/api/).
-  static const String _fromEnvironment = String.fromEnvironment(
-    _defineKey,
+  static const String _fromPrimary = String.fromEnvironment(
+    _primaryDefineKey,
     defaultValue: '',
   );
 
-  /// Aktivni Dio base URL (s završnim `/`).
+  static const String _fromLegacy = String.fromEnvironment(
+    _legacyDefineKey,
+    defaultValue: '',
+  );
+
+  /// Aktivni Dio base URL (mora uključivati path do API-ja, npr. …/api/).
   static String get apiBaseUrl {
-    final override = _fromEnvironment.trim();
-    if (override.isNotEmpty) {
-      return _ensureTrailingSlash(override);
+    final override = _resolveBaseUrl();
+    if (override.isEmpty) {
+      throw StateError(
+        'API_BASE_URL nije postavljen. Kopiraj .env.example u .env i pokreni:\n'
+        '  flutter run --dart-define-from-file=.env\n'
+        'ili:\n'
+        '  flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5088/api/',
+      );
     }
-    return _defaultBaseUrlForPlatform();
+    return _ensureTrailingSlash(override);
   }
 
-  static String _defaultBaseUrlForPlatform() {
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'https://10.0.2.2:7155/api/';
-      case TargetPlatform.windows:
-      case TargetPlatform.linux:
-      case TargetPlatform.macOS:
-        return 'http://127.0.0.1:5088/api/';
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-        return 'http://127.0.0.1:5088/api/';
+  static String _resolveBaseUrl() {
+    final primary = _fromPrimary.trim();
+    if (primary.isNotEmpty) {
+      return primary;
     }
+    return _fromLegacy.trim();
   }
 
   static String _ensureTrailingSlash(String url) {
-    if (url.endsWith('/')) return url;
+    if (url.endsWith('/')) {
+      return url;
+    }
     return '$url/';
   }
 }

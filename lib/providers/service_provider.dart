@@ -52,7 +52,7 @@ class ServiceProvider with ChangeNotifier {
         case DioExceptionType.receiveTimeout:
           return 'Request timed out. Check your network and that the API is available.';
         case DioExceptionType.connectionError:
-          return 'Cannot reach the server. Start the backend or check NUASPA_API_BASE_URL.';
+          return 'Cannot reach the server. Start the backend or check API_BASE_URL.';
         case DioExceptionType.badCertificate:
           return 'HTTPS certificate issue (dev: use HTTP or a trusted certificate).';
         case DioExceptionType.badResponse:

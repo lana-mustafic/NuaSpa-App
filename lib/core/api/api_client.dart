@@ -11,7 +11,6 @@ class ApiClient {
   ApiClient._() {
     dio = Dio(
       BaseOptions(
-        // Zadano po platformi; override: --dart-define=NUASPA_API_BASE_URL=https://host/api/
         baseUrl: AppConfig.apiBaseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 20),
