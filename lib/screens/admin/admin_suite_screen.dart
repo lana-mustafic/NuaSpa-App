@@ -646,7 +646,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   void _startCalendarTimerIfNeeded() {
     _calendarTimer?.cancel();
     if (!_autoRefreshCalendar) return;
-    // “Real-time” MVP: refresh every 20 seconds while screen is open.
+    // Auto-refresh kalendara svakih 20 sekundi dok je ekran otvoren.
     _calendarTimer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!mounted) return;
       final inTherapists = widget.initialRoute == AdminSuiteRoute.therapists ||

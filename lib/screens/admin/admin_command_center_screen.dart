@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../models/admin/admin_activity_feed_item.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/admin/admin_finance_dashboard.dart';
 import '../../models/admin/admin_kpi.dart';
@@ -40,7 +39,6 @@ class _CcData {
     required this.bookings,
     required this.yesterdayBookings,
     required this.therapists,
-    required this.activityFeed,
     required this.homeOverview,
     required this.clientStats,
     required this.financeToday,
@@ -54,7 +52,6 @@ class _CcData {
   final List<Rezervacija> bookings;
   final List<Rezervacija> yesterdayBookings;
   final List<Zaposlenik> therapists;
-  final List<AdminActivityFeedItem> activityFeed;
   final DesktopHomeOverview? homeOverview;
   final AdminClientStats? clientStats;
   final AdminFinanceDashboard? financeToday;
@@ -167,7 +164,6 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           _api.getRezervacijeFiltered(datum: day, includeOtkazane: true),
           _api.getRezervacijeFiltered(datum: yesterday, includeOtkazane: true),
           _api.getZaposlenici(),
-          _api.getAdminActivityFeed(day: day, take: 16),
           _api.getDesktopHomeOverview(day: day),
           _api.getAdminClientStats(),
           _api.getAdminFinanceDashboard(
@@ -189,11 +185,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           bookings: results[4] as List<Rezervacija>,
           yesterdayBookings: results[5] as List<Rezervacija>,
           therapists: results[6] as List<Zaposlenik>,
-          activityFeed: results[7] as List<AdminActivityFeedItem>,
-          homeOverview: results[8] as DesktopHomeOverview?,
-          clientStats: results[9] as AdminClientStats?,
-          financeToday: results[10] as AdminFinanceDashboard?,
-          reviews: results[11] as AdminReviewsDashboard?,
+          homeOverview: results[7] as DesktopHomeOverview?,
+          clientStats: results[8] as AdminClientStats?,
+          financeToday: results[9] as AdminFinanceDashboard?,
+          reviews: results[10] as AdminReviewsDashboard?,
         );
       }();
     });

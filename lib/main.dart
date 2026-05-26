@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/notification_provider.dart';
-import 'providers/service_provider.dart'; // DODANO
+import 'providers/service_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/catalog/service_details_screen.dart';
 import 'core/api/services/api_service.dart';
@@ -32,14 +32,11 @@ Future<void> main() async {
     debugPrint('NuaSpa API base URL: ${AppConfig.apiBaseUrl}');
   }
   runApp(
-    // MultiProvider omogućava da dodaješ više providera kasnije (npr. za Auth, Usluge itd.)
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthState()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(
-          create: (_) => ServiceProvider(),
-        ), // DODANO: Registracija kataloga
+        ChangeNotifierProvider(create: (_) => ServiceProvider()),
       ],
       child: const MyApp(),
     ),
