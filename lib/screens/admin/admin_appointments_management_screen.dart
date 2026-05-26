@@ -285,6 +285,7 @@ class _AdminAppointmentsManagementScreenState
                                     )
                                   : _AppointmentsTable(
                                       reservations: filtered,
+                                      services: data.services,
                                       selectedId: selected?.id,
                                       onSelect: (r) =>
                                           setState(() => _selected = r),
@@ -930,6 +931,7 @@ class _KpiCards extends StatelessWidget {
 class _AppointmentsTable extends StatelessWidget {
   const _AppointmentsTable({
     required this.reservations,
+    required this.services,
     required this.selectedId,
     required this.onSelect,
     required this.onConfirmToggle,
@@ -939,6 +941,7 @@ class _AppointmentsTable extends StatelessWidget {
   });
 
   final List<Rezervacija> reservations;
+  final List<Usluga> services;
   final int? selectedId;
   final ValueChanged<Rezervacija> onSelect;
   final ValueChanged<Rezervacija> onConfirmToggle;
@@ -948,6 +951,12 @@ class _AppointmentsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final serviceImages = {
+      for (final s in services)
+        if (s.slikaUrl.isNotEmpty && !s.slikaUrl.contains('picsum.photos'))
+          s.id: s.slikaUrl,
+    };
+
     if (reservations.isEmpty) {
       return _ApptGlass(
         radius: 28,
@@ -1068,9 +1077,10 @@ class _AppointmentsTable extends StatelessWidget {
                           ),
                         ),
                         DataCell(
-                          _TwoLine(
-                            title: r.uslugaNaziv ?? 'Spa Ritual',
+                          _ServiceListCell(
+                            name: r.uslugaNaziv ?? 'Spa Ritual',
                             subtitle: _category(r.uslugaNaziv),
+                            imageUrl: serviceImages[r.uslugaId],
                           ),
                         ),
                         DataCell(
@@ -1892,6 +1902,76 @@ class _TwoLine extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _ServiceListCell extends StatelessWidget {
+  const _ServiceListCell({
+    required this.name,
+    required this.subtitle,
+    this.imageUrl,
+  });
+
+  final String name;
+  final String subtitle;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 200,
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _placeholder(),
+                  )
+                : _placeholder(),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.48),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        width: 44,
+        height: 44,
+        color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.2),
+        child: Icon(
+          Icons.spa_outlined,
+          size: 22,
+          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.7),
+        ),
+      );
 }
 
 class _StatusBadge extends StatelessWidget {
