@@ -897,12 +897,14 @@ class ApiService {
 
   Future<List<Usluga>> getMyFavorites() async {
     try {
-      final response = await _dio.get<dynamic>('Favorit');
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final response = await _dio.get<dynamic>(
+        'Favorit',
+        queryParameters: {'pageSize': 100},
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => Usluga.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getMyFavorites: $e');
       return [];
@@ -1417,7 +1419,7 @@ class ApiService {
 
   Future<List<GradLookup>> getGradovi({int? drzavaId, String? naziv}) async {
     try {
-      final query = <String, dynamic>{};
+      final query = <String, dynamic>{'pageSize': 100};
       if (drzavaId != null) query['drzavaId'] = drzavaId;
       if (naziv != null && naziv.trim().isNotEmpty) {
         query['naziv'] = naziv.trim();
@@ -1425,14 +1427,12 @@ class ApiService {
 
       final response = await _dio.get<dynamic>(
         'Lookup/gradovi',
-        queryParameters: query.isEmpty ? null : query,
+        queryParameters: query,
       );
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => GradLookup.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      return parsePagedItems(
+        response.data,
+        (json) => GradLookup.fromJson(json),
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getGradovi: $e');
       return [];
