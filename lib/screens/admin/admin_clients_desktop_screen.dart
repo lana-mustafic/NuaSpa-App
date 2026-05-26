@@ -225,6 +225,19 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   Future<void> _showCreateClientDialog(List<Zaposlenik> therapists) async {
+    final gradovi = await widget.api.getGradovi();
+    if (!mounted) return;
+    if (gradovi.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nema gradova u bazi. Dodajte grad prije kreiranja klijenta.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final formKey = GlobalKey<FormState>();
     final imeC = TextEditingController();
     final prezC = TextEditingController();
@@ -234,6 +247,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     final confirmPassC = TextEditingController();
     final telC = TextEditingController();
     int? zId;
+    int? gradId = gradovi.length == 1 ? gradovi.first.id : null;
     var vip = false;
     var attemptedSubmit = false;
     var obscurePass = true;
@@ -325,6 +339,21 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                         validator: NuaValidators.phoneOptional,
                       ),
                       const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        value: gradId,
+                        decoration: const InputDecoration(labelText: 'Grad'),
+                        items: [
+                          for (final g in gradovi)
+                            DropdownMenuItem<int>(
+                              value: g.id,
+                              child: Text(g.label),
+                            ),
+                        ],
+                        onChanged: (v) => setLocal(() => gradId = v),
+                        validator: (v) =>
+                            NuaValidators.selectionRequired(v, fieldLabel: 'grad'),
+                      ),
+                      const SizedBox(height: 8),
                       DropdownButtonFormField<int?>(
                         value: zId,
                         decoration: const InputDecoration(
@@ -371,6 +400,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                       email: emailC.text.trim(),
                       userName: userC.text.trim(),
                       password: passC.text,
+                      gradId: gradId!,
                       telefon: telC.text.trim().isEmpty
                           ? null
                           : telC.text.trim(),

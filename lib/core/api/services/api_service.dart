@@ -29,6 +29,7 @@ import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
 import '../../../models/admin/radno_vrijeme.dart';
+import '../../../models/grad_lookup.dart';
 
 class ApiService {
   final Dio _dio = ApiClient().dio;
@@ -1412,14 +1413,38 @@ class ApiService {
     }
   }
 
+  Future<List<GradLookup>> getGradovi({int? drzavaId, String? naziv}) async {
+    try {
+      final query = <String, dynamic>{};
+      if (drzavaId != null) query['drzavaId'] = drzavaId;
+      if (naziv != null && naziv.trim().isNotEmpty) {
+        query['naziv'] = naziv.trim();
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Lookup/gradovi',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => GradLookup.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getGradovi: $e');
+      return [];
+    }
+  }
+
   Future<AdminClientRow?> createAdminClient({
     required String ime,
     required String prezime,
     required String email,
     required String userName,
     required String password,
+    required int gradId,
     String? telefon,
-    int gradId = 1,
     int? zaposlenikId,
     bool isVipKlijent = false,
   }) async {
