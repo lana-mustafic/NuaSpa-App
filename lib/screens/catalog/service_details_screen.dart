@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/preporuka/preporuka_tracker.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../models/recenzija.dart';
 import '../../models/usluga.dart';
@@ -97,6 +98,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   Future<Usluga?> _loadServiceAndTherapists() async {
     final service = await _apiService.getUslugaById(widget.serviceId);
     if (service != null && mounted) {
+      PreporukaTracker.instance.trackServiceView(service.id);
       await _loadTherapistsForCategory(service);
     }
     return service;

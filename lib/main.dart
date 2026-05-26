@@ -6,7 +6,8 @@ import 'providers/service_provider.dart'; // DODANO
 import 'screens/login_screen.dart';
 import 'screens/catalog/service_details_screen.dart';
 import 'core/api/services/api_service.dart';
-import 'models/usluga.dart';
+import 'models/preporucena_usluga.dart';
+import 'ui/widgets/preporuka_service_card.dart';
 import 'models/rezervacija.dart';
 import 'models/desktop_home_overview.dart';
 import 'ui/layout/desktop_shell.dart';
@@ -107,7 +108,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ApiService _api = ApiService();
-  List<Usluga>? _preporuke;
+  List<PreporucenaUsluga>? _preporuke;
   bool _preporukeLoading = true;
   final ScrollController _scrollController = ScrollController();
   Future<({List<Rezervacija> bookings, DesktopHomeOverview? overview})>?
@@ -116,7 +117,15 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _loadPreporuke();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (auth.isZaposlenik) {
+        setState(() => _preporukeLoading = false);
+        return;
+      }
+      _loadPreporuke();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
@@ -305,81 +314,26 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 190,
+          height: 248,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: list.length,
             separatorBuilder: (context, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
-              final u = list[index];
-              return SizedBox(
-                width: 180,
-                child: HoverCard(
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Otvori detalje: ${u.naziv}',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (context) =>
-                            ServiceDetailsScreen(serviceId: u.id),
+              final item = list[index];
+              return PreporukaServiceCard(
+                width: 200,
+                item: item,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (context) => ServiceDetailsScreen(
+                        serviceId: item.usluga.id,
                       ),
-                    );
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16),
-                          ),
-                          child: Image.network(
-                            u.slikaUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.08),
-                                  child: Icon(
-                                    Icons.spa_outlined,
-                                    color: Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.55),
-                                  ),
-                                ),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              u.naziv,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              u.cijenaKm,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white.withValues(alpha: 0.72),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               );
             },
           ),

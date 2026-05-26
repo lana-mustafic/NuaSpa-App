@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/kategorija_usluga.dart';
 import '../models/usluga.dart';
 import '../core/api/services/api_service.dart';
+import '../core/preporuka/preporuka_tracker.dart';
 
 class ServiceProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -164,9 +165,12 @@ class ServiceProvider with ChangeNotifier {
     }
   }
 
-  void searchServices(String query) {
+  void searchServices(String query, {bool trackForRecommender = true}) {
     _searchQuery = query.trim();
     _applyFilters();
+    if (trackForRecommender) {
+      PreporukaTracker.instance.trackSearch(_searchQuery);
+    }
   }
 
   void setCategoryFilter(int? categoryId) {

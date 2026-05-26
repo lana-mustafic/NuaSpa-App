@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
+import '../../models/preporucena_usluga.dart';
+import '../../ui/widgets/preporuka_service_card.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
@@ -22,7 +24,7 @@ class MobileHomeScreen extends StatefulWidget {
 
 class _MobileHomeScreenState extends State<MobileHomeScreen> {
   final ApiService _api = ApiService();
-  List<Usluga>? _preporuke;
+  List<PreporucenaUsluga>? _preporuke;
   bool _loading = true;
 
   @override
@@ -32,7 +34,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
       if (!mounted) return;
       context.read<ServiceProvider>().fetchFavorites();
     });
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (context.read<AuthProvider>().isZaposlenik) {
+        setState(() => _loading = false);
+        return;
+      }
+      _load();
+    });
   }
 
   Future<void> _load() async {
@@ -171,15 +180,28 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         else
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 200,
+              height: 248,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 scrollDirection: Axis.horizontal,
                 itemCount: _preporuke!.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 14),
                 itemBuilder: (context, i) {
-                  final u = _preporuke![i];
-                  return _RecommendCard(usluga: u);
+                  final item = _preporuke![i];
+                  return PreporukaServiceCard(
+                    width: 168,
+                    compact: true,
+                    item: item,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ServiceDetailsScreen(
+                            serviceId: item.usluga.id,
+                          ),
+                        ),
+                      );
+                    },
+                  );
                 },
               ),
             ),

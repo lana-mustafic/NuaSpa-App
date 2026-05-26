@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../api_client.dart';
 import '../../../models/usluga.dart';
+import '../../../models/preporucena_usluga.dart';
 import '../../../models/kategorija_usluga.dart';
 import '../../../models/zaposlenik.dart';
 import '../../../models/rezervacija.dart';
@@ -62,8 +63,8 @@ class ApiService {
     }
   }
 
-  /// Preporuke po kategorijama iz favorita i rezervacija (ili prvih N iz kataloga).
-  Future<List<Usluga>> getPreporuke({int take = 10}) async {
+  /// Content-based preporuke s objašnjenjem (razlogTekst).
+  Future<List<PreporucenaUsluga>> getPreporuke({int take = 10}) async {
     try {
       final response = await _dio.get<dynamic>(
         'Preporuka',
@@ -72,11 +73,39 @@ class ApiService {
       final data = response.data;
       if (data is! List) return [];
       return data
-          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
+          .map((e) => PreporucenaUsluga.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getPreporuke: $e');
       return [];
+    }
+  }
+
+  /// Zapis signala za recommender: tip 0 = pretraga, 1 = pregled usluge.
+  Future<void> logPreporukaAktivnost({
+    required int tip,
+    int? uslugaId,
+    int? kategorijaUslugaId,
+    String? searchTerm,
+  }) async {
+    try {
+      await _dio.post<void>(
+        'Preporuka/aktivnost',
+        data: {
+          'tip': tip,
+          if (uslugaId != null) 'uslugaId': uslugaId,
+          if (kategorijaUslugaId != null) 'kategorijaUslugaId': kategorijaUslugaId,
+          if (searchTerm != null && searchTerm.trim().isNotEmpty)
+            'searchTerm': searchTerm.trim(),
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        return;
+      }
+      debugPrint('Greška u ApiService.logPreporukaAktivnost: $e');
+    } catch (e) {
+      debugPrint('Greška u ApiService.logPreporukaAktivnost: $e');
     }
   }
 
