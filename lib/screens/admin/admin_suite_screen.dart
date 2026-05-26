@@ -431,8 +431,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                       Text(
                                         'Klijent: $klijentLabel\n'
                                         'Tel: $telLabel · Mail: $mailLabel\n'
-                                        'Terapeut: $terLabel\n'
-                                        'Korisnik #${r.korisnikId} · Rezerv. #${r.id}',
+                                        'Terapeut: $terLabel',
                                         style: subMuted,
                                       ),
                                       if (r.isOtkazana &&
@@ -493,7 +492,6 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                             : '—';
                         return '$tl–$end | ${r.uslugaTrajanjeMinuta} min | '
                             '${r.uslugaCijena.toStringAsFixed(2)} KM | '
-                            'ID ${r.id} | kor ${r.korisnikId} | '
                             '${r.uslugaNaziv ?? "usluga"} | '
                             '${r.korisnikIme ?? "—"} | tel $tel | mail $em | '
                             '${r.zaposlenikIme ?? "—"} | '

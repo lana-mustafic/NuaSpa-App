@@ -844,7 +844,6 @@ class _AboutCard extends StatelessWidget {
         children: [
           Text('About ${therapist.ime}', style: _ProfileUi.cardTitle(context)),
           const SizedBox(height: 16),
-          _InfoRow(label: 'Employee ID', value: '#${therapist.id}'),
           _InfoRow(label: 'Phone', value: phone),
           _InfoRow(label: 'Email', value: email),
           if (therapist.kategorijaUslugaNaziv?.trim().isNotEmpty == true)
@@ -1753,7 +1752,10 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        list[i].korisnikIme ?? 'Client #${list[i].korisnikId}',
+                        list[i].korisnikIme ??
+                            (list[i].korisnikEmail?.trim().isNotEmpty == true
+                                ? list[i].korisnikEmail!
+                                : 'Nepoznat klijent'),
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w600,
                           color: _ProfileUi.textPrimary,

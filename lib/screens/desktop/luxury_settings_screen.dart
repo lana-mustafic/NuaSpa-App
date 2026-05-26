@@ -451,7 +451,6 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
       if (fullName.isNotEmpty) ('Full name', fullName),
       if (_session?.email != null) ('Email', _session!.email!),
       ('Role', _roleLabel(auth)),
-      if (auth.zaposlenikId != null) ('Staff ID', '#${auth.zaposlenikId}'),
       if (auth.roles.isNotEmpty) ('Permissions', auth.roles.join(', ')),
     ];
 

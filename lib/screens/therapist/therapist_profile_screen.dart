@@ -394,7 +394,6 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
           final sidebar = _ProfileSidebar(
             completeness: completeness,
             status: z.status,
-            staffId: z.id,
             certifiedCount: data.certifiedCount,
             category: z.kategorijaUslugaNaziv,
             onRefresh: _reload,
@@ -893,7 +892,6 @@ class _ProfileSidebar extends StatelessWidget {
   const _ProfileSidebar({
     required this.completeness,
     required this.status,
-    required this.staffId,
     required this.certifiedCount,
     required this.category,
     required this.onRefresh,
@@ -901,7 +899,6 @@ class _ProfileSidebar extends StatelessWidget {
 
   final int completeness;
   final ZaposlenikStatus status;
-  final int staffId;
   final int certifiedCount;
   final String? category;
   final VoidCallback onRefresh;
@@ -952,9 +949,9 @@ class _ProfileSidebar extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _SidebarMetric(
-                label: 'Staff ID',
-                value: '#$staffId',
-                progress: 1.0,
+                label: 'Service category',
+                value: catLabel,
+                progress: catLabel == 'Not assigned' ? 0.05 : 1.0,
                 accent: _ProfUi.purple,
               ),
               const SizedBox(height: 6),

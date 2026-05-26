@@ -2350,7 +2350,7 @@ class _AdminAppointmentCreateDialogState
     for (final c in widget.data.clients) {
       if (c.id == _clientId) {
         final name = c.punoIme.isEmpty ? c.email : c.punoIme;
-        return name.isEmpty ? 'Client #${c.id}' : name;
+        return name.isEmpty ? 'Nepoznat klijent' : name;
       }
     }
     return 'Select a client';
