@@ -75,9 +75,9 @@ Future<bool> showServiceEditorDialog(
               onTap: () => Navigator.of(ctx).pop(),
               behavior: HitTestBehavior.opaque,
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                 child: Container(
-                  color: LuxuryModalStyle.bgDeep.withValues(alpha: 0.38),
+                  color: LuxuryModalStyle.bgDeep.withValues(alpha: 0.72),
                 ),
               ),
             ),
