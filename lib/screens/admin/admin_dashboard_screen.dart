@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/api/services/api_service.dart';
+import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../models/rezervacija.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
@@ -247,6 +248,13 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
               r.datumRezervacije.toLocal().toString().split('.').first,
               style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
+            if (r.isPlacena) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Plaćena rezervacija — otkazivanje uključuje Stripe refund.',
+                style: TextStyle(color: Colors.amber.shade200),
+              ),
+            ],
             const SizedBox(height: 14),
             TextField(
               controller: reasonCtrl,
@@ -265,25 +273,27 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
             child: const Text('Nazad'),
           ),
           FilledButton.icon(
-            onPressed: r.isPlacena
-                ? null
-                : () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.cancel_outlined),
-            label: const Text('Otkaži'),
+            label: Text(r.isPlacena ? 'Otkaži i refundiraj' : 'Otkaži'),
           ),
         ],
       ),
     );
     if (ok != true || !mounted) return;
 
-    final success = await _api.cancelRezervacija(
+    final result = await _api.cancelRezervacija(
       r.id,
       razlogOtkaza: reasonCtrl.text,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? 'Rezervacija otkazana.' : 'Neuspjelo otkazivanje.'),
+        content: Text(
+          result?.otkazana == true
+              ? cancelRezervacijaSuccessMessage(result!)
+              : 'Neuspjelo otkazivanje.',
+        ),
       ),
     );
     _reload();
@@ -558,7 +568,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                               Tooltip(
                                 message: 'Otkazivanje',
                                 child: IconButton(
-                                  onPressed: r.isPlacena ? null : () => _cancel(r),
+                                  onPressed: r.isOtkazana ? null : () => _cancel(r),
                                   icon: const Icon(Icons.cancel_outlined),
                                 ),
                               ),

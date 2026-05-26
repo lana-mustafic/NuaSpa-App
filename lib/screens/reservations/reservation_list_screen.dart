@@ -5,6 +5,7 @@ import '../../core/api/services/api_service.dart';
 import '../../models/rezervacija.dart';
 import 'reservation_create_screen.dart';
 import '../../core/payments/stripe_payment_service.dart';
+import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/primary_button.dart';
 
@@ -58,6 +59,13 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
               r.datumRezervacije.toLocal().toString().split('.').first,
               style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
+            if (r.isPlacena) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Rezervacija je plaćena. Otkazivanje uključuje povrat sredstava na karticu.',
+                style: TextStyle(color: Colors.amber.shade200),
+              ),
+            ],
             const SizedBox(height: 14),
             TextField(
               controller: reasonCtrl,
@@ -76,25 +84,29 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
             child: const Text('Nazad'),
           ),
           FilledButton.icon(
-            onPressed: r.isPlacena ? null : () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.cancel_outlined),
-            label: const Text('Otkaži'),
+            label: Text(r.isPlacena ? 'Otkaži i refundiraj' : 'Otkaži'),
           ),
         ],
       ),
     );
     if (yes != true || !mounted) return;
-    final ok = await _apiService.cancelRezervacija(
+    final result = await _apiService.cancelRezervacija(
       r.id,
       razlogOtkaza: reasonCtrl.text,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Rezervacija otkazana.' : 'Neuspjelo otkazivanje.'),
+        content: Text(
+          result?.otkazana == true
+              ? cancelRezervacijaSuccessMessage(result!)
+              : 'Neuspjelo otkazivanje.',
+        ),
       ),
     );
-    if (ok) _refresh();
+    if (result?.otkazana == true) _refresh();
   }
 
   @override
@@ -256,7 +268,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                               messenger.showSnackBar(
                                                 SnackBar(
                                                   content: Text(ok
-                                                      ? 'Plaćanje uspješno. (Webhook može kasniti par sekundi)'
+                                                      ? 'Plaćeno'
                                                       : 'Plaćanje nije završeno.'),
                                                 ),
                                               );
@@ -274,13 +286,13 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Tooltip(
-                                        message: r.isPlacena
-                                            ? 'Plaćene rezervacije se ne otkazuju (MVP)'
-                                            : (r.isOtkazana
-                                                ? 'Već otkazana'
+                                        message: r.isOtkazana
+                                            ? 'Već otkazana'
+                                            : (r.isPlacena
+                                                ? 'Otkaži i refundiraj plaćenu rezervaciju'
                                                 : 'Otkaži rezervaciju'),
                                         child: IconButton(
-                                          onPressed: (r.isPlacena || r.isOtkazana)
+                                          onPressed: r.isOtkazana
                                               ? null
                                               : () => _cancelReservation(r),
                                           icon: const Icon(Icons.cancel_outlined),

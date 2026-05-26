@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../core/validation/nua_validators.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
@@ -447,13 +448,27 @@ class _AdminAppointmentsManagementScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel appointment?'),
-        content: TextField(
-          controller: reasonCtrl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Razlog otkazivanja',
-            hintText: 'Obavezno unesite razlog',
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (r.isPlacena)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Paid booking — cancellation includes a Stripe refund.',
+                  style: TextStyle(color: Colors.amber.shade200),
+                ),
+              ),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Razlog otkazivanja',
+                hintText: 'Obavezno unesite razlog',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -476,12 +491,16 @@ class _AdminAppointmentsManagementScreenState
       _toast('Razlog otkazivanja je obavezan.');
       return;
     }
-    final ok = await _api.cancelRezervacija(
+    final result = await _api.cancelRezervacija(
       r.id,
       razlogOtkaza: reason,
     );
     if (!mounted) return;
-    _toast(ok ? 'Appointment cancelled.' : 'Cancellation failed.');
+    _toast(
+      result?.otkazana == true
+          ? cancelRezervacijaSuccessMessage(result!)
+          : 'Cancellation failed.',
+    );
     if (ok) _reload();
   }
 

@@ -52,7 +52,9 @@ class Rezervacija {
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
       status: (json['status'] as String?) ?? 'Pending',
       isPotvrdjena: json['isPotvrdjena'] as bool,
-      isPlacena: (json['isPlacena'] as bool?) ?? false,
+      isPlacena: (json['isPaid'] as bool?) ??
+          (json['isPlacena'] as bool?) ??
+          false,
       isOtkazana: (json['isOtkazana'] as bool?) ?? false,
       razlogOtkaza: json['razlogOtkaza'] as String?,
       otkazanaAt: (json['otkazanaAt'] as String?) == null

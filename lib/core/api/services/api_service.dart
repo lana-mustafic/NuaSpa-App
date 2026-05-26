@@ -13,6 +13,7 @@ import '../../../models/desktop_home_overview.dart';
 import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
+import '../../../models/cancel_rezervacija_result.dart';
 import '../../../models/admin/admin_client_row.dart';
 import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
@@ -670,19 +671,29 @@ class ApiService {
     }
   }
 
-  Future<bool> cancelRezervacija(int id, {String? razlogOtkaza}) async {
+  Future<CancelRezervacijaResult?> cancelRezervacija(
+    int id, {
+    String? razlogOtkaza,
+  }) async {
     try {
-      await _dio.patch<void>(
+      final response = await _dio.patch<dynamic>(
         'Rezervacija/$id/cancel',
         data: {
           if (razlogOtkaza != null && razlogOtkaza.trim().isNotEmpty)
             'razlogOtkaza': razlogOtkaza.trim(),
         },
       );
-      return true;
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return const CancelRezervacijaResult(
+          otkazana: true,
+          refundIzvrsen: false,
+        );
+      }
+      return CancelRezervacijaResult.fromJson(data);
     } catch (e) {
       debugPrint('Greška u ApiService.cancelRezervacija: $e');
-      return false;
+      return null;
     }
   }
 
@@ -1055,6 +1066,22 @@ class ApiService {
       return PaymentIntentResponse.fromJson(data);
     } catch (e) {
       debugPrint('Greška u ApiService.createPaymentIntent: $e');
+      return null;
+    }
+  }
+
+  /// Server-side potvrda plaćanja (Stripe API verifikacija). Klijent ne smije sam evidentirati uspjeh.
+  Future<ConfirmPaymentResponse?> confirmPayment(String paymentIntentId) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Placanje/confirm',
+        data: {'paymentIntentId': paymentIntentId},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return ConfirmPaymentResponse.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.confirmPayment: $e');
       return null;
     }
   }

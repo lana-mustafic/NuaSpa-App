@@ -12,6 +12,7 @@ class StripePaymentService {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
 
+  /// Vraća true tek nakon server-side potvrde (confirm API), ne nakon PaymentSheet-a.
   Future<bool> payForReservation(int rezervacijaId) async {
     if (!paymentSheetSupported) {
       debugPrint(
@@ -22,7 +23,7 @@ class StripePaymentService {
 
     try {
       final intent = await _api.createPaymentIntent(rezervacijaId);
-      if (intent == null) return false;
+      if (intent == null || intent.clientSecret.isEmpty) return false;
 
       if (kStripePublishableKey.isEmpty) {
         debugPrint(
@@ -40,7 +41,15 @@ class StripePaymentService {
       );
 
       await Stripe.instance.presentPaymentSheet();
-      return true;
+
+      final paymentIntentId = intent.paymentIntentId;
+      if (paymentIntentId.isEmpty) {
+        debugPrint('Stripe: nedostaje paymentIntentId za server-side confirm.');
+        return false;
+      }
+
+      final confirmed = await _api.confirmPayment(paymentIntentId);
+      return confirmed?.isPaid ?? false;
     } on StripeException catch (e) {
       debugPrint('StripeException: $e');
       return false;
@@ -50,4 +59,3 @@ class StripePaymentService {
     }
   }
 }
-
