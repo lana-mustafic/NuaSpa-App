@@ -1475,6 +1475,7 @@ class ApiService {
     String? telefon,
     bool? status,
     bool? isVipKlijent,
+    int? gradId,
     bool setZaposlenik = false,
     int? zaposlenikId,
     String? napomenaZaTerapeuta,
@@ -1488,6 +1489,7 @@ class ApiService {
     if (telefon != null) body['telefon'] = telefon;
     if (status != null) body['status'] = status;
     if (isVipKlijent != null) body['isVipKlijent'] = isVipKlijent;
+    if (gradId != null) body['gradId'] = gradId;
     if (setZaposlenik) body['zaposlenikId'] = zaposlenikId ?? 0;
     if (napomenaZaTerapeuta != null) {
       body['napomenaZaTerapeuta'] = napomenaZaTerapeuta;

@@ -10,6 +10,7 @@ import '../../core/validation/nua_validators.dart';
 import '../../widgets/forms/luxury_validated_field.dart';
 import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
+import '../../models/grad_lookup.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
@@ -443,6 +444,19 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     AdminClientRow row,
     List<Zaposlenik> therapists,
   ) async {
+    final gradovi = await widget.api.getGradovi();
+    if (!mounted) return;
+    if (gradovi.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nema gradova u bazi. Dodajte grad prije uređivanja klijenta.',
+          ),
+        ),
+      );
+      return;
+    }
+
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -452,6 +466,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       pageBuilder: (ctx, _, _) => _ClientEditOverlay(
         client: row,
         therapists: therapists,
+        gradovi: gradovi,
         api: widget.api,
         therapistName: _therapistName,
         onSaved: () {
@@ -1885,6 +1900,7 @@ class _ClientEditOverlay extends StatelessWidget {
   const _ClientEditOverlay({
     required this.client,
     required this.therapists,
+    required this.gradovi,
     required this.api,
     required this.therapistName,
     required this.onSaved,
@@ -1893,6 +1909,7 @@ class _ClientEditOverlay extends StatelessWidget {
 
   final AdminClientRow client;
   final List<Zaposlenik> therapists;
+  final List<GradLookup> gradovi;
   final ApiService api;
   final String Function(Zaposlenik z) therapistName;
   final VoidCallback onSaved;
@@ -1921,6 +1938,7 @@ class _ClientEditOverlay extends StatelessWidget {
                 child: _ClientEditDialog(
                   client: client,
                   therapists: therapists,
+                  gradovi: gradovi,
                   api: api,
                   therapistName: therapistName,
                   onClose: () => Navigator.of(context).pop(),
@@ -1940,6 +1958,7 @@ class _ClientEditDialog extends StatefulWidget {
   const _ClientEditDialog({
     required this.client,
     required this.therapists,
+    required this.gradovi,
     required this.api,
     required this.therapistName,
     required this.onClose,
@@ -1949,6 +1968,7 @@ class _ClientEditDialog extends StatefulWidget {
 
   final AdminClientRow client;
   final List<Zaposlenik> therapists;
+  final List<GradLookup> gradovi;
   final ApiService api;
   final String Function(Zaposlenik z) therapistName;
   final VoidCallback onClose;
@@ -1971,6 +1991,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   late final TextEditingController _newPassC;
   late final TextEditingController _confirmPassC;
   late int? _zId;
+  late int _gradId;
   late bool _vip;
   bool _saving = false;
   bool _changePassword = false;
@@ -1988,6 +2009,9 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _newPassC = TextEditingController();
     _confirmPassC = TextEditingController();
     _zId = widget.client.preferiraniZaposlenikId;
+    _gradId = widget.client.gradId > 0
+        ? widget.client.gradId
+        : widget.gradovi.first.id;
     _vip = widget.client.isVipKlijent;
     for (final c in [_imeC, _prezC]) {
       c.addListener(() => setState(() {}));
@@ -2025,6 +2049,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
         prezime: prez,
         email: email,
         telefon: _telC.text.trim(),
+        gradId: _gradId,
         isVipKlijent: _vip,
         setZaposlenik: true,
         zaposlenikId: _zId,
@@ -2158,6 +2183,47 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                     keyboardType: TextInputType.phone,
                     enabled: !_saving,
                     validator: NuaValidators.phoneOptional,
+                  ),
+                  const SizedBox(height: 14),
+                  _ClientEditFieldRow(
+                    icon: Icons.location_city_outlined,
+                    label: 'Grad',
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: NuaLuxuryTokens.voidViolet,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: widget.gradovi.any((g) => g.id == _gradId)
+                              ? _gradId
+                              : widget.gradovi.first.id,
+                          dropdownColor: NuaLuxuryTokens.voidViolet,
+                          icon: Icon(
+                            Icons.expand_more_rounded,
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
+                          style: fieldStyle,
+                          items: [
+                            for (final g in widget.gradovi)
+                              DropdownMenuItem<int>(
+                                value: g.id,
+                                child: Text(
+                                  g.label,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: _saving
+                              ? null
+                              : (v) {
+                                  if (v != null) {
+                                    setState(() => _gradId = v);
+                                  }
+                                },
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   _ClientEditToggleRow(

@@ -24,6 +24,9 @@ class AdminClientRow {
   /// Account active (API: status).
   final bool isActive;
 
+  final int gradId;
+  final String? gradNaziv;
+
   const AdminClientRow({
     required this.id,
     required this.ime,
@@ -41,6 +44,8 @@ class AdminClientRow {
     this.terapeutPrezime,
     this.isVipKlijent = false,
     this.isActive = true,
+    this.gradId = 0,
+    this.gradNaziv,
   });
 
   String get punoIme => '$ime $prezime'.trim();
@@ -72,6 +77,8 @@ class AdminClientRow {
       terapeutPrezime: json['terapeutPrezime'] as String?,
       isVipKlijent: (json['isVipKlijent'] as bool?) ?? false,
       isActive: (json['status'] as bool?) ?? true,
+      gradId: (json['gradId'] as num?)?.toInt() ?? 0,
+      gradNaziv: json['gradNaziv'] as String?,
     );
   }
 }
