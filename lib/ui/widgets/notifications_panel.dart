@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/sistemska_notifikacija.dart';
 import '../../providers/notification_provider.dart';
 import '../../screens/news/obavijesti_screen.dart';
+import 'notification_localization.dart';
 import '../theme/nua_luxury_tokens.dart';
 
-/// Bottom sheet: scrollable notifications + sticky "Obavijesti" action.
+/// Bottom sheet: scrollable notifications + sticky announcements action.
 class NotificationsBottomSheet extends StatelessWidget {
   const NotificationsBottomSheet({
     super.key,
@@ -51,7 +52,7 @@ class NotificationsBottomSheet extends StatelessWidget {
                   );
                 },
                 icon: const Icon(Icons.newspaper_outlined),
-                label: const Text('Obavijesti (novosti)'),
+                label: const Text('News & announcements'),
               ),
             ],
           ),
@@ -106,7 +107,7 @@ class NotificationsPanel extends StatelessWidget {
         Row(
           children: [
             const Text(
-              'Notifikacije',
+              'Notifications',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -117,13 +118,13 @@ class NotificationsPanel extends StatelessWidget {
             if (provider.unreadCount > 0)
               TextButton(
                 onPressed: () => provider.markAllRead(),
-                child: const Text('Označi sve pročitano'),
+                child: const Text('Mark all as read'),
               ),
           ],
         ),
         const SizedBox(height: 6),
         Text(
-          'Automatski osvježavanje svakih 15 sekundi.',
+          'Auto-refreshes every 15 seconds.',
           style: TextStyle(
             fontSize: 13,
             color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.6),
@@ -151,7 +152,7 @@ class NotificationsPanel extends StatelessWidget {
     if (items.isEmpty) {
       return Center(
         child: Text(
-          provider.loading ? 'Učitavanje…' : 'Nema notifikacija.',
+          provider.loading ? 'Loading…' : 'No notifications.',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),
           ),
@@ -187,7 +188,7 @@ class _NotificationTile extends StatelessWidget {
             : Colors.white.withValues(alpha: 0.45),
       ),
       title: Text(
-        item.naslov,
+        NotificationLocalization.title(item.naslov),
         style: TextStyle(
           fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
           color: const Color(0xFFF5F3FA),
@@ -198,7 +199,7 @@ class _NotificationTile extends StatelessWidget {
         children: [
           const SizedBox(height: 4),
           Text(
-            item.tekst,
+            NotificationLocalization.body(item.tekst),
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.55),
             ),

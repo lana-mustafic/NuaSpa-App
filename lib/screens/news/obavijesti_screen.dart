@@ -31,10 +31,10 @@ class ObavijestiScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Obavijesti'),
+        title: const Text('Announcements'),
       ),
       body: items.isEmpty
-          ? const Center(child: Text('Nema objavljenih obavijesti.'))
+          ? const Center(child: Text('No published announcements.'))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: items.length,
