@@ -5,6 +5,10 @@
 ///
 /// Ili učitaj iz `.env` datoteke:
 /// `flutter run --dart-define-from-file=.env`
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+
 abstract final class AppConfig {
   static const String _primaryDefineKey = 'API_BASE_URL';
   static const String _legacyDefineKey = 'NUASPA_API_BASE_URL';
@@ -23,6 +27,9 @@ abstract final class AppConfig {
   static String get apiBaseUrl {
     final override = _resolveBaseUrl();
     if (override.isEmpty) {
+      if (kDebugMode && !kIsWeb && Platform.isWindows) {
+        return 'http://localhost:5088/api/';
+      }
       throw StateError(
         'API_BASE_URL nije postavljen. Kopiraj .env.example u .env i pokreni:\n'
         '  flutter run --dart-define-from-file=.env\n'
