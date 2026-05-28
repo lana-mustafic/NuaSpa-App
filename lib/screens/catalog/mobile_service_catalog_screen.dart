@@ -9,7 +9,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../screens/news/obavijesti_screen.dart';
 import '../../ui/widgets/notifications_panel.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
@@ -65,33 +64,13 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const NotificationsPanel(),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ObavijestiScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.newspaper_outlined),
-                  label: const Text('Obavijesti (novosti)'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      backgroundColor: MobileSpaColors.softWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const NotificationsBottomSheet(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 24),
+      ),
     );
   }
 

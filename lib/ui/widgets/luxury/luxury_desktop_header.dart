@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/notification_provider.dart';
 import '../../widgets/notifications_panel.dart';
-import '../../../screens/news/obavijesti_screen.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../screens/admin/admin_suite_route.dart';
 import '../../navigation/desktop_nav.dart';
@@ -148,49 +147,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
   Future<void> _showNotifications(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: NuaLuxuryTokens.voidViolet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-            child: LayoutBuilder(
-              builder: (context, c) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: c.maxHeight),
-                          child: const NotificationsPanel(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ObavijestiScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.newspaper_outlined),
-                      label: const Text('Obavijesti (novosti)'),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
+      builder: (_) => const NotificationsBottomSheet(),
     );
   }
 

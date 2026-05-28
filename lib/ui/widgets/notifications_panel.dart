@@ -3,10 +3,77 @@ import 'package:provider/provider.dart';
 
 import '../../models/sistemska_notifikacija.dart';
 import '../../providers/notification_provider.dart';
+import '../../screens/news/obavijesti_screen.dart';
 import '../theme/nua_luxury_tokens.dart';
 
+/// Bottom sheet: scrollable notifications + sticky "Obavijesti" action.
+class NotificationsBottomSheet extends StatelessWidget {
+  const NotificationsBottomSheet({
+    super.key,
+    this.backgroundColor,
+    this.padding = const EdgeInsets.fromLTRB(24, 20, 24, 24),
+    this.maxHeightFactor = 0.85,
+  });
+
+  final Color? backgroundColor;
+  final EdgeInsets padding;
+  final double maxHeightFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheetHeight = MediaQuery.sizeOf(context).height * maxHeightFactor;
+
+    return SafeArea(
+      child: Padding(
+        padding: padding,
+        child: SizedBox(
+          height: sheetHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Expanded(
+                child: NotificationsPanel(expandList: true),
+              ),
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: Colors.white.withValues(alpha: 0.12),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ObavijestiScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.newspaper_outlined),
+                label: const Text('Obavijesti (novosti)'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class NotificationsPanel extends StatelessWidget {
-  const NotificationsPanel({super.key});
+  const NotificationsPanel({
+    super.key,
+    this.expandList = false,
+    this.listHeight = 360,
+  });
+
+  /// When true, the notification list fills remaining parent height (use inside
+  /// a bounded [Column] with [Expanded]).
+  final bool expandList;
+
+  /// Used only when [expandList] is false.
+  final double listHeight;
 
   static IconData iconForTip(String tip) {
     return switch (tip) {
@@ -63,25 +130,39 @@ class NotificationsPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 360,
-          child: items.isEmpty
-              ? Center(
-                  child: Text(
-                    provider.loading ? 'Učitavanje…' : 'Nema notifikacija.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, i) =>
-                      _NotificationTile(item: items[i]),
-                ),
-        ),
+        if (expandList)
+          Expanded(
+            child: _buildList(context, provider, items),
+          )
+        else
+          SizedBox(
+            height: listHeight,
+            child: _buildList(context, provider, items),
+          ),
       ],
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    NotificationProvider provider,
+    List<SistemskaNotifikacija> items,
+  ) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          provider.loading ? 'Učitavanje…' : 'Nema notifikacija.',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, i) => _NotificationTile(item: items[i]),
     );
   }
 }
