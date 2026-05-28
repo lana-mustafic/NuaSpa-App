@@ -61,7 +61,7 @@ class _AdminAppointmentsManagementScreenState
       _api.getRezervacijeFiltered(includeOtkazane: true),
       _api.getZaposlenici(),
       _api.getUsluge(),
-      _api.getAdminClients(take: 400),
+      _api.getAdminClients(pageSize: 400),
     ]);
     final reservations = results[0] as List<Rezervacija>;
     reservations.sort(
@@ -501,7 +501,7 @@ class _AdminAppointmentsManagementScreenState
           ? cancelRezervacijaSuccessMessage(result!)
           : 'Cancellation failed.',
     );
-    if (ok) _reload();
+    if (result?.otkazana == true) _reload();
   }
 
   Future<void> _edit(Rezervacija r) async {

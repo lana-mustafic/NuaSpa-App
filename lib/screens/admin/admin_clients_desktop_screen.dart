@@ -80,7 +80,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     final q = _apiSearch.text.trim();
     setState(() {
       _payloadFuture = () async {
-        final clients = await widget.api.getAdminClients(q: q, take: 500);
+        final clients = await widget.api.getAdminClients(q: q, pageSize: 500);
         final stats = await widget.api.getAdminClientStats(q: q.isEmpty ? null : q);
         return (clients: clients, stats: stats);
       }();

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/service_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../screens/news/obavijesti_screen.dart';
