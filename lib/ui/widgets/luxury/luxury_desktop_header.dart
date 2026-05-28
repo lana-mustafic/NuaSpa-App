@@ -156,26 +156,37 @@ class LuxuryDesktopHeader extends StatelessWidget {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const NotificationsPanel(),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.push<void>(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ObavijestiScreen(),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: c.maxHeight),
+                          child: const NotificationsPanel(),
+                        ),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.newspaper_outlined),
-                  label: const Text('Obavijesti (novosti)'),
-                ),
-              ],
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ObavijestiScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.newspaper_outlined),
+                      label: const Text('Obavijesti (novosti)'),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
