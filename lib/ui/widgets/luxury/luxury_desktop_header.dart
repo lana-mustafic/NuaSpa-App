@@ -146,16 +146,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
     }
   }
 
-  Future<void> _showNotifications(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: NuaLuxuryTokens.voidViolet,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => const NotificationsBottomSheet(),
-    );
+  Future<void> _showNotifications(
+    BuildContext context,
+    BuildContext anchorContext,
+  ) {
+    return showLuxuryNotificationsDropdown(context, anchorContext);
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
@@ -333,7 +328,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         notificationCount: badgeCount,
         fmtDay: _fmtDay,
         onPickDate: () => _pickDate(context),
-        onNotifications: () => _showNotifications(context),
+        onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
         onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
       );
     }
@@ -522,15 +517,17 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
             const SizedBox(width: 14),
           ],
-          _HeaderIconGlass(
-            onTap: () => _showNotifications(context),
-            child: Badge(
-              isLabelVisible: badgeCount > 0,
-              label: Text('$badgeCount'),
-              backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-              child: Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white.withValues(alpha: 0.88),
+          Builder(
+            builder: (bellCtx) => _HeaderIconGlass(
+              onTap: () => _showNotifications(context, bellCtx),
+              child: Badge(
+                isLabelVisible: badgeCount > 0,
+                label: Text('$badgeCount'),
+                backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+                child: Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white.withValues(alpha: 0.88),
+                ),
               ),
             ),
           ),
@@ -679,7 +676,7 @@ class _CommandCenterDashboardHeader extends StatefulWidget {
   final int notificationCount;
   final String Function(DateTime) fmtDay;
   final VoidCallback onPickDate;
-  final VoidCallback onNotifications;
+  final void Function(BuildContext anchorContext) onNotifications;
   final void Function(BuildContext) onProfile;
 
   @override
@@ -711,7 +708,8 @@ class _CommandCenterDashboardHeaderState
 
   VoidCallback get onPickDate => widget.onPickDate;
 
-  VoidCallback get onNotifications => widget.onNotifications;
+  void Function(BuildContext anchorContext) get onNotifications =>
+      widget.onNotifications;
 
   void Function(BuildContext) get onProfile => widget.onProfile;
 
@@ -851,19 +849,21 @@ class _CommandCenterDashboardHeaderState
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: 50,
-          width: 50,
-          child: _HeaderIconGlass(
-            onTap: onNotifications,
-            borderRadius: 18,
-            child: Badge(
-              isLabelVisible: notificationCount > 0,
-              label: Text('$notificationCount'),
-              backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-              child: Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white.withValues(alpha: 0.88),
+        Builder(
+          builder: (bellCtx) => SizedBox(
+            height: 50,
+            width: 50,
+            child: _HeaderIconGlass(
+              onTap: () => onNotifications(bellCtx),
+              borderRadius: 18,
+              child: Badge(
+                isLabelVisible: notificationCount > 0,
+                label: Text('$notificationCount'),
+                backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+                child: Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white.withValues(alpha: 0.88),
+                ),
               ),
             ),
           ),
