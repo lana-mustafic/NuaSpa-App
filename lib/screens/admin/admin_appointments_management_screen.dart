@@ -375,6 +375,33 @@ class _AdminAppointmentsManagementScreenState
             _lastTherapists[id]?.toLowerCase() ?? '',
           ));
 
+  Widget _appointmentDialogOverlay({
+    required Animation<double> animation,
+    required Widget dialog,
+  }) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: const SizedBox.expand(),
+        ),
+        FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+              child: dialog,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _openCreate(_AppointmentsData data) async {
     final prefillZaposlenikId =
         context.read<DesktopNav>().takeAppointmentPrefillZaposlenikId();
@@ -385,26 +412,12 @@ class _AdminAppointmentsManagementScreenState
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: const SizedBox.expand(),
-            ),
-            FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-              child: Center(
-                child: _AdminAppointmentCreateDialog(
-                  data: data,
-                  initialZaposlenikId: prefillZaposlenikId,
-                ),
-              ),
-            ),
-          ],
+        return _appointmentDialogOverlay(
+          animation: animation,
+          dialog: _AdminAppointmentCreateDialog(
+            data: data,
+            initialZaposlenikId: prefillZaposlenikId,
+          ),
         );
       },
     );
@@ -514,26 +527,12 @@ class _AdminAppointmentsManagementScreenState
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: const SizedBox.expand(),
-            ),
-            FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-              child: Center(
-                child: _AdminAppointmentCreateDialog(
-                  data: data,
-                  appointment: r,
-                ),
-              ),
-            ),
-          ],
+        return _appointmentDialogOverlay(
+          animation: animation,
+          dialog: _AdminAppointmentCreateDialog(
+            data: data,
+            appointment: r,
+          ),
         );
       },
     );
@@ -591,6 +590,18 @@ abstract final class _ApptUi {
   static const double sectionGap = 32;
   static const double sidebarMaxWidth = 360;
   static const double sidebarMinWidth = 300;
+}
+
+/// Compact appointment create/edit modal (not full-screen).
+abstract final class _ApptDialogLayout {
+  static const double maxWidth = 520;
+  static const double minWidth = 400;
+  static const double maxHeightCap = 620;
+  static const double maxHeightScreenFactor = 0.72;
+  static const EdgeInsets padding = EdgeInsets.fromLTRB(28, 24, 28, 24);
+  static const double borderRadius = 24;
+  static const double fieldGap = 10;
+  static const double sectionGap = 20;
 }
 
 class _ApptScrollbarTheme extends StatelessWidget {
@@ -2586,37 +2597,40 @@ class _AdminAppointmentCreateDialogState
             widget.data.services.isEmpty ||
             widget.data.therapists.isEmpty;
 
-    final maxDialogH = MediaQuery.sizeOf(context).height * 0.92;
+    final screen = MediaQuery.sizeOf(context);
+    final maxDialogH = (screen.height * _ApptDialogLayout.maxHeightScreenFactor)
+        .clamp(480.0, _ApptDialogLayout.maxHeightCap);
 
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          minWidth: 760,
-          maxWidth: 820,
+          minWidth: _ApptDialogLayout.minWidth,
+          maxWidth: _ApptDialogLayout.maxWidth,
           maxHeight: maxDialogH,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: const Color(0xEB120A24),
-                borderRadius: BorderRadius.circular(30),
+                borderRadius:
+                    BorderRadius.circular(_ApptDialogLayout.borderRadius),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.08),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: _ApptUi.purple.withValues(alpha: 0.25),
-                    blurRadius: 90,
-                    offset: const Offset(0, 24),
+                    color: _ApptUi.purple.withValues(alpha: 0.22),
+                    blurRadius: 48,
+                    offset: const Offset(0, 16),
                   ),
                 ],
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(42, 36, 42, 36),
+                padding: _ApptDialogLayout.padding,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2625,28 +2639,28 @@ class _AdminAppointmentCreateDialogState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 72,
-                          height: 72,
+                          width: 52,
+                          height: 52,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(16),
                             gradient: const LinearGradient(
                               colors: [_ApptUi.purple, _ApptUi.purple2],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: _ApptUi.purple.withValues(alpha: 0.45),
-                                blurRadius: 28,
-                                offset: const Offset(0, 10),
+                                color: _ApptUi.purple.withValues(alpha: 0.4),
+                                blurRadius: 20,
+                                offset: const Offset(0, 6),
                               ),
                             ],
                           ),
                           child: const Icon(
                             Icons.event_available_rounded,
                             color: Colors.white,
-                            size: 36,
+                            size: 28,
                           ),
                         ),
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2654,20 +2668,20 @@ class _AdminAppointmentCreateDialogState
                               Text(
                                 _isEdit ? 'Edit Appointment' : 'New Appointment',
                                 style: const TextStyle(
-                                  fontSize: 28,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.5,
+                                  letterSpacing: -0.4,
                                   color: _ApptUi.textPrimary,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
                               Text(
                                 _isEdit
                                     ? 'Update date, service, therapist, or VIP status for this booking.'
                                     : 'Fill in the details to create a new spa appointment. Enable VIP for priority treatment.',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  height: 1.45,
+                                  fontSize: 13,
+                                  height: 1.4,
                                   color: _ApptUi.lavender.withValues(
                                     alpha: 0.72,
                                   ),
@@ -2681,7 +2695,7 @@ class _AdminAppointmentCreateDialogState
                         ),
                       ],
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: _ApptDialogLayout.sectionGap),
                     _PremiumApptFieldCard(
                       icon: Icons.person_outline_rounded,
                       label: 'Client',
@@ -2721,7 +2735,7 @@ class _AdminAppointmentCreateDialogState
                                 }),
                               ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
                     _PremiumApptFieldCard(
                       icon: Icons.schedule_rounded,
                       label: 'Date & Time',
@@ -2732,7 +2746,7 @@ class _AdminAppointmentCreateDialogState
                       ),
                       onTap: _pickDateTime,
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
                     _PremiumApptFieldCard(
                       icon: Icons.spa_outlined,
                       label: 'Service',
@@ -2764,7 +2778,7 @@ class _AdminAppointmentCreateDialogState
                                 }),
                               ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
                     _PremiumApptFieldCard(
                       icon: Icons.badge_outlined,
                       label: 'Therapist',
@@ -2795,7 +2809,7 @@ class _AdminAppointmentCreateDialogState
                                 }),
                               ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
                     _PremiumApptVipCard(
                       value: _isVip,
                       onChanged: (v) => setState(() => _isVip = v),
@@ -2824,19 +2838,19 @@ class _AdminAppointmentCreateDialogState
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     Container(
                       height: 1,
                       color: Colors.white.withValues(alpha: 0.08),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         _PremiumModalCancelButton(
                           onPressed: () => Navigator.pop(context),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         _PremiumModalCreateButton(
                           label: _isEdit
                               ? 'Save Changes'
@@ -2971,8 +2985,8 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
           borderRadius: BorderRadius.circular(20),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            height: 92,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            height: 74,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.035),
               borderRadius: BorderRadius.circular(20),
@@ -2993,25 +3007,25 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
             child: Row(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                     color: _ApptUi.purple.withValues(alpha: 0.18),
                     boxShadow: [
                       BoxShadow(
                         color: _ApptUi.purple2.withValues(alpha: 0.2),
-                        blurRadius: 16,
+                        blurRadius: 12,
                       ),
                     ],
                   ),
                   child: Icon(
                     widget.icon,
-                    size: 28,
+                    size: 24,
                     color: _ApptUi.purple2,
                   ),
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -3031,7 +3045,7 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: active
                               ? _ApptUi.textPrimary
@@ -3081,11 +3095,11 @@ class _PremiumModalCloseButtonState extends State<_PremiumModalCloseButton> {
           borderRadius: BorderRadius.circular(16),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 52,
-            height: 52,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.06),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.08),
               ),
@@ -3134,12 +3148,12 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 140,
-            height: 56,
+            width: 112,
+            height: 46,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.08),
               ),
@@ -3223,10 +3237,10 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-            width: 260,
-            height: 56,
+            width: 200,
+            height: 46,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(14),
               gradient: LinearGradient(
                 colors: active
                     ? const [_ApptUi.purple, _ApptUi.purple2]
