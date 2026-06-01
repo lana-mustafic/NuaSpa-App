@@ -11,7 +11,6 @@ import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/desktop_home_overview.dart';
 import '../../models/rezervacija.dart';
-import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_mini_sparkline.dart';
@@ -70,10 +69,22 @@ String _pctTrendLabel(num current, num previous) {
   final p = previous.toDouble();
   if (p <= 0) {
     if (c <= 0) return 'Flat vs yesterday';
-    return '+100% vs yesterday';
+    return 'Up from zero yesterday';
   }
   final pct = ((c - p) / p) * 100;
   return '${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(0)}% vs yesterday';
+}
+
+String _formatDashboardDay(DateTime d) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[d.month - 1]} ${d.day}, ${d.year}';
+}
+
+bool _isSameCalendarDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 bool? _pctTrendUp(num current, num previous) {
@@ -309,11 +320,20 @@ class _DashboardLayout extends StatelessWidget {
         bookings.where((b) => !b.isPotvrdjena && !b.isOtkazana).length;
     final cancelled = bookings.where((b) => b.isOtkazana).length;
 
+    final isToday = _isSameCalendarDay(
+      filterDay,
+      DateTime.now(),
+    );
+    final bookingsLabel =
+        isToday ? "Today's Bookings" : 'Bookings (${_formatDashboardDay(filterDay)})';
+    final revenueLabel =
+        isToday ? 'Revenue Today' : 'Revenue (${_formatDashboardDay(filterDay)})';
+
     final ratingGrowth = ratingPrev != null
-        ? '↑ ${(rating - ratingPrev) >= 0 ? '+' : ''}${(rating - ratingPrev).toStringAsFixed(1)} vs last 7 days'
-        : (reviews != null
-            ? '${reviews.postotakPozitivnih.toStringAsFixed(0)}% positive (30d)'
-            : 'All-time average');
+        ? '${(rating - ratingPrev) >= 0 ? '+' : ''}${(rating - ratingPrev).toStringAsFixed(1)} vs prior 30d avg'
+        : 'All-time average';
+
+    final bookingsMayBeTruncated = bookings.length >= 500;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -329,15 +349,21 @@ class _DashboardLayout extends StatelessWidget {
           final main = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (data.loadWarnings.isNotEmpty)
+              if (data.loadWarnings.isNotEmpty || bookingsMayBeTruncated)
                 Padding(
                   padding: const EdgeInsets.only(bottom: _DashUi.gap),
-                  child: _DashLoadWarningsBanner(messages: data.loadWarnings),
+                  child: _DashLoadWarningsBanner(
+                    messages: [
+                      ...data.loadWarnings,
+                      if (bookingsMayBeTruncated)
+                        'Showing first 500 appointments for this day. Open Appointments for the full list.',
+                    ],
+                  ),
                 ),
               _KpiRow(
                 cards: [
                   _DashboardKpiSpec(
-                    label: "Today's Bookings",
+                    label: bookingsLabel,
                     value: '$bookingsToday',
                     growth: _growthArrow(bookingsToday, bookingsYesterday),
                     trendUp: _pctTrendUp(bookingsToday, bookingsYesterday),
@@ -346,31 +372,31 @@ class _DashboardLayout extends StatelessWidget {
                     sparkline: _bookingCountSpark(rev),
                   ),
                   _DashboardKpiSpec(
-                    label: 'Revenue Today',
+                    label: revenueLabel,
                     value: '${revenueToday.toStringAsFixed(0)} KM',
-                    growth: _growthArrow(revenueToday, revenueYesterday),
+                    growth:
+                        '${_growthArrow(revenueToday, revenueYesterday)} · payments',
                     trendUp: _pctTrendUp(revenueToday, revenueYesterday),
                     icon: Icons.payments_outlined,
                     accent: _DashUi.green,
                     sparkline: _sparkRevenue(rev, revenueToday),
                   ),
                   _DashboardKpiSpec(
-                    label: 'Active Clients',
+                    label: 'Total Clients',
                     value: '$activeClients',
                     growth: newClients7d > 0
-                        ? '↑ $newClients7d new (7 days)'
-                        : 'No new clients this week',
+                        ? '$newClients7d new (7 days before ${_formatDashboardDay(filterDay)})'
+                        : 'No new registrations in last 7 days',
                     trendUp: newClients7d > 0 ? true : null,
                     icon: Icons.people_outline,
                     accent: _DashUi.orange,
                     sparkline: [
+                      math.max(0, activeClients - newClients7d).toDouble(),
                       activeClients.toDouble(),
-                      newClients7d.toDouble(),
-                      (clientStats?.vipKlijenata ?? 0).toDouble(),
                     ],
                   ),
                   _DashboardKpiSpec(
-                    label: 'Guest Rating',
+                    label: 'Average Rating',
                     value: rating > 0
                         ? '${rating.toStringAsFixed(1)} / 5'
                         : '—',
@@ -392,7 +418,10 @@ class _DashboardLayout extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, mc) {
                   final stack = mc.maxWidth < 900;
-                  final chart = _TodayOverviewCard(bookings: bookings);
+                  final chart = _TodayOverviewCard(
+                    bookings: bookings,
+                    filterDay: filterDay,
+                  );
                   final actions = _QuickActionsCard();
                   if (stack) {
                     return Column(
@@ -682,9 +711,13 @@ class _DashboardKpiCardState extends State<_DashboardKpiCard> {
 }
 
 class _TodayOverviewCard extends StatelessWidget {
-  const _TodayOverviewCard({required this.bookings});
+  const _TodayOverviewCard({
+    required this.bookings,
+    required this.filterDay,
+  });
 
   final List<Rezervacija> bookings;
+  final DateTime filterDay;
 
   static const _labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
 
@@ -706,42 +739,26 @@ class _TodayOverviewCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    "Today's Overview",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: _DashUi.textPrimary,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
-                    ),
-                  ),
-                  child: const Row(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Today',
+                      const Text(
+                        'Appointments overview',
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
                           color: _DashUi.textPrimary,
                         ),
                       ),
-                      SizedBox(width: 4),
-                      Icon(
-                        Icons.expand_more_rounded,
-                        size: 18,
-                        color: _DashUi.textSecondary,
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDashboardDay(filterDay),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _DashUi.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -873,13 +890,13 @@ class _QuickActionsCard extends StatelessWidget {
         icon: Icons.person_add_alt_1_outlined,
         label: 'Add Client',
         color: _DashUi.lavender,
-        onTap: () => nav.goToAdminSuite(AdminSuiteRoute.clients),
+        onTap: () => nav.requestClientAdd(),
       ),
       _QuickActionTile(
         icon: Icons.spa_outlined,
         label: 'Add Service',
         color: const Color(0xFF60A5FA),
-        onTap: () => nav.goTo(DesktopRouteKey.catalog),
+        onTap: () => nav.requestServiceAdd(),
       ),
       _QuickActionTile(
         icon: Icons.calendar_month_outlined,
@@ -1045,11 +1062,13 @@ class _RecentAppointmentsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 960),
-              child: DataTable(
+          LayoutBuilder(
+            builder: (context, c) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: c.maxWidth),
+                  child: DataTable(
                 headingTextStyle: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1095,16 +1114,22 @@ class _RecentAppointmentsCard extends StatelessWidget {
                                     size: 18,
                                   ),
                                   tooltip: 'Open in appointments',
-                                  onPressed: () => nav.goTo(
-                                    DesktopRouteKey.reservations,
-                                  ),
+                                  onPressed: () {
+                                    final name = r.korisnikIme?.trim();
+                                    if (name != null && name.isNotEmpty) {
+                                      nav.setAppointmentSearchQuery(name);
+                                    }
+                                    nav.goTo(DesktopRouteKey.reservations);
+                                  },
                                 ),
                               ),
                             ],
                           ),
                       ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -1119,21 +1144,41 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    late final String label;
+    final statusNorm = rezervacija.status.trim().toLowerCase();
+    final isCompleted = statusNorm == 'completed' || statusNorm == 'zavrsena';
+
+    late final String primary;
     late final Color color;
     if (rezervacija.isOtkazana) {
-      label = 'Cancelled';
+      primary = 'Cancelled';
       color = _DashUi.pink;
+    } else if (isCompleted) {
+      primary = 'Completed';
+      color = const Color(0xFF94A3B8);
     } else if (!rezervacija.isPotvrdjena) {
-      label = 'Pending';
+      primary = 'Pending';
       color = _DashUi.orange;
     } else {
-      label = 'Confirmed';
+      primary = 'Confirmed';
       color = _DashUi.green;
     }
 
+    final chips = <Widget>[
+      _statusChip(primary, color),
+      if (rezervacija.isVip) _statusChip('VIP', const Color(0xFFE8C547)),
+      if (rezervacija.isPlacena) _statusChip('Paid', const Color(0xFF2DD4BF)),
+      if (!rezervacija.isPlacena &&
+          !rezervacija.isOtkazana &&
+          rezervacija.isPotvrdjena)
+        _statusChip('Unpaid', _DashUi.orange),
+    ];
+
+    return Wrap(spacing: 6, runSpacing: 4, children: chips);
+  }
+
+  Widget _statusChip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(999),
@@ -1142,7 +1187,7 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w800,
           color: color,
         ),
