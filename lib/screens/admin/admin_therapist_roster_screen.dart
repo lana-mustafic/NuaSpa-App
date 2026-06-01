@@ -283,7 +283,7 @@ class _AdminTherapistRosterScreenState
         content: SizedBox(
           width: 520,
           child: slots.isEmpty
-              ? const Text('Nema slobodnih termina za ovaj dan.')
+              ? const Text('No available slots for this day.')
               : Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -295,7 +295,7 @@ class _AdminTherapistRosterScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Zatvori'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -317,7 +317,7 @@ class _AdminTherapistRosterScreenState
 
     if (result == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Greška pri čuvanju terapeuta.')),
+        const SnackBar(content: Text('Failed to save therapist.')),
       );
       return;
     }
@@ -357,18 +357,18 @@ class _AdminTherapistRosterScreenState
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Obrisati terapeuta?'),
+        title: const Text('Delete therapist?'),
         content: Text(
-          'Ova akcija će pokušati obrisati ${therapist.name}. Terapeuti s postojećim rezervacijama neće biti obrisani.',
+          'This will try to delete ${therapist.name}. Therapists with existing appointments will not be removed.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Odustani'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -378,7 +378,7 @@ class _AdminTherapistRosterScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(error ?? 'Terapeut obrisan.')));
+    ).showSnackBar(SnackBar(content: Text(error ?? 'Therapist deleted.')));
     if (error == null) _reload();
   }
 }

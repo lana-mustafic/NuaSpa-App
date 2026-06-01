@@ -13,6 +13,40 @@ import '../../../models/zaposlenik_status.dart';
 import '../../../ui/theme/luxury_modal_style.dart';
 import '../../../ui/theme/nua_luxury_tokens.dart';
 
+/// English validation messages for the therapist editor (UI is English).
+abstract final class _TherapistFormValidation {
+  static String? required(String? value, String field) {
+    if (value == null || value.trim().isEmpty) {
+      return '$field is required.';
+    }
+    return null;
+  }
+
+  static String? phoneOptional(String? value) {
+    final t = value?.trim() ?? '';
+    if (t.isEmpty) return null;
+    if (!NuaValidators.phonePattern.hasMatch(t)) {
+      return 'Enter a valid phone number (e.g. +387 61 123 456).';
+    }
+    return null;
+  }
+
+  static String? emailOptionalOrRequiredForInvite(
+    String? value, {
+    required bool inviteEnabled,
+  }) {
+    final t = value?.trim() ?? '';
+    if (inviteEnabled && t.isEmpty) {
+      return 'Email is required to send a portal invitation.';
+    }
+    if (t.isEmpty) return null;
+    if (!NuaValidators.emailPattern.hasMatch(t)) {
+      return 'Enter a valid email address (e.g. name@nuaspa.ba).';
+    }
+    return null;
+  }
+}
+
 /// Result from add / edit therapist dialog.
 class AdminTherapistEditorResult {
   const AdminTherapistEditorResult({
@@ -303,7 +337,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     if (_selectedServiceIds.isEmpty) {
       setState(() {
         _specializationError =
-            'Odaberite barem jednu specijalizaciju (uslugu).';
+            'Select at least one specialty (service).';
       });
       return;
     }
@@ -414,26 +448,29 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         CrossAxisAlignment.stretch,
                                     children: [
                                       _LuxuryTherapistField(
-                                        label: 'Ime',
+                                        label: 'First name',
                                         icon: Icons.person_outline_rounded,
                                         child: LuxuryModalTextField(
                                           controller: _ime,
-                                          hint: 'Unesite ime terapeuta',
-                                          validator: (v) => NuaValidators
-                                              .requiredText(v, fieldLabel: 'Ime'),
+                                          hint: 'Enter first name',
+                                          validator: (v) =>
+                                              _TherapistFormValidation.required(
+                                            v,
+                                            'First name',
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Prezime',
+                                        label: 'Last name',
                                         icon: Icons.person_outline_rounded,
                                         child: LuxuryModalTextField(
                                           controller: _prezime,
-                                          hint: 'Unesite prezime terapeuta',
-                                          validator: (v) => NuaValidators
-                                              .requiredText(
+                                          hint: 'Enter last name',
+                                          validator: (v) =>
+                                              _TherapistFormValidation.required(
                                             v,
-                                            fieldLabel: 'Prezime',
+                                            'Last name',
                                           ),
                                         ),
                                       ),
@@ -576,23 +613,25 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Telefon',
+                                        label: 'Phone',
                                         icon: Icons.phone_outlined,
                                         child: LuxuryModalTextField(
                                           controller: _telefon,
-                                          hint: '+387 61 123 456 (opcionalno)',
+                                          hint: '+387 61 123 456 (optional)',
                                           keyboardType: TextInputType.phone,
-                                          validator: NuaValidators.phoneOptional,
+                                          validator:
+                                              _TherapistFormValidation
+                                                  .phoneOptional,
                                         ),
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'E-mail',
+                                        label: 'Email',
                                         icon: Icons.mail_outline_rounded,
                                         child: LuxuryModalTextField(
                                           controller: _email,
                                           focusNode: _emailFocus,
-                                          hint: 'terapeut@nuaspa.ba',
+                                          hint: 'therapist@nuaspa.ba',
                                           keyboardType:
                                               TextInputType.emailAddress,
                                           autofillHints: const [
@@ -601,7 +640,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           onChanged: (_) =>
                                               _syncPortalInviteOption(),
                                           validator: (v) =>
-                                              NuaValidators
+                                              _TherapistFormValidation
                                                   .emailOptionalOrRequiredForInvite(
                                             v,
                                             inviteEnabled: widget.isNew &&
@@ -631,7 +670,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                             'e.g. English, Bosnian',
                                         child: LuxuryModalTextField(
                                           controller: _jezici,
-                                          hint: 'Engleski, Bosanski',
+                                          hint: 'English, Bosnian',
                                         ),
                                       ),
                                       const SizedBox(height: 18),
@@ -769,7 +808,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
           Padding(
             padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
             child: Text(
-              'Nema kategorija usluga. Dodajte kategoriju prije kreiranja terapeuta.',
+              'No service categories yet. Add a category before creating a therapist.',
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
@@ -794,7 +833,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
               Expanded(
                 child: Tooltip(
                   message: categoriesMissing
-                      ? 'Dodajte barem jednu kategoriju usluga.'
+                      ? 'Add at least one service category first.'
                       : (_loadError ?? ''),
                   child: _TherapistSaveButton(
                     enabled: !_loading &&
