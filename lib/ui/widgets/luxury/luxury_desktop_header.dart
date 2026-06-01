@@ -858,15 +858,41 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
               hintText: 'Search appointments, clients, services…',
             );
 
-            if (w >= 1080) {
+            if (w >= 1240) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(width: 300, child: _titleBlock()),
+                  Flexible(
+                    flex: 2,
+                    fit: FlexFit.loose,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 280),
+                      child: _titleBlock(),
+                    ),
+                  ),
                   const SizedBox(width: _gap),
-                  if (showSearch) Expanded(child: search),
+                  if (showSearch)
+                    Flexible(flex: 4, child: search),
                   if (showSearch) const SizedBox(width: _gap),
                   _controlsRow(showProfileDetails: showProfileDetails),
+                ],
+              );
+            }
+
+            if (w >= 920 && showSearch) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _titleBlock()),
+                      const SizedBox(width: _gap),
+                      _controlsRow(showProfileDetails: showProfileDetails),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  search,
                 ],
               );
             }

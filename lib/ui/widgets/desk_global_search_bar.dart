@@ -65,12 +65,15 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
 
   TextStyle _bodyStyle() {
     return GoogleFonts.inter(
-      fontSize: widget.compact ? 15 : 16,
+      fontSize: widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16),
       fontWeight: FontWeight.w400,
       height: 1.25,
       color: _textPrimary,
     );
   }
+
+  double get _hintFontSize =>
+      widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16);
 
   BoxDecoration _decoration() {
     final borderColor = _focused
@@ -158,11 +161,12 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
                         isDense: true,
                         hintText: widget.hintText,
                         hintStyle: GoogleFonts.inter(
-                          fontSize: widget.compact ? 15 : 16,
+                          fontSize: _hintFontSize,
                           fontWeight: FontWeight.w400,
                           height: 1.25,
                           color: Colors.white.withValues(alpha: hintAlpha),
                         ),
+                        hintMaxLines: 1,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
