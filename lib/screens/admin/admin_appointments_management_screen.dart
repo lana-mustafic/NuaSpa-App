@@ -2882,7 +2882,6 @@ class _AdminAppointmentCreateDialogState
           ),
         ),
       ),
-    ),
     );
   }
 
