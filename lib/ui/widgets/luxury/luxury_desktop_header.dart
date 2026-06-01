@@ -26,6 +26,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
   /// Tighter header + narrower search (Calendar screen).
   final bool compactChrome;
 
+  bool _isSameCalendarDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   String _fmtDay(DateTime d) {
     const months = [
       'Jan',
@@ -380,7 +384,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   isRevenue
                       ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
                       : isCommandCenter
-                      ? "Here's what's happening at NuaSpa today."
+                      ? (_isSameCalendarDay(day, DateTime.now())
+                          ? "Here's what's happening at NuaSpa today."
+                          : 'Overview for ${_fmtDay(day)}. Use the date picker to change the day.')
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar
