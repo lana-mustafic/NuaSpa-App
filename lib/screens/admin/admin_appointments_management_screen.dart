@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/reservations/cancel_rezervacija_messages.dart';
-import '../../core/validation/nua_validators.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../models/admin/admin_client_row.dart';
@@ -507,13 +506,35 @@ class _AdminAppointmentsManagementScreenState
   Future<void> _edit(Rezervacija r) async {
     final data = await _future;
     if (!mounted) return;
-    final draft = await showDialog<_AppointmentEditDraft>(
+    final draft = await showGeneralDialog<_AdminAppointmentDraft>(
       context: context,
-      builder: (_) => _AppointmentEditDialog(
-        appointment: r,
-        therapists: data.therapists,
-        services: data.services,
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: const SizedBox.expand(),
+            ),
+            FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: Center(
+                child: _AdminAppointmentCreateDialog(
+                  data: data,
+                  appointment: r,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
     if (draft == null || !mounted) return;
     final updated = await _api.editRezervacija(
@@ -2324,26 +2345,33 @@ class _MoreMenuButtonState extends State<_MoreMenuButton> {
 
 class _AdminAppointmentDraft {
   const _AdminAppointmentDraft({
-    required this.clientId,
+    this.clientId,
     required this.dateTime,
     required this.serviceId,
     required this.therapistId,
+    this.isVip = false,
   });
 
-  final int clientId;
+  /// Set when creating; null when editing (client unchanged).
+  final int? clientId;
   final DateTime dateTime;
   final int serviceId;
   final int therapistId;
+  final bool isVip;
 }
 
 class _AdminAppointmentCreateDialog extends StatefulWidget {
   const _AdminAppointmentCreateDialog({
     required this.data,
     this.initialZaposlenikId,
+    this.appointment,
   });
 
   final _AppointmentsData data;
   final int? initialZaposlenikId;
+
+  /// When set, dialog opens in edit mode with the same layout as create.
+  final Rezervacija? appointment;
 
   @override
   State<_AdminAppointmentCreateDialog> createState() =>
@@ -2352,11 +2380,14 @@ class _AdminAppointmentCreateDialog extends StatefulWidget {
 
 class _AdminAppointmentCreateDialogState
     extends State<_AdminAppointmentCreateDialog> {
-  late DateTime _dateTime = DateTime.now().add(const Duration(hours: 1));
+  late DateTime _dateTime;
   late int? _clientId;
   late int? _serviceId;
   late int? _therapistId;
+  late bool _isVip;
   String? _formError;
+
+  bool get _isEdit => widget.appointment != null;
 
   static const _months = [
     'Jan',
@@ -2373,21 +2404,59 @@ class _AdminAppointmentCreateDialogState
     'Dec',
   ];
 
-  bool get _canCreate =>
-      _clientId != null && _serviceId != null && _therapistId != null;
+  bool get _canSubmit {
+    if (_serviceId == null || _therapistId == null) return false;
+    if (_isEdit) return true;
+    return _clientId != null;
+  }
 
   @override
   void initState() {
     super.initState();
     final d = widget.data;
-    _clientId = d.clients.isEmpty ? null : d.clients.first.id;
-    _serviceId = d.services.isEmpty ? null : d.services.first.id;
-    final pre = widget.initialZaposlenikId;
-    if (pre != null && d.therapists.any((t) => t.id == pre)) {
-      _therapistId = pre;
+    final appt = widget.appointment;
+    if (appt != null) {
+      _dateTime = appt.datumRezervacije;
+      _clientId = appt.korisnikId > 0 ? appt.korisnikId : null;
+      _serviceId = _initialServiceId(appt, d.services);
+      _therapistId = _initialTherapistId(appt, d.therapists);
+      _isVip = appt.isVip;
     } else {
-      _therapistId = d.therapists.isEmpty ? null : d.therapists.first.id;
+      _dateTime = DateTime.now().add(const Duration(hours: 1));
+      _clientId = d.clients.isEmpty ? null : d.clients.first.id;
+      _serviceId = d.services.isEmpty ? null : d.services.first.id;
+      final pre = widget.initialZaposlenikId;
+      if (pre != null && d.therapists.any((t) => t.id == pre)) {
+        _therapistId = pre;
+      } else {
+        _therapistId = d.therapists.isEmpty ? null : d.therapists.first.id;
+      }
+      _isVip = false;
     }
+  }
+
+  int? _initialServiceId(Rezervacija appt, List<Usluga> services) {
+    if (appt.uslugaId > 0) {
+      for (final s in services) {
+        if (s.id == appt.uslugaId) return s.id;
+      }
+    }
+    for (final s in services) {
+      if (s.naziv == appt.uslugaNaziv) return s.id;
+    }
+    return services.isEmpty ? null : services.first.id;
+  }
+
+  int? _initialTherapistId(Rezervacija appt, List<Zaposlenik> therapists) {
+    if (appt.zaposlenikId > 0) {
+      for (final t in therapists) {
+        if (t.id == appt.zaposlenikId) return t.id;
+      }
+    }
+    for (final t in therapists) {
+      if (appt.zaposlenikIme?.contains(t.ime) == true) return t.id;
+    }
+    return therapists.isEmpty ? null : therapists.first.id;
   }
 
   String _fmtDateTime(DateTime dt) {
@@ -2400,6 +2469,21 @@ class _AdminAppointmentCreateDialogState
   }
 
   String _clientLabel() {
+    if (_isEdit) {
+      final appt = widget.appointment!;
+      if (appt.korisnikIme != null && appt.korisnikIme!.trim().isNotEmpty) {
+        return appt.korisnikIme!.trim();
+      }
+      if (_clientId != null) {
+        for (final c in widget.data.clients) {
+          if (c.id == _clientId) {
+            final name = c.punoIme.isEmpty ? c.email : c.punoIme;
+            return name.isEmpty ? 'Nepoznat klijent' : name;
+          }
+        }
+      }
+      return 'Nepoznat klijent';
+    }
     if (_clientId == null) return 'Select a client';
     for (final c in widget.data.clients) {
       if (c.id == _clientId) {
@@ -2495,9 +2579,11 @@ class _AdminAppointmentCreateDialogState
 
   @override
   Widget build(BuildContext context) {
-    final missingData = widget.data.clients.isEmpty ||
-        widget.data.services.isEmpty ||
-        widget.data.therapists.isEmpty;
+    final missingData = _isEdit
+        ? widget.data.services.isEmpty || widget.data.therapists.isEmpty
+        : widget.data.clients.isEmpty ||
+            widget.data.services.isEmpty ||
+            widget.data.therapists.isEmpty;
 
     return Material(
       color: Colors.transparent,
@@ -2558,9 +2644,9 @@ class _AdminAppointmentCreateDialogState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'New Appointment',
-                                style: TextStyle(
+                              Text(
+                                _isEdit ? 'Edit Appointment' : 'New Appointment',
+                                style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -0.5,
@@ -2569,7 +2655,9 @@ class _AdminAppointmentCreateDialogState
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Fill in the details to create a new spa appointment.',
+                                _isEdit
+                                    ? 'Update date, service, therapist, or VIP status for this booking.'
+                                    : 'Fill in the details to create a new spa appointment.',
                                 style: TextStyle(
                                   fontSize: 14,
                                   height: 1.45,
@@ -2591,15 +2679,22 @@ class _AdminAppointmentCreateDialogState
                       icon: Icons.person_outline_rounded,
                       label: 'Client',
                       value: _clientLabel(),
-                      trailing: const Icon(
-                        Icons.expand_more_rounded,
-                        color: Color(0x99FFFFFF),
-                      ),
-                      enabled: widget.data.clients.isNotEmpty,
-                      disabledReason: widget.data.clients.isEmpty
-                          ? 'Nema klijenata u bazi. Dodajte klijenta prije kreiranja termina.'
-                          : null,
-                      onTap: widget.data.clients.isEmpty
+                      trailing: _isEdit
+                          ? Icon(
+                              Icons.lock_outline_rounded,
+                              color: _ApptUi.lavender.withValues(alpha: 0.5),
+                            )
+                          : const Icon(
+                              Icons.expand_more_rounded,
+                              color: Color(0x99FFFFFF),
+                            ),
+                      enabled: !_isEdit && widget.data.clients.isNotEmpty,
+                      disabledReason: _isEdit
+                          ? 'Klijent se ne mijenja prilikom uređivanja termina.'
+                          : widget.data.clients.isEmpty
+                              ? 'Nema klijenata u bazi. Dodajte klijenta prije kreiranja termina.'
+                              : null,
+                      onTap: _isEdit || widget.data.clients.isEmpty
                           ? null
                           : () => _pickFromList(
                                 title: 'Select client',
@@ -2693,10 +2788,19 @@ class _AdminAppointmentCreateDialogState
                                 }),
                               ),
                     ),
+                    if (_isEdit) ...[
+                      const SizedBox(height: 14),
+                      _PremiumApptVipCard(
+                        value: _isVip,
+                        onChanged: (v) => setState(() => _isVip = v),
+                      ),
+                    ],
                     if (missingData) ...[
                       const SizedBox(height: 16),
                       Text(
-                        'Prije kreiranja termina učitajte klijente, usluge i terapeute.',
+                        _isEdit
+                            ? 'Učitajte usluge i terapeute prije uređivanja termina.'
+                            : 'Prije kreiranja termina učitajte klijente, usluge i terapeute.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.white.withValues(alpha: 0.45),
@@ -2729,27 +2833,37 @@ class _AdminAppointmentCreateDialogState
                         ),
                         const SizedBox(width: 16),
                         _PremiumModalCreateButton(
+                          label: _isEdit
+                              ? 'Save Changes'
+                              : 'Create Appointment',
+                          icon: _isEdit
+                              ? Icons.save_rounded
+                              : Icons.event_available_rounded,
                           enabled: !missingData,
                           disabledTooltip: missingData
-                              ? 'Prije kreiranja termina učitajte klijente, usluge i terapeute.'
+                              ? (_isEdit
+                                  ? 'Učitajte usluge i terapeute prije uređivanja termina.'
+                                  : 'Prije kreiranja termina učitajte klijente, usluge i terapeute.')
                               : null,
                           onPressed: missingData
                               ? null
                               : () {
-                                  if (!_canCreate) {
+                                  if (!_canSubmit) {
                                     setState(() {
-                                      _formError =
-                                          'Odaberite klijenta, uslugu i terapeuta.';
+                                      _formError = _isEdit
+                                          ? 'Odaberite uslugu i terapeuta.'
+                                          : 'Odaberite klijenta, uslugu i terapeuta.';
                                     });
                                     return;
                                   }
                                   Navigator.pop(
                                     context,
                                     _AdminAppointmentDraft(
-                                      clientId: _clientId!,
+                                      clientId: _isEdit ? null : _clientId,
                                       dateTime: _dateTime,
                                       serviceId: _serviceId!,
                                       therapistId: _therapistId!,
+                                      isVip: _isVip,
                                     ),
                                   );
                                 },
@@ -3040,16 +3154,45 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
   }
 }
 
+class _PremiumApptVipCard extends StatelessWidget {
+  const _PremiumApptVipCard({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PremiumApptFieldCard(
+      icon: Icons.star_rounded,
+      label: 'VIP appointment',
+      value: value ? 'Enabled' : 'Standard booking',
+      trailing: Switch.adaptive(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: _ApptUi.purple2,
+      ),
+      onTap: () => onChanged(!value),
+    );
+  }
+}
+
 class _PremiumModalCreateButton extends StatefulWidget {
   const _PremiumModalCreateButton({
     required this.enabled,
     required this.onPressed,
     this.disabledTooltip,
+    this.label = 'Create Appointment',
+    this.icon = Icons.event_available_rounded,
   });
 
   final bool enabled;
   final VoidCallback? onPressed;
   final String? disabledTooltip;
+  final String label;
+  final IconData icon;
 
   @override
   State<_PremiumModalCreateButton> createState() =>
@@ -3103,13 +3246,13 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.event_available_rounded,
+                  widget.icon,
                   color: Colors.white.withValues(alpha: active ? 1 : 0.5),
                   size: 22,
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Create Appointment',
+                  widget.label,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -3127,173 +3270,6 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
       return Tooltip(message: tip, child: button);
     }
     return button;
-  }
-}
-
-class _AppointmentEditDraft {
-  const _AppointmentEditDraft({
-    required this.dateTime,
-    required this.serviceId,
-    required this.therapistId,
-    required this.isVip,
-  });
-  final DateTime dateTime;
-  final int serviceId, therapistId;
-  final bool isVip;
-}
-
-class _AppointmentEditDialog extends StatefulWidget {
-  const _AppointmentEditDialog({
-    required this.appointment,
-    required this.therapists,
-    required this.services,
-  });
-  final Rezervacija appointment;
-  final List<Zaposlenik> therapists;
-  final List<Usluga> services;
-  @override
-  State<_AppointmentEditDialog> createState() => _AppointmentEditDialogState();
-}
-
-class _AppointmentEditDialogState extends State<_AppointmentEditDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late DateTime _dateTime = widget.appointment.datumRezervacije;
-  late int? _serviceId = _initialServiceId();
-  late int? _therapistId = _initialTherapistId();
-  late bool _isVip = widget.appointment.isVip;
-  bool _attemptedSubmit = false;
-
-  void _trySave() {
-    setState(() => _attemptedSubmit = true);
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.pop(
-      context,
-      _AppointmentEditDraft(
-        dateTime: _dateTime,
-        serviceId: _serviceId!,
-        therapistId: _therapistId!,
-        isVip: _isVip,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Uredi termin'),
-    content: SizedBox(
-      width: 520,
-      child: Form(
-        key: _formKey,
-        autovalidateMode: _attemptedSubmit
-            ? AutovalidateMode.onUserInteraction
-            : AutovalidateMode.disabled,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.schedule_outlined),
-              title: Text(_dateTime.toLocal().toString().split('.').first),
-              subtitle: const Text('Datum i vrijeme'),
-              onTap: _pickDateTime,
-            ),
-            DropdownButtonFormField<int>(
-              value: _serviceId,
-              decoration: const InputDecoration(labelText: 'Usluga'),
-              items: [
-                for (final s in widget.services)
-                  DropdownMenuItem(value: s.id, child: Text(s.naziv)),
-              ],
-              onChanged: (v) => setState(() => _serviceId = v),
-              validator: (v) =>
-                  NuaValidators.selectionRequired(v, fieldLabel: 'uslugu'),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              value: _therapistId,
-              decoration: const InputDecoration(labelText: 'Terapeut'),
-              items: [
-                for (final t in widget.therapists)
-                  DropdownMenuItem(
-                    value: t.id,
-                    child: Text('${t.ime} ${t.prezime}'),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _therapistId = v),
-              validator: (v) =>
-                  NuaValidators.selectionRequired(v, fieldLabel: 'terapeuta'),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('VIP termin'),
-              value: _isVip,
-              onChanged: (v) => setState(() => _isVip = v),
-            ),
-          ],
-        ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Odustani'),
-      ),
-      FilledButton(
-        onPressed: _trySave,
-        child: const Text('Spremi'),
-      ),
-    ],
-  );
-
-  int? _initialServiceId() {
-    if (widget.appointment.uslugaId > 0) {
-      for (final service in widget.services) {
-        if (service.id == widget.appointment.uslugaId) return service.id;
-      }
-    }
-    for (final service in widget.services) {
-      if (service.naziv == widget.appointment.uslugaNaziv) return service.id;
-    }
-    return widget.services.isEmpty ? null : widget.services.first.id;
-  }
-
-  int? _initialTherapistId() {
-    if (widget.appointment.zaposlenikId > 0) {
-      for (final therapist in widget.therapists) {
-        if (therapist.id == widget.appointment.zaposlenikId) {
-          return therapist.id;
-        }
-      }
-    }
-    for (final therapist in widget.therapists) {
-      if (widget.appointment.zaposlenikIme?.contains(therapist.ime) == true) {
-        return therapist.id;
-      }
-    }
-    return widget.therapists.isEmpty ? null : widget.therapists.first.id;
-  }
-
-  Future<void> _pickDateTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _dateTime,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_dateTime),
-    );
-    if (time == null || !mounted) return;
-    setState(
-      () => _dateTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      ),
-    );
   }
 }
 
