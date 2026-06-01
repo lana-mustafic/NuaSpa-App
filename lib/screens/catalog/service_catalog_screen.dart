@@ -25,6 +25,7 @@ class ServiceCatalogScreen extends StatefulWidget {
 class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   final ScrollController _scrollController = ScrollController();
   late final TextEditingController _filterCtrl;
+  int _handledServiceAddRequest = 0;
 
   @override
   void initState() {
@@ -47,6 +48,17 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
           ).searchServices(q);
         }
       });
+    });
+  }
+
+  void _handleServiceAddRequest(DesktopNav nav) {
+    if (nav.serviceAddRequest == _handledServiceAddRequest) return;
+    _handledServiceAddRequest = nav.serviceAddRequest;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showServiceEditorDialog(context, existing: null);
+      if (!mounted) return;
+      await context.read<ServiceProvider>().fetchServices();
     });
   }
 
@@ -105,6 +117,8 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.watch<DesktopNav>();
+    _handleServiceAddRequest(nav);
     var serviceProvider = Provider.of<ServiceProvider>(context);
     final auth = context.watch<AuthProvider>();
     final isAdmin = auth.isAdmin;

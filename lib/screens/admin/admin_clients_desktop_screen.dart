@@ -12,7 +12,9 @@ import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/grad_lookup.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import 'package:provider/provider.dart';
 
 /// Premium dark admin dashboard for Clients (desktop shell provides global header + rail).
 class AdminClientsDesktopScreen extends StatefulWidget {
@@ -44,6 +46,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   String _sortKey = 'new'; // new | old | visit | name
   int _page = 0;
   int _pageSize = 10;
+  int _handledClientAddRequest = 0;
 
   @override
   void initState() {
@@ -622,6 +625,18 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final nav = context.watch<DesktopNav>();
+    if (nav.clientAddRequest != _handledClientAddRequest) {
+      _handledClientAddRequest = nav.clientAddRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final therapists =
+            await (_therapistsFuture ?? widget.api.getZaposlenici());
+        if (!mounted) return;
+        await _showCreateClientDialog(therapists);
+      });
+    }
+
     return FutureBuilder<List<Zaposlenik>>(
       future: _therapistsFuture,
       builder: (context, thSnap) {

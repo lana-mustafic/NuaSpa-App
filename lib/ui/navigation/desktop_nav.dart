@@ -46,6 +46,8 @@ class DesktopNav extends ChangeNotifier {
   int _appointmentCreateRequest = 0;
   int? _appointmentPrefillZaposlenikId;
   int _therapistAddRequest = 0;
+  int _serviceAddRequest = 0;
+  int _clientAddRequest = 0;
 
   /// Shared with [LuxuryDesktopHeader] + [AdminCalendarScreen] (single search field).
   TextEditingController? _calendarSearchCtrl;
@@ -90,6 +92,10 @@ class DesktopNav extends ChangeNotifier {
   int get appointmentCreateRequest => _appointmentCreateRequest;
 
   int get therapistAddRequest => _therapistAddRequest;
+
+  int get serviceAddRequest => _serviceAddRequest;
+
+  int get clientAddRequest => _clientAddRequest;
 
   /// Postavi defaultnu landing stranicu za admina (Command Center).
   void seedAdminLandingIfNeeded(bool isAdmin) {
@@ -192,6 +198,20 @@ class DesktopNav extends ChangeNotifier {
     if (_route != DesktopRouteKey.therapists) {
       _route = DesktopRouteKey.therapists;
     }
+    notifyListeners();
+  }
+
+  void requestServiceAdd() {
+    _serviceAddRequest++;
+    if (_route != DesktopRouteKey.catalog) {
+      _route = DesktopRouteKey.catalog;
+    }
+    notifyListeners();
+  }
+
+  void requestClientAdd() {
+    _clientAddRequest++;
+    goToAdminSuite(AdminSuiteRoute.clients);
     notifyListeners();
   }
 
