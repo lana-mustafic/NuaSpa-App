@@ -37,6 +37,13 @@ import '../../../models/grad_lookup.dart';
 class ApiService {
   final Dio _dio = ApiClient().dio;
 
+  static String _apiDateOnly(DateTime date) {
+    final d = DateTime(date.year, date.month, date.day);
+    return '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+  }
+
   /// Opcionalni filteri mapiraju na [UslugaSearchObject] na backendu.
   Future<List<Usluga>> getUsluge({String? naziv, double? maxCijena}) async {
     try {
@@ -594,11 +601,9 @@ class ApiService {
     int? zaposlenikId,
   }) async {
     try {
-      final query = <String, dynamic>{'pageSize': 100};
+      final query = <String, dynamic>{'pageSize': 500};
       if (datum != null) {
-        final d = DateTime(datum.year, datum.month, datum.day);
-        query['Datum'] =
-            '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        query['Datum'] = _apiDateOnly(datum);
       }
       if (isPotvrdjena != null) {
         query['IsPotvrdjena'] = isPotvrdjena;
@@ -1291,7 +1296,9 @@ class ApiService {
     try {
       final response = await _dio.get<dynamic>(
         'Izvjestaj/kpi',
-        queryParameters: {if (date != null) 'date': date.toIso8601String()},
+        queryParameters: {
+          if (date != null) 'date': _apiDateOnly(date),
+        },
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
