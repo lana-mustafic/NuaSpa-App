@@ -11,6 +11,7 @@ import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/theme/luxury_modal_style.dart';
+import '../../ui/widgets/service_network_image.dart';
 
 /// Premium dark spa palette for service details.
 abstract final class _DetailsStyle {
@@ -245,19 +246,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    service.slikaUrl,
+                  ServiceNetworkImage(
+                    imageUrl: service.slikaUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return ColoredBox(
-                        color: MobileSpaColors.lavender.withValues(alpha: 0.28),
-                        child: Icon(
-                          Icons.spa_outlined,
-                          size: 56,
-                          color: MobileSpaColors.royalPurple.withValues(alpha: 0.28),
-                        ),
-                      );
-                    },
+                    error: ColoredBox(
+                      color: MobileSpaColors.lavender.withValues(alpha: 0.28),
+                      child: Icon(
+                        Icons.spa_outlined,
+                        size: 56,
+                        color: MobileSpaColors.royalPurple.withValues(alpha: 0.28),
+                      ),
+                    ),
                   ),
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -451,24 +450,22 @@ class _LeftServicePanel extends StatelessWidget {
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(_DetailsStyle.cardRadius),
                         ),
-                        child: Image.network(
-                          service.slikaUrl,
+                        child: ServiceNetworkImage(
+                          imageUrl: service.slikaUrl,
                           height: imageHeight,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: imageHeight,
+                          error: Container(
+                            height: imageHeight,
+                            color: _DetailsStyle.accentPurple
+                                .withValues(alpha: 0.12),
+                            child: Icon(
+                              Icons.spa_outlined,
+                              size: 72,
                               color: _DetailsStyle.accentPurple
-                                  .withValues(alpha: 0.12),
-                              child: Icon(
-                                Icons.spa_outlined,
-                                size: 72,
-                                color: _DetailsStyle.accentPurple
-                                    .withValues(alpha: 0.35),
-                              ),
-                            );
-                          },
+                                  .withValues(alpha: 0.35),
+                            ),
+                          ),
                         ),
                       ),
                       Container(

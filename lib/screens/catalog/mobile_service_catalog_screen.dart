@@ -14,6 +14,7 @@ import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/service_category_filter_bar.dart';
+import '../../ui/widgets/service_network_image.dart';
 import 'service_details_screen.dart';
 import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
@@ -539,10 +540,10 @@ class _ServiceCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    usluga.slikaUrl,
+                  ServiceNetworkImage(
+                    imageUrl: usluga.slikaUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    error: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,

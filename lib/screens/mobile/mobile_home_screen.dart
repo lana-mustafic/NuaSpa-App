@@ -13,6 +13,7 @@ import '../../providers/service_provider.dart';
 import '../catalog/service_details_screen.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
+import '../../ui/widgets/service_network_image.dart';
 
 /// Light zen landing — recommendations + entry into Services tab.
 class MobileHomeScreen extends StatefulWidget {
@@ -263,10 +264,10 @@ class _RecommendCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Image.network(
-                  usluga.slikaUrl,
+                child: ServiceNetworkImage(
+                  imageUrl: usluga.slikaUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  error: Container(
                     color: MobileSpaColors.lavender.withValues(alpha: 0.2),
                     child: Icon(
                       Icons.spa_outlined,

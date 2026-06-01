@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../catalog/service_details_screen.dart';
 import 'therapist_portal_scaffold.dart';
+import '../../ui/widgets/service_network_image.dart';
 
 abstract final class _SvcUi {
   static const bgTop = Color(0xFF07040F);
@@ -1104,10 +1105,10 @@ class _ServiceThumbnail extends StatelessWidget {
       child: SizedBox(
         width: 64,
         height: 48,
-        child: Image.network(
-          service.slikaUrl,
+        child: ServiceNetworkImage(
+          imageUrl: service.slikaUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
+          error: Container(
             color: _SvcUi.purple.withValues(alpha: 0.2),
             child: const Icon(Icons.spa_outlined, color: _SvcUi.lavender),
           ),

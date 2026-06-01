@@ -14,6 +14,7 @@ import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
+import '../../ui/widgets/service_network_image.dart';
 
 enum _AppointmentView { day, week, month }
 
@@ -1960,12 +1961,12 @@ class _ServiceListCell extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: imageUrl != null && imageUrl!.isNotEmpty
-                ? Image.network(
-                    imageUrl!,
+                ? ServiceNetworkImage(
+                    imageUrl: imageUrl!,
                     width: 44,
                     height: 44,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _placeholder(),
+                    error: _placeholder(),
                   )
                 : _placeholder(),
           ),

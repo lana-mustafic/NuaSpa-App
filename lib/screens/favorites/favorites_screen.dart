@@ -6,6 +6,7 @@ import '../catalog/service_details_screen.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
+import '../../ui/widgets/service_network_image.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -130,13 +131,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        u.slikaUrl,
+                      child: ServiceNetworkImage(
+                        imageUrl: u.slikaUrl,
                         width: 92,
                         height: 64,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const SizedBox(
+                        error: const SizedBox(
                           width: 92,
                           height: 64,
                           child: Center(

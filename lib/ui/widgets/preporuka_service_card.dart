@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'service_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/preporucena_usluga.dart';
@@ -46,10 +48,10 @@ class PreporukaServiceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Image.network(
-                  u.slikaUrl,
+                child: ServiceNetworkImage(
+                  imageUrl: u.slikaUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => ColoredBox(
+                  error: ColoredBox(
                     color: theme.colorScheme.primary.withValues(alpha: 0.08),
                     child: Icon(
                       Icons.spa_outlined,

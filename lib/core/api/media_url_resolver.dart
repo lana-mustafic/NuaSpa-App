@@ -24,17 +24,30 @@ String resolveMediaUrl(String? pathOrUrl) {
     return url;
   }
 
-  final isLoopback =
-      parsed.host == 'localhost' || parsed.host == '127.0.0.1';
-  final apiIsLoopback =
-      apiUri.host == 'localhost' || apiUri.host == '127.0.0.1';
-  if (isLoopback && !apiIsLoopback) {
-    return parsed
-        .replace(
-          host: apiUri.host,
-          port: apiUri.hasPort ? apiUri.port : parsed.port,
-        )
-        .toString();
+  final isOurImage = parsed.path.contains('/api/files/usluge') ||
+      parsed.path.contains('/uploads/usluge');
+  if (isOurImage) {
+    final imageHost = parsed.host;
+    final apiHost = apiUri.host;
+    final imageLoopback =
+        imageHost == 'localhost' || imageHost == '127.0.0.1';
+    final apiLoopback = apiHost == 'localhost' || apiHost == '127.0.0.1';
+    if (imageLoopback && apiLoopback && imageHost != apiHost) {
+      return parsed
+          .replace(
+            host: apiHost,
+            port: apiUri.hasPort ? apiUri.port : parsed.port,
+          )
+          .toString();
+    }
+    if (imageLoopback && !apiLoopback) {
+      return parsed
+          .replace(
+            host: apiHost,
+            port: apiUri.hasPort ? apiUri.port : parsed.port,
+          )
+          .toString();
+    }
   }
 
   return url;

@@ -10,6 +10,7 @@ import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/service_category_filter_bar.dart';
+import '../../ui/widgets/service_network_image.dart';
 import 'service_details_screen.dart';
 import 'service_category_manager_panel.dart';
 import 'service_editor_dialog.dart';
@@ -287,14 +288,13 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(16),
                               ),
-                              child: Image.network(
-                                usluga.slikaUrl,
+                              child: ServiceNetworkImage(
+                                imageUrl: usluga.slikaUrl,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Center(
-                                      child: Icon(Icons.broken_image, size: 44),
-                                    ),
+                                error: const Center(
+                                  child: Icon(Icons.broken_image, size: 44),
+                                ),
                               ),
                             ),
                           ),
