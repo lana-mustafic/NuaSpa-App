@@ -1,3 +1,4 @@
+import '../core/api/media_url_resolver.dart';
 import '../core/format/km_format.dart';
 
 class Usluga {
@@ -71,7 +72,7 @@ class Usluga {
 
     final slika = json['slikaUrl'] as String?;
     final slikaUrl = (slika != null && slika.isNotEmpty)
-        ? slika
+        ? resolveMediaUrl(slika)
         : 'https://picsum.photos/seed/${json['id']}/400/300';
 
     final kat = json['kategorijaNaziv'] as String?;
