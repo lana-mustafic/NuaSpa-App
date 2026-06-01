@@ -592,16 +592,15 @@ abstract final class _ApptUi {
   static const double sidebarMinWidth = 300;
 }
 
-/// Compact appointment create/edit modal (not full-screen).
+/// Compact appointment create/edit modal (fits without scrolling).
 abstract final class _ApptDialogLayout {
-  static const double maxWidth = 520;
-  static const double minWidth = 400;
-  static const double maxHeightCap = 620;
-  static const double maxHeightScreenFactor = 0.72;
-  static const EdgeInsets padding = EdgeInsets.fromLTRB(28, 24, 28, 24);
-  static const double borderRadius = 24;
-  static const double fieldGap = 10;
-  static const double sectionGap = 20;
+  static const double maxWidth = 440;
+  static const double minWidth = 380;
+  static const EdgeInsets padding = EdgeInsets.fromLTRB(20, 18, 20, 18);
+  static const double borderRadius = 20;
+  static const double fieldGap = 6;
+  static const double sectionGap = 12;
+  static const double fieldHeight = 56;
 }
 
 class _ApptScrollbarTheme extends StatelessWidget {
@@ -2597,17 +2596,12 @@ class _AdminAppointmentCreateDialogState
             widget.data.services.isEmpty ||
             widget.data.therapists.isEmpty;
 
-    final screen = MediaQuery.sizeOf(context);
-    final maxDialogH = (screen.height * _ApptDialogLayout.maxHeightScreenFactor)
-        .clamp(480.0, _ApptDialogLayout.maxHeightCap);
-
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
-        constraints: BoxConstraints(
+        constraints: const BoxConstraints(
           minWidth: _ApptDialogLayout.minWidth,
           maxWidth: _ApptDialogLayout.maxWidth,
-          maxHeight: maxDialogH,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
@@ -2629,65 +2623,38 @@ class _AdminAppointmentCreateDialogState
                   ),
                 ],
               ),
-              child: SingleChildScrollView(
+              child: Padding(
                 padding: _ApptDialogLayout.padding,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 52,
-                          height: 52,
+                          width: 40,
+                          height: 40,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(12),
                             gradient: const LinearGradient(
                               colors: [_ApptUi.purple, _ApptUi.purple2],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _ApptUi.purple.withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
                           ),
                           child: const Icon(
                             Icons.event_available_rounded,
                             color: Colors.white,
-                            size: 28,
+                            size: 22,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _isEdit ? 'Edit Appointment' : 'New Appointment',
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.4,
-                                  color: _ApptUi.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _isEdit
-                                    ? 'Update date, service, therapist, or VIP status for this booking.'
-                                    : 'Fill in the details to create a new spa appointment. Enable VIP for priority treatment.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.4,
-                                  color: _ApptUi.lavender.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            _isEdit ? 'Edit Appointment' : 'New Appointment',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: _ApptUi.textPrimary,
+                            ),
                           ),
                         ),
                         _PremiumModalCloseButton(
@@ -2747,75 +2714,87 @@ class _AdminAppointmentCreateDialogState
                       onTap: _pickDateTime,
                     ),
                     const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    _PremiumApptFieldCard(
-                      icon: Icons.spa_outlined,
-                      label: 'Service',
-                      value: _serviceLabel(),
-                      trailing: const Icon(
-                        Icons.expand_more_rounded,
-                        color: Color(0x99FFFFFF),
-                      ),
-                      enabled: widget.data.services.isNotEmpty,
-                      disabledReason: widget.data.services.isEmpty
-                          ? 'Nema usluga u bazi. Dodajte uslugu prije kreiranja termina.'
-                          : null,
-                      onTap: widget.data.services.isEmpty
-                          ? null
-                          : () => _pickFromList(
-                                title: 'Select service',
-                                currentId: _serviceId,
-                                options: [
-                                  for (final s in widget.data.services)
-                                    (
-                                      id: s.id,
-                                      label:
-                                          '${s.naziv} • ${s.trajanjeMinuta} min',
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _PremiumApptFieldCard(
+                            icon: Icons.spa_outlined,
+                            label: 'Service',
+                            value: _serviceLabel(),
+                            trailing: const Icon(
+                              Icons.expand_more_rounded,
+                              color: Color(0x99FFFFFF),
+                              size: 20,
+                            ),
+                            enabled: widget.data.services.isNotEmpty,
+                            disabledReason: widget.data.services.isEmpty
+                                ? 'Nema usluga u bazi.'
+                                : null,
+                            onTap: widget.data.services.isEmpty
+                                ? null
+                                : () => _pickFromList(
+                                      title: 'Select service',
+                                      currentId: _serviceId,
+                                      options: [
+                                        for (final s in widget.data.services)
+                                          (
+                                            id: s.id,
+                                            label:
+                                                '${s.naziv} • ${s.trajanjeMinuta}m',
+                                          ),
+                                      ],
+                                      onPick: (id) => setState(() {
+                                        _serviceId = id;
+                                        _formError = null;
+                                      }),
                                     ),
-                                ],
-                                onPick: (id) => setState(() {
-                                  _serviceId = id;
-                                  _formError = null;
-                                }),
-                              ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _PremiumApptFieldCard(
+                            icon: Icons.badge_outlined,
+                            label: 'Therapist',
+                            value: _therapistLabel(),
+                            trailing: const Icon(
+                              Icons.expand_more_rounded,
+                              color: Color(0x99FFFFFF),
+                              size: 20,
+                            ),
+                            enabled: widget.data.therapists.isNotEmpty,
+                            disabledReason: widget.data.therapists.isEmpty
+                                ? 'Nema terapeuta u bazi.'
+                                : null,
+                            onTap: widget.data.therapists.isEmpty
+                                ? null
+                                : () => _pickFromList(
+                                      title: 'Select therapist',
+                                      currentId: _therapistId,
+                                      options: [
+                                        for (final t in widget.data.therapists)
+                                          (
+                                            id: t.id,
+                                            label:
+                                                '${t.ime} ${t.prezime}'.trim(),
+                                          ),
+                                      ],
+                                      onPick: (id) => setState(() {
+                                        _therapistId = id;
+                                        _formError = null;
+                                      }),
+                                    ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    _PremiumApptFieldCard(
-                      icon: Icons.badge_outlined,
-                      label: 'Therapist',
-                      value: _therapistLabel(),
-                      trailing: const Icon(
-                        Icons.expand_more_rounded,
-                        color: Color(0x99FFFFFF),
-                      ),
-                      enabled: widget.data.therapists.isNotEmpty,
-                      disabledReason: widget.data.therapists.isEmpty
-                          ? 'Nema terapeuta u bazi. Dodajte terapeuta prije kreiranja termina.'
-                          : null,
-                      onTap: widget.data.therapists.isEmpty
-                          ? null
-                          : () => _pickFromList(
-                                title: 'Select therapist',
-                                currentId: _therapistId,
-                                options: [
-                                  for (final t in widget.data.therapists)
-                                    (
-                                      id: t.id,
-                                      label: '${t.ime} ${t.prezime}'.trim(),
-                                    ),
-                                ],
-                                onPick: (id) => setState(() {
-                                  _therapistId = id;
-                                  _formError = null;
-                                }),
-                              ),
-                    ),
-                    const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    _PremiumApptVipCard(
+                    _PremiumApptVipStrip(
                       value: _isVip,
                       onChanged: (v) => setState(() => _isVip = v),
                     ),
                     if (missingData) ...[
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       Text(
                         _isEdit
                             ? 'Učitajte usluge i terapeute prije uređivanja termina.'
@@ -2827,7 +2806,7 @@ class _AdminAppointmentCreateDialogState
                       ),
                     ],
                     if (_formError != null) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
                       Text(
                         _formError!,
                         style: const TextStyle(
@@ -2838,12 +2817,7 @@ class _AdminAppointmentCreateDialogState
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    Container(
-                      height: 1,
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: _ApptDialogLayout.sectionGap),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -2982,14 +2956,14 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
         color: Colors.transparent,
         child: InkWell(
           onTap: active ? widget.onTap : null,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            height: 74,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
+            height: _ApptDialogLayout.fieldHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.035),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: _hover
                     ? _ApptUi.purple.withValues(alpha: 0.45)
@@ -3007,25 +2981,19 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                     color: _ApptUi.purple.withValues(alpha: 0.18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _ApptUi.purple2.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                      ),
-                    ],
                   ),
                   child: Icon(
                     widget.icon,
-                    size: 24,
+                    size: 20,
                     color: _ApptUi.purple2,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -3034,18 +3002,18 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
                       Text(
                         widget.label,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: _ApptUi.lavender.withValues(alpha: 0.75),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         widget.value,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 17,
+                          fontSize: 14,
                           fontWeight: FontWeight.w800,
                           color: active
                               ? _ApptUi.textPrimary
@@ -3095,8 +3063,8 @@ class _PremiumModalCloseButtonState extends State<_PremiumModalCloseButton> {
           borderRadius: BorderRadius.circular(16),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 44,
-            height: 44,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: _hover ? 0.1 : 0.06),
               borderRadius: BorderRadius.circular(14),
@@ -3148,8 +3116,8 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 112,
-            height: 46,
+            width: 100,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
@@ -3173,8 +3141,8 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
   }
 }
 
-class _PremiumApptVipCard extends StatelessWidget {
-  const _PremiumApptVipCard({
+class _PremiumApptVipStrip extends StatelessWidget {
+  const _PremiumApptVipStrip({
     required this.value,
     required this.onChanged,
   });
@@ -3184,16 +3152,56 @@ class _PremiumApptVipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PremiumApptFieldCard(
-      icon: Icons.star_rounded,
-      label: 'VIP appointment',
-      value: value ? 'Enabled' : 'Standard booking',
-      trailing: Switch.adaptive(
-        value: value,
-        onChanged: onChanged,
-        activeThumbColor: _ApptUi.purple2,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.star_rounded,
+                size: 18,
+                color: value ? _ApptUi.purple2 : _ApptUi.lavender,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'VIP appointment',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _ApptUi.lavender.withValues(alpha: 0.85),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                value ? 'On' : 'Off',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: value
+                      ? _ApptUi.purple2
+                      : _ApptUi.textPrimary.withValues(alpha: 0.5),
+                ),
+              ),
+              Switch.adaptive(
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: _ApptUi.purple2,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+        ),
       ),
-      onTap: () => onChanged(!value),
     );
   }
 }
@@ -3237,8 +3245,8 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-            width: 200,
-            height: 46,
+            width: 168,
+            height: 40,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               gradient: LinearGradient(
