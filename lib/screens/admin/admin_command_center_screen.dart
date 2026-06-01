@@ -6,14 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_client_stats.dart';
-import '../../models/admin/admin_finance_dashboard.dart';
 import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/admin/revenue_point.dart';
-import '../../models/admin/service_popularity.dart';
 import '../../models/desktop_home_overview.dart';
 import '../../models/rezervacija.dart';
-import '../../models/zaposlenik.dart';
 import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
@@ -35,27 +32,23 @@ class _CcData {
     required this.kpi,
     required this.kpiYesterday,
     required this.revenue,
-    required this.popularity,
     required this.bookings,
     required this.yesterdayBookings,
-    required this.therapists,
     required this.homeOverview,
     required this.clientStats,
-    required this.financeToday,
     required this.reviews,
+    this.loadWarnings = const [],
   });
 
   final AdminKpi? kpi;
   final AdminKpi? kpiYesterday;
   final List<RevenuePoint> revenue;
-  final List<ServicePopularity> popularity;
   final List<Rezervacija> bookings;
   final List<Rezervacija> yesterdayBookings;
-  final List<Zaposlenik> therapists;
   final DesktopHomeOverview? homeOverview;
   final AdminClientStats? clientStats;
-  final AdminFinanceDashboard? financeToday;
   final AdminReviewsDashboard? reviews;
+  final List<String> loadWarnings;
 }
 
 abstract final class _DashUi {
@@ -155,43 +148,74 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     final from30 = day.subtract(const Duration(days: 29));
     final reviewsFrom = day.subtract(const Duration(days: 29));
     setState(() {
-      _future = () async {
-        final results = await Future.wait([
-          _api.getAdminKpis(date: day),
-          _api.getAdminKpis(date: yesterday),
-          _api.getRevenueSeries(from: from30, to: day),
-          _api.getServicePopularity(from: day, to: day, take: 8),
-          _api.getRezervacijeFiltered(datum: day, includeOtkazane: true),
-          _api.getRezervacijeFiltered(datum: yesterday, includeOtkazane: true),
-          _api.getZaposlenici(),
-          _api.getDesktopHomeOverview(day: day),
-          _api.getAdminClientStats(),
-          _api.getAdminFinanceDashboard(
-            from: day,
-            toInclusive: day,
-            pageSize: 1,
-          ),
-          _api.getAdminReviewsDashboard(
+      _future = _loadDashboard(
+        day: day,
+        yesterday: yesterday,
+        from30: from30,
+        reviewsFrom: reviewsFrom,
+      );
+    });
+  }
+
+  Future<_CcData> _loadDashboard({
+    required DateTime day,
+    required DateTime yesterday,
+    required DateTime from30,
+    required DateTime reviewsFrom,
+  }) async {
+    final warnings = <String>[];
+
+    Future<T?> guard<T>(String label, Future<T?> Function() call) async {
+      try {
+        return await call();
+      } catch (e) {
+        warnings.add('$label failed to load.');
+        debugPrint('Dashboard $label: $e');
+        return null;
+      }
+    }
+
+    final results = await Future.wait([
+      guard('KPIs', () => _api.getAdminKpis(date: day)),
+      guard('KPIs (yesterday)', () => _api.getAdminKpis(date: yesterday)),
+      guard('Revenue trend', () async {
+        final list = await _api.getRevenueSeries(from: from30, to: day);
+        return list;
+      }),
+      guard('Today appointments', () async {
+        final list = await _api.getRezervacijeFiltered(
+          datum: day,
+          includeOtkazane: true,
+        );
+        return list;
+      }),
+      guard('Yesterday appointments', () async {
+        final list = await _api.getRezervacijeFiltered(
+          datum: yesterday,
+          includeOtkazane: true,
+        );
+        return list;
+      }),
+      guard('Overview', () => _api.getDesktopHomeOverview(day: day)),
+      guard('Client stats', () => _api.getAdminClientStats()),
+      guard('Reviews summary', () => _api.getAdminReviewsDashboard(
             from: reviewsFrom,
             toInclusive: day,
             pageSize: 1,
-          ),
-        ]);
-        return _CcData(
-          kpi: results[0] as AdminKpi?,
-          kpiYesterday: results[1] as AdminKpi?,
-          revenue: results[2] as List<RevenuePoint>,
-          popularity: results[3] as List<ServicePopularity>,
-          bookings: results[4] as List<Rezervacija>,
-          yesterdayBookings: results[5] as List<Rezervacija>,
-          therapists: results[6] as List<Zaposlenik>,
-          homeOverview: results[7] as DesktopHomeOverview?,
-          clientStats: results[8] as AdminClientStats?,
-          financeToday: results[9] as AdminFinanceDashboard?,
-          reviews: results[10] as AdminReviewsDashboard?,
-        );
-      }();
-    });
+          )),
+    ]);
+
+    return _CcData(
+      kpi: results[0] as AdminKpi?,
+      kpiYesterday: results[1] as AdminKpi?,
+      revenue: (results[2] as List<RevenuePoint>?) ?? const [],
+      bookings: (results[3] as List<Rezervacija>?) ?? const [],
+      yesterdayBookings: (results[4] as List<Rezervacija>?) ?? const [],
+      homeOverview: results[5] as DesktopHomeOverview?,
+      clientStats: results[6] as AdminClientStats?,
+      reviews: results[7] as AdminReviewsDashboard?,
+      loadWarnings: warnings,
+    );
   }
 
   @override
@@ -240,16 +264,23 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           return const Center(child: Text('No dashboard data.'));
         }
 
-        return _DashboardLayout(data: d);
+        return _DashboardLayout(
+          data: d,
+          filterDay: widget.filterDay,
+        );
       },
     );
   }
 }
 
 class _DashboardLayout extends StatelessWidget {
-  const _DashboardLayout({required this.data});
+  const _DashboardLayout({
+    required this.data,
+    required this.filterDay,
+  });
 
   final _CcData data;
+  final DateTime filterDay;
 
   @override
   Widget build(BuildContext context) {
@@ -298,6 +329,11 @@ class _DashboardLayout extends StatelessWidget {
           final main = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (data.loadWarnings.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: _DashUi.gap),
+                  child: _DashLoadWarningsBanner(messages: data.loadWarnings),
+                ),
               _KpiRow(
                 cards: [
                   _DashboardKpiSpec(
@@ -378,7 +414,10 @@ class _DashboardLayout extends StatelessWidget {
                 },
               ),
               const SizedBox(height: _DashUi.gap),
-              _RecentAppointmentsCard(bookings: bookings),
+              _RecentAppointmentsCard(
+                bookings: bookings,
+                filterDay: filterDay,
+              ),
             ],
           );
 
@@ -410,6 +449,40 @@ class _DashboardLayout extends StatelessWidget {
                   ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _DashLoadWarningsBanner extends StatelessWidget {
+  const _DashLoadWarningsBanner({required this.messages});
+
+  final List<String> messages;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: _DashUi.orange.withValues(alpha: 0.95),
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              messages.join(' '),
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: _DashUi.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -928,9 +1001,13 @@ class _QuickActionTileState extends State<_QuickActionTile> {
 }
 
 class _RecentAppointmentsCard extends StatelessWidget {
-  const _RecentAppointmentsCard({required this.bookings});
+  const _RecentAppointmentsCard({
+    required this.bookings,
+    required this.filterDay,
+  });
 
   final List<Rezervacija> bookings;
+  final DateTime filterDay;
 
   @override
   Widget build(BuildContext context) {
