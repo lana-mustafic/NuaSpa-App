@@ -93,7 +93,6 @@ class _DesktopShellState extends State<DesktopShell> {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 1100;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
-    final isCommandCenter = nav.route == DesktopRouteKey.commandCenter;
     final railExpandedW = width < 1450 ? 200.0 : 212.0;
 
     final adminItems = <LuxurySideItem>[
@@ -354,7 +353,7 @@ class _DesktopShellState extends State<DesktopShell> {
                               notificationCount: context
                                   .watch<NotificationProvider>()
                                   .unreadCount,
-                              compactChrome: isCommandCenter || isCalendar,
+                              compactChrome: isCalendar,
                             ),
                             Expanded(
                               child: AnimatedSwitcher(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/notification_provider.dart';
@@ -323,14 +324,25 @@ class LuxuryDesktopHeader extends StatelessWidget {
 
     final badgeCount = notificationCount;
 
-    final dashboardChrome = compact && isCommandCenter;
+    if (isCommandCenter) {
+      return _CommandCenterDashboardHeader(
+        theme: theme,
+        auth: auth,
+        day: day,
+        notificationCount: badgeCount,
+        fmtDay: _fmtDay,
+        onPickDate: () => _pickDate(context),
+        onNotifications: () => _showNotifications(context),
+        onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        dashboardChrome ? 20 : (compact ? 16 : 28),
-        dashboardChrome ? 10 : (compact ? 8 : 18),
-        dashboardChrome ? 20 : (compact ? 16 : 28),
-        dashboardChrome ? 6 : (compact ? 4 : 8),
+        compact ? 16 : 28,
+        compact ? 8 : 18,
+        compact ? 16 : 28,
+        compact ? 4 : 8,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -643,6 +655,307 @@ class LuxuryDesktopHeader extends StatelessWidget {
   }
 }
 
+/// Spacious enterprise header used only on the admin Dashboard route.
+class _CommandCenterDashboardHeader extends StatelessWidget {
+  const _CommandCenterDashboardHeader({
+    required this.theme,
+    required this.auth,
+    required this.day,
+    required this.notificationCount,
+    required this.fmtDay,
+    required this.onPickDate,
+    required this.onNotifications,
+    required this.onProfile,
+  });
+
+  final ThemeData theme;
+  final AuthProvider auth;
+  final DateTime day;
+  final int notificationCount;
+  final String Function(DateTime) fmtDay;
+  final VoidCallback onPickDate;
+  final VoidCallback onNotifications;
+  final void Function(BuildContext) onProfile;
+
+  static const _gap = 16.0;
+
+  Widget _titleBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Dashboard',
+          style: GoogleFonts.inter(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.6,
+            height: 1.15,
+            color: const Color(0xFFF5F3FA),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Welcome back, Admin. Here is today\'s overview.',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            height: 1.35,
+            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dateButton() {
+    return _DashboardHeaderControl(
+      onTap: onPickDate,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.calendar_month_outlined,
+            size: 20,
+            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            fmtDay(day),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFFF5F3FA),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.expand_more_rounded,
+            size: 20,
+            color: Colors.white.withValues(alpha: 0.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profilePill({required bool showDetails}) {
+    final initials = auth.userInitials ??
+        (auth.displayName != null && auth.displayName!.length >= 2
+            ? auth.displayName!.substring(0, 2).toUpperCase()
+            : 'AD');
+
+    return Builder(
+      builder: (profileContext) => _DashboardHeaderControl(
+        onTap: () => onProfile(profileContext),
+        padding: EdgeInsets.fromLTRB(
+          showDetails ? 8 : 6,
+          6,
+          showDetails ? 14 : 8,
+          6,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: showDetails ? 20 : 18,
+              backgroundColor:
+                  NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
+              child: Text(
+                initials,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+            ),
+            if (showDetails) ...[
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    auth.isAdmin ? 'Admin' : (auth.displayName ?? 'NuaSpa'),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFF5F3FA),
+                    ),
+                  ),
+                  Text(
+                    'Super Admin',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: NuaLuxuryTokens.champagneGold.withValues(
+                        alpha: 0.92,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 18,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _controlsRow({required bool showProfileDetails}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 50,
+          width: 50,
+          child: _HeaderIconGlass(
+            onTap: onNotifications,
+            borderRadius: 18,
+            child: Badge(
+              isLabelVisible: notificationCount > 0,
+              label: Text('$notificationCount'),
+              backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+              child: Icon(
+                Icons.notifications_none_rounded,
+                color: Colors.white.withValues(alpha: 0.88),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: _gap),
+        _dateButton(),
+        const SizedBox(width: _gap),
+        _profilePill(showDetails: showProfileDetails),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 92),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth;
+            final showSearch = w >= 720;
+            final showProfileDetails = w >= 980;
+
+            final search = DeskGlobalSearchBar(
+              dashboardStyle: true,
+              showShortcutHint: true,
+              hintText: 'Search appointments, clients, services…',
+            );
+
+            if (w >= 1080) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(width: 300, child: _titleBlock()),
+                  const SizedBox(width: _gap),
+                  if (showSearch) Expanded(child: search),
+                  if (showSearch) const SizedBox(width: _gap),
+                  _controlsRow(showProfileDetails: showProfileDetails),
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _titleBlock(),
+                const SizedBox(height: 18),
+                if (showSearch) ...[
+                  search,
+                  const SizedBox(height: 16),
+                ],
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _controlsRow(showProfileDetails: showProfileDetails),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardHeaderControl extends StatefulWidget {
+  const _DashboardHeaderControl({
+    required this.child,
+    required this.onTap,
+    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<_DashboardHeaderControl> createState() => _DashboardHeaderControlState();
+}
+
+class _DashboardHeaderControlState extends State<_DashboardHeaderControl> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            constraints: const BoxConstraints(minHeight: 50),
+            padding: widget.padding,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: const Color.fromRGBO(255, 255, 255, 0.04),
+              border: Border.all(
+                color: Color.fromRGBO(
+                  255,
+                  255,
+                  255,
+                  _hover ? 0.12 : 0.08,
+                ),
+              ),
+              boxShadow: _hover
+                  ? [
+                      BoxShadow(
+                        color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                          alpha: 0.14,
+                        ),
+                        blurRadius: 20,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileMenuRow extends StatelessWidget {
   const _ProfileMenuRow({
     required this.icon,
@@ -719,22 +1032,27 @@ class _HeaderPill extends StatelessWidget {
 }
 
 class _HeaderIconGlass extends StatelessWidget {
-  const _HeaderIconGlass({required this.child, required this.onTap});
+  const _HeaderIconGlass({
+    required this.child,
+    required this.onTap,
+    this.borderRadius = 14,
+  });
 
   final Widget child;
   final VoidCallback onTap;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(borderRadius),
         onTap: onTap,
         child: LuxuryGlassPanel(
           blurSigma: 18,
           opacity: 0.26,
-          borderRadius: 14,
+          borderRadius: borderRadius,
           padding: const EdgeInsets.all(12),
           child: child,
         ),

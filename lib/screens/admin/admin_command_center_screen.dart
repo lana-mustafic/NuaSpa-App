@@ -437,6 +437,11 @@ class _DashboardLayout extends StatelessWidget {
 
     final bookingsMayBeTruncated = bookings.length >= 500;
     final activity = data.activity;
+    final therapistsWorking = kpi?.aktivniTerapeuti ?? 0;
+    final pendingAppointments = bookings
+        .where((b) => !b.isPotvrdjena && !b.isOtkazana)
+        .length;
+    final showInfoStrip = kpi != null;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -447,10 +452,18 @@ class _DashboardLayout extends StatelessWidget {
         ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+        padding: const EdgeInsets.fromLTRB(28, 32, 28, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showInfoStrip) ...[
+              _DashboardInfoStrip(
+                appointments: bookingsToday,
+                therapistsWorking: therapistsWorking,
+                pendingAppointments: pendingAppointments,
+              ),
+              const SizedBox(height: 28),
+            ],
             if (data.loadWarnings.isNotEmpty || bookingsMayBeTruncated)
               Padding(
                 padding: const EdgeInsets.only(bottom: _DashUi.gap),
@@ -540,6 +553,46 @@ class _DashboardLayout extends StatelessWidget {
               filterDay: filterDay,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardInfoStrip extends StatelessWidget {
+  const _DashboardInfoStrip({
+    required this.appointments,
+    required this.therapistsWorking,
+    required this.pendingAppointments,
+  });
+
+  final int appointments;
+  final int therapistsWorking;
+  final int pendingAppointments;
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingLabel = pendingAppointments == 1
+        ? '1 pending appointment'
+        : '$pendingAppointments pending appointments';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Text(
+        'Today: $appointments appointments scheduled'
+        ' • $therapistsWorking therapists working'
+        ' • $pendingLabel',
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          height: 1.4,
+          color: _DashUi.textSecondary,
         ),
       ),
     );

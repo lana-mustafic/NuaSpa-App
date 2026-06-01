@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,7 @@ class DeskGlobalSearchBar extends StatefulWidget {
     this.showShortcutHint = false,
     this.controller,
     this.compact = false,
+    this.dashboardStyle = false,
   });
 
   final String hintText;
@@ -26,6 +28,8 @@ class DeskGlobalSearchBar extends StatefulWidget {
   final TextEditingController? controller;
   /// Narrower width / slightly shorter height (e.g. calendar).
   final bool compact;
+  /// Dashboard header: 50px height, 18px corners, Ctrl K label on desktop.
+  final bool dashboardStyle;
 
   @override
   State<DeskGlobalSearchBar> createState() => _DeskGlobalSearchBarState();
@@ -52,7 +56,12 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
 
   bool get _focused => _node.hasFocus;
 
-  double get _height => widget.compact ? 52 : 54;
+  double get _height {
+    if (widget.dashboardStyle) return 50;
+    return widget.compact ? 52 : 54;
+  }
+
+  double get _radius => widget.dashboardStyle ? 18 : 999;
 
   TextStyle _bodyStyle() {
     return GoogleFonts.inter(
@@ -75,7 +84,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
     final blurY = _focused ? 6.0 : (_hover ? 6.0 : 4.0);
 
     return BoxDecoration(
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(_radius),
       gradient: const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -115,7 +124,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
         height: _height,
         decoration: _decoration(),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(_radius),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Padding(
@@ -165,7 +174,7 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
                   ),
                   if (widget.showShortcutHint) ...[
                     const SizedBox(width: 12),
-                    _ShortcutBadge(),
+                    _ShortcutBadge(dashboardStyle: widget.dashboardStyle),
                   ],
                 ],
               ),
@@ -178,8 +187,15 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
 }
 
 class _ShortcutBadge extends StatelessWidget {
+  const _ShortcutBadge({this.dashboardStyle = false});
+
+  final bool dashboardStyle;
+
   @override
   Widget build(BuildContext context) {
+    final label = dashboardStyle
+        ? (defaultTargetPlatform == TargetPlatform.macOS ? '⌘ K' : 'Ctrl K')
+        : '⌘ K';
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -192,7 +208,7 @@ class _ShortcutBadge extends StatelessWidget {
         ),
       ),
       child: Text(
-        '⌘ K',
+        label,
         style: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w500,
