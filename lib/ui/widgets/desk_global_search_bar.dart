@@ -67,13 +67,21 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
     return GoogleFonts.inter(
       fontSize: widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16),
       fontWeight: FontWeight.w400,
-      height: 1.25,
+      height: widget.dashboardStyle ? 1.0 : 1.25,
       color: _textPrimary,
     );
   }
 
-  double get _hintFontSize =>
-      widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16);
+  TextStyle _hintStyle(double hintAlpha) {
+    return GoogleFonts.inter(
+      fontSize: widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16),
+      fontWeight: FontWeight.w400,
+      height: widget.dashboardStyle ? 1.0 : 1.25,
+      color: Colors.white.withValues(alpha: hintAlpha),
+    );
+  }
+
+  double get _iconSize => widget.dashboardStyle ? 20 : (widget.compact ? 18 : 20);
 
   BoxDecoration _decoration() {
     final borderColor = _focused
@@ -130,57 +138,60 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
           borderRadius: BorderRadius.circular(_radius),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.search_outlined,
-                    size: widget.compact ? 18 : 20,
-                    color: Colors.white.withValues(alpha: 0.55),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: TextField(
-                      controller: widget.controller,
-                      focusNode: _node,
-                      textInputAction: TextInputAction.search,
-                      textAlignVertical: TextAlignVertical.center,
-                      style: _bodyStyle(),
-                      cursorColor: NuaLuxuryTokens.softPurpleGlow,
-                      onChanged: widget.onChanged,
-                      onSubmitted: (q) {
-                        if (widget.onSubmitted != null) {
-                          widget.onSubmitted!(q);
-                          return;
-                        }
-                        context.read<DesktopNav>().goToCatalogWithSearch(q);
-                      },
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: widget.hintText,
-                        hintStyle: GoogleFonts.inter(
-                          fontSize: _hintFontSize,
-                          fontWeight: FontWeight.w400,
-                          height: 1.25,
-                          color: Colors.white.withValues(alpha: hintAlpha),
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _node,
+              textInputAction: TextInputAction.search,
+              textAlignVertical: TextAlignVertical.center,
+              style: _bodyStyle(),
+              cursorColor: NuaLuxuryTokens.softPurpleGlow,
+              onChanged: widget.onChanged,
+              onSubmitted: (q) {
+                if (widget.onSubmitted != null) {
+                  widget.onSubmitted!(q);
+                  return;
+                }
+                context.read<DesktopNav>().goToCatalogWithSearch(q);
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: widget.hintText,
+                hintStyle: _hintStyle(hintAlpha),
+                hintMaxLines: 1,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: true,
+                fillColor: Colors.transparent,
+                prefixIcon: Icon(
+                  Icons.search_outlined,
+                  size: _iconSize,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+                prefixIconConstraints: BoxConstraints(
+                  minWidth: widget.dashboardStyle ? 46 : 48,
+                  minHeight: _height,
+                ),
+                suffixIcon: widget.showShortcutHint
+                    ? Padding(
+                        padding: EdgeInsets.only(
+                          right: widget.dashboardStyle ? 10 : 14,
                         ),
-                        hintMaxLines: 1,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        filled: true,
-                        fillColor: Colors.transparent,
-                      ),
-                    ),
-                  ),
-                  if (widget.showShortcutHint) ...[
-                    const SizedBox(width: 12),
-                    _ShortcutBadge(dashboardStyle: widget.dashboardStyle),
-                  ],
-                ],
+                        child: _ShortcutBadge(
+                          dashboardStyle: widget.dashboardStyle,
+                        ),
+                      )
+                    : null,
+                suffixIconConstraints: widget.showShortcutHint
+                    ? BoxConstraints(
+                        minWidth: widget.dashboardStyle ? 76 : 80,
+                        minHeight: _height,
+                      )
+                    : null,
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: widget.dashboardStyle ? 16 : 17,
+                  horizontal: 0,
+                ),
               ),
             ),
           ),
