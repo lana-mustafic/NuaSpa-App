@@ -41,6 +41,7 @@ class DesktopNav extends ChangeNotifier {
 
   /// Jednokratni upit za [ServiceCatalogScreen] nakon navigacije iz globalne tračice.
   String? _pendingCatalogSearch;
+  String? _pendingClientSearch;
   String _therapistSearchQuery = '';
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -143,6 +144,46 @@ class DesktopNav extends ChangeNotifier {
     final t = raw.trim();
     _pendingCatalogSearch = t.isEmpty ? null : t;
     goTo(DesktopRouteKey.catalog);
+  }
+
+  void goToClientsWithSearch(String raw) {
+    final t = raw.trim();
+    _pendingClientSearch = t.isEmpty ? null : t;
+    goToAdminSuite(AdminSuiteRoute.clients);
+  }
+
+  String? takePendingClientSearch() {
+    final q = _pendingClientSearch;
+    _pendingClientSearch = null;
+    return q;
+  }
+
+  /// Dashboard global search — routes to the best admin screen for the query.
+  void performAdminGlobalSearch(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return;
+
+    if (t.contains('@')) {
+      goToClientsWithSearch(t);
+      return;
+    }
+
+    final lower = t.toLowerCase();
+    const serviceHints = [
+      'massage',
+      'facial',
+      'spa',
+      'therapy',
+      'treatment',
+      'usluga',
+      'service',
+    ];
+    if (serviceHints.any((h) => lower.contains(h))) {
+      goToCatalogWithSearch(t);
+      return;
+    }
+
+    setAppointmentSearchQuery(t);
   }
 
   void setTherapistSearchQuery(String raw) {

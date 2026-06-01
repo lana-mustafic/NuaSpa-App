@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -655,8 +656,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
   }
 }
 
+class _FocusDashboardSearchIntent extends Intent {
+  const _FocusDashboardSearchIntent();
+}
+
 /// Spacious enterprise header used only on the admin Dashboard route.
-class _CommandCenterDashboardHeader extends StatelessWidget {
+class _CommandCenterDashboardHeader extends StatefulWidget {
   const _CommandCenterDashboardHeader({
     required this.theme,
     required this.auth,
@@ -677,7 +682,38 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
   final VoidCallback onNotifications;
   final void Function(BuildContext) onProfile;
 
+  @override
+  State<_CommandCenterDashboardHeader> createState() =>
+      _CommandCenterDashboardHeaderState();
+}
+
+class _CommandCenterDashboardHeaderState
+    extends State<_CommandCenterDashboardHeader> {
+  final _searchFocus = FocusNode();
+
   static const _gap = 16.0;
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  ThemeData get theme => widget.theme;
+
+  AuthProvider get auth => widget.auth;
+
+  DateTime get day => widget.day;
+
+  int get notificationCount => widget.notificationCount;
+
+  String fmtDay(DateTime d) => widget.fmtDay(d);
+
+  VoidCallback get onPickDate => widget.onPickDate;
+
+  VoidCallback get onNotifications => widget.onNotifications;
+
+  void Function(BuildContext) get onProfile => widget.onProfile;
 
   Widget _titleBlock() {
     return Column(
@@ -842,7 +878,25 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final nav = context.read<DesktopNav>();
+
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _FocusDashboardSearchIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _FocusDashboardSearchIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _FocusDashboardSearchIntent: CallbackAction<_FocusDashboardSearchIntent>(
+            onInvoke: (_) {
+              _searchFocus.requestFocus();
+              return null;
+            },
+          ),
+        },
+        child: Padding(
       padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 92),
@@ -858,7 +912,9 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
               dashboardStyle: true,
               showShortcutHint: true,
               maxWidth: searchMaxW,
+              focusNode: _searchFocus,
               hintText: 'Search appointments, clients, services…',
+              onSubmitted: nav.performAdminGlobalSearch,
             );
 
             if (w >= 1100 && showSearch) {
@@ -899,6 +955,8 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
               ],
             );
           },
+        ),
+      ),
         ),
       ),
     );

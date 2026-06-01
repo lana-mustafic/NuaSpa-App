@@ -55,6 +55,17 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     _scheduleReload(immediate: true);
     _apiSearch.addListener(_onApiSearchChanged);
     _quickSearch.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final q = Provider.of<DesktopNav>(
+        context,
+        listen: false,
+      ).takePendingClientSearch();
+      if (q != null && q.isNotEmpty) {
+        _apiSearch.text = q;
+        _scheduleReload(immediate: true);
+      }
+    });
   }
 
   @override
