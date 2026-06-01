@@ -21,6 +21,7 @@ import '../../../models/admin/admin_client_row.dart';
 import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
 import '../../../models/admin/revenue_point.dart';
+import '../../../models/admin/activity_feed_item.dart';
 import '../../../models/admin/service_popularity.dart';
 import '../../../models/admin/top_spender.dart';
 import '../../../models/admin/rezervacija_calendar_item.dart';
@@ -1317,8 +1318,8 @@ class ApiService {
       final response = await _dio.get<dynamic>(
         'Izvjestaj/revenue',
         queryParameters: {
-          'from': from.toIso8601String(),
-          'to': to.toIso8601String(),
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
         },
       );
       final data = response.data;
@@ -1329,6 +1330,30 @@ class ApiService {
           .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getRevenueSeries: $e');
+      return [];
+    }
+  }
+
+  Future<List<ActivityFeedItem>> getAdminActivityFeed({
+    required DateTime day,
+    int take = 12,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/activity-feed',
+        queryParameters: {
+          'day': _apiDateOnly(day),
+          'take': take,
+        },
+      );
+      final data = response.data;
+      if (data is! List) return [];
+      return data
+          .whereType<Map>()
+          .map((e) => ActivityFeedItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAdminActivityFeed: $e');
       return [];
     }
   }

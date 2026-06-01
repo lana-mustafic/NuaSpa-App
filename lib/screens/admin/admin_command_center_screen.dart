@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/admin/admin_kpi.dart';
+import '../../models/admin/activity_feed_item.dart';
 import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/admin/revenue_point.dart';
 import '../../models/desktop_home_overview.dart';
@@ -35,6 +36,7 @@ class _CcData {
     required this.homeOverview,
     required this.clientStats,
     required this.reviews,
+    required this.activity,
     this.loadWarnings = const [],
   });
 
@@ -46,6 +48,7 @@ class _CcData {
   final DesktopHomeOverview? homeOverview;
   final AdminClientStats? clientStats;
   final AdminReviewsDashboard? reviews;
+  final List<_ActivityEvent> activity;
   final List<String> loadWarnings;
 }
 
@@ -131,7 +134,38 @@ class _ActivityEvent {
   final Color color;
 }
 
-List<_ActivityEvent> _buildActivityFeed(
+List<_ActivityEvent> _activityFromApi(List<ActivityFeedItem> items) {
+  return items.map((item) {
+    late final IconData icon;
+    late final Color color;
+    switch (item.tip) {
+      case 'payment':
+        icon = Icons.payments_outlined;
+        color = _DashUi.green;
+      case 'review':
+        icon = Icons.star_rounded;
+        color = _DashUi.orange;
+      case 'client':
+        icon = Icons.person_add_alt_1_outlined;
+        color = _DashUi.purple;
+      default:
+        icon = Icons.event_available_outlined;
+        color = _DashUi.blue;
+    }
+    final subtitle = item.podnaslov?.trim();
+    final text = subtitle != null && subtitle.isNotEmpty
+        ? '${item.naslov} · $subtitle'
+        : item.naslov;
+    return _ActivityEvent(
+      time: item.datumVrijeme,
+      text: text,
+      icon: icon,
+      color: color,
+    );
+  }).toList();
+}
+
+List<_ActivityEvent> _buildActivityFeedFallback(
   List<Rezervacija> bookings,
   AdminReviewsDashboard? reviews,
 ) {
@@ -268,9 +302,18 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       guard('Reviews summary', () => _api.getAdminReviewsDashboard(
             from: reviewsFrom,
             toInclusive: day,
-            pageSize: 12,
+            pageSize: 1,
           )),
+      guard('Activity feed', () => _api.getAdminActivityFeed(day: day)),
     ]);
+
+    final apiActivity = (results[8] as List<ActivityFeedItem>?) ?? const [];
+    final activityEvents = apiActivity.isNotEmpty
+        ? _activityFromApi(apiActivity)
+        : _buildActivityFeedFallback(
+            (results[3] as List<Rezervacija>?) ?? const [],
+            results[7] as AdminReviewsDashboard?,
+          );
 
     return _CcData(
       kpi: results[0] as AdminKpi?,
@@ -281,6 +324,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       homeOverview: results[5] as DesktopHomeOverview?,
       clientStats: results[6] as AdminClientStats?,
       reviews: results[7] as AdminReviewsDashboard?,
+      activity: activityEvents,
       loadWarnings: warnings,
     );
   }
@@ -392,7 +436,7 @@ class _DashboardLayout extends StatelessWidget {
         : 'No reviews yet';
 
     final bookingsMayBeTruncated = bookings.length >= 500;
-    final activity = _buildActivityFeed(bookings, reviews);
+    final activity = data.activity;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -812,10 +856,11 @@ class _AppointmentsChartCardState extends State<_AppointmentsChartCard> {
       pointCount = pts.length;
       confirmedSpots = [
         for (var i = 0; i < pts.length; i++)
-          FlSpot(i.toDouble(), pts[i].brojRezervacija.toDouble()),
+          FlSpot(i.toDouble(), pts[i].brojPotvrdjenih.toDouble()),
       ];
       cancelledSpots = [
-        for (var i = 0; i < pts.length; i++) FlSpot(i.toDouble(), 0),
+        for (var i = 0; i < pts.length; i++)
+          FlSpot(i.toDouble(), pts[i].brojOtkazanih.toDouble()),
       ];
       revenueSpots = [
         for (var i = 0; i < pts.length; i++)
@@ -886,13 +931,13 @@ class _AppointmentsChartCardState extends State<_AppointmentsChartCard> {
                   color: _DashUi.blue,
                   label: _period == _ChartPeriod.day
                       ? 'Confirmed (${widget.confirmed})'
-                      : 'Appointments',
+                      : 'Confirmed',
                 ),
                 _ChartLegendDot(
                   color: _DashUi.pink,
                   label: _period == _ChartPeriod.day
                       ? 'Cancelled (${widget.cancelled})'
-                      : 'Cancelled (day view)',
+                      : 'Cancelled',
                 ),
                 const _ChartLegendDot(
                   color: _DashUi.green,
