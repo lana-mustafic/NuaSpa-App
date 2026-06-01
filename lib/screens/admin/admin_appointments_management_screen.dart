@@ -2826,9 +2826,7 @@ class _AdminAppointmentCreateDialogState
                         ),
                         const SizedBox(width: 12),
                         _PremiumModalCreateButton(
-                          label: _isEdit
-                              ? 'Save Changes'
-                              : 'Create Appointment',
+                          label: _isEdit ? 'Save' : 'Create',
                           icon: _isEdit
                               ? Icons.save_rounded
                               : Icons.event_available_rounded,
@@ -3245,8 +3243,8 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-            width: 168,
             height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               gradient: LinearGradient(
@@ -3270,18 +3268,19 @@ class _PremiumModalCreateButtonState extends State<_PremiumModalCreateButton> {
                   : null,
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   widget.icon,
                   color: Colors.white.withValues(alpha: active ? 1 : 0.5),
-                  size: 22,
+                  size: 18,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Text(
                   widget.label,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: Colors.white.withValues(alpha: active ? 1 : 0.5),
                   ),
