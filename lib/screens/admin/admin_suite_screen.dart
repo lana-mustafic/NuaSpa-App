@@ -607,7 +607,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     final to = DateTime(_range.end.year, _range.end.month, _range.end.day);
     setState(() {
       _overviewFuture = () async {
-        final kpi = await _api.getAdminKpis(date: DateTime.now());
+        final kpi = await _api.getAdminKpis(date: to);
         final revenue = await _api.getRevenueSeries(from: from, to: to);
         final popularity = await _api.getServicePopularity(
           from: from,
