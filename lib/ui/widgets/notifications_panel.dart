@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/sistemska_notifikacija.dart';
 import '../../providers/notification_provider.dart';
-import '../../screens/news/obavijesti_screen.dart';
+import '../../screens/admin/admin_notifications_screen.dart';
 import 'notification_localization.dart';
 import '../theme/nua_luxury_tokens.dart';
 
@@ -220,7 +220,7 @@ class NotificationsDropdownPanel extends StatelessWidget {
               : null,
         ),
         Flexible(
-          child: _DropdownBody(
+          child: NotificationListBody(
             provider: provider,
             items: items,
           ),
@@ -231,7 +231,7 @@ class NotificationsDropdownPanel extends StatelessWidget {
             Navigator.push<void>(
               context,
               MaterialPageRoute<void>(
-                builder: (_) => const ObavijestiScreen(),
+                builder: (_) => const AdminNotificationsScreen(),
               ),
             );
           },
@@ -329,14 +329,18 @@ class _DropdownHeader extends StatelessWidget {
   }
 }
 
-class _DropdownBody extends StatelessWidget {
-  const _DropdownBody({
+/// Shared list area for dropdown and full-screen notifications.
+class NotificationListBody extends StatelessWidget {
+  const NotificationListBody({
+    super.key,
     required this.provider,
     required this.items,
+    this.shrinkWrap = true,
   });
 
   final NotificationProvider provider;
   final List<SistemskaNotifikacija> items;
+  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -348,14 +352,14 @@ class _DropdownBody extends StatelessWidget {
     }
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      shrinkWrap: true,
+      shrinkWrap: shrinkWrap,
       itemCount: items.length,
       separatorBuilder: (_, __) => Divider(
         height: 1,
         indent: 72,
         color: Colors.white.withValues(alpha: 0.06),
       ),
-      itemBuilder: (context, i) => _LuxuryNotificationRow(item: items[i]),
+      itemBuilder: (context, i) => LuxuryNotificationRow(item: items[i]),
     );
   }
 }
@@ -421,16 +425,16 @@ class _DropdownFooterState extends State<_DropdownFooter> {
   }
 }
 
-class _LuxuryNotificationRow extends StatefulWidget {
-  const _LuxuryNotificationRow({required this.item});
+class LuxuryNotificationRow extends StatefulWidget {
+  const LuxuryNotificationRow({super.key, required this.item});
 
   final SistemskaNotifikacija item;
 
   @override
-  State<_LuxuryNotificationRow> createState() => _LuxuryNotificationRowState();
+  State<LuxuryNotificationRow> createState() => _LuxuryNotificationRowState();
 }
 
-class _LuxuryNotificationRowState extends State<_LuxuryNotificationRow> {
+class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
   bool _hover = false;
 
   @override
@@ -642,21 +646,20 @@ class _NotificationSkeletonRow extends StatelessWidget {
   }
 }
 
-/// Mobile bottom sheet variant (unchanged behavior).
+/// Mobile bottom sheet — system notifications only.
 class NotificationsBottomSheet extends StatelessWidget {
   const NotificationsBottomSheet({
     super.key,
-    this.backgroundColor,
     this.padding = const EdgeInsets.fromLTRB(24, 20, 24, 24),
     this.maxHeightFactor = 0.85,
   });
 
-  final Color? backgroundColor;
   final EdgeInsets padding;
   final double maxHeightFactor;
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<NotificationProvider>();
     final sheetHeight = MediaQuery.sizeOf(context).height * maxHeightFactor;
 
     return SafeArea(
@@ -667,27 +670,52 @@ class NotificationsBottomSheet extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: _textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (provider.unreadCount > 0)
+                    TextButton(
+                      onPressed: () => provider.markAllRead(),
+                      child: const Text('Mark all as read'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bookings, payments, and account activity.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 12),
               Expanded(
-                child: NotificationsPanel(expandList: true, useDropdownStyle: true),
+                child: NotificationListBody(
+                  provider: provider,
+                  items: provider.notifikacije,
+                ),
               ),
-              const SizedBox(height: 12),
-              Divider(
-                height: 1,
-                color: Colors.white.withValues(alpha: 0.12),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
+              const SizedBox(height: 8),
+              OutlinedButton(
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.push<void>(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (_) => const ObavijestiScreen(),
+                      builder: (_) => const AdminNotificationsScreen(),
                     ),
                   );
                 },
-                icon: const Icon(Icons.newspaper_outlined),
-                label: const Text('News & announcements'),
+                child: const Text('View all notifications'),
               ),
             ],
           ),
@@ -704,17 +732,8 @@ class NotificationVisual {
   final Color color;
 }
 
-class NotificationsPanel extends StatelessWidget {
-  const NotificationsPanel({
-    super.key,
-    this.expandList = false,
-    this.listHeight = 360,
-    this.useDropdownStyle = false,
-  });
-
-  final bool expandList;
-  final double listHeight;
-  final bool useDropdownStyle;
+abstract final class NotificationsPanel {
+  NotificationsPanel._();
 
   static IconData iconForTip(String tip) => visualForTip(tip).icon;
 
@@ -781,132 +800,5 @@ class NotificationsPanel extends StatelessWidget {
       return d == 1 ? '1d ago' : '${d}d ago';
     }
     return formatDt(dt);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (useDropdownStyle) {
-      return NotificationsDropdownPanel(
-        onClose: () => Navigator.maybePop(context),
-      );
-    }
-
-    final provider = context.watch<NotificationProvider>();
-    final items = provider.notifikacije;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'Notifications',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: _textPrimary,
-              ),
-            ),
-            const Spacer(),
-            if (provider.unreadCount > 0)
-              TextButton(
-                onPressed: () => provider.markAllRead(),
-                child: const Text('Mark all as read'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Auto-refreshes every 15 seconds.',
-          style: TextStyle(
-            fontSize: 13,
-            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (expandList)
-          Expanded(child: _buildLegacyList(context, provider, items))
-        else
-          SizedBox(
-            height: listHeight,
-            child: _buildLegacyList(context, provider, items),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildLegacyList(
-    BuildContext context,
-    NotificationProvider provider,
-    List<SistemskaNotifikacija> items,
-  ) {
-    if (items.isEmpty) {
-      return Center(
-        child: Text(
-          provider.loading ? 'Loading…' : 'No notifications.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-        ),
-      );
-    }
-
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, i) => _LegacyNotificationTile(item: items[i]),
-    );
-  }
-}
-
-class _LegacyNotificationTile extends StatelessWidget {
-  const _LegacyNotificationTile({required this.item});
-
-  final SistemskaNotifikacija item;
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<NotificationProvider>();
-    final unread = !item.procitana;
-    final visual = NotificationsPanel.visualFor(item);
-
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      onTap: unread ? () => provider.markRead(item.id) : null,
-      leading: Icon(visual.icon, color: unread ? visual.color : visual.color.withValues(alpha: 0.45)),
-      title: Text(
-        NotificationLocalization.title(item.naslov),
-        style: TextStyle(
-          fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
-          color: _textPrimary,
-        ),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 4),
-          Text(
-            NotificationLocalization.body(item.tekst),
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            NotificationsPanel.formatRelative(item.datumVrijeme),
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.white.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-      ),
-      trailing: unread
-          ? Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: _purple,
-                shape: BoxShape.circle,
-              ),
-            )
-          : null,
-    );
   }
 }

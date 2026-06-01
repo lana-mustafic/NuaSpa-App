@@ -16,7 +16,6 @@ import '../../../models/recenzija.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/cancel_rezervacija_result.dart';
 import '../../../models/sistemska_notifikacija.dart';
-import '../../../models/obavijest.dart';
 import '../../../models/admin/admin_client_row.dart';
 import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
@@ -1698,22 +1697,6 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.markAllSistemskaNotifikacijeRead: $e');
       return false;
-    }
-  }
-
-  Future<List<Obavijest>> getObavijesti() async {
-    try {
-      final response = await _dio.get<dynamic>(
-        'Obavijest',
-        queryParameters: {'pageSize': 50},
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => Obavijest.fromJson(json),
-      );
-    } catch (e) {
-      debugPrint('Greška u ApiService.getObavijesti: $e');
-      return [];
     }
   }
 }

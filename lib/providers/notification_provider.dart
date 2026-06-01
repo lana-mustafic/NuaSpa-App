@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/api/services/api_service.dart';
-import '../models/obavijest.dart';
 import '../models/sistemska_notifikacija.dart';
 
 /// Auto-refresh notifikacija (polling svakih 15s) — bez ručnog refresha.
@@ -17,11 +16,9 @@ class NotificationProvider extends ChangeNotifier {
   bool _loading = false;
 
   List<SistemskaNotifikacija> _notifikacije = [];
-  List<Obavijest> _obavijesti = [];
   int _unreadCount = 0;
 
   List<SistemskaNotifikacija> get notifikacije => _notifikacije;
-  List<Obavijest> get obavijesti => _obavijesti;
   int get unreadCount => _unreadCount;
   bool get loading => _loading;
 
@@ -33,7 +30,6 @@ class NotificationProvider extends ChangeNotifier {
     } else {
       _stopPolling();
       _notifikacije = [];
-      _obavijesti = [];
       _unreadCount = 0;
       notifyListeners();
     }
@@ -55,13 +51,11 @@ class NotificationProvider extends ChangeNotifier {
     _loading = true;
     try {
       final results = await Future.wait([
-        _api.getSistemskaNotifikacije(take: 50),
+        _api.getSistemskaNotifikacije(take: 100),
         _api.getSistemskaNotifikacijeUnreadCount(),
-        _api.getObavijesti(),
       ]);
       _notifikacije = results[0] as List<SistemskaNotifikacija>;
       _unreadCount = results[1] as int;
-      _obavijesti = results[2] as List<Obavijest>;
       notifyListeners();
     } catch (e) {
       debugPrint('NotificationProvider refresh: $e');
