@@ -2585,10 +2585,16 @@ class _AdminAppointmentCreateDialogState
             widget.data.services.isEmpty ||
             widget.data.therapists.isEmpty;
 
+    final maxDialogH = MediaQuery.sizeOf(context).height * 0.92;
+
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 760, maxWidth: 820),
+        constraints: BoxConstraints(
+          minWidth: 760,
+          maxWidth: 820,
+          maxHeight: maxDialogH,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
@@ -2608,7 +2614,7 @@ class _AdminAppointmentCreateDialogState
                   ),
                 ],
               ),
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(42, 36, 42, 36),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2877,6 +2883,7 @@ class _AdminAppointmentCreateDialogState
           ),
         ),
       ),
+    ),
     );
   }
 
