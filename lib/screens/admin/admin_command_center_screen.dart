@@ -13,7 +13,6 @@ import '../../models/desktop_home_overview.dart';
 import '../../models/rezervacija.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
-import '../../ui/widgets/luxury/luxury_mini_sparkline.dart';
 
 /// NuaSpa admin operational dashboard — live backend data, luxury SaaS layout.
 class AdminCommandCenterScreen extends StatefulWidget {
@@ -50,18 +49,19 @@ class _CcData {
   final List<String> loadWarnings;
 }
 
+enum _ChartPeriod { day, week, month }
+
 abstract final class _DashUi {
   static const textPrimary = Color(0xFFF5F3FA);
   static const textSecondary = Color(0xA6FFFFFF);
   static const purple = Color(0xFF7B4DFF);
-  static const lavender = Color(0xFF9D6BFF);
+  static const blue = Color(0xFF3B82F6);
   static const green = Color(0xFF22C55E);
   static const orange = Color(0xFFF59E0B);
   static const pink = Color(0xFFEC4899);
-  static const cardRadius = 24.0;
-  static const kpiHeight = 180.0;
-  static const sidebarWidth = 360.0;
-  static const gap = 24.0;
+  static const cardRadius = 18.0;
+  static const kpiHeight = 140.0;
+  static const gap = 20.0;
 }
 
 String _pctTrendLabel(num current, num previous) {
@@ -103,28 +103,84 @@ String _growthArrow(num current, num previous) {
   return label;
 }
 
-List<double> _bookingCountSpark(List<RevenuePoint> rev) {
-  if (rev.isEmpty) return const [0, 0, 1];
-  final take = rev.length <= 14 ? rev : rev.sublist(rev.length - 14);
-  return take.map((p) => p.brojRezervacija.toDouble()).toList();
-}
-
-List<double> _sparkRevenue(List<RevenuePoint> pts, double fallback) {
-  if (pts.isEmpty) return [fallback, fallback * 1.05];
-  final take = pts.length <= 14 ? pts : pts.sublist(pts.length - 14);
-  final vals = take.map((p) => p.prihod).toList();
-  if (vals.every((v) => v <= 0)) return [fallback, fallback * 1.08];
-  return vals;
-}
-
-List<int> _hourlyBuckets(List<Rezervacija> bookings) {
+List<int> _hourlyBuckets(
+  List<Rezervacija> bookings, {
+  required bool cancelled,
+}) {
   final buckets = List<int>.filled(7, 0);
   for (final r in bookings) {
+    if (r.isOtkazana != cancelled) continue;
     final h = r.datumRezervacije.toLocal().hour;
     final idx = h >= 20 ? 5 : (h ~/ 4).clamp(0, 5);
     buckets[idx]++;
   }
   return buckets;
+}
+
+class _ActivityEvent {
+  const _ActivityEvent({
+    required this.time,
+    required this.text,
+    required this.icon,
+    required this.color,
+  });
+
+  final DateTime time;
+  final String text;
+  final IconData icon;
+  final Color color;
+}
+
+List<_ActivityEvent> _buildActivityFeed(
+  List<Rezervacija> bookings,
+  AdminReviewsDashboard? reviews,
+) {
+  final events = <_ActivityEvent>[];
+
+  for (final r in bookings) {
+    final client = r.korisnikIme?.trim();
+    final name = (client != null && client.isNotEmpty) ? client : 'A client';
+    final service = r.uslugaNaziv?.trim();
+    final svc = (service != null && service.isNotEmpty) ? service : 'appointment';
+
+    if (r.isOtkazana) {
+      events.add(_ActivityEvent(
+        time: r.otkazanaAt ?? r.datumRezervacije,
+        icon: Icons.event_busy_outlined,
+        color: _DashUi.pink,
+        text: '$name cancelled $svc',
+      ));
+      continue;
+    }
+
+    events.add(_ActivityEvent(
+      time: r.datumRezervacije,
+      icon: Icons.event_available_outlined,
+      color: _DashUi.blue,
+      text: '$name booked $svc',
+    ));
+
+    if (r.isPlacena) {
+      events.add(_ActivityEvent(
+        time: r.datumRezervacije,
+        icon: Icons.payments_outlined,
+        color: _DashUi.green,
+        text: 'Payment completed · $svc',
+      ));
+    }
+  }
+
+  for (final rv in reviews?.redovi ?? const <AdminReviewRow>[]) {
+    events.add(_ActivityEvent(
+      time: rv.createdAt,
+      icon: Icons.star_rounded,
+      color: _DashUi.orange,
+      text: 'New review received (${rv.ocjena}★) · ${rv.korisnikPunoIme}',
+    ));
+  }
+
+  events.sort((a, b) => b.time.compareTo(a.time));
+  return events.take(8).toList();
 }
 
 String _formatTimeAmPm(DateTime d) {
@@ -212,7 +268,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       guard('Reviews summary', () => _api.getAdminReviewsDashboard(
             from: reviewsFrom,
             toInclusive: day,
-            pageSize: 1,
+            pageSize: 12,
           )),
     ]);
 
@@ -316,8 +372,6 @@ class _DashboardLayout extends StatelessWidget {
 
     final confirmed =
         bookings.where((b) => b.isPotvrdjena && !b.isOtkazana).length;
-    final pending =
-        bookings.where((b) => !b.isPotvrdjena && !b.isOtkazana).length;
     final cancelled = bookings.where((b) => b.isOtkazana).length;
 
     final isToday = _isSameCalendarDay(
@@ -329,155 +383,120 @@ class _DashboardLayout extends StatelessWidget {
     final revenueLabel =
         isToday ? 'Revenue Today' : 'Revenue (${_formatDashboardDay(filterDay)})';
 
-    final ratingGrowth = ratingPrev != null
-        ? '${(rating - ratingPrev) >= 0 ? '+' : ''}${(rating - ratingPrev).toStringAsFixed(1)} vs prior 30d avg'
-        : 'All-time average';
+    final reviewCount = reviews?.ukupno ?? 0;
+    final clientsGrowth = newClients7d > 0
+        ? '+$newClients7d this week'
+        : 'No new clients this week';
+    final ratingGrowth = reviewCount > 0
+        ? '$reviewCount reviews'
+        : 'No reviews yet';
 
     final bookingsMayBeTruncated = bookings.length >= 500;
+    final activity = _buildActivityFeed(bookings, reviews);
 
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF07040F), Color(0xFF120A24)],
+          colors: [Color(0xFF07040F), Color(0xFF0E0818)],
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 1300;
-          final main = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (data.loadWarnings.isNotEmpty || bookingsMayBeTruncated)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: _DashUi.gap),
-                  child: _DashLoadWarningsBanner(
-                    messages: [
-                      ...data.loadWarnings,
-                      if (bookingsMayBeTruncated)
-                        'Showing first 500 appointments for this day. Open Appointments for the full list.',
-                    ],
-                  ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (data.loadWarnings.isNotEmpty || bookingsMayBeTruncated)
+              Padding(
+                padding: const EdgeInsets.only(bottom: _DashUi.gap),
+                child: _DashLoadWarningsBanner(
+                  messages: [
+                    ...data.loadWarnings,
+                    if (bookingsMayBeTruncated)
+                      'Showing first 500 appointments for this day. Open Appointments for the full list.',
+                  ],
                 ),
-              _KpiRow(
-                cards: [
-                  _DashboardKpiSpec(
-                    label: bookingsLabel,
-                    value: '$bookingsToday',
-                    growth: _growthArrow(bookingsToday, bookingsYesterday),
-                    trendUp: _pctTrendUp(bookingsToday, bookingsYesterday),
-                    icon: Icons.calendar_today_outlined,
-                    accent: _DashUi.purple,
-                    sparkline: _bookingCountSpark(rev),
-                  ),
-                  _DashboardKpiSpec(
-                    label: revenueLabel,
-                    value: '${revenueToday.toStringAsFixed(0)} KM',
-                    growth:
-                        '${_growthArrow(revenueToday, revenueYesterday)} · payments',
-                    trendUp: _pctTrendUp(revenueToday, revenueYesterday),
-                    icon: Icons.payments_outlined,
-                    accent: _DashUi.green,
-                    sparkline: _sparkRevenue(rev, revenueToday),
-                  ),
-                  _DashboardKpiSpec(
-                    label: 'Total Clients',
-                    value: '$activeClients',
-                    growth: newClients7d > 0
-                        ? '$newClients7d new (7 days before ${_formatDashboardDay(filterDay)})'
-                        : 'No new registrations in last 7 days',
-                    trendUp: newClients7d > 0 ? true : null,
-                    icon: Icons.people_outline,
-                    accent: _DashUi.orange,
-                    sparkline: [
-                      math.max(0, activeClients - newClients7d).toDouble(),
-                      activeClients.toDouble(),
-                    ],
-                  ),
-                  _DashboardKpiSpec(
-                    label: 'Average Rating',
-                    value: rating > 0
-                        ? '${rating.toStringAsFixed(1)} / 5'
-                        : '—',
-                    growth: ratingGrowth,
-                    trendUp: ratingPrev != null
-                        ? rating >= ratingPrev
-                        : null,
-                    icon: Icons.star_rounded,
-                    accent: _DashUi.pink,
-                    sparkline: [
-                      if (ratingPrev != null) ratingPrev,
-                      rating,
-                      rating,
-                    ],
-                  ),
-                ],
               ),
-              const SizedBox(height: _DashUi.gap),
-              LayoutBuilder(
-                builder: (context, mc) {
-                  final stack = mc.maxWidth < 900;
-                  final chart = _TodayOverviewCard(
-                    bookings: bookings,
-                    filterDay: filterDay,
-                  );
-                  final actions = _QuickActionsCard();
-                  if (stack) {
-                    return Column(
-                      children: [
-                        chart,
-                        const SizedBox(height: _DashUi.gap),
-                        actions,
-                      ],
-                    );
-                  }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            _KpiRow(
+              cards: [
+                _DashboardKpiSpec(
+                  label: bookingsLabel,
+                  value: '$bookingsToday',
+                  growth: _growthArrow(bookingsToday, bookingsYesterday),
+                  trendUp: _pctTrendUp(bookingsToday, bookingsYesterday),
+                  icon: Icons.calendar_today_outlined,
+                  accent: _DashUi.blue,
+                ),
+                _DashboardKpiSpec(
+                  label: revenueLabel,
+                  value: '${revenueToday.toStringAsFixed(0)} KM',
+                  growth: _growthArrow(revenueToday, revenueYesterday),
+                  trendUp: _pctTrendUp(revenueToday, revenueYesterday),
+                  icon: Icons.payments_outlined,
+                  accent: _DashUi.green,
+                ),
+                _DashboardKpiSpec(
+                  label: 'Clients',
+                  value: '$activeClients',
+                  growth: clientsGrowth,
+                  trendUp: newClients7d > 0 ? true : null,
+                  icon: Icons.people_outline,
+                  accent: _DashUi.purple,
+                ),
+                _DashboardKpiSpec(
+                  label: 'Rating',
+                  value: rating > 0 ? rating.toStringAsFixed(1) : '—',
+                  growth: ratingGrowth,
+                  trendUp: ratingPrev != null ? rating >= ratingPrev : null,
+                  icon: Icons.star_rounded,
+                  accent: _DashUi.orange,
+                ),
+              ],
+            ),
+            const SizedBox(height: _DashUi.gap),
+            LayoutBuilder(
+              builder: (context, mc) {
+                final stack = mc.maxWidth < 1024;
+                final chart = _AppointmentsChartCard(
+                  bookings: bookings,
+                  revenue: rev,
+                  filterDay: filterDay,
+                  confirmed: confirmed,
+                  cancelled: cancelled,
+                );
+                final side = _DashboardSideColumn(
+                  bookings: bookings,
+                  activity: activity,
+                );
+                if (stack) {
+                  return Column(
                     children: [
-                      Expanded(flex: 3, child: chart),
-                      const SizedBox(width: _DashUi.gap),
-                      Expanded(flex: 2, child: actions),
+                      chart,
+                      const SizedBox(height: _DashUi.gap),
+                      side,
                     ],
                   );
-                },
-              ),
-              const SizedBox(height: _DashUi.gap),
-              _RecentAppointmentsCard(
-                bookings: bookings,
-                filterDay: filterDay,
-              ),
-            ],
-          );
-
-          final sidebar = _DashboardSidebar(
-            bookings: bookings,
-            confirmed: confirmed,
-            pending: pending,
-            cancelled: cancelled,
-          );
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 40),
-            child: wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: main),
-                      const SizedBox(width: _DashUi.gap),
-                      SizedBox(width: _DashUi.sidebarWidth, child: sidebar),
-                    ],
-                  )
-                : Column(
+                }
+                return IntrinsicHeight(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      main,
-                      const SizedBox(height: _DashUi.gap),
-                      sidebar,
+                      Expanded(flex: 7, child: chart),
+                      const SizedBox(width: _DashUi.gap),
+                      Expanded(flex: 3, child: side),
                     ],
                   ),
-          );
-        },
+                );
+              },
+            ),
+            const SizedBox(height: _DashUi.gap),
+            _RecentAppointmentsCard(
+              bookings: bookings,
+              filterDay: filterDay,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -535,14 +554,14 @@ class _DashGlass extends StatelessWidget {
       child: Container(
         padding: padding ?? const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.035),
+          color: Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
           boxShadow: [
             BoxShadow(
-              color: _DashUi.purple.withValues(alpha: 0.12),
-              blurRadius: 60,
-              offset: const Offset(0, 20),
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -559,7 +578,6 @@ class _DashboardKpiSpec {
     required this.growth,
     required this.icon,
     required this.accent,
-    required this.sparkline,
     this.trendUp,
   });
 
@@ -568,7 +586,6 @@ class _DashboardKpiSpec {
   final String growth;
   final IconData icon;
   final Color accent;
-  final List<double> sparkline;
   final bool? trendUp;
 }
 
@@ -614,8 +631,6 @@ class _DashboardKpiCard extends StatefulWidget {
 }
 
 class _DashboardKpiCardState extends State<_DashboardKpiCard> {
-  bool _hover = false;
-
   @override
   Widget build(BuildContext context) {
     final s = widget.spec;
@@ -625,152 +640,274 @@ class _DashboardKpiCardState extends State<_DashboardKpiCard> {
         ? _DashUi.green
         : _DashUi.pink;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: double.infinity,
-        transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
-        child: _DashGlass(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: s.accent.withValues(alpha: 0.18),
-                  border: Border.all(
-                    color: s.accent.withValues(alpha: 0.35),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: s.accent.withValues(
-                        alpha: _hover ? 0.45 : 0.25,
-                      ),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: Icon(s.icon, color: s.accent, size: 20),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                s.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _DashUi.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                s.value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: _DashUi.textPrimary,
-                  letterSpacing: -0.5,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                s.growth,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: trendColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: LuxuryMiniSparkline(
-                    values: s.sparkline,
-                    height: 32,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TodayOverviewCard extends StatelessWidget {
-  const _TodayOverviewCard({
-    required this.bookings,
-    required this.filterDay,
-  });
-
-  final List<Rezervacija> bookings;
-  final DateTime filterDay;
-
-  static const _labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
-
-  @override
-  Widget build(BuildContext context) {
-    final buckets = _hourlyBuckets(bookings);
-    final peak = buckets.isEmpty ? 0 : buckets.reduce(math.max);
-    final maxY = math.max(20.0, peak.toDouble());
-    final spots = [
-      for (var i = 0; i < buckets.length; i++)
-        FlSpot(i.toDouble(), buckets[i].toDouble()),
-    ];
-
     return _DashGlass(
-      child: SizedBox(
-        height: 320,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 3,
+            height: 72,
+            decoration: BoxDecoration(
+              color: s.accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Appointments overview',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _DashUi.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDashboardDay(filterDay),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        s.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: _DashUi.textSecondary,
                         ),
                       ),
-                    ],
+                    ),
+                    Icon(s.icon, color: s.accent, size: 18),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  s.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: s.accent == _DashUi.green
+                        ? _DashUi.green
+                        : _DashUi.textPrimary,
+                    letterSpacing: -0.6,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  s.growth,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: trendColor,
+                    height: 1.25,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppointmentsChartCard extends StatefulWidget {
+  const _AppointmentsChartCard({
+    required this.bookings,
+    required this.revenue,
+    required this.filterDay,
+    required this.confirmed,
+    required this.cancelled,
+  });
+
+  final List<Rezervacija> bookings;
+  final List<RevenuePoint> revenue;
+  final DateTime filterDay;
+  final int confirmed;
+  final int cancelled;
+
+  @override
+  State<_AppointmentsChartCard> createState() => _AppointmentsChartCardState();
+}
+
+class _AppointmentsChartCardState extends State<_AppointmentsChartCard> {
+  _ChartPeriod _period = _ChartPeriod.day;
+
+  static const _dayLabels = [
+    '00:00',
+    '04:00',
+    '08:00',
+    '12:00',
+    '16:00',
+    '20:00',
+    '24:00',
+  ];
+
+  List<RevenuePoint> get _seriesPoints {
+    final sorted = [...widget.revenue]
+      ..sort((a, b) => a.datum.compareTo(b.datum));
+    if (_period == _ChartPeriod.week) {
+      return sorted.length <= 7
+          ? sorted
+          : sorted.sublist(sorted.length - 7);
+    }
+    if (_period == _ChartPeriod.month) {
+      return sorted.length <= 30
+          ? sorted
+          : sorted.sublist(sorted.length - 30);
+    }
+    return sorted;
+  }
+
+  String _xLabel(int index, int count) {
+    if (_period == _ChartPeriod.day) {
+      return index >= 0 && index < _dayLabels.length ? _dayLabels[index] : '';
+    }
+    if (index < 0 || index >= count) return '';
+    final pts = _seriesPoints;
+    if (index >= pts.length) return '';
+    final d = pts[index].datum;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final confirmedBuckets = _hourlyBuckets(
+      widget.bookings,
+      cancelled: false,
+    );
+    final cancelledBuckets = _hourlyBuckets(
+      widget.bookings,
+      cancelled: true,
+    );
+
+    final int pointCount;
+    final List<FlSpot> confirmedSpots;
+    final List<FlSpot> cancelledSpots;
+    final List<FlSpot> revenueSpots;
+
+    if (_period == _ChartPeriod.day) {
+      pointCount = confirmedBuckets.length;
+      confirmedSpots = [
+        for (var i = 0; i < pointCount; i++)
+          FlSpot(i.toDouble(), confirmedBuckets[i].toDouble()),
+      ];
+      cancelledSpots = [
+        for (var i = 0; i < pointCount; i++)
+          FlSpot(i.toDouble(), cancelledBuckets[i].toDouble()),
+      ];
+      final revToday = widget.revenue
+          .where((p) => _isSameCalendarDay(p.datum, widget.filterDay))
+          .fold<double>(0, (a, p) => a + p.prihod);
+      revenueSpots = [
+        for (var i = 0; i < pointCount; i++)
+          FlSpot(i.toDouble(), revToday / math.max(pointCount, 1)),
+      ];
+    } else {
+      final pts = _seriesPoints;
+      pointCount = pts.length;
+      confirmedSpots = [
+        for (var i = 0; i < pts.length; i++)
+          FlSpot(i.toDouble(), pts[i].brojRezervacija.toDouble()),
+      ];
+      cancelledSpots = [
+        for (var i = 0; i < pts.length; i++) FlSpot(i.toDouble(), 0),
+      ];
+      revenueSpots = [
+        for (var i = 0; i < pts.length; i++)
+          FlSpot(i.toDouble(), pts[i].prihod),
+      ];
+    }
+
+    final allY = [
+      ...confirmedSpots.map((s) => s.y),
+      ...cancelledSpots.map((s) => s.y),
+    ];
+    final maxBookings = allY.isEmpty ? 4.0 : allY.reduce(math.max);
+    final maxY = math.max(4.0, maxBookings * 1.2);
+
+    final maxRevenue = revenueSpots.isEmpty
+        ? 1.0
+        : revenueSpots.map((s) => s.y).reduce(math.max);
+    final revenueScale = maxRevenue <= 0 ? 1.0 : maxY / maxRevenue;
+    final scaledRevenue = [
+      for (final s in revenueSpots)
+        FlSpot(s.x, s.y * revenueScale),
+    ];
+
+    return _DashGlass(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+      child: SizedBox(
+        height: 340,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Appointments Overview',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _DashUi.textPrimary,
+                    ),
+                  ),
+                ),
+                _ChartTab(
+                  label: 'Day',
+                  selected: _period == _ChartPeriod.day,
+                  onTap: () => setState(() => _period = _ChartPeriod.day),
+                ),
+                const SizedBox(width: 6),
+                _ChartTab(
+                  label: 'Week',
+                  selected: _period == _ChartPeriod.week,
+                  onTap: () => setState(() => _period = _ChartPeriod.week),
+                ),
+                const SizedBox(width: 6),
+                _ChartTab(
+                  label: 'Month',
+                  selected: _period == _ChartPeriod.month,
+                  onTap: () => setState(() => _period = _ChartPeriod.month),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 6,
+              children: [
+                _ChartLegendDot(
+                  color: _DashUi.blue,
+                  label: _period == _ChartPeriod.day
+                      ? 'Confirmed (${widget.confirmed})'
+                      : 'Appointments',
+                ),
+                _ChartLegendDot(
+                  color: _DashUi.pink,
+                  label: _period == _ChartPeriod.day
+                      ? 'Cancelled (${widget.cancelled})'
+                      : 'Cancelled (day view)',
+                ),
+                const _ChartLegendDot(
+                  color: _DashUi.green,
+                  label: 'Revenue trend',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: LineChart(
                 LineChartData(
                   minY: 0,
                   maxY: maxY,
+                  minX: 0,
+                  maxX: math.max(0, pointCount - 1).toDouble(),
                   gridData: FlGridData(
                     drawVerticalLine: false,
                     horizontalInterval: maxY / 4,
@@ -784,12 +921,12 @@ class _TodayOverviewCard extends StatelessWidget {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 28,
+                        reservedSize: 30,
                         interval: maxY / 4,
                         getTitlesWidget: (v, _) => Text(
                           v.toInt().toString(),
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: _DashUi.textSecondary,
                             fontWeight: FontWeight.w600,
                           ),
@@ -799,19 +936,17 @@ class _TodayOverviewCard extends StatelessWidget {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 28,
-                        interval: 1,
+                        reservedSize: 26,
+                        interval: _period == _ChartPeriod.month ? 5 : 1,
                         getTitlesWidget: (v, _) {
-                          final i = v.round();
-                          if (i < 0 || i >= _labels.length) {
-                            return const SizedBox.shrink();
-                          }
+                          final label = _xLabel(v.round(), pointCount);
+                          if (label.isEmpty) return const SizedBox.shrink();
                           return Padding(
-                            padding: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              _labels[i],
+                              label,
                               style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 color: _DashUi.textSecondary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -823,46 +958,34 @@ class _TodayOverviewCard extends StatelessWidget {
                     topTitles: const AxisTitles(),
                     rightTitles: const AxisTitles(),
                   ),
-                  lineTouchData: LineTouchData(
-                    enabled: true,
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipItems: (touched) => touched.map((t) {
-                        final i = t.spotIndex;
-                        final label = i >= 0 && i < _labels.length
-                            ? _labels[i]
-                            : '';
-                        return LineTooltipItem(
-                          '$label — ${t.y.toInt()} bookings',
-                          const TextStyle(
-                            color: _DashUi.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
                   lineBarsData: [
                     LineChartBarData(
-                      spots: spots,
+                      spots: confirmedSpots,
                       isCurved: true,
-                      barWidth: 3,
-                      color: _DashUi.purple,
-                      dotData: const FlDotData(show: true),
+                      barWidth: 2.5,
+                      color: _DashUi.blue,
+                      dotData: FlDotData(
+                        show: _period == _ChartPeriod.day,
+                      ),
                       belowBarData: BarAreaData(
                         show: true,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            _DashUi.purple.withValues(alpha: 0.35),
-                            _DashUi.purple.withValues(alpha: 0.02),
-                          ],
-                        ),
+                        color: _DashUi.blue.withValues(alpha: 0.08),
                       ),
-                      shadow: Shadow(
-                        color: _DashUi.purple.withValues(alpha: 0.5),
-                        blurRadius: 16,
-                      ),
+                    ),
+                    LineChartBarData(
+                      spots: cancelledSpots,
+                      isCurved: true,
+                      barWidth: 2,
+                      color: _DashUi.pink,
+                      dotData: const FlDotData(show: false),
+                    ),
+                    LineChartBarData(
+                      spots: scaledRevenue,
+                      isCurved: true,
+                      barWidth: 2,
+                      color: _DashUi.green,
+                      dotData: const FlDotData(show: false),
+                      dashArray: [6, 4],
                     ),
                   ],
                 ),
@@ -875,73 +998,147 @@ class _TodayOverviewCard extends StatelessWidget {
   }
 }
 
+class _ChartTab extends StatelessWidget {
+  const _ChartTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? _DashUi.purple.withValues(alpha: 0.22)
+                : Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected
+                  ? _DashUi.purple.withValues(alpha: 0.5)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: selected ? _DashUi.textPrimary : _DashUi.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartLegendDot extends StatelessWidget {
+  const _ChartLegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: _DashUi.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardSideColumn extends StatelessWidget {
+  const _DashboardSideColumn({
+    required this.bookings,
+    required this.activity,
+  });
+
+  final List<Rezervacija> bookings;
+  final List<_ActivityEvent> activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _QuickActionsCard(),
+        const SizedBox(height: _DashUi.gap),
+        _UpcomingTodayCard(bookings: bookings),
+        const SizedBox(height: _DashUi.gap),
+        _RecentActivityCard(events: activity),
+      ],
+    );
+  }
+}
+
 class _QuickActionsCard extends StatelessWidget {
+  const _QuickActionsCard();
+
   @override
   Widget build(BuildContext context) {
     final nav = context.read<DesktopNav>();
-    final items = [
-      _QuickActionTile(
-        icon: Icons.add_circle_outline,
-        label: 'New Appointment',
-        color: _DashUi.purple,
-        onTap: () => nav.requestAppointmentCreate(),
-      ),
-      _QuickActionTile(
-        icon: Icons.person_add_alt_1_outlined,
-        label: 'Add Client',
-        color: _DashUi.lavender,
-        onTap: () => nav.requestClientAdd(),
-      ),
-      _QuickActionTile(
-        icon: Icons.spa_outlined,
-        label: 'Add Service',
-        color: const Color(0xFF60A5FA),
-        onTap: () => nav.requestServiceAdd(),
-      ),
-      _QuickActionTile(
-        icon: Icons.calendar_month_outlined,
-        label: 'Open Calendar',
-        color: _DashUi.pink,
-        onTap: () => nav.goTo(DesktopRouteKey.adminCalendar),
-      ),
-    ];
-
-    Widget rowPair(_QuickActionTile a, _QuickActionTile b) {
-      return Row(
-        children: [
-          Expanded(child: a),
-          const SizedBox(width: 8),
-          Expanded(child: b),
-        ],
-      );
-    }
 
     return _DashGlass(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
             'Quick Actions',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               color: _DashUi.textPrimary,
             ),
           ),
-          const SizedBox(height: 12),
-          rowPair(items[0], items[1]),
+          const SizedBox(height: 10),
+          _PrimaryActionButton(
+            icon: Icons.add_circle_outline,
+            label: 'New Appointment',
+            color: _DashUi.purple,
+            onTap: () => nav.requestAppointmentCreate(),
+          ),
           const SizedBox(height: 8),
-          rowPair(items[2], items[3]),
+          _PrimaryActionButton(
+            icon: Icons.person_add_alt_1_outlined,
+            label: 'Add Client',
+            color: _DashUi.purple,
+            onTap: () => nav.requestClientAdd(),
+          ),
         ],
       ),
     );
   }
 }
 
-class _QuickActionTile extends StatefulWidget {
-  const _QuickActionTile({
+class _PrimaryActionButton extends StatefulWidget {
+  const _PrimaryActionButton({
     required this.icon,
     required this.label,
     required this.color,
@@ -954,10 +1151,10 @@ class _QuickActionTile extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_QuickActionTile> createState() => _QuickActionTileState();
+  State<_PrimaryActionButton> createState() => _PrimaryActionButtonState();
 }
 
-class _QuickActionTileState extends State<_QuickActionTile> {
+class _PrimaryActionButtonState extends State<_PrimaryActionButton> {
   bool _hover = false;
 
   @override
@@ -969,49 +1166,92 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            duration: const Duration(milliseconds: 160),
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: widget.color.withValues(alpha: _hover ? 0.2 : 0.1),
+              borderRadius: BorderRadius.circular(12),
+              color: widget.color.withValues(alpha: _hover ? 0.28 : 0.18),
               border: Border.all(
-                color: widget.color.withValues(alpha: _hover ? 0.5 : 0.28),
+                color: widget.color.withValues(alpha: _hover ? 0.65 : 0.45),
               ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: widget.color.withValues(alpha: 0.35),
-                        blurRadius: 14,
-                      ),
-                    ]
-                  : null,
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(widget.icon, color: widget.color, size: 18),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: _DashUi.textPrimary,
-                      height: 1.2,
-                    ),
+                Icon(widget.icon, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _DashUi.textPrimary,
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.events});
+
+  final List<_ActivityEvent> events;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashGlass(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Recent Activity',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: _DashUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (events.isEmpty)
+            const Text(
+              'No recent activity for this day.',
+              style: TextStyle(
+                fontSize: 12,
+                color: _DashUi.textSecondary,
+              ),
+            )
+          else
+            ...events.map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(e.icon, size: 16, color: e.color),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        e.text,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: _DashUi.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1196,280 +1436,120 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _DashboardSidebar extends StatelessWidget {
-  const _DashboardSidebar({
-    required this.bookings,
-    required this.confirmed,
-    required this.pending,
-    required this.cancelled,
-  });
-
-  final List<Rezervacija> bookings;
-  final int confirmed;
-  final int pending;
-  final int cancelled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _UpcomingTimelineCard(bookings: bookings),
-        const SizedBox(height: 18),
-        _TodaySummaryCard(
-          confirmed: confirmed,
-          pending: pending,
-          cancelled: cancelled,
-        ),
-      ],
-    );
-  }
-}
-
-class _UpcomingTimelineCard extends StatelessWidget {
-  const _UpcomingTimelineCard({required this.bookings});
+class _UpcomingTodayCard extends StatelessWidget {
+  const _UpcomingTodayCard({required this.bookings});
 
   final List<Rezervacija> bookings;
 
   @override
   Widget build(BuildContext context) {
     final nav = context.read<DesktopNav>();
-    final active = bookings.where((b) => !b.isOtkazana).toList()
+    final now = DateTime.now();
+    final upcoming = bookings
+        .where((b) => !b.isOtkazana && !b.datumRezervacije.isBefore(now))
+        .toList()
       ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
 
     return _DashGlass(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Upcoming Today',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: _DashUi.textPrimary,
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Upcoming Today',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: _DashUi.textPrimary,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => nav.goTo(DesktopRouteKey.adminCalendar),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Calendar',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: NuaLuxuryTokens.champagneGold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          if (active.isEmpty)
+          const SizedBox(height: 10),
+          if (upcoming.isEmpty)
             const Text(
-              'No upcoming appointments.',
-              style: TextStyle(color: _DashUi.textSecondary),
+              'No more appointments scheduled.',
+              style: TextStyle(fontSize: 12, color: _DashUi.textSecondary),
             )
           else
-            ...active.take(6).map((r) => _TimelineRow(rezervacija: r)),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: () => nav.goTo(DesktopRouteKey.adminCalendar),
-            child: const Text('View full schedule'),
-          ),
+            ...upcoming.take(5).map((r) => _UpcomingRow(rezervacija: r)),
         ],
       ),
     );
   }
 }
 
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({required this.rezervacija});
+class _UpcomingRow extends StatelessWidget {
+  const _UpcomingRow({required this.rezervacija});
 
   final Rezervacija rezervacija;
 
-  Color get _dotColor {
-    if (rezervacija.isOtkazana) return _DashUi.pink;
-    if (!rezervacija.isPotvrdjena) return _DashUi.orange;
-    return _DashUi.green;
-  }
-
-  String _initials(String? name) {
-    final parts = (name ?? 'G')
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return 'G';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
+    final time = _formatTimeAmPm(rezervacija.datumRezervacije);
+    final service = rezervacija.uslugaNaziv ?? 'Appointment';
+    final client = rezervacija.korisnikIme ?? 'Guest';
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _dotColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _dotColor.withValues(alpha: 0.6),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 2,
-                height: 36,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _formatTimeAmPm(rezervacija.datumRezervacije),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: NuaLuxuryTokens.champagneGold,
-            ),
-          ),
-          const SizedBox(width: 10),
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: _DashUi.purple.withValues(alpha: 0.35),
+          SizedBox(
+            width: 52,
             child: Text(
-              _initials(rezervacija.korisnikIme),
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
+              time,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: _DashUi.blue,
+              ),
             ),
           ),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  rezervacija.korisnikIme ?? 'Guest',
+                  service,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: _DashUi.textPrimary,
                   ),
                 ),
                 Text(
-                  rezervacija.uslugaNaziv ?? '—',
+                  client,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     color: _DashUi.textSecondary,
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodaySummaryCard extends StatelessWidget {
-  const _TodaySummaryCard({
-    required this.confirmed,
-    required this.pending,
-    required this.cancelled,
-  });
-
-  final int confirmed;
-  final int pending;
-  final int cancelled;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DashGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            "Today's Summary",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: _DashUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
-            children: [
-              _SummaryMini(
-                label: 'Confirmed',
-                value: '$confirmed',
-                color: _DashUi.green,
-              ),
-              _SummaryMini(
-                label: 'Pending',
-                value: '$pending',
-                color: _DashUi.orange,
-              ),
-              _SummaryMini(
-                label: 'Cancelled',
-                value: '$cancelled',
-                color: _DashUi.pink,
-              ),
-              const _SummaryMini(
-                label: 'No Shows',
-                value: '0',
-                color: _DashUi.textSecondary,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryMini extends StatelessWidget {
-  const _SummaryMini({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: _DashUi.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              color: color,
             ),
           ),
         ],

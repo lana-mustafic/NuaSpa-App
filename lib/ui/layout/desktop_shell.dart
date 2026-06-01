@@ -93,7 +93,8 @@ class _DesktopShellState extends State<DesktopShell> {
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 1100;
     final isCalendar = nav.route == DesktopRouteKey.adminCalendar;
-    final railExpandedW = width < 1450 ? 224.0 : 236.0;
+    final isCommandCenter = nav.route == DesktopRouteKey.commandCenter;
+    final railExpandedW = width < 1450 ? 200.0 : 212.0;
 
     final adminItems = <LuxurySideItem>[
       LuxurySideItem(
@@ -353,6 +354,7 @@ class _DesktopShellState extends State<DesktopShell> {
                               notificationCount: context
                                   .watch<NotificationProvider>()
                                   .unreadCount,
+                              compactChrome: isCommandCenter || isCalendar,
                             ),
                             Expanded(
                               child: AnimatedSwitcher(
@@ -520,7 +522,7 @@ class _LuxuryRail extends StatelessWidget {
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.zero,
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => SizedBox(height: compact ? 2 : 4),
+                  separatorBuilder: (_, _) => SizedBox(height: compact ? 2 : 3),
                   itemBuilder: (_, i) {
                     final it = items[i];
                     final sel = _selected(nav, it);
@@ -604,7 +606,7 @@ class _SidebarTileState extends State<_SidebarTile> {
             curve: Curves.easeOutCubic,
             padding: EdgeInsets.symmetric(
               horizontal: widget.expanded ? (widget.compact ? 10 : 14) : 10,
-              vertical: widget.compact ? 8 : 13,
+              vertical: widget.compact ? 7 : 10,
             ),
             decoration: BoxDecoration(
               borderRadius: borderRadius,

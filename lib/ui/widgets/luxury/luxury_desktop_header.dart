@@ -26,10 +26,6 @@ class LuxuryDesktopHeader extends StatelessWidget {
   /// Tighter header + narrower search (Calendar screen).
   final bool compactChrome;
 
-  bool _isSameCalendarDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
   String _fmtDay(DateTime d) {
     const months = [
       'Jan',
@@ -327,12 +323,14 @@ class LuxuryDesktopHeader extends StatelessWidget {
 
     final badgeCount = notificationCount;
 
+    final dashboardChrome = compact && isCommandCenter;
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        compact ? 16 : 28,
-        compact ? 8 : 18,
-        compact ? 16 : 28,
-        compact ? 4 : 8,
+        dashboardChrome ? 20 : (compact ? 16 : 28),
+        dashboardChrome ? 10 : (compact ? 8 : 18),
+        dashboardChrome ? 20 : (compact ? 16 : 28),
+        dashboardChrome ? 6 : (compact ? 4 : 8),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -346,7 +344,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   isRevenue
                       ? 'Reports & Analytics'
                       : isCommandCenter
-                      ? 'Good morning, Admin!'
+                      ? 'Dashboard'
                       : isAppointments
                       ? 'Appointments'
                       : isCalendar
@@ -384,9 +382,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                   isRevenue
                       ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
                       : isCommandCenter
-                      ? (_isSameCalendarDay(day, DateTime.now())
-                          ? "Here's what's happening at NuaSpa today."
-                          : 'Overview for ${_fmtDay(day)}. Use the date picker to change the day.')
+                      ? 'Overview of bookings, revenue and business performance.'
                       : isAppointments
                       ? 'Manage, view and organize all spa appointments.'
                       : isCalendar
@@ -469,7 +465,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
               ),
             ),
             SizedBox(width: compact ? 10 : 14),
-          ] else if (showRangePills) ...[
+          ] else if (showRangePills && !isCommandCenter) ...[
             _HeaderPill(
               icon: Icons.date_range_outlined,
               label: _fmtRange(range),
