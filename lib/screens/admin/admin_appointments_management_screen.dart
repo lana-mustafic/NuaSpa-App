@@ -414,6 +414,7 @@ class _AdminAppointmentsManagementScreenState
       datumRezervacije: draft.dateTime,
       uslugaId: draft.serviceId,
       zaposlenikId: draft.therapistId,
+      isVip: draft.isVip,
     );
     if (!mounted) return;
     _toast(
@@ -2663,7 +2664,7 @@ class _AdminAppointmentCreateDialogState
                               Text(
                                 _isEdit
                                     ? 'Update date, service, therapist, or VIP status for this booking.'
-                                    : 'Fill in the details to create a new spa appointment.',
+                                    : 'Fill in the details to create a new spa appointment. Enable VIP for priority treatment.',
                                 style: TextStyle(
                                   fontSize: 14,
                                   height: 1.45,
@@ -2794,13 +2795,11 @@ class _AdminAppointmentCreateDialogState
                                 }),
                               ),
                     ),
-                    if (_isEdit) ...[
-                      const SizedBox(height: 14),
-                      _PremiumApptVipCard(
-                        value: _isVip,
-                        onChanged: (v) => setState(() => _isVip = v),
-                      ),
-                    ],
+                    const SizedBox(height: 14),
+                    _PremiumApptVipCard(
+                      value: _isVip,
+                      onChanged: (v) => setState(() => _isVip = v),
+                    ),
                     if (missingData) ...[
                       const SizedBox(height: 16),
                       Text(

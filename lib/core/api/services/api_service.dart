@@ -751,12 +751,14 @@ class ApiService {
     required DateTime datumRezervacije,
     required int uslugaId,
     required int zaposlenikId,
+    bool isVip = false,
   }) async {
     try {
       final body = <String, dynamic>{
         'datumRezervacije': datumRezervacije.toIso8601String(),
         'uslugaId': uslugaId,
         'zaposlenikId': zaposlenikId,
+        'isVip': isVip,
       };
       if (korisnikId != null) {
         body['korisnikId'] = korisnikId;
