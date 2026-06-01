@@ -852,47 +852,29 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
             final showSearch = w >= 720;
             final showProfileDetails = w >= 980;
 
+            const searchMaxW = 400.0;
+
             final search = DeskGlobalSearchBar(
               dashboardStyle: true,
               showShortcutHint: true,
+              maxWidth: searchMaxW,
               hintText: 'Search appointments, clients, services…',
             );
 
-            if (w >= 1240) {
+            if (w >= 1100 && showSearch) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Flexible(
-                    flex: 2,
-                    fit: FlexFit.loose,
+                  Expanded(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 280),
+                      constraints: const BoxConstraints(maxWidth: 300),
                       child: _titleBlock(),
                     ),
                   ),
                   const SizedBox(width: _gap),
-                  if (showSearch)
-                    Flexible(flex: 4, child: search),
-                  if (showSearch) const SizedBox(width: _gap),
-                  _controlsRow(showProfileDetails: showProfileDetails),
-                ],
-              );
-            }
-
-            if (w >= 920 && showSearch) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _titleBlock()),
-                      const SizedBox(width: _gap),
-                      _controlsRow(showProfileDetails: showProfileDetails),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                   search,
+                  const Spacer(),
+                  _controlsRow(showProfileDetails: showProfileDetails),
                 ],
               );
             }
@@ -900,16 +882,20 @@ class _CommandCenterDashboardHeader extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _titleBlock(),
-                const SizedBox(height: 18),
-                if (showSearch) ...[
-                  search,
-                  const SizedBox(height: 16),
-                ],
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _controlsRow(showProfileDetails: showProfileDetails),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _titleBlock()),
+                    _controlsRow(showProfileDetails: showProfileDetails),
+                  ],
                 ),
+                if (showSearch) ...[
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: search,
+                  ),
+                ],
               ],
             );
           },

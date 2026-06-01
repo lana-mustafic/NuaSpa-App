@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import '../navigation/desktop_nav.dart';
 import '../theme/nua_luxury_tokens.dart';
 
-/// Premium glass capsule search — global catalog jump (Linear / Stripe–style).
+/// Premium glass search — global catalog jump (Linear / Stripe–style).
 class DeskGlobalSearchBar extends StatefulWidget {
   const DeskGlobalSearchBar({
     super.key,
@@ -19,6 +19,7 @@ class DeskGlobalSearchBar extends StatefulWidget {
     this.controller,
     this.compact = false,
     this.dashboardStyle = false,
+    this.maxWidth,
   });
 
   final String hintText;
@@ -26,10 +27,10 @@ class DeskGlobalSearchBar extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final bool showShortcutHint;
   final TextEditingController? controller;
-  /// Narrower width / slightly shorter height (e.g. calendar).
   final bool compact;
-  /// Dashboard header: 50px height, 18px corners, Ctrl K label on desktop.
+  /// Dashboard header: 48px height, 18px corners, compact width.
   final bool dashboardStyle;
+  final double? maxWidth;
 
   @override
   State<DeskGlobalSearchBar> createState() => _DeskGlobalSearchBarState();
@@ -57,27 +58,20 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
   bool get _focused => _node.hasFocus;
 
   double get _height {
-    if (widget.dashboardStyle) return 50;
+    if (widget.dashboardStyle) return 48;
     return widget.compact ? 52 : 54;
   }
 
   double get _radius => widget.dashboardStyle ? 18 : 999;
 
-  TextStyle _bodyStyle() {
+  TextStyle _textStyle({required bool hint, double? hintAlpha}) {
     return GoogleFonts.inter(
       fontSize: widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16),
       fontWeight: FontWeight.w400,
-      height: widget.dashboardStyle ? 1.0 : 1.25,
-      color: _textPrimary,
-    );
-  }
-
-  TextStyle _hintStyle(double hintAlpha) {
-    return GoogleFonts.inter(
-      fontSize: widget.dashboardStyle ? 14 : (widget.compact ? 15 : 16),
-      fontWeight: FontWeight.w400,
-      height: widget.dashboardStyle ? 1.0 : 1.25,
-      color: Colors.white.withValues(alpha: hintAlpha),
+      height: 1.2,
+      color: hint
+          ? Colors.white.withValues(alpha: hintAlpha ?? 0.58)
+          : _textPrimary,
     );
   }
 
@@ -121,11 +115,40 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
     );
   }
 
+  Widget _field(double hintAlpha) {
+    return TextField(
+      controller: widget.controller,
+      focusNode: _node,
+      textInputAction: TextInputAction.search,
+      style: _textStyle(hint: false),
+      cursorColor: NuaLuxuryTokens.softPurpleGlow,
+      onChanged: widget.onChanged,
+      onSubmitted: (q) {
+        if (widget.onSubmitted != null) {
+          widget.onSubmitted!(q);
+          return;
+        }
+        context.read<DesktopNav>().goToCatalogWithSearch(q);
+      },
+      decoration: InputDecoration(
+        isDense: true,
+        isCollapsed: true,
+        hintText: widget.hintText,
+        hintStyle: _textStyle(hint: true, hintAlpha: hintAlpha),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hintAlpha = _focused ? 0.32 : 0.45;
+    final hintAlpha = _focused ? 0.5 : 0.58;
+    final hPad = widget.dashboardStyle ? 14.0 : 18.0;
 
-    return MouseRegion(
+    final bar = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       cursor: SystemMouseCursors.text,
@@ -138,66 +161,34 @@ class _DeskGlobalSearchBarState extends State<DeskGlobalSearchBar> {
           borderRadius: BorderRadius.circular(_radius),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _node,
-              textInputAction: TextInputAction.search,
-              textAlignVertical: TextAlignVertical.center,
-              style: _bodyStyle(),
-              cursorColor: NuaLuxuryTokens.softPurpleGlow,
-              onChanged: widget.onChanged,
-              onSubmitted: (q) {
-                if (widget.onSubmitted != null) {
-                  widget.onSubmitted!(q);
-                  return;
-                }
-                context.read<DesktopNav>().goToCatalogWithSearch(q);
-              },
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: widget.hintText,
-                hintStyle: _hintStyle(hintAlpha),
-                hintMaxLines: 1,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: true,
-                fillColor: Colors.transparent,
-                prefixIcon: Icon(
-                  Icons.search_outlined,
-                  size: _iconSize,
-                  color: Colors.white.withValues(alpha: 0.55),
-                ),
-                prefixIconConstraints: BoxConstraints(
-                  minWidth: widget.dashboardStyle ? 46 : 48,
-                  minHeight: _height,
-                ),
-                suffixIcon: widget.showShortcutHint
-                    ? Padding(
-                        padding: EdgeInsets.only(
-                          right: widget.dashboardStyle ? 10 : 14,
-                        ),
-                        child: _ShortcutBadge(
-                          dashboardStyle: widget.dashboardStyle,
-                        ),
-                      )
-                    : null,
-                suffixIconConstraints: widget.showShortcutHint
-                    ? BoxConstraints(
-                        minWidth: widget.dashboardStyle ? 76 : 80,
-                        minHeight: _height,
-                      )
-                    : null,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: widget.dashboardStyle ? 16 : 17,
-                  horizontal: 0,
-                ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.search_outlined,
+                    size: _iconSize,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                  SizedBox(width: widget.dashboardStyle ? 10 : 13),
+                  Expanded(child: _field(hintAlpha)),
+                  if (widget.showShortcutHint) ...[
+                    const SizedBox(width: 10),
+                    _ShortcutBadge(dashboardStyle: widget.dashboardStyle),
+                  ],
+                ],
               ),
             ),
           ),
         ),
       ),
     );
+
+    if (widget.maxWidth != null) {
+      return SizedBox(width: widget.maxWidth, child: bar);
+    }
+    return bar;
   }
 }
 
@@ -212,12 +203,12 @@ class _ShortcutBadge extends StatelessWidget {
         ? (defaultTargetPlatform == TargetPlatform.macOS ? '⌘ K' : 'Ctrl K')
         : '⌘ K';
     return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: const Color.fromRGBO(255, 255, 255, 0.04),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: const Color.fromRGBO(255, 255, 255, 0.06),
         ),
@@ -225,7 +216,7 @@ class _ShortcutBadge extends StatelessWidget {
       child: Text(
         label,
         style: GoogleFonts.inter(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: FontWeight.w500,
           height: 1,
           letterSpacing: 0.2,
