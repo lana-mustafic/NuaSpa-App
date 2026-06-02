@@ -723,6 +723,11 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   late final TextEditingController _searchController;
 
   static const _gap = 16.0;
+  static const _edgePadding = EdgeInsets.fromLTRB(28, 22, 28, 18);
+  static const _wideContentHeight = 92.0;
+  static const _titleBlockHeight = 56.0;
+  static const _stackedContentHeight = 122.0;
+  static const _wideBreakpoint = 1100.0;
 
   @override
   void initState() {
@@ -765,33 +770,38 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   void Function(BuildContext) get onProfile => widget.onProfile;
 
   Widget _titleBlock() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          widget.title,
-          style: GoogleFonts.inter(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.6,
-            height: 1.15,
-            color: const Color(0xFFF5F3FA),
+    return SizedBox(
+      height: _titleBlockHeight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            widget.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.6,
+              height: 1.15,
+              color: const Color(0xFFF5F3FA),
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          widget.subtitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            height: 1.35,
-            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+          const SizedBox(height: 6),
+          Text(
+            widget.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -946,48 +956,54 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
           ),
         },
         child: Padding(
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 92),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final w = c.maxWidth;
-            final showSearch = w >= 720;
-            final showProfileDetails = w >= 980;
+      padding: _edgePadding,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          final showSearch = w >= 720;
+          final showProfileDetails = w >= 980;
+          final useWideRow = w >= _wideBreakpoint && showSearch;
+          final contentHeight = useWideRow
+              ? _wideContentHeight
+              : (showSearch ? _stackedContentHeight : _wideContentHeight);
 
-            const searchMaxW = 400.0;
+          const searchMaxW = 400.0;
 
-            final search = DeskGlobalSearchBar(
-              dashboardStyle: true,
-              showShortcutHint: true,
-              maxWidth: searchMaxW,
-              focusNode: _searchFocus,
-              controller: _searchController,
-              hintText: widget.searchHint,
-              onSubmitted: widget.onSearchSubmitted,
-              onChanged: widget.onSearchChanged,
-            );
+          final search = DeskGlobalSearchBar(
+            dashboardStyle: true,
+            showShortcutHint: true,
+            maxWidth: searchMaxW,
+            focusNode: _searchFocus,
+            controller: _searchController,
+            hintText: widget.searchHint,
+            onSubmitted: widget.onSearchSubmitted,
+            onChanged: widget.onSearchChanged,
+          );
 
-            if (w >= 1100 && showSearch) {
-              if (widget.alignSearchWithControls) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(child: _titleBlock()),
-                    const SizedBox(width: _gap),
-                    search,
-                    const SizedBox(width: _gap),
-                    _controlsRow(showProfileDetails: showProfileDetails),
-                  ],
-                );
-              }
-              return Row(
+          Widget content;
+          if (useWideRow) {
+            if (widget.alignSearchWithControls) {
+              content = Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: _titleBlock()),
+                  const SizedBox(width: _gap),
+                  search,
+                  const SizedBox(width: _gap),
+                  _controlsRow(showProfileDetails: showProfileDetails),
+                ],
+              );
+            } else {
+              content = Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 300),
-                      child: _titleBlock(),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 300),
+                        child: _titleBlock(),
+                      ),
                     ),
                   ),
                   const SizedBox(width: _gap),
@@ -997,12 +1013,13 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                 ],
               );
             }
-
-            return Column(
+          } else {
+            content = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(child: _titleBlock()),
                     _controlsRow(showProfileDetails: showProfileDetails),
@@ -1019,8 +1036,16 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                 ],
               ],
             );
-          },
-        ),
+          }
+
+          return SizedBox(
+            height: contentHeight,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: content,
+            ),
+          );
+        },
       ),
         ),
       ),

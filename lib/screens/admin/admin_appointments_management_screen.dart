@@ -236,7 +236,7 @@ class _AdminAppointmentsManagementScreenState
               child: SingleChildScrollView(
                 controller: _mainScrollController,
                 primary: false,
-                padding: const EdgeInsets.fromLTRB(32, 24, 32, 40),
+                          padding: const EdgeInsets.fromLTRB(28, 32, 28, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
