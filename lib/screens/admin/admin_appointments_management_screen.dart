@@ -423,54 +423,20 @@ class _AdminAppointmentsManagementScreenState
   }
 
   Future<void> _cancel(Rezervacija r) async {
-    final reasonCtrl = TextEditingController();
-    final yes = await showDialog<bool>(
+    final reason = await showGeneralDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel appointment?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (r.isPlacena)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'Paid booking — cancellation includes a Stripe refund.',
-                  style: TextStyle(color: Colors.amber.shade200),
-                ),
-              ),
-            TextField(
-              controller: reasonCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Cancellation reason',
-                hintText: 'Reason is required',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Back'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (reasonCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return _appointmentDialogOverlay(
+          animation: animation,
+          dialog: _CancelAppointmentDialog(appointment: r),
+        );
+      },
     );
-    if (yes != true || !mounted) return;
-    final reason = reasonCtrl.text.trim();
-    if (reason.isEmpty) {
-      _toast('Cancellation reason is required.');
-      return;
-    }
+    if (reason == null || reason.isEmpty || !mounted) return;
     final result = await _api.cancelRezervacija(
       r.id,
       razlogOtkaza: reason,
@@ -1049,6 +1015,25 @@ class _AppointmentsTable extends StatelessWidget {
     return '${months[l.month - 1]} ${l.day}';
   }
 
+  static String fullDateLabel(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final l = d.toLocal();
+    return '${months[l.month - 1]} ${l.day}, ${l.year}';
+  }
+
   static bool isToday(DateTime d) {
     final l = d.toLocal();
     final n = DateTime.now();
@@ -1292,6 +1277,390 @@ class _ApptStatusChip extends StatelessWidget {
           color: color,
         ),
       ),
+    );
+  }
+}
+
+/// Premium cancel-appointment modal (matches add/edit appointment dialog).
+class _CancelAppointmentDialog extends StatefulWidget {
+  const _CancelAppointmentDialog({required this.appointment});
+
+  final Rezervacija appointment;
+
+  @override
+  State<_CancelAppointmentDialog> createState() =>
+      _CancelAppointmentDialogState();
+}
+
+class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
+  final TextEditingController _reasonCtrl = TextEditingController();
+  String? _formError;
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _clientLine {
+    final name = widget.appointment.korisnikIme?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return 'Client #${widget.appointment.korisnikId}';
+  }
+
+  String get _whenLine {
+    final d = widget.appointment.datumRezervacije;
+    return '${_AppointmentsTable.fullDateLabel(d)} at ${_AppointmentsTable.timeLabel(d)}';
+  }
+
+  void _submit() {
+    final reason = _reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      setState(() => _formError = 'Cancellation reason is required.');
+      return;
+    }
+    Navigator.pop(context, reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appt = widget.appointment;
+
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: _ApptDialogLayout.minWidth,
+          maxWidth: _ApptDialogLayout.maxWidth,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xEB120A24),
+                borderRadius:
+                    BorderRadius.circular(_ApptDialogLayout.borderRadius),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF6B8A).withValues(alpha: 0.18),
+                    blurRadius: 48,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: _ApptDialogLayout.padding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFFFF6B8A).withValues(alpha: 0.9),
+                                const Color(0xFFFF8FA8).withValues(alpha: 0.85),
+                              ],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.event_busy_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Cancel appointment?',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: _ApptUi.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'This action cannot be undone.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.35,
+                                  color: _ApptUi.lavender.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _PremiumModalCloseButton(
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: _ApptDialogLayout.sectionGap),
+                    _CancelAppointmentSummaryCard(
+                      client: _clientLine,
+                      service: appt.uslugaNaziv ?? 'Spa service',
+                      when: _whenLine,
+                      therapist: appt.zaposlenikIme,
+                    ),
+                    if (appt.isPlacena) ...[
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      const _PremiumApptPaidCancelBanner(),
+                    ],
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
+                    _PremiumApptReasonField(controller: _reasonCtrl),
+                    if (_formError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _formError!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: Color(0xFFFF6B8A),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: _ApptDialogLayout.sectionGap),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _PremiumModalCancelButton(
+                          label: 'Back',
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 12),
+                        _PremiumModalDestructiveButton(
+                          onPressed: _submit,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CancelAppointmentSummaryCard extends StatelessWidget {
+  const _CancelAppointmentSummaryCard({
+    required this.client,
+    required this.service,
+    required this.when,
+    this.therapist,
+  });
+
+  final String client;
+  final String service;
+  final String when;
+  final String? therapist;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        children: [
+          _CancelSummaryRow(
+            icon: Icons.person_outline_rounded,
+            label: 'Client',
+            value: client,
+          ),
+          const SizedBox(height: 8),
+          _CancelSummaryRow(
+            icon: Icons.spa_outlined,
+            label: 'Service',
+            value: service,
+          ),
+          const SizedBox(height: 8),
+          _CancelSummaryRow(
+            icon: Icons.schedule_rounded,
+            label: 'When',
+            value: when,
+          ),
+          if (therapist != null && therapist!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _CancelSummaryRow(
+              icon: Icons.badge_outlined,
+              label: 'Therapist',
+              value: therapist!.trim(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CancelSummaryRow extends StatelessWidget {
+  const _CancelSummaryRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: _ApptUi.lavender.withValues(alpha: 0.55)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 64,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: _ApptUi.lavender.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _ApptUi.textPrimary,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PremiumApptPaidCancelBanner extends StatelessWidget {
+  const _PremiumApptPaidCancelBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0x33FFB84D),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x55FFB84D)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.payments_outlined,
+            size: 18,
+            color: Colors.amber.shade200,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Paid booking — cancelling will process a Stripe refund.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: Colors.amber.shade100,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumApptReasonField extends StatelessWidget {
+  const _PremiumApptReasonField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Cancellation reason',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+            color: _ApptUi.lavender.withValues(alpha: 0.55),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLines: 4,
+          minLines: 3,
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.4,
+            color: _ApptUi.textPrimary,
+          ),
+          cursorColor: _ApptUi.purple2,
+          decoration: InputDecoration(
+            hintText: 'Describe why this appointment is being cancelled…',
+            hintStyle: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.32),
+            ),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.04),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _ApptUi.purple2.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -3226,9 +3595,13 @@ class _PremiumModalCloseButtonState extends State<_PremiumModalCloseButton> {
 }
 
 class _PremiumModalCancelButton extends StatefulWidget {
-  const _PremiumModalCancelButton({required this.onPressed});
+  const _PremiumModalCancelButton({
+    required this.onPressed,
+    this.label = 'Cancel',
+  });
 
   final VoidCallback onPressed;
+  final String label;
 
   @override
   State<_PremiumModalCancelButton> createState() =>
@@ -3261,7 +3634,7 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
               ),
             ),
             child: Text(
-              'Cancel',
+              widget.label,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -3632,6 +4005,82 @@ class _PremiumApptVipStrip extends StatelessWidget {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumModalDestructiveButton extends StatefulWidget {
+  const _PremiumModalDestructiveButton({
+    required this.onPressed,
+    this.label = 'Cancel appointment',
+    this.icon = Icons.event_busy_rounded,
+  });
+
+  final VoidCallback onPressed;
+  final String label;
+  final IconData icon;
+
+  @override
+  State<_PremiumModalDestructiveButton> createState() =>
+      _PremiumModalDestructiveButtonState();
+}
+
+class _PremiumModalDestructiveButtonState
+    extends State<_PremiumModalDestructiveButton> {
+  bool _hover = false;
+
+  static const _coral = Color(0xFFFF6B8A);
+  static const _coralLight = Color(0xFFFF8FA8);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
+                colors: [
+                  _coral.withValues(alpha: _hover ? 1 : 0.92),
+                  _coralLight.withValues(alpha: _hover ? 1 : 0.88),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _coral.withValues(alpha: _hover ? 0.5 : 0.35),
+                  blurRadius: _hover ? 28 : 20,
+                  offset: Offset(0, _hover ? 8 : 5),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
