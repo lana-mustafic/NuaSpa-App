@@ -601,7 +601,9 @@ class ApiService {
     int? zaposlenikId,
   }) async {
     try {
-      final query = <String, dynamic>{'pageSize': 500};
+      // Note: backend clamps pageSize to MaxPageSize (currently 100).
+      // This method returns only the first page (for backwards compatibility).
+      final query = <String, dynamic>{'pageSize': 100, 'page': 1};
       if (datum != null) {
         query['Datum'] = _apiDateOnly(datum);
       }
@@ -625,6 +627,68 @@ class ApiService {
       );
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
+      return [];
+    }
+  }
+
+  /// Admin screens: fetch all pages of reservations (backend enforces max pageSize=100).
+  Future<List<Rezervacija>> getRezervacijeFilteredAll({
+    DateTime? datum,
+    bool? isPotvrdjena,
+    bool includeOtkazane = false,
+    int? zaposlenikId,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final all = <Rezervacija>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final pageItems = await _getRezervacijeFilteredPage(
+        page: page,
+        pageSize: pageSize,
+        datum: datum,
+        isPotvrdjena: isPotvrdjena,
+        includeOtkazane: includeOtkazane,
+        zaposlenikId: zaposlenikId,
+      );
+      all.addAll(pageItems);
+      if (pageItems.length < pageSize) break;
+    }
+    return all;
+  }
+
+  Future<List<Rezervacija>> _getRezervacijeFilteredPage({
+    required int page,
+    required int pageSize,
+    DateTime? datum,
+    bool? isPotvrdjena,
+    bool includeOtkazane = false,
+    int? zaposlenikId,
+  }) async {
+    try {
+      final query = <String, dynamic>{'pageSize': pageSize, 'page': page};
+      if (datum != null) {
+        query['Datum'] = _apiDateOnly(datum);
+      }
+      if (isPotvrdjena != null) {
+        query['IsPotvrdjena'] = isPotvrdjena;
+      }
+      if (includeOtkazane) {
+        query['IncludeOtkazane'] = true;
+      }
+      if (zaposlenikId != null) {
+        query['ZaposlenikId'] = zaposlenikId;
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Rezervacija',
+        queryParameters: query,
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => Rezervacija.fromJson(json),
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService._getRezervacijeFilteredPage: $e');
       return [];
     }
   }
@@ -1067,6 +1131,16 @@ class ApiService {
     }
   }
 
+  Future<bool> completeRezervacija(int id) async {
+    try {
+      await _dio.patch<void>('Rezervacija/$id/complete');
+      return true;
+    } catch (e) {
+      debugPrint('Greška u ApiService.completeRezervacija: $e');
+      return false;
+    }
+  }
+
   Future<PaymentIntentResponse?> createPaymentIntent(int rezervacijaId) async {
     try {
       final response = await _dio.post<dynamic>(
@@ -1431,6 +1505,21 @@ class ApiService {
       debugPrint('Greška u ApiService.getAdminClients: $e');
       return [];
     }
+  }
+
+  /// Admin screens: fetch all pages of clients (backend enforces max pageSize=100).
+  Future<List<AdminClientRow>> getAdminClientsAll({
+    String? q,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final all = <AdminClientRow>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final items = await getAdminClients(q: q, page: page, pageSize: pageSize);
+      all.addAll(items);
+      if (items.length < pageSize) break;
+    }
+    return all;
   }
 
   Future<AdminClientStats?> getAdminClientStats({String? q}) async {

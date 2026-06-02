@@ -58,10 +58,10 @@ class _AdminAppointmentsManagementScreenState
 
   Future<_AppointmentsData> _load() async {
     final results = await Future.wait([
-      _api.getRezervacijeFiltered(includeOtkazane: true),
+      _api.getRezervacijeFilteredAll(includeOtkazane: true),
       _api.getZaposlenici(),
       _api.getUsluge(),
-      _api.getAdminClients(pageSize: 400),
+      _api.getAdminClientsAll(pageSize: 100),
     ]);
     final reservations = results[0] as List<Rezervacija>;
     reservations.sort(
@@ -291,8 +291,8 @@ class _AdminAppointmentsManagementScreenState
                                       onSelect: (r) =>
                                           setState(() => _selected = r),
                                       onConfirmToggle: _toggleConfirmed,
+                                      onComplete: _complete,
                                       onCancel: _cancel,
-                                      onDelete: (_) {},
                                       onEdit: _edit,
                                     ),
                             ],
@@ -311,8 +311,8 @@ class _AdminAppointmentsManagementScreenState
                               ? null
                               : () => _edit(selected),
                           onConfirmToggle: _toggleConfirmed,
+                          onComplete: _complete,
                           onCancel: _cancel,
-                          onDelete: (_) {},
                         ),
                       ),
                     ),
@@ -343,10 +343,8 @@ class _AdminAppointmentsManagementScreenState
               r.datumRezervacije.month == _selectedDate.month,
       };
       final matchesTherapist =
-          _therapistId == null ||
-          _nameMatchesTherapist(r.zaposlenikIme, _therapistId!);
-      final matchesService =
-          _serviceId == null || _serviceNameById(_serviceId!) == r.uslugaNaziv;
+          _therapistId == null || r.zaposlenikId == _therapistId;
+      final matchesService = _serviceId == null || r.uslugaId == _serviceId;
       final matchesStatus =
           _status == 'All Status' ||
           (_status == 'Confirmed' && r.isPotvrdjena && !r.isOtkazana) ||
@@ -359,22 +357,8 @@ class _AdminAppointmentsManagementScreenState
           matchesStatus;
     }).toList();
   }
-
-  String? _serviceNameById(int id) {
-    return _lastServices[id];
-  }
-
   final Map<int, String> _lastServices = {};
   final Map<int, String> _lastTherapists = {};
-
-  bool _nameMatchesTherapist(String? name, int id) =>
-      name != null &&
-      (_lastTherapists[id] == name ||
-          _lastTherapists[id]?.toLowerCase().contains(name.toLowerCase()) ==
-              true ||
-          name.toLowerCase().contains(
-            _lastTherapists[id]?.toLowerCase() ?? '',
-          ));
 
   Widget _appointmentDialogOverlay({
     required Animation<double> animation,
@@ -433,8 +417,8 @@ class _AdminAppointmentsManagementScreenState
     if (!mounted) return;
     _toast(
       created == null
-          ? 'Kreiranje termina nije uspjelo.'
-          : 'Termin je uspješno kreiran.',
+          ? 'Unable to create appointment.'
+          : 'Appointment created.',
     );
     if (created != null) {
       setState(() {
@@ -452,7 +436,14 @@ class _AdminAppointmentsManagementScreenState
   Future<void> _toggleConfirmed(Rezervacija r) async {
     final ok = await _api.updateRezervacijaPotvrdjena(r.id, !r.isPotvrdjena);
     if (!mounted) return;
-    _toast(ok ? 'Status ažuriran.' : 'Nije moguće ažurirati status.');
+    _toast(ok ? 'Status updated.' : 'Unable to update status.');
+    if (ok) _reload();
+  }
+
+  Future<void> _complete(Rezervacija r) async {
+    final ok = await _api.completeRezervacija(r.id);
+    if (!mounted) return;
+    _toast(ok ? 'Appointment marked as completed.' : 'Unable to complete.');
     if (ok) _reload();
   }
 
@@ -478,8 +469,8 @@ class _AdminAppointmentsManagementScreenState
               controller: reasonCtrl,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Razlog otkazivanja',
-                hintText: 'Obavezno unesite razlog',
+                labelText: 'Cancellation reason',
+                hintText: 'Reason is required',
               ),
             ),
           ],
@@ -502,7 +493,7 @@ class _AdminAppointmentsManagementScreenState
     if (yes != true || !mounted) return;
     final reason = reasonCtrl.text.trim();
     if (reason.isEmpty) {
-      _toast('Razlog otkazivanja je obavezan.');
+      _toast('Cancellation reason is required.');
       return;
     }
     final result = await _api.cancelRezervacija(
@@ -548,8 +539,8 @@ class _AdminAppointmentsManagementScreenState
     if (!mounted) return;
     _toast(
       updated == null
-          ? 'Ažuriranje termina nije uspjelo.'
-          : 'Termin je uspješno ažuriran.',
+          ? 'Unable to update appointment.'
+          : 'Appointment updated.',
     );
     if (updated != null) {
       setState(() => _selected = updated);
@@ -823,9 +814,9 @@ class _KpiCards extends StatelessWidget {
     final cancelled = reservations.where((r) => r.isOtkazana).length;
     final cards = [
       _KpiSpec(
-        "Today's Appointments",
+        "Appointments",
         '$total',
-        '+12% vs yesterday',
+        'Based on current filters',
         Icons.calendar_today_outlined,
         NuaLuxuryTokens.softPurpleGlow,
       ),
@@ -956,8 +947,8 @@ class _AppointmentsTable extends StatelessWidget {
     required this.selectedId,
     required this.onSelect,
     required this.onConfirmToggle,
+    required this.onComplete,
     required this.onCancel,
-    required this.onDelete,
     required this.onEdit,
   });
 
@@ -966,8 +957,8 @@ class _AppointmentsTable extends StatelessWidget {
   final int? selectedId;
   final ValueChanged<Rezervacija> onSelect;
   final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
   final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onDelete;
   final ValueChanged<Rezervacija> onEdit;
 
   @override
@@ -1094,7 +1085,11 @@ class _AppointmentsTable extends StatelessWidget {
                         DataCell(
                           _PersonCell(
                             name: r.korisnikIme ?? 'Nua Guest',
-                            subtitle: r.korisnikTelefon ?? '+387 61 000 000',
+                            subtitle:
+                                (r.korisnikTelefon != null &&
+                                        r.korisnikTelefon!.trim().isNotEmpty)
+                                    ? r.korisnikTelefon!.trim()
+                                    : '—',
                           ),
                         ),
                         DataCell(
@@ -1107,7 +1102,7 @@ class _AppointmentsTable extends StatelessWidget {
                         DataCell(
                           _PersonCell(
                             name: r.zaposlenikIme ?? 'Nua Therapist',
-                            subtitle: 'Senior Therapist',
+                            subtitle: '',
                             compact: true,
                           ),
                         ),
@@ -1134,8 +1129,8 @@ class _AppointmentsTable extends StatelessWidget {
                           _ActionsMenu(
                             appointment: r,
                             onConfirmToggle: onConfirmToggle,
+                            onComplete: onComplete,
                             onCancel: onCancel,
-                            onDelete: onDelete,
                             onEdit: onEdit,
                           ),
                         ),
@@ -1191,15 +1186,15 @@ class _AppointmentDetailsPanel extends StatelessWidget {
     required this.appointment,
     required this.onEdit,
     required this.onConfirmToggle,
+    required this.onComplete,
     required this.onCancel,
-    required this.onDelete,
   });
 
   final Rezervacija? appointment;
   final VoidCallback? onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
   final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,8 +1215,8 @@ class _AppointmentDetailsPanel extends StatelessWidget {
           appointment: r,
           onEdit: onEdit,
           onConfirmToggle: onConfirmToggle,
+          onComplete: onComplete,
           onCancel: onCancel,
-          onDelete: onDelete,
         ),
       ],
     );
@@ -1311,7 +1306,7 @@ class _AppointmentDetailsContent extends StatelessWidget {
                 icon: Icons.person_outline,
                 label: 'Therapist',
                 value: appointment.zaposlenikIme ?? 'Nua Therapist',
-                helper: 'Senior Therapist',
+                helper: null,
               ),
               _DetailRow(
                 icon: Icons.timer_outlined,
@@ -1336,11 +1331,6 @@ class _AppointmentDetailsContent extends StatelessWidget {
                       ? const Color(0xFF4ADE80)
                       : const Color(0xFFFF5E7A),
                 ),
-              ),
-              const _DetailRow(
-                icon: Icons.language_outlined,
-                label: 'Booking Source',
-                value: 'Website',
               ),
               _DetailRow(
                 icon: Icons.notes_outlined,
@@ -2034,12 +2024,12 @@ class _ActionsMenu extends StatelessWidget {
   const _ActionsMenu({
     required this.appointment,
     required this.onConfirmToggle,
+    required this.onComplete,
     required this.onCancel,
-    required this.onDelete,
     required this.onEdit,
   });
   final Rezervacija appointment;
-  final ValueChanged<Rezervacija> onConfirmToggle, onCancel, onDelete, onEdit;
+  final ValueChanged<Rezervacija> onConfirmToggle, onComplete, onCancel, onEdit;
   @override
   Widget build(BuildContext context) => PopupMenuButton<String>(
     color: NuaLuxuryTokens.voidViolet,
@@ -2047,13 +2037,20 @@ class _ActionsMenu extends StatelessWidget {
     onSelected: (v) {
       if (v == 'edit') onEdit(appointment);
       if (v == 'toggle') onConfirmToggle(appointment);
+      if (v == 'complete') onComplete(appointment);
       if (v == 'cancel') onCancel(appointment);
     },
-    itemBuilder: (_) => [
-      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-      const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
-      const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-    ],
+    itemBuilder: (_) {
+      final canComplete =
+          !appointment.isOtkazana && (appointment.status == 'Confirmed');
+      return [
+        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+        const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
+        if (canComplete)
+          const PopupMenuItem(value: 'complete', child: Text('Mark as Completed')),
+        const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+      ];
+    },
   );
 }
 
@@ -2253,14 +2250,14 @@ class _BottomEditBar extends StatelessWidget {
     required this.appointment,
     required this.onEdit,
     required this.onConfirmToggle,
+    required this.onComplete,
     required this.onCancel,
-    required this.onDelete,
   });
   final Rezervacija? appointment;
   final VoidCallback? onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
   final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onDelete;
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
@@ -2281,11 +2278,16 @@ class _BottomEditBar extends StatelessWidget {
           final r = appointment;
           if (r == null) return;
           if (v == 'toggle') onConfirmToggle(r);
+          if (v == 'complete') onComplete(r);
           if (v == 'cancel') onCancel(r);
         },
         itemBuilder: (ctx) {
+          final r = appointment;
+          final canComplete = r != null && !r.isOtkazana && r.status == 'Confirmed';
           return [
             const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
+            if (canComplete)
+              const PopupMenuItem(value: 'complete', child: Text('Mark as Completed')),
             const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
           ];
         },
@@ -2490,17 +2492,17 @@ class _AdminAppointmentCreateDialogState
         for (final c in widget.data.clients) {
           if (c.id == _clientId) {
             final name = c.punoIme.isEmpty ? c.email : c.punoIme;
-            return name.isEmpty ? 'Nepoznat klijent' : name;
+            return name.isEmpty ? 'Unknown client' : name;
           }
         }
       }
-      return 'Nepoznat klijent';
+      return 'Unknown client';
     }
     if (_clientId == null) return 'Select a client';
     for (final c in widget.data.clients) {
       if (c.id == _clientId) {
         final name = c.punoIme.isEmpty ? c.email : c.punoIme;
-        return name.isEmpty ? 'Nepoznat klijent' : name;
+        return name.isEmpty ? 'Unknown client' : name;
       }
     }
     return 'Select a client';
@@ -2679,9 +2681,9 @@ class _AdminAppointmentCreateDialogState
                             ),
                       enabled: !_isEdit && widget.data.clients.isNotEmpty,
                       disabledReason: _isEdit
-                          ? 'Klijent se ne mijenja prilikom uređivanja termina.'
+                          ? 'Client cannot be changed when editing an appointment.'
                           : widget.data.clients.isEmpty
-                              ? 'Nema klijenata u bazi. Dodajte klijenta prije kreiranja termina.'
+                              ? 'No clients found. Create a client before adding appointments.'
                               : null,
                       onTap: _isEdit || widget.data.clients.isEmpty
                           ? null
@@ -2730,7 +2732,7 @@ class _AdminAppointmentCreateDialogState
                             ),
                             enabled: widget.data.services.isNotEmpty,
                             disabledReason: widget.data.services.isEmpty
-                                ? 'Nema usluga u bazi.'
+                                ? 'No services found.'
                                 : null,
                             onTap: widget.data.services.isEmpty
                                 ? null
@@ -2765,7 +2767,7 @@ class _AdminAppointmentCreateDialogState
                             ),
                             enabled: widget.data.therapists.isNotEmpty,
                             disabledReason: widget.data.therapists.isEmpty
-                                ? 'Nema terapeuta u bazi.'
+                                ? 'No therapists found.'
                                 : null,
                             onTap: widget.data.therapists.isEmpty
                                 ? null
@@ -2798,8 +2800,8 @@ class _AdminAppointmentCreateDialogState
                       const SizedBox(height: 8),
                       Text(
                         _isEdit
-                            ? 'Učitajte usluge i terapeute prije uređivanja termina.'
-                            : 'Prije kreiranja termina učitajte klijente, usluge i terapeute.',
+                            ? 'Load services and therapists before editing.'
+                            : 'Load clients, services, and therapists before creating appointments.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.white.withValues(alpha: 0.45),
@@ -2834,8 +2836,8 @@ class _AdminAppointmentCreateDialogState
                           enabled: !missingData,
                           disabledTooltip: missingData
                               ? (_isEdit
-                                  ? 'Učitajte usluge i terapeute prije uređivanja termina.'
-                                  : 'Prije kreiranja termina učitajte klijente, usluge i terapeute.')
+                                  ? 'Load services and therapists before editing.'
+                                  : 'Load clients, services, and therapists before creating appointments.')
                               : null,
                           onPressed: missingData
                               ? null
@@ -2843,8 +2845,8 @@ class _AdminAppointmentCreateDialogState
                                   if (!_canSubmit) {
                                     setState(() {
                                       _formError = _isEdit
-                                          ? 'Odaberite uslugu i terapeuta.'
-                                          : 'Odaberite klijenta, uslugu i terapeuta.';
+                                          ? 'Select a service and therapist.'
+                                          : 'Select a client, service, and therapist.';
                                     });
                                     return;
                                   }
