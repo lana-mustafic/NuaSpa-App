@@ -288,7 +288,11 @@ class _AdminAppointmentsManagementScreenState
                             reservations: filtered,
                             services: data.services,
                             onViewDetails: (r) =>
-                                _showAppointmentDetails(r, data.services),
+                                _showAppointmentDetails(
+                                  r,
+                                  data.services,
+                                  data.clients,
+                                ),
                             onEdit: _edit,
                             onConfirmToggle: _toggleConfirmed,
                             onComplete: _complete,
@@ -529,13 +533,18 @@ class _AdminAppointmentsManagementScreenState
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _showAppointmentDetails(Rezervacija r, List<Usluga> services) {
+  void _showAppointmentDetails(
+    Rezervacija r,
+    List<Usluga> services,
+    List<AdminClientRow> clients,
+  ) {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (dialogContext) => _AppointmentDetailsModal(
         appointment: r,
         services: services,
+        clients: clients,
         onEdit: () {
           Navigator.pop(dialogContext);
           _edit(r);
@@ -1696,6 +1705,7 @@ class _AppointmentDetailsModal extends StatelessWidget {
   const _AppointmentDetailsModal({
     required this.appointment,
     required this.services,
+    required this.clients,
     required this.onEdit,
     required this.onConfirmToggle,
     required this.onComplete,
@@ -1704,6 +1714,7 @@ class _AppointmentDetailsModal extends StatelessWidget {
 
   final Rezervacija appointment;
   final List<Usluga> services;
+  final List<AdminClientRow> clients;
   final VoidCallback onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onComplete;
@@ -1778,6 +1789,7 @@ class _AppointmentDetailsModal extends StatelessWidget {
                     child: _AppointmentDetailsContent(
                       appointment: appointment,
                       services: services,
+                      clients: clients,
                     ),
                   ),
                 ),
@@ -1905,10 +1917,12 @@ class _AppointmentDetailsContent extends StatelessWidget {
   const _AppointmentDetailsContent({
     required this.appointment,
     required this.services,
+    required this.clients,
   });
 
   final Rezervacija appointment;
   final List<Usluga> services;
+  final List<AdminClientRow> clients;
 
   @override
   Widget build(BuildContext context) {
@@ -1922,7 +1936,15 @@ class _AppointmentDetailsContent extends StatelessWidget {
             ),
       builder: (context, snap) {
         final history = snap.data ?? const <RezervacijaPovijestItem>[];
-        final spent = appointment.uslugaCijena * (history.length + 1);
+        AdminClientRow? clientRow;
+        for (final c in clients) {
+          if (c.id == appointment.korisnikId) {
+            clientRow = c;
+            break;
+          }
+        }
+        final spent = clientRow?.ukupnoPotroseno ??
+            (appointment.isPlacena ? appointment.uslugaCijena : 0.0);
         final phone = appointment.korisnikTelefon?.trim();
         final email = appointment.korisnikEmail?.trim();
 

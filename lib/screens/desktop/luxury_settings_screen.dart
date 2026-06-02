@@ -341,7 +341,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
         _WorkspaceLink(
           icon: Icons.people_outline,
           label: 'Clients',
-          subtitle: 'Client profiles and history',
+          subtitle: 'Client profiles, notes, and CRM',
           onTap: () => nav.goToAdminSuite(AdminSuiteRoute.clients),
         ),
         _WorkspaceLink(

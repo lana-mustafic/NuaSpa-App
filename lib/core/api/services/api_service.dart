@@ -1572,7 +1572,7 @@ class ApiService {
       );
     } catch (e) {
       debugPrint('Greška u ApiService.getAdminClients: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -1591,6 +1591,35 @@ class ApiService {
     return all;
   }
 
+  /// Returns all client pages plus server total when available.
+  Future<({List<AdminClientRow> clients, int? serverTotal})>
+      getAdminClientsAllWithTotal({
+    String? q,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final all = <AdminClientRow>[];
+    int? serverTotal;
+    for (var page = 1; page <= maxPages; page++) {
+      final response = await _dio.get<dynamic>(
+        'AdminKlijent',
+        queryParameters: {
+          if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+          'page': page,
+          'pageSize': pageSize,
+        },
+      );
+      serverTotal ??= parsePagedTotal(response.data);
+      final pageItems = parsePagedItems(
+        response.data,
+        (json) => AdminClientRow.fromJson(json),
+      );
+      all.addAll(pageItems);
+      if (pageItems.length < pageSize) break;
+    }
+    return (clients: all, serverTotal: serverTotal);
+  }
+
   Future<AdminClientStats?> getAdminClientStats({String? q}) async {
     try {
       final response = await _dio.get<dynamic>(
@@ -1604,7 +1633,7 @@ class ApiService {
       return AdminClientStats.fromJson(data);
     } catch (e) {
       debugPrint('Greška u ApiService.getAdminClientStats: $e');
-      return null;
+      rethrow;
     }
   }
 

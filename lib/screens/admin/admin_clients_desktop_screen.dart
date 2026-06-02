@@ -10,6 +10,7 @@ import '../../core/validation/nua_validators.dart';
 import '../../widgets/forms/luxury_validated_field.dart';
 import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
+import '../../models/rezervacija_povijest_item.dart';
 import '../../models/grad_lookup.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
@@ -38,10 +39,17 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   final TextEditingController _quickSearch = TextEditingController();
   Timer? _searchDebounce;
 
-  Future<({List<AdminClientRow> clients, AdminClientStats? stats})>? _payloadFuture;
+  Future<
+      ({
+        List<AdminClientRow> clients,
+        AdminClientStats? stats,
+        String? error,
+        int? serverTotal,
+        bool hitPageCap,
+      })>? _payloadFuture;
   Future<List<Zaposlenik>>? _therapistsFuture;
 
-  String _vipFilter = 'all'; // all | vip | none
+  String _vipFilter = 'all'; // all | vip | manual | none
   int? _therapistFilterIndex; // null = all; else index into therapists
   String _sortKey = 'new'; // new | old | visit | name
   int _page = 0;
@@ -94,9 +102,29 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     final q = _apiSearch.text.trim();
     setState(() {
       _payloadFuture = () async {
-        final clients = await widget.api.getAdminClients(q: q, pageSize: 500);
-        final stats = await widget.api.getAdminClientStats(q: q.isEmpty ? null : q);
-        return (clients: clients, stats: stats);
+        try {
+          final loaded = await widget.api.getAdminClientsAllWithTotal(
+            q: q.isEmpty ? null : q,
+          );
+          final stats = await widget.api.getAdminClientStats(
+            q: q.isEmpty ? null : q,
+          );
+          return (
+            clients: loaded.clients,
+            stats: stats,
+            error: null,
+            serverTotal: loaded.serverTotal,
+            hitPageCap: loaded.clients.length >= 5000,
+          );
+        } catch (e) {
+          return (
+            clients: <AdminClientRow>[],
+            stats: null,
+            error: _apiErr(e),
+            serverTotal: null,
+            hitPageCap: false,
+          );
+        }
       }();
       _page = 0;
     });
@@ -107,20 +135,13 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       _therapistFilterIndex == null &&
       _quickSearch.text.trim().isEmpty;
 
-  String _therapistDisplay(AdminClientRow c, List<Zaposlenik> th) {
+  String _therapistDisplay(AdminClientRow c) {
     final api = c.terapeutPunoIme;
     if (api != null && api.isNotEmpty) return api;
-    final z = _therapistFor(c, th);
-    return z == null ? '—' : _therapistName(z);
+    return '—';
   }
 
-  int? _therapistIdForRow(AdminClientRow c, List<Zaposlenik> th) =>
-      c.terapeutZaposlenikId ?? _therapistFor(c, th)?.id;
-
-  Zaposlenik? _therapistFor(AdminClientRow c, List<Zaposlenik> th) {
-    if (th.isEmpty) return null;
-    return th[c.id.abs() % th.length];
-  }
+  int? _therapistIdForRow(AdminClientRow c) => c.terapeutZaposlenikId;
 
   String _therapistName(Zaposlenik z) => '${z.ime} ${z.prezime}'.trim();
 
@@ -176,6 +197,8 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
 
     if (_vipFilter == 'vip') {
       xs = xs.where((c) => c.isVip).toList();
+    } else if (_vipFilter == 'manual') {
+      xs = xs.where((c) => c.isVipKlijent).toList();
     } else if (_vipFilter == 'none') {
       xs = xs.where((c) => !c.isVip).toList();
     }
@@ -184,7 +207,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         therapists.isNotEmpty &&
         _therapistFilterIndex! < therapists.length) {
       final z = therapists[_therapistFilterIndex!];
-      xs = xs.where((c) => _therapistIdForRow(c, therapists) == z.id).toList();
+      xs = xs.where((c) => _therapistIdForRow(c) == z.id).toList();
     }
 
     int cmp(AdminClientRow a, AdminClientRow b) {
@@ -210,8 +233,8 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     return xs;
   }
 
-  void _openClientSheet(AdminClientRow c, List<Zaposlenik> th) {
-    final tName = _therapistDisplay(c, th);
+  void _openClientSheet(AdminClientRow c) {
+    final tName = _therapistDisplay(c);
     showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -220,6 +243,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, _) => _ClientDetailsOverlay(
         client: c,
+        api: widget.api,
         therapistLabel: tName,
         fmtVisit: _fmtVisit,
       ),
@@ -655,13 +679,24 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       builder: (context, thSnap) {
         final therapists = thSnap.data ?? const <Zaposlenik>[];
 
-        return FutureBuilder<({List<AdminClientRow> clients, AdminClientStats? stats})>(
+        return FutureBuilder<
+            ({
+              List<AdminClientRow> clients,
+              AdminClientStats? stats,
+              String? error,
+              int? serverTotal,
+              bool hitPageCap,
+            })>(
           future: _payloadFuture,
           builder: (context, snap) {
             final loading = snap.connectionState == ConnectionState.waiting;
             final payload = snap.data;
+            final loadError = payload?.error;
             final raw = payload?.clients ?? const <AdminClientRow>[];
             final serverStats = payload?.stats;
+            final serverTotal = payload?.serverTotal;
+            final hitPageCap = payload?.hitPageCap ?? false;
+            final truncated = serverTotal != null && raw.length < serverTotal;
             final filtered = _applyLocalFilters(raw, therapists);
             final totalFiltered = filtered.length;
             final pageCount = totalFiltered == 0
@@ -703,6 +738,26 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                 final content = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (loadError != null)
+                      _ClientsLoadBanner(
+                        message: loadError,
+                        isError: true,
+                        onRetry: _reloadFromApi,
+                      ),
+                    if (loadError == null && (truncated || hitPageCap))
+                      _ClientsLoadBanner(
+                        message: hitPageCap
+                            ? 'Showing first 5,000 clients. Narrow your search to see more.'
+                            : 'Loaded ${raw.length} of $serverTotal clients. Pull to refresh or search.',
+                        isError: false,
+                        onRetry: _reloadFromApi,
+                      ),
+                    if (loadError == null && !_useServerStats)
+                      _ClientsLoadBanner(
+                        message:
+                            'KPIs below reflect your current filters (${totalFiltered} shown), not all clients.',
+                        isError: false,
+                      ),
                     _ClientsHeroKpiSection(
                       totalClients: totalClientsKpi,
                       vipCount: vipN,
@@ -741,10 +796,12 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                     Expanded(
                       child: _ClientsTableCard(
                         loading: loading,
+                        hasError: loadError != null,
                         rows: pageSlice,
-                        therapistLabel: (c) => _therapistDisplay(c, therapists),
+                        therapistLabel: (c) => _therapistDisplay(c),
                         fmtVisit: _fmtVisit,
-                        onView: (row) => _openClientSheet(row, therapists),
+                        onRetry: _reloadFromApi,
+                        onView: (row) => _openClientSheet(row),
                         onMore: (row) => _onClientMore(row, therapists),
                       ),
                     ),
@@ -774,15 +831,24 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(child: content),
-                    SizedBox(width: rightW, child: _RightPanel(
-                      quickSearch: _quickSearch,
-                      recent: _recentClients(filtered),
-                      therapists: therapists,
-                      countsForTherapist: (z) => filtered
-                          .where((c) => _therapistIdForRow(c, therapists) == z.id)
-                          .length,
-                      therapistName: _therapistName,
-                    )),
+                    SizedBox(
+                      width: rightW,
+                      child: _RightPanel(
+                        quickSearch: _quickSearch,
+                        recent: _recentClients(filtered),
+                        therapists: therapists,
+                        countsForTherapist: (z) => filtered
+                            .where((c) => _therapistIdForRow(c) == z.id)
+                            .length,
+                        therapistName: _therapistName,
+                        onViewAll: () => setState(() {
+                          _vipFilter = 'all';
+                          _therapistFilterIndex = null;
+                          _quickSearch.clear();
+                          _page = 0;
+                        }),
+                      ),
+                    ),
                   ],
                 );
               },
@@ -807,6 +873,55 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
 }
 
 // ——— UI blocks ———
+
+class _ClientsLoadBanner extends StatelessWidget {
+  const _ClientsLoadBanner({
+    required this.message,
+    required this.isError,
+    this.onRetry,
+  });
+
+  final String message;
+  final bool isError;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: isError
+            ? Colors.red.withValues(alpha: 0.12)
+            : Colors.amber.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.info_outline,
+                size: 20,
+                color: isError ? Colors.red.shade300 : Colors.amber.shade200,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.88),
+                  ),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _Glass extends StatelessWidget {
   const _Glass({
@@ -1338,7 +1453,11 @@ class _FilterBar extends StatelessWidget {
                 value: vipFilter,
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('All statuses')),
-                  DropdownMenuItem(value: 'vip', child: Text('VIP only')),
+                  DropdownMenuItem(value: 'vip', child: Text('VIP (any)')),
+                  DropdownMenuItem(
+                    value: 'manual',
+                    child: Text('Manual VIP only'),
+                  ),
                   DropdownMenuItem(value: 'none', child: Text('Non-VIP')),
                 ],
                 onChanged: (v) {
@@ -1449,11 +1568,13 @@ class _FilterBar extends StatelessWidget {
 class _ClientDetailsOverlay extends StatelessWidget {
   const _ClientDetailsOverlay({
     required this.client,
+    required this.api,
     required this.therapistLabel,
     required this.fmtVisit,
   });
 
   final AdminClientRow client;
+  final ApiService api;
   final String therapistLabel;
   final String Function(DateTime? d) fmtVisit;
 
@@ -1477,6 +1598,7 @@ class _ClientDetailsOverlay extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: _ClientDetailsDialog(
                 client: client,
+                api: api,
                 therapistLabel: therapistLabel,
                 fmtVisit: fmtVisit,
                 onClose: () => Navigator.of(context).pop(),
@@ -1492,24 +1614,39 @@ class _ClientDetailsOverlay extends StatelessWidget {
 class _ClientDetailsDialog extends StatelessWidget {
   const _ClientDetailsDialog({
     required this.client,
+    required this.api,
     required this.therapistLabel,
     required this.fmtVisit,
     required this.onClose,
   });
 
   final AdminClientRow client;
+  final ApiService api;
   final String therapistLabel;
   final String Function(DateTime? d) fmtVisit;
   final VoidCallback onClose;
 
   static const Color _bg = Color(0xEB120A24);
-  static const double _width = 440;
+  static const double _width = 480;
+
+  String _vipDetailLabel() {
+    final earned = client.isVipFromActivity;
+    if (client.isVipKlijent && earned) {
+      return 'Manual + earned (10+ visits or 600+ KM)';
+    }
+    if (client.isVipKlijent) return 'Manual VIP';
+    if (client.isVip && earned) return 'Earned (10+ visits or 600+ KM spent)';
+    if (client.isVip) return 'VIP';
+    return 'Standard';
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasVisit = client.zadnjaPosjeta != null;
     final lastVisitValue = hasVisit ? fmtVisit(client.zadnjaPosjeta) : 'No visits yet';
     final lastVisitMuted = !hasVisit;
+    final note = client.napomenaZaTerapeuta?.trim();
+    final city = client.gradNaziv?.trim();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -1536,80 +1673,227 @@ class _ClientDetailsDialog extends StatelessWidget {
           ),
           child: SizedBox(
             width: _width,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ClientDetailsHeader(
-                    client: client,
-                    onClose: onClose,
-                  ),
-                  const SizedBox(height: 20),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
-                  const SizedBox(height: 20),
-                  _ClientInfoRow(
-                    icon: Icons.verified_user_outlined,
-                    label: 'Account',
-                    valueWidget: Text(
-                      client.isActive ? 'Active' : 'Inactive',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: client.isActive
-                            ? const Color(0xFF22C55E)
-                            : Colors.orange.shade300,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ClientDetailsHeader(
+                      client: client,
+                      onClose: onClose,
+                    ),
+                    const SizedBox(height: 20),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                    const SizedBox(height: 16),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _ClientInfoRow(
+                              icon: Icons.verified_user_outlined,
+                              label: 'Account',
+                              valueWidget: Text(
+                                client.isActive ? 'Active' : 'Inactive',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: client.isActive
+                                      ? const Color(0xFF22C55E)
+                                      : Colors.orange.shade300,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.workspace_premium_rounded,
+                              label: 'VIP Status',
+                              valueWidget: client.isVip
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _VipBadge(),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            _vipDetailLabel(),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.white.withValues(
+                                                alpha: 0.65,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      'Standard',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.55,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.location_city_outlined,
+                              label: 'City',
+                              value: city != null && city.isNotEmpty
+                                  ? city
+                                  : '—',
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.calendar_month_outlined,
+                              label: 'Registered',
+                              value: fmtVisit(client.datumRegistracije),
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.spa_outlined,
+                              label: 'Therapist',
+                              value: therapistLabel,
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.event_available_outlined,
+                              label: 'Total Visits',
+                              value: '${client.ukupnoPosjeta}',
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.account_balance_wallet_outlined,
+                              label: 'Spending',
+                              value:
+                                  '${client.ukupnoPotroseno.toStringAsFixed(0)} KM',
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.schedule_rounded,
+                              label: 'Last Visit',
+                              value: lastVisitValue,
+                              valueMuted: lastVisitMuted,
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
+                              icon: Icons.notes_outlined,
+                              label: 'Notes',
+                              value: note != null && note.isNotEmpty
+                                  ? note
+                                  : 'No notes on file.',
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Recent appointments',
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: _AdminClientsDesktopScreenState._textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            FutureBuilder<List<RezervacijaPovijestItem>>(
+                              future: api.getRezervacijaPovijestZaKlijenta(
+                                korisnikId: client.id,
+                                take: 8,
+                              ),
+                              builder: (context, histSnap) {
+                                if (histSnap.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (histSnap.hasError) {
+                                  return Text(
+                                    'Could not load history.',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                final history =
+                                    histSnap.data ?? const [];
+                                if (history.isEmpty) {
+                                  return Text(
+                                    'No past appointments.',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return Column(
+                                  children: [
+                                    for (final h in history)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                h.uslugaNaziv ?? 'Service',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              fmtVisit(h.datumRezervacije),
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  _ClientInfoRow(
-                    icon: Icons.workspace_premium_rounded,
-                    label: 'VIP Status',
-                    valueWidget: client.isVip
-                        ? _VipBadge()
-                        : Text(
-                            'Standard',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 18),
-                  _ClientInfoRow(
-                    icon: Icons.spa_outlined,
-                    label: 'Therapist',
-                    value: therapistLabel,
-                  ),
-                  const SizedBox(height: 18),
-                  _ClientInfoRow(
-                    icon: Icons.event_available_outlined,
-                    label: 'Total Visits',
-                    value: '${client.ukupnoPosjeta}',
-                  ),
-                  const SizedBox(height: 18),
-                  _ClientInfoRow(
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: 'Spending',
-                    value: '${client.ukupnoPotroseno.toStringAsFixed(0)} KM',
-                  ),
-                  const SizedBox(height: 18),
-                  _ClientInfoRow(
-                    icon: Icons.schedule_rounded,
-                    label: 'Last Visit',
-                    value: lastVisitValue,
-                    valueMuted: lastVisitMuted,
-                  ),
-                  const SizedBox(height: 24),
-                  _ClientDetailsCloseButton(onPressed: onClose),
-                ],
+                    const SizedBox(height: 16),
+                    _ClientDetailsCloseButton(onPressed: onClose),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2018,6 +2302,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   late final TextEditingController _telC;
   late final TextEditingController _newPassC;
   late final TextEditingController _confirmPassC;
+  late final TextEditingController _noteC;
   late int? _zId;
   late int _gradId;
   late bool _vip;
@@ -2036,6 +2321,9 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _telC = TextEditingController(text: widget.client.telefon);
     _newPassC = TextEditingController();
     _confirmPassC = TextEditingController();
+    _noteC = TextEditingController(
+      text: widget.client.napomenaZaTerapeuta ?? '',
+    );
     _zId = widget.client.preferiraniZaposlenikId;
     _gradId = widget.client.gradId > 0
         ? widget.client.gradId
@@ -2054,6 +2342,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _telC.dispose();
     _newPassC.dispose();
     _confirmPassC.dispose();
+    _noteC.dispose();
     super.dispose();
   }
 
@@ -2081,6 +2370,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
         isVipKlijent: _vip,
         setZaposlenik: true,
         zaposlenikId: _zId,
+        napomenaZaTerapeuta: _noteC.text.trim(),
         novaLozinka: _changePassword && _newPassC.text.isNotEmpty
             ? _newPassC.text
             : null,
@@ -2369,9 +2659,46 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  Text(
+                    'Notes for therapist',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _noteC,
+                    enabled: !_saving,
+                    maxLines: 3,
+                    maxLength: 1200,
+                    style: fieldStyle,
+                    decoration: InputDecoration(
+                      hintText: 'Preferences, allergies, etc.',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.04),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   _ClientEditToggleRow(
                     icon: Icons.workspace_premium_rounded,
-                    label: 'VIP client',
+                    label: 'Manual VIP',
                     value: _vip,
                     onChanged: _saving ? null : (v) => setState(() => _vip = v),
                   ),
@@ -2729,19 +3056,23 @@ class _ClientDetailsCloseButtonState extends State<_ClientDetailsCloseButton> {
 class _ClientsTableCard extends StatelessWidget {
   const _ClientsTableCard({
     required this.loading,
+    required this.hasError,
     required this.rows,
     required this.therapistLabel,
     required this.fmtVisit,
     required this.onView,
     required this.onMore,
+    this.onRetry,
   });
 
   final bool loading;
+  final bool hasError;
   final List<AdminClientRow> rows;
   final String Function(AdminClientRow c) therapistLabel;
   final String Function(DateTime? d) fmtVisit;
   final void Function(AdminClientRow) onView;
   final void Function(AdminClientRow) onMore;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -2761,9 +3092,25 @@ class _ClientsTableCard extends StatelessWidget {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(48),
-            child: Text(
-              'No clients to display.',
-              style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  hasError
+                      ? 'Could not load clients.'
+                      : 'No clients to display.',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+                if (hasError && onRetry != null) ...[
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: onRetry,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
@@ -2773,35 +3120,54 @@ class _ClientsTableCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         const headerH = 64.0;
-        final listH = (constraints.maxHeight - headerH).clamp(0.0, double.infinity);
+        const minTableW = 1080.0;
+        final listH =
+            (constraints.maxHeight - headerH).clamp(0.0, double.infinity);
+
+        final table = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _TableHeaderRow(),
+            if (listH > 0)
+              SizedBox(
+                height: listH,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  itemCount: rows.length,
+                  itemBuilder: (context, i) {
+                    final c = rows[i];
+                    final tLabel = therapistLabel(c);
+                    return _TableDataRow(
+                      client: c,
+                      therapistLabel: tLabel,
+                      fmtVisit: fmtVisit,
+                      onView: () => onView(c),
+                      onMore: () => onMore(c),
+                    );
+                  },
+                ),
+              )
+            else
+              const SizedBox.shrink(),
+          ],
+        );
 
         return _ClientsTableShell(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _TableHeaderRow(),
-              if (listH > 0)
-                SizedBox(
-                  height: listH,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                    itemCount: rows.length,
-                    itemBuilder: (context, i) {
-                      final c = rows[i];
-                      final tLabel = therapistLabel(c);
-                      return _TableDataRow(
-                        client: c,
-                        therapistLabel: tLabel,
-                        fmtVisit: fmtVisit,
-                        onView: () => onView(c),
-                        onMore: () => onMore(c),
-                      );
-                    },
-                  ),
-                )
-              else
-                const SizedBox.shrink(),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth < minTableW
+                    ? minTableW
+                    : constraints.maxWidth,
+              ),
+              child: SizedBox(
+                width: constraints.maxWidth < minTableW
+                    ? minTableW
+                    : constraints.maxWidth,
+                child: table,
+              ),
+            ),
           ),
         );
       },
@@ -2993,11 +3359,13 @@ class _TableDataRowState extends State<_TableDataRow> {
                   children: [
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
+                      tooltip: 'View client',
                       onTap: widget.onView,
                     ),
                     const SizedBox(width: 10),
                     _ActionIconButton(
                       icon: Icons.more_horiz_rounded,
+                      tooltip: 'More actions',
                       onTap: widget.onMore,
                     ),
                   ],
@@ -3339,10 +3707,15 @@ class _TableDataRowState extends State<_TableDataRow> {
 }
 
 class _ActionIconButton extends StatefulWidget {
-  const _ActionIconButton({required this.icon, required this.onTap});
+  const _ActionIconButton({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   State<_ActionIconButton> createState() => _ActionIconButtonState();
@@ -3353,7 +3726,7 @@ class _ActionIconButtonState extends State<_ActionIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final btn = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
@@ -3390,6 +3763,8 @@ class _ActionIconButtonState extends State<_ActionIconButton> {
         ),
       ),
     );
+    if (widget.tooltip == null) return btn;
+    return Tooltip(message: widget.tooltip!, child: btn);
   }
 }
 
@@ -3567,6 +3942,7 @@ class _RightPanel extends StatelessWidget {
     required this.therapists,
     required this.countsForTherapist,
     required this.therapistName,
+    required this.onViewAll,
   });
 
   final TextEditingController quickSearch;
@@ -3574,6 +3950,7 @@ class _RightPanel extends StatelessWidget {
   final List<Zaposlenik> therapists;
   final int Function(Zaposlenik z) countsForTherapist;
   final String Function(Zaposlenik z) therapistName;
+  final VoidCallback onViewAll;
 
   @override
   Widget build(BuildContext context) {
@@ -3705,7 +4082,7 @@ class _RightPanel extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: onViewAll,
                     child: Text(
                       'View all',
                       style: GoogleFonts.inter(
@@ -3807,7 +4184,7 @@ class _RightPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'VIP clients have access to special packages and priority appointments.',
+                  'Manual VIP is set per client. Earned VIP: 10+ visits or 600+ KM spent (paid appointments).',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     height: 1.45,

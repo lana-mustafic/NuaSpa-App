@@ -26,6 +26,7 @@ class AdminClientRow {
 
   final int gradId;
   final String? gradNaziv;
+  final String? napomenaZaTerapeuta;
 
   const AdminClientRow({
     required this.id,
@@ -46,7 +47,12 @@ class AdminClientRow {
     this.isActive = true,
     this.gradId = 0,
     this.gradNaziv,
+    this.napomenaZaTerapeuta,
   });
+
+  /// VIP earned via visits/spend (may coexist with manual flag).
+  bool get isVipFromActivity =>
+      ukupnoPosjeta >= 10 || ukupnoPotroseno >= 600;
 
   String get punoIme => '$ime $prezime'.trim();
 
@@ -79,6 +85,7 @@ class AdminClientRow {
       isActive: (json['status'] as bool?) ?? true,
       gradId: (json['gradId'] as num?)?.toInt() ?? 0,
       gradNaziv: json['gradNaziv'] as String?,
+      napomenaZaTerapeuta: json['napomenaZaTerapeuta'] as String?,
     );
   }
 }

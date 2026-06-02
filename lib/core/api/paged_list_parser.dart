@@ -20,3 +20,11 @@ List<T> parsePagedItems<T>(
   }
   return [];
 }
+
+/// Total row count from paginated API (`ukupno`).
+int? parsePagedTotal(dynamic data) {
+  if (data is Map) {
+    return (data['ukupno'] as num?)?.toInt();
+  }
+  return null;
+}
