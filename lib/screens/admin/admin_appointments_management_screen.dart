@@ -15,7 +15,7 @@ import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_desktop_header.dart';
-import '../../ui/widgets/luxury/luxury_glass_panel.dart';
+
 enum _AppointmentView { day, week, month }
 
 class AdminAppointmentsManagementScreen extends StatefulWidget {
@@ -40,6 +40,7 @@ class _AdminAppointmentsManagementScreenState
   String _status = 'All Status';
   _AppointmentView _view = _AppointmentView.day;
   int _handledCreateRequest = 0;
+  int _handledEditRequest = 0;
   int _lastFiltersPulse = 0;
   final ScrollController _mainScrollController = ScrollController();
 
@@ -75,7 +76,9 @@ class _AdminAppointmentsManagementScreenState
   }
 
   void _reload() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   Future<void> _showFiltersSheet(_AppointmentsData data) async {
@@ -213,6 +216,16 @@ class _AdminAppointmentsManagementScreenState
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _openCreate(data);
           });
+        }
+        if (nav.appointmentEditRequest != _handledEditRequest &&
+            snap.connectionState == ConnectionState.done) {
+          _handledEditRequest = nav.appointmentEditRequest;
+          final editId = nav.takeAppointmentEditId();
+          if (editId != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _openEditById(editId, data);
+            });
+          }
         }
         if (nav.headerFiltersPulse != _lastFiltersPulse &&
             snap.connectionState == ConnectionState.done) {
@@ -455,6 +468,23 @@ class _AdminAppointmentsManagementScreenState
           : 'Cancellation failed.',
     );
     if (result?.otkazana == true) _reload();
+  }
+
+  Future<void> _openEditById(int id, _AppointmentsData data) async {
+    Rezervacija? found;
+    for (final r in data.reservations) {
+      if (r.id == id) {
+        found = r;
+        break;
+      }
+    }
+    found ??= await _api.getRezervacijaById(id);
+    if (!mounted) return;
+    if (found == null) {
+      _toast('Appointment not found.');
+      return;
+    }
+    await _edit(found);
   }
 
   Future<void> _edit(Rezervacija r) async {
@@ -2465,90 +2495,109 @@ class _ClientHistoryCard extends StatelessWidget {
     required this.last,
     required this.history,
   });
+
   final int total;
   final double spent;
   final String last;
   final List<RezervacijaPovijestItem> history;
-  @override
-  Widget build(BuildContext context) => LuxuryGlassPanel(
-    borderRadius: 20,
-    opacity: 0.24,
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Client History',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-              ),
-            ),
-            InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => _showHistory(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Text(
-                  'View All',
-                  style: TextStyle(
-                    color: NuaLuxuryTokens.champagneGold,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _HistoryMetric('Total Appointments', '$total'),
-        _HistoryMetric('Total Spent', '${spent.toStringAsFixed(0)} KM'),
-        _HistoryMetric('Last Appointment', last),
-      ],
-    ),
-  );
 
   void _showHistory(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Client History'),
-        content: SizedBox(
-          width: 520,
-          child: history.isEmpty
-              ? const Text('No previous appointments.')
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final item in history.take(12))
-                      ListTile(
-                        leading: Icon(
-                          item.isOtkazana
-                              ? Icons.cancel_outlined
-                              : item.isPotvrdjena
-                              ? Icons.check_circle_outline
-                              : Icons.schedule_outlined,
-                        ),
-                        title: Text(item.uslugaNaziv ?? 'Spa appointment'),
-                        subtitle: Text(
-                          item.datumRezervacije
-                              .toLocal()
-                              .toString()
-                              .split('.')
-                              .first,
-                        ),
-                        trailing: Text(item.isPlacena ? 'Paid' : 'Unpaid'),
-                      ),
-                  ],
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (ctx) => _ClientHistoryModal(
+        total: total,
+        spent: spent,
+        last: last,
+        history: history,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _ApptUi.purple.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _ApptUi.purple.withValues(alpha: 0.35),
+                  ),
                 ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+                child: Icon(
+                  Icons.history_rounded,
+                  size: 22,
+                  color: _ApptUi.purple2.withValues(alpha: 0.95),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${history.length} previous appointment${history.length == 1 ? '' : 's'} on file',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.72),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _ClientHistoryMetricChip(
+                  label: 'Total visits',
+                  value: '$total',
+                  icon: Icons.event_available_outlined,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ClientHistoryMetricChip(
+                  label: 'Total spent',
+                  value: '${spent.toStringAsFixed(0)} KM',
+                  icon: Icons.payments_outlined,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ClientHistoryMetricChip(
+                  label: 'Last visit',
+                  value: last,
+                  icon: Icons.schedule_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _showHistory(context),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('View client history'),
+              style: TextButton.styleFrom(
+                foregroundColor: _ApptUi.purple2,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
           ),
         ],
       ),
@@ -2556,24 +2605,348 @@ class _ClientHistoryCard extends StatelessWidget {
   }
 }
 
-class _HistoryMetric extends StatelessWidget {
-  const _HistoryMetric(this.label, this.value);
-  final String label, value;
+class _ClientHistoryMetricChip extends StatelessWidget {
+  const _ClientHistoryMetricChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: _ApptUi.lavender.withValues(alpha: 0.85)),
+          const SizedBox(height: 8),
+          Text(
             label,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.52)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.48),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              height: 1.15,
+              color: _ApptUi.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientHistoryModal extends StatelessWidget {
+  const _ClientHistoryModal({
+    required this.total,
+    required this.spent,
+    required this.last,
+    required this.history,
+  });
+
+  final int total;
+  final double spent;
+  final String last;
+  final List<RezervacijaPovijestItem> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxH = MediaQuery.sizeOf(context).height * 0.82;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFA120A24),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _ApptUi.purple.withValues(alpha: 0.22),
+                blurRadius: 48,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 80,
+                offset: const Offset(0, 24),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 12, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _ApptUi.purple.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _ApptUi.purple.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.history_rounded,
+                        color: Color(0xFFB388FF),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Client History',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: _ApptUi.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Previous appointments for this client',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _PremiumModalCloseButton(
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _ClientHistoryMetricChip(
+                        label: 'Total appointments',
+                        value: '$total',
+                        icon: Icons.event_available_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ClientHistoryMetricChip(
+                        label: 'Total spent',
+                        value: '${spent.toStringAsFixed(0)} KM',
+                        icon: Icons.payments_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ClientHistoryMetricChip(
+                        label: 'Last appointment',
+                        value: last,
+                        icon: Icons.schedule_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxH - 220),
+                  child: history.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const _ApptEmptyIllustration(
+                                icon: Icons.history_rounded,
+                                compact: true,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No previous appointments',
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: _ApptUi.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'This client has no earlier visits on record.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Colors.white.withValues(alpha: 0.52),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Scrollbar(
+                          thumbVisibility: true,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
+                            itemCount: history.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) => _ClientHistoryListTile(
+                              item: history[i],
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 20),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+}
+
+class _ClientHistoryListTile extends StatelessWidget {
+  const _ClientHistoryListTile({required this.item});
+
+  final RezervacijaPovijestItem item;
+
+  static String _formatDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final l = d.toLocal();
+    final h = l.hour.toString().padLeft(2, '0');
+    final m = l.minute.toString().padLeft(2, '0');
+    return '${months[l.month - 1]} ${l.day}, ${l.year} · $h:$m';
+  }
+
+  ({String label, Color color}) _status() {
+    if (item.isOtkazana) {
+      return (label: 'Cancelled', color: const Color(0xFFFF6B8A));
+    }
+    if (item.isPotvrdjena) {
+      return (label: 'Confirmed', color: const Color(0xFFB388FF));
+    }
+    return (label: 'Pending', color: const Color(0xFFF5B942));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status();
+    final service = item.uslugaNaziv?.trim().isNotEmpty == true
+        ? item.uslugaNaziv!.trim()
+        : 'Spa appointment';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: 44,
+            decoration: BoxDecoration(
+              color: status.color,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  service,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: _ApptUi.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatDate(item.datumRezervacije),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _StatusBadge(label: status.label, color: status.color),
+              const SizedBox(height: 6),
+              _StatusBadge(
+                label: item.isPlacena ? 'Paid' : 'Unpaid',
+                color: item.isPlacena
+                    ? const Color(0xFF4ADE80)
+                    : Colors.white54,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AdminAppointmentDraft {

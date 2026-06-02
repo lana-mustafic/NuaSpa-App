@@ -45,6 +45,8 @@ class DesktopNav extends ChangeNotifier {
   String _therapistSearchQuery = '';
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
+  int _appointmentEditRequest = 0;
+  int? _appointmentEditId;
   int? _appointmentPrefillZaposlenikId;
   int _therapistAddRequest = 0;
   int _serviceAddRequest = 0;
@@ -91,6 +93,8 @@ class DesktopNav extends ChangeNotifier {
   String get appointmentSearchQuery => _appointmentSearchQuery;
 
   int get appointmentCreateRequest => _appointmentCreateRequest;
+
+  int get appointmentEditRequest => _appointmentEditRequest;
 
   int get therapistAddRequest => _therapistAddRequest;
 
@@ -222,6 +226,24 @@ class DesktopNav extends ChangeNotifier {
       _route = DesktopRouteKey.reservations;
     }
     notifyListeners();
+  }
+
+  void requestAppointmentEdit(int rezervacijaId) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
+    _appointmentEditId = rezervacijaId;
+    _appointmentEditRequest++;
+    if (_route != DesktopRouteKey.reservations) {
+      _route = DesktopRouteKey.reservations;
+    }
+    notifyListeners();
+  }
+
+  int? takeAppointmentEditId() {
+    final v = _appointmentEditId;
+    _appointmentEditId = null;
+    return v;
   }
 
   /// Called when opening the admin "New appointment" dialog (consumes one-shot prefill).

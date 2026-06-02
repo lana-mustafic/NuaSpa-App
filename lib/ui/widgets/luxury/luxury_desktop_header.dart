@@ -22,8 +22,8 @@ abstract final class LuxuryPageChrome {
   static const EdgeInsets bodyPadding = EdgeInsets.fromLTRB(28, 20, 28, 36);
 
   static const double headerRowHeight = 80;
-  static const double headerStackedHeight = 104;
-  static const double titleBlockHeight = 52;
+  static const double headerStackedHeight = 118;
+  static const double titleBlockHeight = 58;
   static const double titleSubtitleGap = 4;
   static const double stackedSearchGap = 10;
 }
@@ -371,7 +371,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Calendar',
-          subtitle: 'Manage your spa schedule and appointments.',
+          subtitle: 'Manage appointments and schedules.',
           searchHint: 'Search appointments…',
           searchController: nav.calendarSearchController,
           onSearchSubmitted: (_) {},
@@ -882,35 +882,38 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   Widget _titleBlock() {
     return SizedBox(
       height: LuxuryPageChrome.titleBlockHeight,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            widget.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.6,
-              height: 1.1,
-              color: const Color(0xFFF5F3FA),
+      child: ClipRect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+                height: 1.05,
+                color: const Color(0xFFF5F3FA),
+              ),
             ),
-          ),
-          SizedBox(height: LuxuryPageChrome.titleSubtitleGap),
-          Text(
-            widget.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              height: 1.25,
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+            SizedBox(height: LuxuryPageChrome.titleSubtitleGap),
+            Text(
+              widget.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1113,25 +1116,27 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
               ],
             );
           } else {
-            content = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(child: _titleBlock()),
-                    _controlsRow(showProfileDetails: showProfileDetails),
-                  ],
-                ),
-                if (showSearch) ...[
-                  SizedBox(height: LuxuryPageChrome.stackedSearchGap),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: search,
+            content = ClipRect(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: _titleBlock()),
+                      _controlsRow(showProfileDetails: showProfileDetails),
+                    ],
                   ),
+                  if (showSearch) ...[
+                    SizedBox(height: LuxuryPageChrome.stackedSearchGap),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: search,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             );
           }
 

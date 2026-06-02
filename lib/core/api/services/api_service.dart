@@ -1709,7 +1709,7 @@ class ApiService {
     return null;
   }
 
-  Future<List<RezervacijaCalendarItem>> getRezervacijeCalendar({
+  Future<CalendarFetchResult> getRezervacijeCalendar({
     required DateTime from,
     required DateTime to,
     int? zaposlenikId,
@@ -1719,8 +1719,8 @@ class ApiService {
   }) async {
     try {
       final query = <String, dynamic>{
-        'from': from.toIso8601String(),
-        'to': to.toIso8601String(),
+        'from': _apiDateOnly(from),
+        'to': _apiDateOnly(to),
         if (zaposlenikId != null) 'zaposlenikId': zaposlenikId,
         if (uslugaId != null) 'uslugaId': uslugaId,
         if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
@@ -1732,17 +1732,38 @@ class ApiService {
         queryParameters: query,
       );
       final data = response.data;
-      if (data is! List) return [];
-      return data
+      if (data is! List) {
+        return const CalendarFetchResult(items: []);
+      }
+      final items = data
           .whereType<Map>()
           .map(
             (e) =>
                 RezervacijaCalendarItem.fromJson(Map<String, dynamic>.from(e)),
           )
           .toList();
+      return CalendarFetchResult(items: items);
     } catch (e) {
       debugPrint('Greška u ApiService.getRezervacijeCalendar: $e');
-      return [];
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return CalendarFetchResult(
+        items: const [],
+        error: message ?? 'Unable to load calendar appointments.',
+      );
+    }
+  }
+
+  Future<Rezervacija?> getRezervacijaById(int id) async {
+    try {
+      final response = await _dio.get<dynamic>('Rezervacija/$id');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return Rezervacija.fromJson(data);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacijaById: $e');
+      return null;
     }
   }
 

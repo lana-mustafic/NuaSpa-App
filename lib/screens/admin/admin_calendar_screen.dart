@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../models/admin/radno_vrijeme.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
@@ -30,11 +29,6 @@ bool _sameDay(DateTime a, DateTime b) {
   return x.year == y.year && x.month == y.month && x.day == y.day;
 }
 
-List<RezervacijaCalendarItem> _calendarPassThrough(
-  List<RezervacijaCalendarItem> xs,
-) =>
-    xs;
-
 String _hm(DateTime d) {
   final l = d.toLocal();
   return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
@@ -45,13 +39,15 @@ String _weekdayShort(DateTime d) {
   return n[(d.weekday - 1).clamp(0, 6)];
 }
 
-/// High-fidelity admin calendar (dark mockup palette).
+/// Admin calendar — NuaSpa dark luxury palette.
 abstract final class _CalUi {
-  static const Color bg = Color(0xFF0B0E14);
-  static const Color surface = Color(0xFF161922);
-  static const Color surfaceCard = Color(0xFF1B1D2D);
-  static const Color accent = Color(0xFF6C5CE7);
-  static const Color border = Color(0xFF2A2D3E);
+  static const Color accent = Color(0xFF7B4DFF);
+  static const Color accent2 = Color(0xFF9B7BFF);
+  static const Color lavender = Color(0xFFC8B6E8);
+  static const Color textPrimary = Color(0xFFF5F3FA);
+
+  static Color get border => Colors.white.withValues(alpha: 0.08);
+  static Color get glassFill => Colors.white.withValues(alpha: 0.04);
 }
 
 String _monthLong(int m) {
@@ -79,7 +75,136 @@ String _rangeCaption(_CalViewMode view, DateTime anchor, ({DateTime from, DateTi
   }
 }
 
-/// Admin calendar — week timeline + filteri (terapeuti, otkazani, auto-refresh, pretraga).
+int _durationMinutes(RezervacijaCalendarItem e) =>
+    e.uslugaTrajanjeMinuta <= 0 ? 60 : e.uslugaTrajanjeMinuta;
+
+double _minutesOfDay(DateTime d) {
+  final l = d.toLocal();
+  return l.hour * 60.0 + l.minute + l.second / 60.0;
+}
+
+({int startHour, int endHour}) _resolveGridHours(
+  List<DateTime> days,
+  List<RadnoVrijeme> hours,
+) {
+  const fallbackStart = 8;
+  const fallbackEnd = 17;
+  if (hours.isEmpty) {
+    return (startHour: fallbackStart, endHour: fallbackEnd);
+  }
+  var minOpen = 24 * 60;
+  var maxClose = 0;
+  var anyOpen = false;
+  for (final day in days) {
+    RadnoVrijeme? rv;
+    for (final h in hours) {
+      if (h.danUSedmici == day.weekday) {
+        rv = h;
+        break;
+      }
+    }
+    if (rv == null || rv.isClosed) continue;
+    anyOpen = true;
+    final open = rv.otvaraMin ?? fallbackStart * 60;
+    final close = rv.zatvaraMin ?? fallbackEnd * 60;
+    if (open < minOpen) minOpen = open;
+    if (close > maxClose) maxClose = close;
+  }
+  if (!anyOpen || minOpen >= maxClose) {
+    return (startHour: fallbackStart, endHour: fallbackEnd);
+  }
+  return (startHour: minOpen ~/ 60, endHour: (maxClose + 59) ~/ 60);
+}
+
+class _LanePlacement {
+  const _LanePlacement({
+    required this.item,
+    required this.lane,
+    required this.laneCount,
+  });
+
+  final RezervacijaCalendarItem item;
+  final int lane;
+  final int laneCount;
+}
+
+List<_LanePlacement> _assignDayLanes(List<RezervacijaCalendarItem> items) {
+  if (items.isEmpty) return const [];
+  final sorted = [...items]
+    ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+  final lanes = <List<RezervacijaCalendarItem>>[];
+
+  bool overlaps(RezervacijaCalendarItem a, RezervacijaCalendarItem b) {
+    final aStart = _minutesOfDay(a.datumRezervacije);
+    final aEnd = aStart + _durationMinutes(a);
+    final bStart = _minutesOfDay(b.datumRezervacije);
+    final bEnd = bStart + _durationMinutes(b);
+    return aStart < bEnd && bStart < aEnd;
+  }
+
+  final laneOf = <int, int>{};
+  for (final e in sorted) {
+    var laneIndex = 0;
+    while (true) {
+      if (laneIndex >= lanes.length) {
+        lanes.add([e]);
+        laneOf[e.id] = laneIndex;
+        break;
+      }
+      final conflict = lanes[laneIndex].any((o) => overlaps(o, e));
+      if (!conflict) {
+        lanes[laneIndex].add(e);
+        laneOf[e.id] = laneIndex;
+        break;
+      }
+      laneIndex++;
+    }
+  }
+
+  final laneCount = lanes.length;
+  return [
+    for (final e in sorted)
+      _LanePlacement(
+        item: e,
+        lane: laneOf[e.id] ?? 0,
+        laneCount: laneCount,
+      ),
+  ];
+}
+
+String _calendarStatusLabel(RezervacijaCalendarItem item) {
+  if (item.isOtkazana || item.status == 'Cancelled') return 'Cancelled';
+  if (item.isCompleted || item.status == 'Completed') return 'Completed';
+  if (item.isPotvrdjena || item.status == 'Confirmed') return 'Confirmed';
+  return 'Pending';
+}
+
+String _calendarNotesText(RezervacijaCalendarItem item) {
+  final note = item.napomenaZaTerapeuta?.trim();
+  if (note != null && note.isNotEmpty) return note;
+  if (item.isOtkazana) {
+    final reason = item.razlogOtkaza?.trim();
+    if (reason != null && reason.isNotEmpty) {
+      return 'Cancellation reason: $reason';
+    }
+  }
+  return 'No notes on file.';
+}
+
+Color _statusTagColor(RezervacijaCalendarItem item) {
+  switch (_calendarStatusLabel(item)) {
+    case 'Completed':
+      return const Color(0xFF60A5FA);
+    case 'Cancelled':
+      return Colors.redAccent;
+    case 'Pending':
+      return const Color(0xFFF5B942);
+    default:
+      return NuaLuxuryTokens.softPurpleGlow;
+  }
+}
+
+/// Admin calendar — week timeline, filters, search, auto-refresh.
 class AdminCalendarScreen extends StatefulWidget {
   const AdminCalendarScreen({super.key});
 
@@ -88,13 +213,7 @@ class AdminCalendarScreen extends StatefulWidget {
 }
 
 class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
-  static const int _startHour = 8;
-  /// Display day through 16:xx; grid ends at 17:00 (exclusive end hour).
-  static const int _endHour = 17;
-
   final ApiService _api = ApiService();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
   DateTime _anchor = _dateOnly(DateTime.now());
   _CalViewMode _view = _CalViewMode.week;
 
@@ -110,8 +229,12 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
 
   List<Zaposlenik> _therapists = [];
   List<Usluga> _usluge = [];
+  List<RadnoVrijeme> _radnoVrijeme = [];
 
-  Future<List<RezervacijaCalendarItem>>? _calendarFuture;
+  List<RezervacijaCalendarItem> _items = const [];
+  bool _loading = true;
+  String? _loadError;
+  int _loadSeq = 0;
 
   RezervacijaCalendarItem? _selected;
 
@@ -142,12 +265,16 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   }
 
   Future<void> _bootstrapLists() async {
-    final t = await _api.getZaposlenici();
-    final u = await _api.getUsluge();
+    final results = await Future.wait([
+      _api.getZaposlenici(),
+      _api.getUsluge(),
+      _api.getRadnoVrijeme(),
+    ]);
     if (!mounted) return;
     setState(() {
-      _therapists = t;
-      _usluge = u;
+      _therapists = results[0] as List<Zaposlenik>;
+      _usluge = results[1] as List<Usluga>;
+      _radnoVrijeme = results[2] as List<RadnoVrijeme>;
     });
   }
 
@@ -164,23 +291,14 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     switch (_view) {
       case _CalViewMode.day:
         final d = _dateOnly(_anchor);
-        return (
-          from: d,
-          to: d.add(const Duration(days: 1)).subtract(const Duration(seconds: 1)),
-        );
+        return (from: d, to: d);
       case _CalViewMode.week:
         final m = _mondayOf(_anchor);
-        return (
-          from: m,
-          to: m.add(const Duration(days: 7)).subtract(const Duration(seconds: 1)),
-        );
+        return (from: m, to: m.add(const Duration(days: 6)));
       case _CalViewMode.month:
-        final first = DateTime(_anchor.year, _anchor.month);
-        final next = DateTime(_anchor.year, _anchor.month + 1);
-        return (
-          from: first,
-          to: next.subtract(const Duration(seconds: 1)),
-        );
+        final first = DateTime(_anchor.year, _anchor.month, 1);
+        final last = DateTime(_anchor.year, _anchor.month + 1, 0);
+        return (from: first, to: last);
     }
   }
 
@@ -192,50 +310,55 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
         final m = _mondayOf(_anchor);
         return List.generate(7, (i) => m.add(Duration(days: i)));
       case _CalViewMode.month:
-        final m = _mondayOf(_anchor);
-        return List.generate(7, (i) => m.add(Duration(days: i)));
+        return const [];
     }
   }
 
-  void _reloadCalendar() {
+  Future<void> _reloadCalendar() async {
+    final seq = ++_loadSeq;
     final r = _visibleRange();
     final qq = _nav.calendarSearchController.text.trim();
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+    final result = await _api.getRezervacijeCalendar(
+      from: r.from,
+      to: r.to,
+      zaposlenikId: _filterZaposlenikId,
+      uslugaId: _filterUslugaId,
+      q: qq.isEmpty ? null : qq,
+      includeOtkazane: _includeCancelled,
+    );
+    if (!mounted || seq != _loadSeq) return;
     setState(() {
-      _calendarFuture = _api.getRezervacijeCalendar(
-        from: r.from,
-        to: r.to,
-        zaposlenikId: _filterZaposlenikId,
-        uslugaId: _filterUslugaId,
-        q: qq.isEmpty ? null : qq,
-        includeOtkazane: _includeCancelled,
-      );
+      _loading = false;
+      _items = result.items;
+      _loadError = result.error;
     });
   }
 
   Future<void> _onVipToggle(bool value) async {
     final sel = _selected;
-    if (sel == null || sel.isOtkazana) return;
+    if (sel == null || sel.isOtkazana || sel.isCompleted) return;
     final ok = await _api.patchRezervacijaVip(sel.id, value);
     if (!mounted) return;
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('VIP status nije spremljen.')),
+        const SnackBar(content: Text('Could not save VIP status.')),
       );
       return;
     }
+    final updated = sel.copyWith(isVip: value);
     setState(() {
-      _selected = sel.copyWith(isVip: value);
+      _selected = updated;
+      _items = [
+        for (final e in _items)
+          if (e.id == updated.id) updated else e,
+      ];
     });
-    _reloadCalendar();
-  }
-
-  DateTime _summaryDay() {
-    final now = _dateOnly(DateTime.now());
-    final r = _visibleRange();
-    final from = _dateOnly(r.from);
-    final to = _dateOnly(r.to);
-    if (!now.isBefore(from) && !now.isAfter(to)) return now;
-    return from;
   }
 
   void _shiftPeriod(int delta) {
@@ -261,6 +384,30 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     _reloadCalendar();
   }
 
+  void _openAppointmentDetails(RezervacijaCalendarItem item) {
+    setState(() => _selected = item);
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (dialogContext) => _CalendarAppointmentDetailsModal(
+        initialItem: item,
+        showVipToggle: context.read<AuthProvider>().isAdmin,
+        onVipToggle: context.read<AuthProvider>().isAdmin
+            ? (value) async {
+                await _onVipToggle(value);
+                return _selected ?? item;
+              }
+            : null,
+        onEdit: () {
+          Navigator.pop(dialogContext);
+          _nav.requestAppointmentEdit(item.id);
+        },
+      ),
+    ).then((_) {
+      if (mounted) setState(() => _selected = null);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final range = _visibleRange();
@@ -268,238 +415,146 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
     final mq = MediaQuery.sizeOf(context);
     final screenW = mq.width;
     final screenH = mq.height;
-    final showRightPanel = screenW >= 1250;
-    final rightPanelW = screenW < 1450 ? 260.0 : 280.0;
 
-    Widget calendarBody({required bool inDrawer}) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(color: _CalUi.bg),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF07040F), Color(0xFF120A24)],
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          LuxuryPageChrome.bodyPadding.left,
+          LuxuryPageChrome.bodyPadding.top,
+          LuxuryPageChrome.bodyPadding.right,
+          LuxuryPageChrome.bodyPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _CalendarToolbar(
+              rangeLabel: rangeLabel,
+              view: _view,
+              onView: (v) {
+                setState(() => _view = v);
+                _reloadCalendar();
+              },
+              includeCancelled: _includeCancelled,
+              onToggleCancelled: (v) {
+                setState(() => _includeCancelled = v);
+                _reloadCalendar();
+              },
+              autoRefresh: _autoRefresh,
+              onToggleAuto: (v) {
+                setState(() => _autoRefresh = v);
+                _startTimer();
+                if (v) _reloadCalendar();
+              },
+              therapists: _therapists,
+              usluge: _usluge,
+              filterZaposlenikId: _filterZaposlenikId,
+              onTherapist: (id) {
+                setState(() => _filterZaposlenikId = id);
+                _reloadCalendar();
+              },
+              filterUslugaId: _filterUslugaId,
+              onUsluga: (id) {
+                setState(() => _filterUslugaId = id);
+                _reloadCalendar();
+              },
+              onPrev: () => _shiftPeriod(-1),
+              onNext: () => _shiftPeriod(1),
+              onToday: _goToday,
+              onAddAppointment: () {
+                context.read<DesktopNav>().requestAppointmentCreate(
+                      zaposlenikId: _filterZaposlenikId,
+                    );
+              },
+            ),
+            const SizedBox(height: 14),
+            _TodayScheduleStrip(items: _items),
+            const SizedBox(height: 14),
             Expanded(
-              child: Padding(
-                padding: inDrawer
-                    ? EdgeInsets.zero
-                    : EdgeInsets.fromLTRB(
-                        LuxuryPageChrome.bodyPadding.left,
-                        LuxuryPageChrome.bodyPadding.top,
-                        LuxuryPageChrome.bodyPadding.right,
-                        0,
-                      ),
-                child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _Toolbar(
-                          rangeLabel: rangeLabel,
-                          view: _view,
-                          onView: (v) {
-                            setState(() {
-                              _view = v;
-                            });
-                            _reloadCalendar();
-                          },
-                          includeCancelled: _includeCancelled,
-                          onToggleCancelled: (v) {
-                            setState(() => _includeCancelled = v);
-                            _reloadCalendar();
-                          },
-                          autoRefresh: _autoRefresh,
-                          onToggleAuto: (v) {
-                            setState(() => _autoRefresh = v);
-                            _startTimer();
-                            if (v) _reloadCalendar();
-                          },
-                          therapists: _therapists,
-                          usluge: _usluge,
-                          filterZaposlenikId: _filterZaposlenikId,
-                          onTherapist: (id) {
-                            setState(() => _filterZaposlenikId = id);
-                            _reloadCalendar();
-                          },
-                          filterUslugaId: _filterUslugaId,
-                          onUsluga: (id) {
-                            setState(() => _filterUslugaId = id);
-                            _reloadCalendar();
-                          },
-                          onPrev: () => _shiftPeriod(-1),
-                          onNext: () => _shiftPeriod(1),
-                          onToday: _goToday,
-                          onAddAppointment: () {
-                            context.read<DesktopNav>().requestAppointmentCreate(
-                                  zaposlenikId: _filterZaposlenikId,
-                                );
-                          },
-                          compactHeight: screenH < 850,
-                        ),
-                        SizedBox(height: screenH < 850 ? 6 : 8),
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, gridCons) {
-                              final headerH =
-                                  screenH < 850 ? 28.0 : 32.0;
-                              final slotMin =
-                                  (_endHour - _startHour) * 60.0;
-                              final px = math.max(
-                                0.42,
-                                math.min(
-                                  1.22,
-                                  (gridCons.maxHeight - headerH) / slotMin,
-                                ),
-                              );
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: _CalUi.surface,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: _CalUi.border
-                                          .withValues(alpha: 0.85),
-                                    ),
-                                  ),
-                                  child: _view == _CalViewMode.month
-                                      ? _MonthOverview(
-                                          anchor: _anchor,
-                                          itemsFuture: _calendarFuture,
-                                          onPickDay: (d) {
-                                            setState(() {
-                                              _anchor = d;
-                                              _view = _CalViewMode.week;
-                                            });
-                                            _reloadCalendar();
-                                          },
-                                          filterFn: _calendarPassThrough,
-                                        )
-                                      : _WeekTimeline(
-                                          days: _headerDays(),
-                                          itemsFuture: _calendarFuture,
-                                          filterFn: _calendarPassThrough,
-                                          selected: _selected,
-                                          onSelect: (e) =>
-                                              setState(() => _selected = e),
-                                          startHour: _startHour,
-                                          endHour: _endHour,
-                                          pxPerMinute: px,
-                                          dayHeaderHeight: headerH,
-                                          rulerWidth: screenW < 1450 ? 52.0 : 56.0,
-                                        ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+              child: LayoutBuilder(
+                builder: (context, gridCons) {
+                  if (_loading && _items.isEmpty) {
+                    return const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  }
+                  if (_loadError != null && _items.isEmpty) {
+                    return _CalendarErrorState(
+                      message: _loadError!,
+                      onRetry: _reloadCalendar,
+                    );
+                  }
+                  final days = _headerDays();
+                  final gridHours = _view == _CalViewMode.month
+                      ? (startHour: 8, endHour: 17)
+                      : _resolveGridHours(days, _radnoVrijeme);
+                  final headerH = screenH < 850 ? 36.0 : 40.0;
+                  final slotMin =
+                      (gridHours.endHour - gridHours.startHour) * 60.0;
+                  final px = math.max(
+                    0.55,
+                    math.min(
+                      1.35,
+                      (gridCons.maxHeight - headerH) / slotMin,
                     ),
-                  ),
-                  if (!inDrawer && showRightPanel) ...[
-                    SizedBox(width: screenW < 1450 ? 10 : 12),
-                    SizedBox(
-                      width: rightPanelW,
-                      child: _CalendarSidePanel(
-                        anchor: _anchor,
-                        onMonthDelta: (d) {
-                          setState(() => _anchor = d);
-                          _reloadCalendar();
-                        },
-                        onPickMiniDay: (d) {
-                          setState(() {
-                            _anchor = _dateOnly(d);
-                            _view = _CalViewMode.week;
-                          });
-                          _reloadCalendar();
-                        },
-                        selected: _selected,
-                        itemsFuture: _calendarFuture,
-                        filterFn: _calendarPassThrough,
-                        summaryDay: _summaryDay(),
-                        onViewFullSchedule: _goToday,
-                        showVipToggle:
-                            context.watch<AuthProvider>().isAdmin,
-                        onVipToggle: context.watch<AuthProvider>().isAdmin
-                            ? _onVipToggle
-                            : null,
-                        onNew: () {
-                          context.read<DesktopNav>().requestAppointmentCreate(
-                                zaposlenikId: _filterZaposlenikId,
-                              );
-                        },
+                  );
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _CalUi.glassFill,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: _CalUi.border),
                       ),
+                      child: _view == _CalViewMode.month
+                          ? _MonthOverview(
+                              anchor: _anchor,
+                              items: _items,
+                              loading: _loading,
+                              onPickDay: (d) {
+                                setState(() {
+                                  _anchor = d;
+                                  _view = _CalViewMode.week;
+                                });
+                                _reloadCalendar();
+                              },
+                            )
+                          : _WeekTimeline(
+                              days: days,
+                              items: _items,
+                              loading: _loading,
+                              loadError: _loadError,
+                              selected: _selected,
+                              onSelect: (e) {
+                                if (e != null) _openAppointmentDetails(e);
+                              },
+                              startHour: gridHours.startHour,
+                              endHour: gridHours.endHour,
+                              pxPerMinute: px,
+                              dayHeaderHeight: headerH,
+                              rulerWidth: screenW < 1200 ? 56.0 : 60.0,
+                              viewMode: _view,
+                            ),
                     ),
-                  ],
-                ],
-              ),
+                  );
+                },
               ),
             ),
           ],
         ),
-      );
-    }
-
-    final drawerChild = _CalendarSidePanel(
-      anchor: _anchor,
-      onMonthDelta: (d) {
-        setState(() => _anchor = d);
-        _reloadCalendar();
-      },
-      onPickMiniDay: (d) {
-        setState(() {
-          _anchor = _dateOnly(d);
-          _view = _CalViewMode.week;
-        });
-        _reloadCalendar();
-      },
-      selected: _selected,
-      itemsFuture: _calendarFuture,
-      filterFn: _calendarPassThrough,
-      summaryDay: _summaryDay(),
-      onViewFullSchedule: _goToday,
-      showVipToggle: context.watch<AuthProvider>().isAdmin,
-      onVipToggle:
-          context.watch<AuthProvider>().isAdmin ? _onVipToggle : null,
-      onNew: () {
-        context.read<DesktopNav>().requestAppointmentCreate(
-              zaposlenikId: _filterZaposlenikId,
-            );
-      },
-      inDrawer: true,
-    );
-
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: _CalUi.bg,
-      endDrawer: showRightPanel
-          ? null
-          : Drawer(
-              width: math.min(320, screenW * 0.92),
-              backgroundColor: _CalUi.surface,
-              child: SafeArea(
-                child: drawerChild,
-              ),
-            ),
-      floatingActionButton: showRightPanel
-          ? null
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 8, right: 4),
-              child: FloatingActionButton.small(
-                heroTag: 'cal_details',
-                tooltip: 'Details',
-                backgroundColor: _CalUi.accent,
-                onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-                child: const Icon(Icons.view_sidebar_outlined, size: 18),
-              ),
-            ),
-      body: calendarBody(inDrawer: false),
+      ),
     );
   }
 }
 
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({
+class _CalendarToolbar extends StatelessWidget {
+  const _CalendarToolbar({
     required this.rangeLabel,
     required this.view,
     required this.onView,
@@ -517,7 +572,6 @@ class _Toolbar extends StatelessWidget {
     required this.onNext,
     required this.onToday,
     required this.onAddAppointment,
-    required this.compactHeight,
   });
 
   final String rangeLabel;
@@ -537,242 +591,336 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onToday;
   final VoidCallback onAddAppointment;
-  final bool compactHeight;
 
-  InputDecoration _dropDecoration(String hint, {bool micro = false}) =>
-      InputDecoration(
+  static const _gap = 14.0;
+
+  InputDecoration _dropDecoration(String hint) => InputDecoration(
         isDense: true,
-        labelText: hint,
-        labelStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.55),
-          fontSize: micro ? 11 : 12,
+        hintText: hint,
+        hintStyle: TextStyle(
+          color: Colors.white.withValues(alpha: 0.45),
+          fontSize: 13,
         ),
         filled: true,
-        fillColor: _CalUi.surface,
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: micro ? 8 : 10,
-          vertical: micro ? 6 : 8,
-        ),
+        fillColor: _CalUi.glassFill,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _CalUi.border),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _CalUi.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _CalUi.border),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _CalUi.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _CalUi.accent, width: 1.1),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _CalUi.accent.withValues(alpha: 0.75)),
         ),
       );
 
+  Widget _navIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return _CalGlassIconButton(
+      tooltip: tooltip,
+      icon: icon,
+      onPressed: onPressed,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final h = compactHeight ? 42.0 : 46.0;
     return Container(
-      height: h,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: _CalUi.surfaceCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _CalUi.border.withValues(alpha: 0.75)),
+        color: _CalUi.glassFill,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _CalUi.border),
       ),
-      child: Row(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
         children: [
+          _navIconButton(
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Previous',
+            onPressed: onPrev,
+          ),
+          const SizedBox(width: 8),
           TextButton(
             onPressed: onToday,
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: _CalUi.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: _CalUi.border),
+              ),
             ),
-            child: Text(
+            child: const Text(
               'Today',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
           ),
-          IconButton(
-            tooltip: 'Previous',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            onPressed: onPrev,
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              size: compactHeight ? 22 : 24,
-              color: Colors.white.withValues(alpha: 0.85),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Center(
-              child: Text(
-                rangeLabel,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
+          const SizedBox(width: 8),
+          _navIconButton(
+            icon: Icons.chevron_right_rounded,
             tooltip: 'Next',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             onPressed: onNext,
-            icon: Icon(
-              Icons.chevron_right_rounded,
-              size: compactHeight ? 22 : 24,
-              color: Colors.white.withValues(alpha: 0.85),
+          ),
+          const SizedBox(width: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
+            child: Text(
+              rangeLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _CalUi.textPrimary,
+              ),
             ),
           ),
+          const SizedBox(width: _gap),
           SegmentedButton<_CalViewMode>(
             showSelectedIcon: false,
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: WidgetStateProperty.all(
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              ),
-              minimumSize: WidgetStateProperty.all(Size.zero),
-              foregroundColor: WidgetStateProperty.resolveWith((s) {
-                if (s.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-                return Colors.white.withValues(alpha: 0.65);
-              }),
-              backgroundColor: WidgetStateProperty.resolveWith((s) {
-                if (s.contains(WidgetState.selected)) {
-                  return _CalUi.accent;
-                }
-                return _CalUi.surface;
-              }),
-              side: WidgetStateProperty.all(
-                const BorderSide(color: _CalUi.border),
-              ),
-            ),
             segments: const [
-              ButtonSegment(value: _CalViewMode.day, label: Text('D')),
-              ButtonSegment(value: _CalViewMode.week, label: Text('W')),
-              ButtonSegment(value: _CalViewMode.month, label: Text('M')),
+              ButtonSegment(value: _CalViewMode.day, label: Text('Day')),
+              ButtonSegment(value: _CalViewMode.week, label: Text('Week')),
+              ButtonSegment(value: _CalViewMode.month, label: Text('Month')),
             ],
             selected: {view},
             onSelectionChanged: (s) => onView(s.first),
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: WidgetStateProperty.resolveWith((s) {
+                return s.contains(WidgetState.selected)
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.65);
+              }),
+              backgroundColor: WidgetStateProperty.resolveWith((s) {
+                return s.contains(WidgetState.selected)
+                    ? _CalUi.accent
+                    : Colors.white.withValues(alpha: 0.04);
+              }),
+              side: WidgetStateProperty.all(BorderSide(color: _CalUi.border)),
+            ),
           ),
+          const SizedBox(width: _gap),
+          SizedBox(
+            width: 168,
+            child: DropdownButtonFormField<int?>(
+              value: filterZaposlenikId,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1A1228),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: _dropDecoration('Therapist'),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All therapists'),
+                ),
+                ...therapists.map(
+                  (t) => DropdownMenuItem(
+                    value: t.id,
+                    child: Text('${t.ime} ${t.prezime}'.trim()),
+                  ),
+                ),
+              ],
+              onChanged: onTherapist,
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 168,
+            child: DropdownButtonFormField<int?>(
+              value: filterUslugaId,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1A1228),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: _dropDecoration('Service'),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All services'),
+                ),
+                ...usluge.map(
+                  (u) => DropdownMenuItem(
+                    value: u.id,
+                    child: Text(u.naziv, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: onUsluga,
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilterChip(
+            label: Text(
+              includeCancelled ? 'Cancelled on' : 'Cancelled',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            selected: includeCancelled,
+            onSelected: onToggleCancelled,
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            selectedColor: _CalUi.accent.withValues(alpha: 0.28),
+            backgroundColor: Colors.white.withValues(alpha: 0.04),
+            side: BorderSide(color: _CalUi.border),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: onAddAppointment,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add Appointment'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _CalUi.accent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           PopupMenuButton<String>(
-            tooltip: 'More',
-            padding: EdgeInsets.zero,
+            tooltip: 'More options',
+            color: const Color(0xFF1A1228),
             icon: Icon(
               Icons.more_horiz_rounded,
-              color: Colors.white.withValues(alpha: 0.65),
-              size: 22,
+              color: Colors.white.withValues(alpha: 0.72),
             ),
-            color: _CalUi.surfaceCard,
             onSelected: (id) {
-              if (id == 'c') onToggleCancelled(!includeCancelled);
               if (id == 'a') onToggleAuto(!autoRefresh);
             },
             itemBuilder: (context) => [
               PopupMenuItem(
-                value: 'c',
-                child: Text(
-                  includeCancelled ? '✓ Include cancelled' : 'Include cancelled',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-              PopupMenuItem(
                 value: 'a',
                 child: Text(
-                  autoRefresh ? '✓ Auto refresh (20s)' : 'Auto refresh (20s)',
-                  style: theme.textTheme.bodySmall,
+                  autoRefresh
+                      ? 'Auto refresh (on)'
+                      : 'Auto refresh (20s)',
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            flex: 3,
-            child: SizedBox(
-              height: h - 6,
-              child: DropdownButtonFormField<int?>(
-                value: filterZaposlenikId,
-                isExpanded: true,
-                isDense: true,
-                dropdownColor: _CalUi.surfaceCard,
-                style: const TextStyle(color: Colors.white, fontSize: 11.5),
-                decoration: _dropDecoration('Therapist', micro: true),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('All therapists', overflow: TextOverflow.ellipsis),
-                  ),
-                  ...therapists.map(
-                    (t) => DropdownMenuItem(
-                      value: t.id,
-                      child: Text(
-                        '${t.ime} ${t.prezime}'.trim(),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: onTherapist,
-              ),
+        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CalGlassIconButton extends StatelessWidget {
+  const _CalGlassIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _CalUi.border),
+            ),
+            child: Icon(icon, color: Colors.white.withValues(alpha: 0.88), size: 22),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayScheduleStrip extends StatelessWidget {
+  const _TodayScheduleStrip({required this.items});
+
+  final List<RezervacijaCalendarItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = _dateOnly(DateTime.now());
+    final todays = items
+        .where((e) => _sameDay(e.datumRezervacije, today) && !e.isOtkazana)
+        .toList()
+      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+
+    final now = DateTime.now();
+    final upcoming =
+        todays.where((e) => !e.datumRezervacije.isBefore(now)).toList();
+    final next = upcoming.isNotEmpty ? upcoming.first : null;
+
+    String detail;
+    if (todays.isEmpty) {
+      detail = 'No appointments scheduled for today.';
+    } else if (next != null) {
+      final service = next.uslugaNaziv ?? 'Appointment';
+      final client = next.korisnikIme?.trim();
+      final clientPart =
+          client != null && client.isNotEmpty ? ' · $client' : '';
+      detail =
+          "${todays.length} appointment${todays.length == 1 ? '' : 's'} • Next: ${_hm(next.datumRezervacije)} $service$clientPart";
+    } else {
+      detail =
+          "${todays.length} appointment${todays.length == 1 ? '' : 's'} today (all completed)";
+    }
+
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: _CalUi.glassFill,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _CalUi.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.today_rounded,
+            size: 20,
+            color: _CalUi.accent2.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            "Today's Schedule:",
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _CalUi.lavender.withValues(alpha: 0.85),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
-            flex: 3,
-            child: SizedBox(
-              height: h - 6,
-              child: DropdownButtonFormField<int?>(
-                value: filterUslugaId,
-                isExpanded: true,
-                isDense: true,
-                dropdownColor: _CalUi.surfaceCard,
-                style: const TextStyle(color: Colors.white, fontSize: 11.5),
-                decoration: _dropDecoration('Service', micro: true),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('All services', overflow: TextOverflow.ellipsis),
-                  ),
-                  ...usluge.map(
-                    (u) => DropdownMenuItem(
-                      value: u.id,
-                      child: Text(u.naziv, overflow: TextOverflow.ellipsis),
-                    ),
-                  ),
-                ],
-                onChanged: onUsluga,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: _CalUi.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: onAddAppointment,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text(
-              'Add',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w900,
+            child: Text(
+              detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _CalUi.textPrimary.withValues(alpha: 0.88),
               ),
             ),
           ),
@@ -782,11 +930,120 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-class _WeekTimeline extends StatefulWidget {
+class _CalendarErrorState extends StatelessWidget {
+  const _CalendarErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+        decoration: BoxDecoration(
+          color: _CalUi.glassFill,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _CalUi.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 36,
+              color: Colors.redAccent.withValues(alpha: 0.85),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load calendar',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _CalUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: onRetry,
+              style: FilledButton.styleFrom(
+                backgroundColor: _CalUi.accent,
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarEmptyState extends StatelessWidget {
+  const _CalendarEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+        decoration: BoxDecoration(
+          color: _CalUi.glassFill,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _CalUi.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_available_outlined,
+              size: 36,
+              color: _CalUi.accent2.withValues(alpha: 0.75),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No appointments scheduled.',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _CalUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Try another date or add a new appointment.',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekTimeline extends StatelessWidget {
   const _WeekTimeline({
     required this.days,
-    required this.itemsFuture,
-    required this.filterFn,
+    required this.items,
+    required this.loading,
+    required this.loadError,
     required this.selected,
     required this.onSelect,
     required this.startHour,
@@ -794,11 +1051,13 @@ class _WeekTimeline extends StatefulWidget {
     required this.pxPerMinute,
     required this.dayHeaderHeight,
     required this.rulerWidth,
+    required this.viewMode,
   });
 
   final List<DateTime> days;
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
+  final List<RezervacijaCalendarItem> items;
+  final bool loading;
+  final String? loadError;
   final RezervacijaCalendarItem? selected;
   final ValueChanged<RezervacijaCalendarItem?> onSelect;
   final int startHour;
@@ -806,78 +1065,97 @@ class _WeekTimeline extends StatefulWidget {
   final double pxPerMinute;
   final double dayHeaderHeight;
   final double rulerWidth;
+  final _CalViewMode viewMode;
 
-  @override
-  State<_WeekTimeline> createState() => _WeekTimelineState();
-}
-
-class _WeekTimelineState extends State<_WeekTimeline> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    return FutureBuilder<List<RezervacijaCalendarItem>>(
-      future: widget.itemsFuture,
-      builder: (context, snap) {
-        final raw = snap.data ?? const <RezervacijaCalendarItem>[];
-        final items = widget.filterFn(raw);
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final headerH = widget.dayHeaderHeight;
-            final slotMinutes = (widget.endHour - widget.startHour) * 60.0;
-            final effectivePx = widget.pxPerMinute;
-            final totalH = slotMinutes * effectivePx;
-            final rulerW = widget.rulerWidth;
-            final viewportH = constraints.maxHeight.isFinite
-                ? constraints.maxHeight
-                : 480.0;
-            final viewportW = constraints.maxWidth.isFinite
-                ? constraints.maxWidth
-                : (rulerW + 7 * 100.0);
+    final isDay = viewMode == _CalViewMode.day;
+    final visibleAppts = items
+        .where((e) => days.any((d) => _sameDay(e.datumRezervacije, d)))
+        .toList();
+    final showEmpty =
+        !loading && loadError == null && visibleAppts.isEmpty;
 
-            return SizedBox(
-              height: viewportH,
-              width: viewportW,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _TimeRuler(
-                    startHour: widget.startHour,
-                    endHour: widget.endHour,
-                    height: totalH,
-                    pxPerMinute: effectivePx,
-                    headerHeight: headerH,
-                    width: rulerW,
-                  ),
-                  for (final day in widget.days)
-                    Expanded(
-                      child: _DayColumn(
-                        day: day,
-                        items: () {
-                          final d = items
-                              .where(
-                                (e) => _sameDay(e.datumRezervacije, day),
-                              )
-                              .toList();
-                          d.sort(
-                            (a, b) => a.datumRezervacije
-                                .compareTo(b.datumRezervacije),
-                          );
-                          return d;
-                        }(),
-                        height: totalH,
-                        headerHeight: headerH,
-                        startHour: widget.startHour,
-                        endHour: widget.endHour,
-                        pxPerMinute: effectivePx,
-                        now: now,
-                        selected: widget.selected,
-                        onSelect: widget.onSelect,
-                      ),
-                    ),
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final headerH = dayHeaderHeight;
+        final slotMinutes = (endHour - startHour) * 60.0;
+        final rulerW = rulerWidth;
+        final viewportH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 480.0;
+        final viewportW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : (rulerW + days.length * 100.0);
+
+        final maxPx = math.max(0.45, (viewportH - headerH) / slotMinutes);
+        final effectivePx = isDay
+            ? math.min(math.max(pxPerMinute, 1.05), maxPx)
+            : math.min(pxPerMinute, maxPx);
+        final totalH = slotMinutes * effectivePx;
+        final contentH = headerH + totalH;
+
+        final grid = SizedBox(
+          width: viewportW,
+          height: contentH,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _TimeRuler(
+                startHour: startHour,
+                endHour: endHour,
+                height: totalH,
+                pxPerMinute: effectivePx,
+                headerHeight: headerH,
+                width: rulerW,
               ),
-            );
-          },
+              for (final day in days)
+                Expanded(
+                  child: _DayColumn(
+                    day: day,
+                    placements: () {
+                      final d = items
+                          .where((e) => _sameDay(e.datumRezervacije, day))
+                          .toList();
+                      return _assignDayLanes(d);
+                    }(),
+                    height: totalH,
+                    headerHeight: headerH,
+                    startHour: startHour,
+                    endHour: endHour,
+                    pxPerMinute: effectivePx,
+                    now: now,
+                    selected: selected,
+                    onSelect: onSelect,
+                    isDayView: isDay,
+                    showColumnEmpty: isDay,
+                  ),
+                ),
+            ],
+          ),
+        );
+
+        final timeline = contentH > viewportH + 1
+            ? Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: grid,
+                ),
+              )
+            : SizedBox(
+                height: viewportH,
+                width: viewportW,
+                child: grid,
+              );
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            timeline,
+            if (showEmpty) const _CalendarEmptyState(),
+          ],
         );
       },
     );
@@ -941,7 +1219,7 @@ class _TimeRuler extends StatelessWidget {
 class _DayColumn extends StatelessWidget {
   const _DayColumn({
     required this.day,
-    required this.items,
+    required this.placements,
     required this.height,
     required this.headerHeight,
     required this.startHour,
@@ -950,10 +1228,12 @@ class _DayColumn extends StatelessWidget {
     required this.now,
     required this.selected,
     required this.onSelect,
+    required this.isDayView,
+    required this.showColumnEmpty,
   });
 
   final DateTime day;
-  final List<RezervacijaCalendarItem> items;
+  final List<_LanePlacement> placements;
   final double height;
   final double headerHeight;
   final int startHour;
@@ -962,11 +1242,8 @@ class _DayColumn extends StatelessWidget {
   final DateTime now;
   final RezervacijaCalendarItem? selected;
   final ValueChanged<RezervacijaCalendarItem?> onSelect;
-
-  double _minutes(DateTime d) {
-    final l = d.toLocal();
-    return l.hour * 60.0 + l.minute + l.second / 60.0;
-  }
+  final bool isDayView;
+  final bool showColumnEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -976,18 +1253,17 @@ class _DayColumn extends StatelessWidget {
     final endM = endHour * 60.0;
 
     double topFor(RezervacijaCalendarItem e) {
-      final m = _minutes(e.datumRezervacije);
+      final m = _minutesOfDay(e.datumRezervacije);
       return (m - startM) * pxPerMinute;
     }
 
     double hFor(RezervacijaCalendarItem e) {
-      final d = e.uslugaTrajanjeMinuta <= 0 ? 60 : e.uslugaTrajanjeMinuta;
-      return d * pxPerMinute;
+      return _durationMinutes(e) * pxPerMinute;
     }
 
     double? nowTop;
     if (isToday) {
-      final nm = _minutes(now);
+      final nm = _minutesOfDay(now);
       if (nm >= startM && nm <= endM) {
         nowTop = (nm - startM) * pxPerMinute;
       }
@@ -1033,40 +1309,69 @@ class _DayColumn extends StatelessWidget {
         SizedBox(
           height: height,
           child: ClipRRect(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _HourGridPainter(
-                      startHour: startHour,
-                      endHour: endHour,
-                      pxPerMinute: pxPerMinute,
+            child: LayoutBuilder(
+              builder: (context, col) {
+                final laneCount = placements.fold<int>(
+                  1,
+                  (max, p) => math.max(max, p.laneCount),
+                );
+                final innerW = col.maxWidth - 8;
+                final laneW = innerW / laneCount;
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _HourGridPainter(
+                          startHour: startHour,
+                          endHour: endHour,
+                          pxPerMinute: pxPerMinute,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                if (nowTop != null)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: nowTop,
-                    child: Container(
-                      height: 2,
-                      color: _CalUi.accent.withValues(alpha: 0.85),
-                    ),
-                  ),
-                for (final e in items)
-                  Positioned(
-                    left: 6,
-                    right: 6,
-                    top: topFor(e).clamp(0, height - 24),
-                    height: hFor(e).clamp(28, height),
-                    child: _ApptCard(
-                      item: e,
-                      selected: selected?.id == e.id,
-                      onTap: () => onSelect(selected?.id == e.id ? null : e),
-                    ),
-                  ),
-              ],
+                    if (nowTop != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: nowTop,
+                        child: Container(
+                          height: 2,
+                          color: _CalUi.accent.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    if (showColumnEmpty && placements.isEmpty)
+                      Positioned.fill(
+                        child: Center(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'No appointments scheduled.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.42),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (final p in placements)
+                      Positioned(
+                        left: 4 + p.lane * laneW + 1,
+                        width: laneW - 2,
+                        top: topFor(p.item).clamp(0, height - 40),
+                        height: hFor(p.item)
+                            .clamp(isDayView ? 56.0 : 48.0, height),
+                        child: _ApptCard(
+                          item: p.item,
+                          selected: selected?.id == p.item.id,
+                          spacious: isDayView,
+                          onTap: () => onSelect(p.item),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -1104,19 +1409,25 @@ class _HourGridPainter extends CustomPainter {
       oldDelegate.pxPerMinute != pxPerMinute;
 }
 
-enum _ApptCardVisualStatus { confirmed, pending, cancelled, vip }
+enum _ApptCardVisualStatus { confirmed, pending, cancelled, completed, vip }
 
 _ApptCardVisualStatus _apptCardVisualStatus(RezervacijaCalendarItem item) {
-  if (item.isOtkazana) return _ApptCardVisualStatus.cancelled;
+  if (item.isOtkazana || item.status == 'Cancelled') {
+    return _ApptCardVisualStatus.cancelled;
+  }
+  if (item.isCompleted || item.status == 'Completed') {
+    return _ApptCardVisualStatus.completed;
+  }
   if (item.isVip) return _ApptCardVisualStatus.vip;
-  if (!item.isPotvrdjena) return _ApptCardVisualStatus.pending;
+  if (!item.isPotvrdjena && item.status == 'Pending') {
+    return _ApptCardVisualStatus.pending;
+  }
   return _ApptCardVisualStatus.confirmed;
 }
 
-String _therapistFirstName(String? full) {
-  final t = full?.trim();
-  if (t == null || t.isEmpty) return 'Therapist';
-  return t.split(RegExp(r'\s+')).first;
+String _appointmentDateTimeLabel(DateTime d) {
+  final l = d.toLocal();
+  return '${_monthLong(l.month)} ${l.day}, ${l.year} · ${_hm(l)}';
 }
 
 class _ApptCard extends StatefulWidget {
@@ -1124,11 +1435,13 @@ class _ApptCard extends StatefulWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    this.spacious = false,
   });
 
   final RezervacijaCalendarItem item;
   final bool selected;
   final VoidCallback onTap;
+  final bool spacious;
 
   @override
   State<_ApptCard> createState() => _ApptCardState();
@@ -1137,7 +1450,7 @@ class _ApptCard extends StatefulWidget {
 class _ApptCardState extends State<_ApptCard> {
   bool _hover = false;
 
-  static const double _radius = 13;
+  static const double _radius = 11;
 
   TextStyle _txt(
     double size,
@@ -1183,6 +1496,15 @@ class _ApptCardState extends State<_ApptCard> {
             Color.fromRGBO(180, 40, 60, 0.18),
           ],
         );
+      case _ApptCardVisualStatus.completed:
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.fromRGBO(96, 165, 250, 0.22),
+            Color.fromRGBO(30, 64, 120, 0.18),
+          ],
+        );
       case _ApptCardVisualStatus.vip:
         return const LinearGradient(
           begin: Alignment.topCenter,
@@ -1203,56 +1525,11 @@ class _ApptCardState extends State<_ApptCard> {
         return const Color(0xFFF5B942);
       case _ApptCardVisualStatus.cancelled:
         return const Color(0xFFFF6B8A);
+      case _ApptCardVisualStatus.completed:
+        return const Color(0xFF60A5FA);
       case _ApptCardVisualStatus.vip:
         return const Color(0xFF4ADE80);
     }
-  }
-
-  List<BoxShadow> _outerShadows(_ApptCardVisualStatus status, bool vip) {
-    final hover = _hover;
-    final glow = switch (status) {
-      _ApptCardVisualStatus.confirmed => const Color(0xFF7B4DFF),
-      _ApptCardVisualStatus.pending => const Color(0xFFF5B942),
-      _ApptCardVisualStatus.cancelled => const Color(0xFFFF5E7A),
-      _ApptCardVisualStatus.vip => const Color(0xFF22C55E),
-    };
-
-    final list = <BoxShadow>[
-      if (vip && status != _ApptCardVisualStatus.vip)
-        BoxShadow(
-          color: const Color(0xFF4ADE80).withValues(alpha: 0.2),
-          blurRadius: 10,
-          offset: Offset.zero,
-        ),
-      BoxShadow(
-        color: glow.withValues(alpha: hover ? 0.22 : 0.15),
-        offset: Offset(0, hover ? 8 : 5),
-        blurRadius: hover ? 18 : 14,
-      ),
-      BoxShadow(
-        color: Colors.black.withValues(alpha: hover ? 0.35 : 0.3),
-        offset: Offset(0, hover ? 3 : 2),
-        blurRadius: hover ? 8 : 5,
-      ),
-    ];
-    return list;
-  }
-
-  List<BoxShadow> _innerGlow(_ApptCardVisualStatus status) {
-    final c = switch (status) {
-      _ApptCardVisualStatus.confirmed => const Color(0xFFB388FF),
-      _ApptCardVisualStatus.pending => const Color(0xFFF5C96A),
-      _ApptCardVisualStatus.cancelled => const Color(0xFFFF8A9B),
-      _ApptCardVisualStatus.vip => const Color(0xFF86EFAC),
-    };
-    return [
-      BoxShadow(
-        color: c.withValues(alpha: 0.14),
-        blurRadius: 20,
-        spreadRadius: -10,
-        offset: Offset.zero,
-      ),
-    ];
   }
 
   @override
@@ -1262,152 +1539,19 @@ class _ApptCardState extends State<_ApptCard> {
     final end = item.datumRezervacije.add(
       Duration(minutes: item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta),
     );
-    final timeStr = '${_hm(item.datumRezervacije)} – ${_hm(end)}';
-    final durationMin = item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta;
-    final durationStr = '$durationMin min';
+    final timeStr = '${_hm(item.datumRezervacije)}–${_hm(end)}';
     final service = item.uslugaNaziv ?? 'Service';
     final client = item.korisnikIme ?? 'Guest';
-    final therapist = _therapistFirstName(item.zaposlenikIme);
-    final dotColor = _statusDotColor(status);
+    final therapist = item.zaposlenikIme?.trim();
+    final accent = _statusDotColor(status);
+    final spacious = widget.spacious;
+    final timeSize = spacious ? 12.0 : 11.0;
+    final serviceSize = spacious ? 13.5 : 12.5;
+    final lineSize = spacious ? 12.0 : 11.0;
 
     final borderColor = widget.selected
-        ? const Color(0xFFB388FF).withValues(alpha: 0.5)
-        : const Color.fromRGBO(255, 255, 255, 0.06);
-    final borderW = widget.selected ? 1.5 : 1.0;
-
-    late final List<BoxShadow> dotShadow;
-    if (status == _ApptCardVisualStatus.confirmed) {
-      dotShadow = [
-        BoxShadow(
-          color: const Color(0xFFB388FF).withValues(alpha: 0.8),
-          blurRadius: 8,
-        ),
-      ];
-    } else if (status == _ApptCardVisualStatus.vip) {
-      dotShadow = [
-        BoxShadow(
-          color: const Color(0xFF4ADE80).withValues(alpha: 0.75),
-          blurRadius: 8,
-        ),
-      ];
-    } else {
-      dotShadow = [
-        BoxShadow(
-          color: dotColor.withValues(alpha: 0.55),
-          blurRadius: 6,
-        ),
-      ];
-    }
-
-    Widget cardInterior(bool compact, double maxW, double maxH) {
-      final topRow = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              timeStr,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _txt(
-                10.5,
-                FontWeight.w500,
-                Colors.white.withValues(alpha: 0.72),
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-          Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(left: 8, top: 2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: dotColor,
-              boxShadow: dotShadow,
-            ),
-          ),
-        ],
-      );
-
-      final serviceText = Text(
-        service,
-        maxLines: compact ? 1 : 2,
-        overflow: TextOverflow.ellipsis,
-        style: _txt(12.5, FontWeight.w700, const Color(0xFFF5F3FA), height: 1.2),
-      );
-
-      final clientText = Text(
-        client,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: _txt(10.5, FontWeight.w400, Colors.white.withValues(alpha: 0.75)),
-      );
-
-      final footer = Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              therapist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _txt(10.5, FontWeight.w500, const Color(0xFFC8B6E8)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            durationStr,
-            style: _txt(10, FontWeight.w500, Colors.white.withValues(alpha: 0.55)),
-          ),
-        ],
-      );
-
-      if (compact) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            topRow,
-            const SizedBox(height: 4),
-            serviceText,
-            const SizedBox(height: 5),
-            clientText,
-            const SizedBox(height: 5),
-            footer,
-          ],
-        );
-      }
-
-      return SizedBox(
-        height: maxH,
-        width: maxW,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            topRow,
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    serviceText,
-                    const SizedBox(height: 5),
-                    clientText,
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: footer,
-            ),
-          ],
-        ),
-      );
-    }
+        ? _CalUi.accent2.withValues(alpha: 0.65)
+        : Colors.white.withValues(alpha: 0.08);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -1417,60 +1561,119 @@ class _ApptCardState extends State<_ApptCard> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.ease,
-          transform: Matrix4.translationValues(0, _hover ? -2.0 : 0.0, 0),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.ease,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(_radius),
-              boxShadow: [
-                ..._outerShadows(status, item.isVip),
-                ..._innerGlow(status),
-              ],
+          duration: const Duration(milliseconds: 180),
+          transform: Matrix4.translationValues(0, _hover ? -1.0 : 0.0, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(_radius),
+            border: Border.all(
+              color: borderColor,
+              width: widget.selected ? 1.5 : 1,
             ),
-            child: ClipRRect(
-                borderRadius: BorderRadius.circular(_radius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: _statusGradient(status),
-                      borderRadius: BorderRadius.circular(_radius),
-                      border: Border.all(color: borderColor, width: borderW),
+            boxShadow: _hover
+                ? [
+                    BoxShadow(
+                      color: _CalUi.accent.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
+                  ]
+                : null,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_radius),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: accent),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(gradient: _statusGradient(status)),
                     child: LayoutBuilder(
-                      builder: (context, c) {
-                        final h = c.maxHeight;
-                        final w = c.maxWidth;
-                        final compact = h < 92;
-                        if (compact) {
-                          return Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.topLeft,
-                              child: SizedBox(
-                                width: w,
-                                height: 84,
-                                child: cardInterior(true, w, 84),
-                              ),
-                            ),
-                          );
-                        }
+                      builder: (context, constraints) {
+                        final maxH = constraints.maxHeight;
+                        final showClient = maxH >= 44;
+                        final showTherapist =
+                            showClient &&
+                            therapist != null &&
+                            therapist.isNotEmpty &&
+                            maxH >= 58;
+
                         return Padding(
-                          padding: const EdgeInsets.all(9),
-                          child: cardInterior(false, w, h - 24),
+                          padding: EdgeInsets.fromLTRB(
+                            spacious ? 10 : 8,
+                            spacious ? 8 : 6,
+                            spacious ? 10 : 8,
+                            spacious ? 8 : 6,
+                          ),
+                          child: ClipRect(
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                    Text(
+                                      timeStr,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _txt(
+                                        timeSize,
+                                        FontWeight.w600,
+                                        Colors.white.withValues(alpha: 0.78),
+                                      ),
+                                    ),
+                                    SizedBox(height: spacious ? 4 : 3),
+                                    Text(
+                                      service,
+                                      maxLines: spacious ? 2 : 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _txt(
+                                        serviceSize,
+                                        FontWeight.w700,
+                                        _CalUi.textPrimary,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                    if (showClient) ...[
+                                      SizedBox(height: spacious ? 3 : 2),
+                                      Text(
+                                        client,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: _txt(
+                                          lineSize,
+                                          FontWeight.w500,
+                                          Colors.white.withValues(alpha: 0.82),
+                                        ),
+                                      ),
+                                    ],
+                                    if (showTherapist) ...[
+                                      SizedBox(height: spacious ? 3 : 2),
+                                      Text(
+                                        therapist,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: _txt(
+                                          lineSize,
+                                          FontWeight.w500,
+                                          _CalUi.lavender.withValues(alpha: 0.9),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                            ),
+                          ),
                         );
                       },
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
+      ),
     );
   }
 }
@@ -1478,104 +1681,167 @@ class _ApptCardState extends State<_ApptCard> {
 class _MonthOverview extends StatelessWidget {
   const _MonthOverview({
     required this.anchor,
-    required this.itemsFuture,
+    required this.items,
+    required this.loading,
     required this.onPickDay,
-    required this.filterFn,
   });
 
   final DateTime anchor;
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
+  final List<RezervacijaCalendarItem> items;
+  final bool loading;
   final void Function(DateTime day) onPickDay;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final today = _dateOnly(DateTime.now());
     final first = DateTime(anchor.year, anchor.month);
     final daysInMonth = DateTime(anchor.year, anchor.month + 1, 0).day;
     final lead = first.weekday - 1;
 
-    return FutureBuilder<List<RezervacijaCalendarItem>>(
-      future: itemsFuture,
-      builder: (context, snap) {
-        final items = filterFn(snap.data ?? const []);
-        final counts = <int, int>{};
-        for (final e in items) {
-          final d = e.datumRezervacije.toLocal().day;
-          counts[d] = (counts[d] ?? 0) + 1;
-        }
-        final cells = lead + daysInMonth;
-        final rows = (cells / 7).ceil();
-        final totalCells = rows * 7;
+    final counts = <int, int>{};
+    for (final e in items) {
+      final loc = e.datumRezervacije.toLocal();
+      if (loc.year == anchor.year && loc.month == anchor.month) {
+        counts[loc.day] = (counts[loc.day] ?? 0) + 1;
+      }
+    }
+    final cells = lead + daysInMonth;
+    final rows = (cells / 7).ceil();
+    final totalCells = rows * 7;
+    final monthEmpty = !loading && items.isEmpty;
 
-        return Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
+    const weekdayHeaderH = 28.0;
+    const gridSpacing = 6.0;
+
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  for (final w in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          w,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            fontWeight: FontWeight.w800,
+              SizedBox(
+                height: weekdayHeaderH,
+                child: Row(
+                  children: [
+                    for (final w in [
+                      'Mon',
+                      'Tue',
+                      'Wed',
+                      'Thu',
+                      'Fri',
+                      'Sat',
+                      'Sun',
+                    ])
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            w,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.45),
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 7,
-                    childAspectRatio: 1.28,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                  ),
-                  itemCount: totalCells,
-                  itemBuilder: (_, i) {
-                    final dayNum = i - lead + 1;
-                    if (i < lead || dayNum < 1 || dayNum > daysInMonth) {
-                      return const SizedBox.shrink();
-                    }
-                    final c = counts[dayNum] ?? 0;
-                    final day = DateTime(anchor.year, anchor.month, dayNum);
-                    return InkWell(
-                      onTap: () => onPickDay(day),
-                      borderRadius: BorderRadius.circular(12),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.white.withValues(alpha: c == 0 ? 0.03 : 0.07),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
+                child: LayoutBuilder(
+                  builder: (context, gridBox) {
+                    final gridW = gridBox.maxWidth;
+                    final gridH = gridBox.maxHeight;
+                    final rowCount = rows.toDouble();
+                    final cellW =
+                        (gridW - gridSpacing * 6) / 7;
+                    final cellH = math.max(
+                      44.0,
+                      (gridH - gridSpacing * (rowCount - 1)) / rowCount,
+                    );
+                    final aspectRatio = cellW / cellH;
+
+                    return Scrollbar(
+                      thumbVisibility: true,
+                      child: GridView.builder(
+                        padding: EdgeInsets.zero,
+                        physics: const ClampingScrollPhysics(),
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 7,
+                          childAspectRatio:
+                              aspectRatio.clamp(0.72, 1.35),
+                          mainAxisSpacing: gridSpacing,
+                          crossAxisSpacing: gridSpacing,
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '$dayNum',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            if (c > 0)
-                              Text(
-                                '$c appts',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.75),
+                        itemCount: totalCells,
+                        itemBuilder: (_, i) {
+                          final dayNum = i - lead + 1;
+                          if (i < lead ||
+                              dayNum < 1 ||
+                              dayNum > daysInMonth) {
+                            return const SizedBox.shrink();
+                          }
+                          final c = counts[dayNum] ?? 0;
+                          final day =
+                              DateTime(anchor.year, anchor.month, dayNum);
+                          final isToday = _sameDay(day, today);
+                          return InkWell(
+                            onTap: () => onPickDay(day),
+                            borderRadius: BorderRadius.circular(12),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white.withValues(
+                                  alpha: isToday
+                                      ? 0.1
+                                      : c == 0
+                                          ? 0.03
+                                          : 0.07,
+                                ),
+                                border: Border.all(
+                                  color: isToday
+                                      ? _CalUi.accent.withValues(alpha: 0.65)
+                                      : Colors.white.withValues(alpha: 0.08),
+                                  width: isToday ? 1.5 : 1,
                                 ),
                               ),
-                          ],
-                        ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '$dayNum',
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                      color: isToday ? _CalUi.accent2 : null,
+                                    ),
+                                  ),
+                                  if (c > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        '$c appts',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style:
+                                            theme.textTheme.labelSmall?.copyWith(
+                                          fontSize: 10,
+                                          color: NuaLuxuryTokens
+                                              .lavenderWhisper
+                                              .withValues(alpha: 0.75),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -1583,541 +1849,147 @@ class _MonthOverview extends StatelessWidget {
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-class _CalendarSidePanel extends StatelessWidget {
-  const _CalendarSidePanel({
-    required this.anchor,
-    required this.onMonthDelta,
-    required this.onPickMiniDay,
-    required this.selected,
-    required this.itemsFuture,
-    required this.filterFn,
-    required this.summaryDay,
-    required this.onViewFullSchedule,
-    required this.showVipToggle,
-    this.onVipToggle,
-    required this.onNew,
-    this.inDrawer = false,
-  });
-
-  final DateTime anchor;
-  final ValueChanged<DateTime> onMonthDelta;
-  final ValueChanged<DateTime> onPickMiniDay;
-  final RezervacijaCalendarItem? selected;
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
-  final DateTime summaryDay;
-  final VoidCallback onViewFullSchedule;
-  final bool showVipToggle;
-  final Future<void> Function(bool value)? onVipToggle;
-  final VoidCallback onNew;
-  final bool inDrawer;
-
-  void _maybeCloseDrawer(BuildContext context) {
-    if (inDrawer && Navigator.canPop(context)) {
-      Navigator.of(context).pop();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final pad = inDrawer ? 12.0 : 2.0;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(pad, pad, pad, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _MiniMonthCalendar(
-            anchor: anchor,
-            summaryDay: summaryDay,
-            onPrevMonth: () {
-              final d = DateTime(anchor.year, anchor.month - 1, 1);
-              onMonthDelta(d);
-            },
-            onNextMonth: () {
-              final d = DateTime(anchor.year, anchor.month + 1, 1);
-              onMonthDelta(d);
-            },
-            onSelectDay: (d) {
-              onPickMiniDay(d);
-              _maybeCloseDrawer(context);
-            },
-            itemsFuture: itemsFuture,
-            filterFn: filterFn,
-          ),
-          const SizedBox(height: 8),
-          _TodaySummary(
-            itemsFuture: itemsFuture,
-            filterFn: filterFn,
-          ),
-          if (selected != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _CalUi.surfaceCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _CalUi.accent.withValues(alpha: 0.4),
-                ),
-              ),
-              child: _DetailCard(
-                item: selected!,
-                showVipToggle: showVipToggle,
-                onVipToggle: onVipToggle,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            'Upcoming',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: FutureBuilder<List<RezervacijaCalendarItem>>(
-              future: itemsFuture,
-              builder: (context, snap) {
-                final list = filterFn(snap.data ?? const []);
-                final dayItems = list
-                    .where((e) => _sameDay(e.datumRezervacije, summaryDay))
-                    .toList()
-                  ..sort(
-                    (a, b) => a.datumRezervacije.compareTo(b.datumRezervacije),
-                  );
-                if (dayItems.isEmpty) {
-                  return Text(
-                    'No appointments this day.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
-                    ),
-                  );
-                }
-                final show = dayItems.take(8).toList();
-                return ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: show.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 4),
-                  itemBuilder: (_, i) => _UpcomingRow(item: show[i]),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: _CalUi.border),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: onViewFullSchedule,
-                  child: Text(
-                    'Today',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _CalUi.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: onNew,
-                  child: Text(
-                    'New',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          if (monthEmpty) const _CalendarEmptyState(),
         ],
       ),
     );
   }
 }
 
-class _MiniMonthCalendar extends StatelessWidget {
-  const _MiniMonthCalendar({
-    required this.anchor,
-    required this.summaryDay,
-    required this.onPrevMonth,
-    required this.onNextMonth,
-    required this.onSelectDay,
-    required this.itemsFuture,
-    required this.filterFn,
+class _CalendarAppointmentDetailsModal extends StatefulWidget {
+  const _CalendarAppointmentDetailsModal({
+    required this.initialItem,
+    required this.showVipToggle,
+    required this.onEdit,
+    this.onVipToggle,
   });
 
-  final DateTime anchor;
-  final DateTime summaryDay;
-  final VoidCallback onPrevMonth;
-  final VoidCallback onNextMonth;
-  final ValueChanged<DateTime> onSelectDay;
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
+  final RezervacijaCalendarItem initialItem;
+  final bool showVipToggle;
+  final VoidCallback onEdit;
+  final Future<RezervacijaCalendarItem?> Function(bool value)? onVipToggle;
 
-  static const _mons = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
+  @override
+  State<_CalendarAppointmentDetailsModal> createState() =>
+      _CalendarAppointmentDetailsModalState();
+}
+
+class _CalendarAppointmentDetailsModalState
+    extends State<_CalendarAppointmentDetailsModal> {
+  late RezervacijaCalendarItem _item;
+
+  @override
+  void initState() {
+    super.initState();
+    _item = widget.initialItem;
+  }
+
+  Future<void> _handleVipToggle(bool value) async {
+    final handler = widget.onVipToggle;
+    if (handler == null) return;
+    final updated = await handler(value);
+    if (!mounted || updated == null) return;
+    setState(() => _item = updated);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final first = DateTime(anchor.year, anchor.month);
-    final daysInMonth = DateTime(anchor.year, anchor.month + 1, 0).day;
-    final lead = first.weekday - 1;
-    final cells = lead + daysInMonth;
-    final rows = (cells / 7).ceil();
+    final duration =
+        _item.uslugaTrajanjeMinuta <= 0 ? 60 : _item.uslugaTrajanjeMinuta;
+    final notes = _calendarNotesText(_item);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-      decoration: BoxDecoration(
-        color: _CalUi.surfaceCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _CalUi.border.withValues(alpha: 0.65)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: onPrevMonth,
-                icon: Icon(
-                  Icons.chevron_left_rounded,
-                  color: Colors.white.withValues(alpha: 0.75),
-                  size: 20,
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  '${_mons[anchor.month - 1]} ${anchor.year}',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: onNextMonth,
-                icon: Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.white.withValues(alpha: 0.75),
-                  size: 20,
-                ),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFA120A24),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _CalUi.border),
+            boxShadow: [
+              BoxShadow(
+                color: _CalUi.accent.withValues(alpha: 0.2),
+                blurRadius: 40,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final w in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      w,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.38),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          FutureBuilder<List<RezervacijaCalendarItem>>(
-            future: itemsFuture,
-            builder: (context, snap) {
-              final items = filterFn(snap.data ?? const []);
-              final counts = <int, int>{};
-              for (final e in items) {
-                final loc = e.datumRezervacije.toLocal();
-                if (loc.year == anchor.year && loc.month == anchor.month) {
-                  counts[loc.day] = (counts[loc.day] ?? 0) + 1;
-                }
-              }
-              final totalCells = rows * 7;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: totalCells,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  mainAxisSpacing: 2,
-                  crossAxisSpacing: 2,
-                  childAspectRatio: 1.15,
-                ),
-                itemBuilder: (_, i) {
-                  final dayNum = i - lead + 1;
-                  if (i < lead || dayNum < 1 || dayNum > daysInMonth) {
-                    return const SizedBox.shrink();
-                  }
-                  final day = DateTime(anchor.year, anchor.month, dayNum);
-                  final isSel = _sameDay(day, summaryDay);
-                  final c = counts[dayNum] ?? 0;
-                  return InkWell(
-                    onTap: () => onSelectDay(day),
-                    borderRadius: BorderRadius.circular(6),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: isSel
-                            ? _CalUi.accent.withValues(alpha: 0.35)
-                            : Colors.white.withValues(alpha: c > 0 ? 0.06 : 0.02),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.06),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Appointment Details',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: _CalUi.textPrimary,
                         ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$dayNum',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 11,
-                            ),
-                          ),
-                          if (c > 0)
-                            Container(
-                              width: 4,
-                              height: 4,
-                              margin: const EdgeInsets.only(top: 2),
-                              decoration: const BoxDecoration(
-                                color: _CalUi.accent,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodaySummary extends StatelessWidget {
-  const _TodaySummary({
-    required this.itemsFuture,
-    required this.filterFn,
-  });
-
-  final Future<List<RezervacijaCalendarItem>>? itemsFuture;
-  final List<RezervacijaCalendarItem> Function(List<RezervacijaCalendarItem>) filterFn;
-
-  @override
-  Widget build(BuildContext context) {
-    final today = _dateOnly(DateTime.now());
-    return FutureBuilder<List<RezervacijaCalendarItem>>(
-      future: itemsFuture,
-      builder: (context, snap) {
-        final list = filterFn(snap.data ?? const []);
-        final todays = list
-            .where((e) => _sameDay(e.datumRezervacije, today) && !e.isOtkazana)
-            .toList();
-        final vip = todays.where((e) => e.isVip).length;
-        final pending = todays.where((e) => !e.isPotvrdjena).length;
-        final confirmed = todays.where((e) => e.isPotvrdjena).length;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: _CalUi.surfaceCard,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _CalUi.border.withValues(alpha: 0.65)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _SummaryCell(
-                  label: 'Today',
-                  value: '${todays.length}',
-                  sub: 'appts',
+                  ],
                 ),
               ),
-              Container(
-                width: 1,
-                height: 36,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-              Expanded(
-                child: _SummaryCell(
-                  label: 'Confirmed',
-                  value: '$confirmed',
-                  sub: null,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+                child: _DetailCard(
+                  item: _item,
+                  showVipToggle: widget.showVipToggle,
+                  onVipToggle: widget.onVipToggle == null
+                      ? null
+                      : _handleVipToggle,
+                  dateTimeLabel:
+                      _appointmentDateTimeLabel(_item.datumRezervacije),
+                  durationMinutes: duration,
+                  notes: notes,
                 ),
               ),
-              Expanded(
-                child: _SummaryCell(
-                  label: 'Pending',
-                  value: '$pending',
-                  sub: null,
-                ),
-              ),
-              Expanded(
-                child: _SummaryCell(
-                  label: 'VIP',
-                  value: '$vip',
-                  sub: null,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: widget.onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit Appointment'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _CalUi.accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-class _SummaryCell extends StatelessWidget {
-  const _SummaryCell({
-    required this.label,
-    required this.value,
-    this.sub,
-  });
-
-  final String label;
-  final String value;
-  final String? sub;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.45),
-            fontWeight: FontWeight.w700,
-            fontSize: 9,
-          ),
         ),
-        Text(
-          value,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        if (sub != null)
-          Text(
-            sub!,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.35),
-              fontSize: 8,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _UpcomingRow extends StatelessWidget {
-  const _UpcomingRow({required this.item});
-  final RezervacijaCalendarItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 44,
-            child: Text(
-              _hm(item.datumRezervacije),
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: Colors.white.withValues(alpha: 0.88),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 4, right: 8),
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: _CalUi.accent,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.uslugaNaziv ?? 'Service',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  item.zaposlenikIme ?? 'Therapist',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.55),
-                  ),
-                ),
-                Text(
-                  item.korisnikIme ?? 'Guest',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.42),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2128,10 +2000,16 @@ class _DetailCard extends StatelessWidget {
     required this.item,
     required this.showVipToggle,
     this.onVipToggle,
+    this.dateTimeLabel,
+    this.durationMinutes,
+    this.notes,
   });
   final RezervacijaCalendarItem item;
   final bool showVipToggle;
   final Future<void> Function(bool value)? onVipToggle;
+  final String? dateTimeLabel;
+  final int? durationMinutes;
+  final String? notes;
 
   @override
   Widget build(BuildContext context) {
@@ -2181,38 +2059,45 @@ class _DetailCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        _DetailLine(Icons.event_rounded, 'When', _hm(item.datumRezervacije)),
+        _DetailLine(
+          Icons.event_rounded,
+          'Date & time',
+          dateTimeLabel ?? _appointmentDateTimeLabel(item.datumRezervacije),
+        ),
         _DetailLine(Icons.spa_rounded, 'Service', item.uslugaNaziv ?? '—'),
-        _DetailLine(Icons.person_outline, 'Therapist', item.zaposlenikIme ?? '—'),
         _DetailLine(
           Icons.timer_outlined,
           'Duration',
-          '${item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta} min',
+          '${durationMinutes ?? (item.uslugaTrajanjeMinuta <= 0 ? 60 : item.uslugaTrajanjeMinuta)} min',
         ),
+        if (item.zaposlenikIme?.trim().isNotEmpty == true)
+          _DetailLine(Icons.person_outline, 'Therapist', item.zaposlenikIme!.trim()),
+        if (item.prostorijaNaziv?.trim().isNotEmpty == true)
+          _DetailLine(Icons.meeting_room_outlined, 'Room', item.prostorijaNaziv!.trim()),
+        if (notes != null)
+          _DetailLine(Icons.notes_outlined, 'Notes', notes!),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             _Tag(
-              label: item.isPotvrdjena ? 'Confirmed' : 'Pending',
-              color: NuaLuxuryTokens.softPurpleGlow,
+              label: _calendarStatusLabel(item),
+              color: _statusTagColor(item),
             ),
             _Tag(
               label: item.isPlacena ? 'Paid' : 'Unpaid',
               color: item.isPlacena ? const Color(0xFF4ADE80) : Colors.white54,
             ),
-            if (item.isOtkazana)
-              const _Tag(label: 'Cancelled', color: Colors.redAccent),
             if (item.isVip) const _Tag(label: 'VIP', color: Color(0xFFE8C547)),
           ],
         ),
-        if (showVipToggle && !item.isOtkazana && onVipToggle != null) ...[
+        if (showVipToggle && !item.isOtkazana && !item.isCompleted && onVipToggle != null) ...[
           const SizedBox(height: 8),
-          SwitchListTile(
+            SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(
-              'VIP termin',
+              'VIP appointment',
               style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             value: item.isVip,

@@ -164,11 +164,12 @@ class _AdminTherapistRosterScreenState
         ),
       ),
     );
-    final calendar = await _api.getRezervacijeCalendar(
+    final calendarResult = await _api.getRezervacijeCalendar(
       from: weekStart,
       to: weekStart.add(const Duration(days: 6)),
       includeOtkazane: false,
     );
+    final calendar = calendarResult.items;
 
     final kpiById = <int, TherapistKpi?>{};
     for (var i = 0; i < therapists.length; i++) {

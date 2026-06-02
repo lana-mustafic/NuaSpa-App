@@ -552,7 +552,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   final Map<String, Future<int>> _freeCountCache = {};
 
   // Calendar (admin)
-  Future<List<RezervacijaCalendarItem>>? _calendarFuture;
+  Future<CalendarFetchResult>? _calendarFuture;
   bool _includeCancelledInCalendar = false;
   bool _autoRefreshCalendar = true;
   Timer? _calendarTimer;
@@ -1266,7 +1266,7 @@ class _AdminCalendarView extends StatelessWidget {
 
   final List<Zaposlenik> therapists;
   final List<DateTime> days;
-  final Future<List<RezervacijaCalendarItem>>? calendarFuture;
+  final Future<CalendarFetchResult>? calendarFuture;
   final bool includeCancelled;
   final bool autoRefresh;
   final ValueChanged<bool> onToggleCancelled;
@@ -1298,7 +1298,7 @@ class _AdminCalendarView extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: FutureBuilder<List<RezervacijaCalendarItem>>(
+          child: FutureBuilder<CalendarFetchResult>(
             future: calendarFuture,
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
@@ -1341,7 +1341,7 @@ class _AdminCalendarView extends StatelessWidget {
                   ),
                 );
               }
-              final items = snap.data ?? const <RezervacijaCalendarItem>[];
+              final items = snap.data?.items ?? const <RezervacijaCalendarItem>[];
               final byTherapist = <int, List<RezervacijaCalendarItem>>{};
               for (final it in items) {
                 byTherapist.putIfAbsent(it.zaposlenikId, () => []).add(it);
