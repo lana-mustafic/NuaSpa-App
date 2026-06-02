@@ -1360,21 +1360,31 @@ class _DayColumn extends StatelessWidget {
                         ),
                       ),
                     for (final p in placements)
-                      Positioned(
+                      () {
+                        final minCardH = isDayView ? 56.0 : 52.0;
+                        final rawTop = topFor(p.item);
+                        final rawH = hFor(p.item);
+                        final top = rawTop
+                            .clamp(0.0, math.max(0.0, height - minCardH))
+                            .toDouble();
+                        final maxCardH = height - top;
+                        final cardH = math
+                            .max(rawH, minCardH)
+                            .clamp(minCardH, maxCardH)
+                            .toDouble();
+                        return Positioned(
                         left: 4 + p.lane * laneW + 1,
                         width: laneW - 2,
-                        top: topFor(p.item).clamp(0, height - 40),
-                        height: hFor(p.item).clamp(
-                          isDayView ? 56.0 : 52.0,
-                          height,
-                        ),
+                        top: top,
+                        height: cardH,
                         child: _ApptCard(
                           item: p.item,
                           selected: selected?.id == p.item.id,
                           spacious: isDayView,
                           onTap: () => onSelect(p.item),
                         ),
-                      ),
+                      );
+                      }(),
                   ],
                 );
               },
@@ -1598,16 +1608,25 @@ class _ApptCardState extends State<_ApptCard> {
                       builder: (context, constraints) {
                         final maxH = constraints.maxHeight;
                         final maxW = constraints.maxWidth;
-                        final compact = maxH < 52;
+                        final padL = spacious ? 10.0 : 8.0;
+                        final padR = spacious ? 10.0 : 8.0;
+                        final padT = spacious ? 8.0 : 6.0;
+                        final padB = spacious ? 8.0 : 6.0;
+                        final contentH = math.max(0.0, maxH - padT - padB);
+                        final contentW = math.max(0.0, maxW - padL - padR);
+                        final compact = contentH < 56;
                         final showClient =
-                            !compact && maxH >= 50 && client.isNotEmpty;
+                            !compact && contentH >= 52 && client.isNotEmpty;
                         final showTherapist = showClient &&
                             therapist != null &&
                             therapist.isNotEmpty &&
-                            maxH >= 64;
+                            contentH >= 68;
                         final tSize = compact ? 10.0 : timeSize;
                         final sSize = compact ? 11.0 : serviceSize;
                         final lSize = compact ? 10.0 : lineSize;
+                        final serviceLines = compact
+                            ? 1
+                            : (spacious && contentH >= 72 ? 2 : 1);
 
                         final column = Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1626,7 +1645,7 @@ class _ApptCardState extends State<_ApptCard> {
                             SizedBox(height: compact ? 2 : (spacious ? 4 : 3)),
                             Text(
                               service,
-                              maxLines: compact ? 1 : (spacious ? 2 : 1),
+                              maxLines: serviceLines,
                               overflow: TextOverflow.ellipsis,
                               style: _txt(
                                 sSize,
@@ -1664,28 +1683,31 @@ class _ApptCardState extends State<_ApptCard> {
                           ],
                         );
 
+                        Widget body = column;
+                        if (compact) {
+                          body = FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: contentW,
+                              child: column,
+                            ),
+                          );
+                        }
+
                         return Padding(
                           padding: EdgeInsets.fromLTRB(
-                            spacious ? 10 : 8,
-                            spacious ? 8 : 6,
-                            spacious ? 10 : 8,
-                            spacious ? 8 : 6,
+                            padL,
+                            padT,
+                            padR,
+                            padB,
                           ),
                           child: ClipRect(
-                            child: compact
-                                ? FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.topLeft,
-                                    child: SizedBox(
-                                      width: maxW,
-                                      height: 46,
-                                      child: column,
-                                    ),
-                                  )
-                                : Align(
-                                    alignment: Alignment.topLeft,
-                                    child: column,
-                                  ),
+                            child: SizedBox(
+                              height: contentH,
+                              width: contentW,
+                              child: body,
+                            ),
                           ),
                         );
                       },
