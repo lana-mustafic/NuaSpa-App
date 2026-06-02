@@ -11,6 +11,23 @@ import '../desk_global_search_bar.dart';
 import '../../theme/nua_luxury_tokens.dart';
 import 'luxury_glass_panel.dart';
 
+/// Shared vertical rhythm between shell header and page body (Dashboard baseline).
+abstract final class LuxuryPageChrome {
+  LuxuryPageChrome._();
+
+  /// Inner padding of the page header row in the shell chrome card.
+  static const EdgeInsets headerPadding = EdgeInsets.fromLTRB(28, 18, 28, 12);
+
+  /// Padding for the first scrollable content block below the shell header.
+  static const EdgeInsets bodyPadding = EdgeInsets.fromLTRB(28, 20, 28, 36);
+
+  static const double headerRowHeight = 80;
+  static const double headerStackedHeight = 104;
+  static const double titleBlockHeight = 52;
+  static const double titleSubtitleGap = 4;
+  static const double stackedSearchGap = 10;
+}
+
 /// Premium top chrome — glass search (global catalog jump), alerts, calendar, profile.
 class LuxuryDesktopHeader extends StatelessWidget {
   const LuxuryDesktopHeader({
@@ -304,10 +321,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final isAdminPayments = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.finance;
-    final compact = compactChrome ||
-        isCalendar ||
-        isAdminClients ||
-        isAdminPayments;
+    final isCatalog = nav.route == DesktopRouteKey.catalog;
+    final compact = compactChrome;
     final showRangePills =
         isRevenue || isCommandCenter || isSettings;
 
@@ -319,48 +334,106 @@ class LuxuryDesktopHeader extends StatelessWidget {
 
     final badgeCount = notificationCount;
 
-    if (isCommandCenter) {
-      return _SpaciousLuxuryPageHeader(
-        title: 'Dashboard',
-        subtitle: 'Welcome back, Admin. Here is today\'s overview.',
-        searchHint: 'Search appointments, clients, services…',
-        onSearchSubmitted: nav.performAdminGlobalSearch,
-        auth: auth,
-        day: day,
-        notificationCount: badgeCount,
-        fmtDay: _fmtDay,
-        onPickDate: () => _pickDate(context),
-        onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
-        onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
-      );
-    }
-
-    if (isAppointments && auth.isAdmin) {
-      return _SpaciousLuxuryPageHeader(
-        title: 'Appointments',
-        subtitle: 'Manage, view and organize all spa appointments.',
-        searchHint: 'Search clients, appointments…',
-        initialSearchQuery: nav.appointmentSearchQuery,
-        onSearchSubmitted: nav.setAppointmentSearchQuery,
-        onSearchChanged: nav.setAppointmentSearchQuery,
-        alignSearchWithControls: true,
-        auth: auth,
-        day: day,
-        notificationCount: badgeCount,
-        fmtDay: _fmtDay,
-        onPickDate: () => _pickDate(context),
-        onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
-        onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
-      );
+    if (auth.isAdmin) {
+      if (isCommandCenter) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Dashboard',
+          subtitle: 'Welcome back, Admin. Here is today\'s overview.',
+          searchHint: 'Search appointments, clients, services…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
+        );
+      }
+      if (isAppointments) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Appointments',
+          subtitle: 'Manage, view and organize all spa appointments.',
+          searchHint: 'Search clients, appointments…',
+          initialSearchQuery: nav.appointmentSearchQuery,
+          onSearchSubmitted: nav.setAppointmentSearchQuery,
+          onSearchChanged: nav.setAppointmentSearchQuery,
+        );
+      }
+      if (isCalendar) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Calendar',
+          subtitle: 'Manage your spa schedule and appointments.',
+          searchHint: 'Search appointments…',
+          searchController: nav.calendarSearchController,
+          onSearchSubmitted: (_) {},
+        );
+      }
+      if (isTherapists) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Therapists',
+          subtitle: 'Manage your spa therapists, specialties and schedules.',
+          searchHint: 'Search therapists…',
+          onSearchSubmitted: nav.setTherapistSearchQuery,
+          onSearchChanged: nav.setTherapistSearchQuery,
+        );
+      }
+      if (isAdminClients) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Clients',
+          subtitle: 'Manage client profiles, visits, and loyalty status.',
+          searchHint: 'Search clients…',
+          onSearchSubmitted: nav.goToClientsWithSearch,
+        );
+      }
+      if (isAdminPayments) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Payments',
+          subtitle: 'Track revenue, refunds, and payment activity.',
+          searchHint: 'Search payments, invoices, clients…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
+        );
+      }
+      if (isCatalog) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Services',
+          subtitle: 'Manage treatments, pricing, and service categories.',
+          searchHint: 'Search services & treatments (Enter → Services)…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
+        );
+      }
     }
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        compact ? 16 : 28,
-        compact ? 8 : 18,
-        compact ? 16 : 28,
-        compact ? 4 : 8,
-      ),
+      padding: LuxuryPageChrome.headerPadding,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -435,7 +508,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
-                  maxLines: compact ? 1 : 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: compact ? 12.5 : null,
@@ -672,6 +745,38 @@ class LuxuryDesktopHeader extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildSpaciousLuxuryHeader(
+    BuildContext context, {
+    required AuthProvider auth,
+    required DesktopNav nav,
+    required DateTime day,
+    required int notificationCount,
+    required String title,
+    required String subtitle,
+    required String searchHint,
+    required ValueChanged<String> onSearchSubmitted,
+    ValueChanged<String>? onSearchChanged,
+    String? initialSearchQuery,
+    TextEditingController? searchController,
+  }) {
+    return _SpaciousLuxuryPageHeader(
+      title: title,
+      subtitle: subtitle,
+      searchHint: searchHint,
+      onSearchSubmitted: onSearchSubmitted,
+      onSearchChanged: onSearchChanged,
+      initialSearchQuery: initialSearchQuery,
+      searchController: searchController,
+      auth: auth,
+      day: day,
+      notificationCount: notificationCount,
+      fmtDay: _fmtDay,
+      onPickDate: () => _pickDate(context),
+      onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
+      onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
+    );
+  }
 }
 
 class _FocusDashboardSearchIntent extends Intent {
@@ -694,7 +799,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     required this.onProfile,
     this.onSearchChanged,
     this.initialSearchQuery,
-    this.alignSearchWithControls = false,
+    this.searchController,
   });
 
   final String title;
@@ -703,8 +808,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<String>? onSearchChanged;
   final String? initialSearchQuery;
-  /// When true, title expands left and search sits just before header controls.
-  final bool alignSearchWithControls;
+  final TextEditingController? searchController;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -721,20 +825,24 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
 class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   final _searchFocus = FocusNode();
   late final TextEditingController _searchController;
+  late final bool _ownsSearchController;
 
   static const _gap = 16.0;
-  static const _edgePadding = EdgeInsets.fromLTRB(28, 22, 28, 18);
-  static const _wideContentHeight = 92.0;
-  static const _titleBlockHeight = 58.0;
-  static const _stackedContentHeight = 122.0;
   static const _wideBreakpoint = 1100.0;
 
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController(
-      text: widget.initialSearchQuery ?? '',
-    );
+    final external = widget.searchController;
+    if (external != null) {
+      _searchController = external;
+      _ownsSearchController = false;
+    } else {
+      _searchController = TextEditingController(
+        text: widget.initialSearchQuery ?? '',
+      );
+      _ownsSearchController = true;
+    }
   }
 
   @override
@@ -750,7 +858,9 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   @override
   void dispose() {
     _searchFocus.dispose();
-    _searchController.dispose();
+    if (_ownsSearchController) {
+      _searchController.dispose();
+    }
     super.dispose();
   }
 
@@ -771,7 +881,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
 
   Widget _titleBlock() {
     return SizedBox(
-      height: _titleBlockHeight,
+      height: LuxuryPageChrome.titleBlockHeight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -784,11 +894,11 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
               fontSize: 28,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.6,
-              height: 1.15,
+              height: 1.1,
               color: const Color(0xFFF5F3FA),
             ),
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: LuxuryPageChrome.titleSubtitleGap),
           Text(
             widget.subtitle,
             maxLines: 1,
@@ -796,7 +906,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              height: 1.3,
+              height: 1.25,
               color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
             ),
           ),
@@ -956,7 +1066,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
           ),
         },
         child: Padding(
-      padding: _edgePadding,
+      padding: LuxuryPageChrome.headerPadding,
       child: LayoutBuilder(
         builder: (context, c) {
           final w = c.maxWidth;
@@ -964,8 +1074,10 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
           final showProfileDetails = w >= 980;
           final useWideRow = w >= _wideBreakpoint && showSearch;
           final contentHeight = useWideRow
-              ? _wideContentHeight
-              : (showSearch ? _stackedContentHeight : _wideContentHeight);
+              ? LuxuryPageChrome.headerRowHeight
+              : (showSearch
+                  ? LuxuryPageChrome.headerStackedHeight
+                  : LuxuryPageChrome.headerRowHeight);
 
           const searchMaxW = 400.0;
 
@@ -982,37 +1094,24 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
 
           Widget content;
           if (useWideRow) {
-            if (widget.alignSearchWithControls) {
-              content = Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _titleBlock()),
-                  const SizedBox(width: _gap),
-                  search,
-                  const SizedBox(width: _gap),
-                  _controlsRow(showProfileDetails: showProfileDetails),
-                ],
-              );
-            } else {
-              content = Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 300),
-                        child: _titleBlock(),
-                      ),
+            content = Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 300),
+                      child: _titleBlock(),
                     ),
                   ),
-                  const SizedBox(width: _gap),
-                  search,
-                  const Spacer(),
-                  _controlsRow(showProfileDetails: showProfileDetails),
-                ],
-              );
-            }
+                ),
+                const SizedBox(width: _gap),
+                search,
+                const Spacer(),
+                _controlsRow(showProfileDetails: showProfileDetails),
+              ],
+            );
           } else {
             content = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1026,11 +1125,9 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                   ],
                 ),
                 if (showSearch) ...[
-                  const SizedBox(height: 14),
+                  SizedBox(height: LuxuryPageChrome.stackedSearchGap),
                   Align(
-                    alignment: widget.alignSearchWithControls
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
+                    alignment: Alignment.centerLeft,
                     child: search,
                   ),
                 ],

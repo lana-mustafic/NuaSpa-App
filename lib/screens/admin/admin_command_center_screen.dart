@@ -14,6 +14,7 @@ import '../../models/desktop_home_overview.dart';
 import '../../models/rezervacija.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 /// NuaSpa admin operational dashboard — live backend data, luxury SaaS layout.
 class AdminCommandCenterScreen extends StatefulWidget {
@@ -452,7 +453,7 @@ class _DashboardLayout extends StatelessWidget {
         ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(28, 32, 28, 36),
+        padding: LuxuryPageChrome.bodyPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

@@ -14,6 +14,7 @@ import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 enum _AppointmentView { day, week, month }
 
@@ -236,7 +237,9 @@ class _AdminAppointmentsManagementScreenState
               child: SingleChildScrollView(
                 controller: _mainScrollController,
                 primary: false,
-                          padding: const EdgeInsets.fromLTRB(28, 32, 28, 40),
+                          padding: LuxuryPageChrome.bodyPadding.copyWith(
+                            bottom: 40,
+                          ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

@@ -9,6 +9,7 @@ import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_finance_dashboard.dart';
 import '../../models/usluga.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 String _formatKm(num v) {
   final s = v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2);
@@ -265,7 +266,11 @@ class _AdminPaymentsOverviewScreenState
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: ClampingScrollPhysics(),
                   ),
-                  padding: EdgeInsets.fromLTRB(pad, 4, pad, pad + 8),
+                  padding: LuxuryPageChrome.bodyPadding.copyWith(
+                    left: pad,
+                    right: pad,
+                    bottom: pad + 8,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

@@ -13,6 +13,7 @@ import '../../models/zaposlenik.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 enum _CalViewMode { day, week, month }
 
@@ -277,7 +278,16 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Row(
+              child: Padding(
+                padding: inDrawer
+                    ? EdgeInsets.zero
+                    : EdgeInsets.fromLTRB(
+                        LuxuryPageChrome.bodyPadding.left,
+                        LuxuryPageChrome.bodyPadding.top,
+                        LuxuryPageChrome.bodyPadding.right,
+                        0,
+                      ),
+                child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
@@ -422,6 +432,7 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
                     ),
                   ],
                 ],
+              ),
               ),
             ),
           ],

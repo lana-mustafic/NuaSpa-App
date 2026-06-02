@@ -8,6 +8,7 @@ import '../../providers/service_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/widgets/hover_card.dart';
 import '../../ui/widgets/load_retry_panel.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/service_category_filter_bar.dart';
 import '../../ui/widgets/service_network_image.dart';
@@ -127,7 +128,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
+        padding: LuxuryPageChrome.bodyPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

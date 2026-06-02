@@ -8,6 +8,7 @@ import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import 'admin_therapist_profile_screen.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
@@ -107,7 +108,7 @@ class _AdminTherapistRosterScreenState
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 12, 28, 28),
+              padding: LuxuryPageChrome.bodyPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

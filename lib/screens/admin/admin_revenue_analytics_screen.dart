@@ -11,6 +11,7 @@ import '../../models/admin/revenue_point.dart';
 import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 
 enum _ReportPeriod { days7, days30, days90 }
@@ -239,7 +240,9 @@ class _AdminRevenueAnalyticsScreenState
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(28, 12, 22, 32),
+                    padding: LuxuryPageChrome.bodyPadding.copyWith(
+                      right: 22,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [

@@ -11,6 +11,7 @@ import '../../models/admin/service_popularity.dart';
 import '../../models/admin/top_spender.dart';
 import '../../models/admin/rezervacija_calendar_item.dart';
 import '../../models/zaposlenik.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/page_header.dart';
 import 'admin_clients_desktop_screen.dart';
 import 'admin_dashboard_screen.dart';
@@ -706,7 +707,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
     return Material(
       color: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+        padding: LuxuryPageChrome.bodyPadding,
         child: _buildRouteBody(context),
       ),
     );
