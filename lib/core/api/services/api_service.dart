@@ -870,6 +870,75 @@ class ApiService {
     }
   }
 
+  /// Admin create with API error text when the request fails.
+  Future<({Rezervacija? data, String? error})> createRezervacijaWithMessage({
+    int? korisnikId,
+    required DateTime datumRezervacije,
+    required int uslugaId,
+    required int zaposlenikId,
+    bool isVip = false,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'datumRezervacije': datumRezervacije.toIso8601String(),
+        'uslugaId': uslugaId,
+        'zaposlenikId': zaposlenikId,
+        'isVip': isVip,
+      };
+      if (korisnikId != null) {
+        body['korisnikId'] = korisnikId;
+      }
+      final response = await _dio.post<dynamic>('Rezervacija', data: body);
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Unable to create appointment.');
+      }
+      return (data: Rezervacija.fromJson(data), error: null);
+    } on DioException catch (e) {
+      return (
+        data: null,
+        error: ApiErrorMessages.fromDio(e) ?? 'Unable to create appointment.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.createRezervacijaWithMessage: $e');
+      return (data: null, error: 'Unable to create appointment.');
+    }
+  }
+
+  /// Admin edit with API error text when the request fails.
+  Future<({Rezervacija? data, String? error})> editRezervacijaWithMessage({
+    required int rezervacijaId,
+    required DateTime datumRezervacije,
+    required int uslugaId,
+    required int zaposlenikId,
+    bool isVip = false,
+  }) async {
+    try {
+      final response = await _dio.put<dynamic>(
+        'Rezervacija/$rezervacijaId',
+        data: {
+          'datumRezervacije': datumRezervacije.toIso8601String(),
+          'uslugaId': uslugaId,
+          'zaposlenikId': zaposlenikId,
+          'isVip': isVip,
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Unable to update appointment.');
+      }
+      return (data: Rezervacija.fromJson(data), error: null);
+    } on DioException catch (e) {
+      return (
+        data: null,
+        error: ApiErrorMessages.fromDio(e) ?? 'Unable to update appointment.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.editRezervacijaWithMessage: $e');
+      return (data: null, error: 'Unable to update appointment.');
+    }
+  }
+
   /// Admin: trajna VIP oznaka na rezervaciji.
   Future<bool> patchRezervacijaVip(int rezervacijaId, bool isVip) async {
     try {

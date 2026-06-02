@@ -369,7 +369,7 @@ class _AdminAppointmentsManagementScreenState
       },
     );
     if (draft == null || !mounted) return;
-    final created = await _api.createRezervacija(
+    final result = await _api.createRezervacijaWithMessage(
       korisnikId: draft.clientId,
       datumRezervacije: draft.dateTime,
       uslugaId: draft.serviceId,
@@ -377,12 +377,26 @@ class _AdminAppointmentsManagementScreenState
       isVip: draft.isVip,
     );
     if (!mounted) return;
-    _toast(
-      created == null
-          ? 'Unable to create appointment.'
-          : 'Appointment created.',
-    );
-    if (created != null) {
+    if (result.data == null) {
+      _toast(result.error ?? 'Unable to create appointment.');
+      return;
+    }
+    if (draft.confirmOnCreate) {
+      final confirmed = await _api.updateRezervacijaPotvrdjena(
+        result.data!.id,
+        true,
+      );
+      if (!mounted) return;
+      if (!confirmed) {
+        _toast('Appointment created but could not be confirmed.');
+      } else {
+        _toast('Appointment created and confirmed.');
+      }
+    } else {
+      _toast('Appointment created.');
+    }
+    final created = result.data!;
+    if (created.id > 0) {
       setState(() {
         _selectedDate = DateTime(
           created.datumRezervacije.year,
@@ -490,7 +504,7 @@ class _AdminAppointmentsManagementScreenState
       },
     );
     if (draft == null || !mounted) return;
-    final updated = await _api.editRezervacija(
+    final result = await _api.editRezervacijaWithMessage(
       rezervacijaId: r.id,
       datumRezervacije: draft.dateTime,
       uslugaId: draft.serviceId,
@@ -498,14 +512,12 @@ class _AdminAppointmentsManagementScreenState
       isVip: draft.isVip,
     );
     if (!mounted) return;
-    _toast(
-      updated == null
-          ? 'Unable to update appointment.'
-          : 'Appointment updated.',
-    );
-    if (updated != null) {
-      _reload();
+    if (result.data == null) {
+      _toast(result.error ?? 'Unable to update appointment.');
+      return;
     }
+    _toast('Appointment updated.');
+    _reload();
   }
 
   void _toast(String message) {
@@ -573,8 +585,8 @@ abstract final class _ApptUi {
 
 /// Compact appointment create/edit modal (fits without scrolling).
 abstract final class _ApptDialogLayout {
-  static const double maxWidth = 440;
-  static const double minWidth = 380;
+  static const double maxWidth = 500;
+  static const double minWidth = 400;
   static const EdgeInsets padding = EdgeInsets.fromLTRB(20, 18, 20, 18);
   static const double borderRadius = 20;
   static const double fieldGap = 6;
@@ -2203,6 +2215,7 @@ class _AdminAppointmentDraft {
     required this.serviceId,
     required this.therapistId,
     this.isVip = false,
+    this.confirmOnCreate = false,
   });
 
   /// Set when creating; null when editing (client unchanged).
@@ -2211,6 +2224,7 @@ class _AdminAppointmentDraft {
   final int serviceId;
   final int therapistId;
   final bool isVip;
+  final bool confirmOnCreate;
 }
 
 class _AdminAppointmentCreateDialog extends StatefulWidget {
@@ -2235,17 +2249,31 @@ class _AdminAppointmentCreateDialogState
     extends State<_AdminAppointmentCreateDialog> {
   final ApiService _api = ApiService();
 
-  late DateTime _dateTime;
+  late DateTime _selectedDay;
+  DateTime? _selectedSlot;
   late int? _clientId;
   late int? _serviceId;
   late int? _therapistId;
   late bool _isVip;
+  late bool _confirmOnCreate;
   String? _formError;
 
   List<Zaposlenik> _eligibleTherapists = [];
   bool _loadingTherapists = false;
+  List<DateTime> _availableSlots = [];
+  bool _loadingSlots = false;
 
   bool get _isEdit => widget.appointment != null;
+
+  Rezervacija? get _appt => widget.appointment;
+
+  bool get _isLockedEdit {
+    final a = _appt;
+    if (a == null) return false;
+    return a.isOtkazana ||
+        a.isPlacena ||
+        a.status.toLowerCase() == 'completed';
+  }
 
   static const _months = [
     'Jan',
@@ -2263,9 +2291,21 @@ class _AdminAppointmentCreateDialogState
   ];
 
   bool get _canSubmit {
-    if (_serviceId == null || _therapistId == null) return false;
+    if (_isLockedEdit) return false;
+    if (_serviceId == null || _therapistId == null || _selectedSlot == null) {
+      return false;
+    }
     if (_isEdit) return true;
     return _clientId != null;
+  }
+
+  Usluga? get _selectedService {
+    final id = _serviceId;
+    if (id == null) return null;
+    for (final s in widget.data.services) {
+      if (s.id == id) return s;
+    }
+    return null;
   }
 
   @override
@@ -2274,13 +2314,18 @@ class _AdminAppointmentCreateDialogState
     final d = widget.data;
     final appt = widget.appointment;
     if (appt != null) {
-      _dateTime = appt.datumRezervacije;
+      final local = appt.datumRezervacije.toLocal();
+      _selectedDay = DateTime(local.year, local.month, local.day);
+      _selectedSlot = appt.datumRezervacije;
       _clientId = appt.korisnikId > 0 ? appt.korisnikId : null;
       _serviceId = _initialServiceId(appt, d.services);
       _therapistId = _initialTherapistId(appt, d.therapists);
       _isVip = appt.isVip;
+      _confirmOnCreate = false;
     } else {
-      _dateTime = DateTime.now().add(const Duration(hours: 1));
+      final now = DateTime.now();
+      _selectedDay = DateTime(now.year, now.month, now.day);
+      _selectedSlot = null;
       _clientId = d.clients.isEmpty ? null : d.clients.first.id;
       _serviceId = d.services.isEmpty ? null : d.services.first.id;
       final pre = widget.initialZaposlenikId;
@@ -2290,6 +2335,7 @@ class _AdminAppointmentCreateDialogState
         _therapistId = d.therapists.isEmpty ? null : d.therapists.first.id;
       }
       _isVip = false;
+      _confirmOnCreate = true;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadEligibleTherapists(preserveTherapistId: _therapistId);
@@ -2304,6 +2350,8 @@ class _AdminAppointmentCreateDialogState
         _eligibleTherapists = [];
         _therapistId = null;
         _loadingTherapists = false;
+        _availableSlots = [];
+        _selectedSlot = null;
       });
       return;
     }
@@ -2325,6 +2373,125 @@ class _AdminAppointmentCreateDialogState
       _therapistId = nextTherapist;
       _loadingTherapists = false;
     });
+    await _loadSlots(preserveSelection: true);
+  }
+
+  Future<void> _loadSlots({bool preserveSelection = false}) async {
+    final tid = _therapistId;
+    final sid = _serviceId;
+    if (tid == null) {
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = [];
+        _loadingSlots = false;
+        if (!preserveSelection) _selectedSlot = null;
+      });
+      return;
+    }
+
+    final previous = _selectedSlot;
+    setState(() {
+      _loadingSlots = true;
+      if (!preserveSelection) _selectedSlot = null;
+    });
+
+    final slots = await _api.getDostupniTermini(
+      zaposlenikId: tid,
+      datum: _selectedDay,
+      uslugaId: sid,
+    );
+
+    if (!mounted) return;
+
+    var merged = List<DateTime>.from(slots)..sort();
+    if (_isEdit && previous != null && _isSameDay(previous, _selectedDay)) {
+      final kept = previous.toLocal();
+      final exists = merged.any((t) => _isSameSlot(t, kept));
+      if (!exists) {
+        merged.add(kept);
+        merged.sort();
+      }
+    }
+
+    DateTime? nextSlot;
+    if (preserveSelection && previous != null) {
+      for (final t in merged) {
+        if (_isSameSlot(t, previous)) {
+          nextSlot = t;
+          break;
+        }
+      }
+      if (nextSlot == null && _isEdit) {
+        nextSlot = previous;
+      }
+    }
+
+    setState(() {
+      _availableSlots = merged;
+      _loadingSlots = false;
+      if (preserveSelection && previous != null) {
+        _selectedSlot = nextSlot;
+      }
+    });
+  }
+
+  Future<void> _pickDay() async {
+    if (_isLockedEdit) return;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDay,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: NuaLuxuryTokens.softPurpleGlow,
+            surface: NuaLuxuryTokens.voidViolet,
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+    setState(() {
+      _selectedDay = DateTime(date.year, date.month, date.day);
+      _selectedSlot = null;
+      _formError = null;
+    });
+    await _loadSlots();
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _isSameSlot(DateTime a, DateTime b) {
+    final x = a.toLocal();
+    final y = b.toLocal();
+    return x.year == y.year &&
+        x.month == y.month &&
+        x.day == y.day &&
+        x.hour == y.hour &&
+        x.minute == y.minute;
+  }
+
+  String _formatSlot(DateTime t) {
+    final local = t.toLocal();
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String _fmtDay(DateTime day) {
+    final local = day.toLocal();
+    return '${_months[local.month - 1]} ${local.day}, ${local.year}';
+  }
+
+  String _editStatusLabel() {
+    final a = _appt!;
+    if (a.isOtkazana) return 'Cancelled';
+    if (a.status.isNotEmpty) return a.status;
+    return a.isPotvrdjena ? 'Confirmed' : 'Pending';
   }
 
   int? _initialServiceId(Rezervacija appt, List<Usluga> services) {
@@ -2349,15 +2516,6 @@ class _AdminAppointmentCreateDialogState
       if (appt.zaposlenikIme?.contains(t.ime) == true) return t.id;
     }
     return therapists.isEmpty ? null : therapists.first.id;
-  }
-
-  String _fmtDateTime(DateTime dt) {
-    final local = dt.toLocal();
-    final h = local.hour;
-    final hour12 = h % 12 == 0 ? 12 : h % 12;
-    final ampm = h >= 12 ? 'PM' : 'AM';
-    final min = local.minute.toString().padLeft(2, '0');
-    return '${_months[local.month - 1]} ${local.day}, ${local.year} at $hour12:$min $ampm';
   }
 
   String _clientLabel() {
@@ -2474,18 +2632,75 @@ class _AdminAppointmentCreateDialogState
     if (picked != null) onPick(picked);
   }
 
+  Widget _buildSlotsSection() {
+    if (_loadingSlots) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _ApptUi.purple2.withValues(alpha: 0.9),
+            ),
+          ),
+        ),
+      );
+    }
+    if (_therapistId == null) {
+      return Text(
+        'Select a therapist to see available times.',
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.35,
+          color: _ApptUi.lavender.withValues(alpha: 0.55),
+        ),
+      );
+    }
+    if (_availableSlots.isEmpty) {
+      return Text(
+        'No available times for this date (spa may be closed or fully booked).',
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.35,
+          color: _ApptUi.lavender.withValues(alpha: 0.55),
+        ),
+      );
+    }
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final slot in _availableSlots)
+          _PremiumApptSlotChip(
+            label: _formatSlot(slot),
+            selected: _selectedSlot != null && _isSameSlot(slot, _selectedSlot!),
+            enabled: !_isLockedEdit,
+            onTap: () => setState(() {
+              _selectedSlot = slot;
+              _formError = null;
+            }),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final missingData = _isEdit
         ? widget.data.services.isEmpty
         : widget.data.clients.isEmpty || widget.data.services.isEmpty;
+    final service = _selectedService;
+    final apptNotes = _appt?.napomenaZaTerapeuta?.trim();
 
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
+        constraints: BoxConstraints(
           minWidth: _ApptDialogLayout.minWidth,
           maxWidth: _ApptDialogLayout.maxWidth,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.88,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
@@ -2509,96 +2724,104 @@ class _AdminAppointmentCreateDialogState
               ),
               child: Padding(
                 padding: _ApptDialogLayout.padding,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            gradient: const LinearGradient(
-                              colors: [_ApptUi.purple, _ApptUi.purple2],
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: const LinearGradient(
+                                colors: [_ApptUi.purple, _ApptUi.purple2],
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.event_available_rounded,
+                              color: Colors.white,
+                              size: 22,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.event_available_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _isEdit ? 'Edit Appointment' : 'New Appointment',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: _ApptUi.textPrimary,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _isEdit ? 'Edit Appointment' : 'New Appointment',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ApptUi.textPrimary,
+                              ),
                             ),
                           ),
-                        ),
-                        _PremiumModalCloseButton(
-                          onPressed: () => Navigator.pop(context),
+                          _PremiumModalCloseButton(
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      if (_isEdit && _isLockedEdit) ...[
+                        const SizedBox(height: _ApptDialogLayout.fieldGap),
+                        _PremiumApptLockedBanner(
+                          message: _appt!.isPlacena
+                              ? 'Paid appointments cannot be edited.'
+                              : _appt!.isOtkazana
+                                  ? 'Cancelled appointments cannot be edited.'
+                                  : 'Completed appointments cannot be edited.',
                         ),
                       ],
-                    ),
-                    const SizedBox(height: _ApptDialogLayout.sectionGap),
-                    _PremiumApptFieldCard(
-                      icon: Icons.person_outline_rounded,
-                      label: 'Client',
-                      value: _clientLabel(),
-                      trailing: _isEdit
-                          ? Icon(
-                              Icons.lock_outline_rounded,
-                              color: _ApptUi.lavender.withValues(alpha: 0.5),
-                            )
-                          : const Icon(
-                              Icons.expand_more_rounded,
-                              color: Color(0x99FFFFFF),
-                            ),
-                      enabled: !_isEdit && widget.data.clients.isNotEmpty,
-                      disabledReason: _isEdit
-                          ? 'Client cannot be changed when editing an appointment.'
-                          : widget.data.clients.isEmpty
-                              ? 'No clients found. Create a client before adding appointments.'
-                              : null,
-                      onTap: _isEdit || widget.data.clients.isEmpty
-                          ? null
-                          : () => _pickFromList(
-                                title: 'Select client',
-                                currentId: _clientId,
-                                options: [
-                                  for (final c in widget.data.clients)
-                                    (
-                                      id: c.id,
-                                      label: c.punoIme.isEmpty
-                                          ? c.email
-                                          : c.punoIme,
-                                    ),
-                                ],
-                                onPick: (id) => setState(() {
-                                  _clientId = id;
-                                  _formError = null;
-                                }),
+                      if (_isEdit) ...[
+                        const SizedBox(height: _ApptDialogLayout.fieldGap),
+                        _PremiumApptStatusRow(
+                          status: _editStatusLabel(),
+                          confirmed: _appt!.isPotvrdjena,
+                          paid: _appt!.isPlacena,
+                        ),
+                      ],
+                      const SizedBox(height: _ApptDialogLayout.sectionGap),
+                      _PremiumApptFieldCard(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Client',
+                        value: _clientLabel(),
+                        trailing: _isEdit
+                            ? Icon(
+                                Icons.lock_outline_rounded,
+                                color: _ApptUi.lavender.withValues(alpha: 0.5),
+                              )
+                            : const Icon(
+                                Icons.expand_more_rounded,
+                                color: Color(0x99FFFFFF),
                               ),
-                    ),
-                    const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    _PremiumApptFieldCard(
-                      icon: Icons.schedule_rounded,
-                      label: 'Date & Time',
-                      value: _fmtDateTime(_dateTime),
-                      trailing: Icon(
-                        Icons.calendar_month_outlined,
-                        color: _ApptUi.purple2.withValues(alpha: 0.9),
+                        enabled: !_isEdit && widget.data.clients.isNotEmpty,
+                        disabledReason: _isEdit
+                            ? 'Client cannot be changed when editing an appointment.'
+                            : widget.data.clients.isEmpty
+                                ? 'No clients found. Create a client before adding appointments.'
+                                : null,
+                        onTap: _isEdit || widget.data.clients.isEmpty
+                            ? null
+                            : () => _pickFromList(
+                                  title: 'Select client',
+                                  currentId: _clientId,
+                                  options: [
+                                    for (final c in widget.data.clients)
+                                      (
+                                        id: c.id,
+                                        label: c.punoIme.isEmpty
+                                            ? c.email
+                                            : c.punoIme,
+                                      ),
+                                  ],
+                                  onPick: (id) => setState(() {
+                                    _clientId = id;
+                                    _formError = null;
+                                  }),
+                                ),
                       ),
-                      onTap: _pickDateTime,
-                    ),
-                    const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    Row(
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
@@ -2611,11 +2834,14 @@ class _AdminAppointmentCreateDialogState
                               color: Color(0x99FFFFFF),
                               size: 20,
                             ),
-                            enabled: widget.data.services.isNotEmpty,
-                            disabledReason: widget.data.services.isEmpty
-                                ? 'No services found.'
-                                : null,
-                            onTap: widget.data.services.isEmpty
+                            enabled: !_isLockedEdit &&
+                                widget.data.services.isNotEmpty,
+                            disabledReason: _isLockedEdit
+                                ? 'This appointment cannot be edited.'
+                                : widget.data.services.isEmpty
+                                    ? 'No services found.'
+                                    : null,
+                            onTap: _isLockedEdit || widget.data.services.isEmpty
                                 ? null
                                 : () => _pickFromList(
                                       title: 'Select service',
@@ -2650,14 +2876,18 @@ class _AdminAppointmentCreateDialogState
                               color: Color(0x99FFFFFF),
                               size: 20,
                             ),
-                            enabled: !_loadingTherapists &&
+                            enabled: !_isLockedEdit &&
+                                !_loadingTherapists &&
                                 _eligibleTherapists.isNotEmpty,
-                            disabledReason: _loadingTherapists
-                                ? 'Loading therapists for this service…'
-                                : _eligibleTherapists.isEmpty
-                                    ? 'No therapists are assigned to perform this service.'
-                                    : null,
-                            onTap: _loadingTherapists ||
+                            disabledReason: _isLockedEdit
+                                ? 'This appointment cannot be edited.'
+                                : _loadingTherapists
+                                    ? 'Loading therapists for this service…'
+                                    : _eligibleTherapists.isEmpty
+                                        ? 'No therapists are assigned to perform this service.'
+                                        : null,
+                            onTap: _isLockedEdit ||
+                                    _loadingTherapists ||
                                     _eligibleTherapists.isEmpty
                                 ? null
                                 : () => _pickFromList(
@@ -2671,20 +2901,74 @@ class _AdminAppointmentCreateDialogState
                                                 '${t.ime} ${t.prezime}'.trim(),
                                           ),
                                       ],
-                                      onPick: (id) => setState(() {
-                                        _therapistId = id;
-                                        _formError = null;
-                                      }),
+                                      onPick: (id) {
+                                        setState(() {
+                                          _therapistId = id;
+                                          _formError = null;
+                                        });
+                                        _loadSlots();
+                                      },
                                     ),
                           ),
                         ),
                       ],
                     ),
+                    if (service != null) ...[
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      _PremiumApptServiceSummary(
+                        name: service.naziv,
+                        durationMinutes: service.trajanjeMinuta,
+                        priceLabel: service.cijenaKm,
+                      ),
+                    ],
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
+                    _PremiumApptFieldCard(
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Date',
+                      value: _fmtDay(_selectedDay),
+                      trailing: Icon(
+                        Icons.edit_calendar_outlined,
+                        color: _ApptUi.purple2.withValues(alpha: 0.9),
+                        size: 20,
+                      ),
+                      enabled: !_isLockedEdit,
+                      disabledReason: _isLockedEdit
+                          ? 'This appointment cannot be edited.'
+                          : null,
+                      onTap: _isLockedEdit ? null : _pickDay,
+                    ),
+                    const SizedBox(height: _ApptDialogLayout.fieldGap),
+                    Text(
+                      'Available times',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: _ApptUi.lavender.withValues(alpha: 0.55),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildSlotsSection(),
+                    if (_isEdit &&
+                        apptNotes != null &&
+                        apptNotes.isNotEmpty) ...[
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      _PremiumApptNotesCard(notes: apptNotes),
+                    ],
                     const SizedBox(height: _ApptDialogLayout.fieldGap),
                     _PremiumApptVipStrip(
                       value: _isVip,
-                      onChanged: (v) => setState(() => _isVip = v),
+                      onChanged: _isLockedEdit
+                          ? null
+                          : (v) => setState(() => _isVip = v),
                     ),
+                    if (!_isEdit) ...[
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      _PremiumApptConfirmStrip(
+                        value: _confirmOnCreate,
+                        onChanged: (v) => setState(() => _confirmOnCreate = v),
+                      ),
+                    ],
                     if (missingData) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -2722,20 +3006,22 @@ class _AdminAppointmentCreateDialogState
                           icon: _isEdit
                               ? Icons.save_rounded
                               : Icons.event_available_rounded,
-                          enabled: !missingData,
-                          disabledTooltip: missingData
-                              ? (_isEdit
-                                  ? 'Load services before editing.'
-                                  : 'Load clients and services before creating appointments.')
-                              : null,
-                          onPressed: missingData
+                          enabled: !missingData && !_isLockedEdit,
+                          disabledTooltip: _isLockedEdit
+                              ? 'This appointment cannot be edited.'
+                              : missingData
+                                  ? (_isEdit
+                                      ? 'Load services before editing.'
+                                      : 'Load clients and services before creating appointments.')
+                                  : null,
+                          onPressed: missingData || _isLockedEdit
                               ? null
                               : () {
                                   if (!_canSubmit) {
                                     setState(() {
                                       _formError = _isEdit
-                                          ? 'Select a service and therapist.'
-                                          : 'Select a client, service, and therapist.';
+                                          ? 'Select a service, therapist, and available time.'
+                                          : 'Select a client, service, therapist, and available time.';
                                     });
                                     return;
                                   }
@@ -2743,66 +3029,24 @@ class _AdminAppointmentCreateDialogState
                                     context,
                                     _AdminAppointmentDraft(
                                       clientId: _isEdit ? null : _clientId,
-                                      dateTime: _dateTime,
+                                      dateTime: _selectedSlot!,
                                       serviceId: _serviceId!,
                                       therapistId: _therapistId!,
                                       isVip: _isVip,
+                                      confirmOnCreate: _confirmOnCreate,
                                     ),
                                   );
                                 },
                         ),
                       ],
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Future<void> _pickDateTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _dateTime,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: NuaLuxuryTokens.softPurpleGlow,
-            surface: NuaLuxuryTokens.voidViolet,
-            onSurface: Colors.white,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_dateTime),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary: NuaLuxuryTokens.softPurpleGlow,
-            surface: NuaLuxuryTokens.voidViolet,
-            onSurface: Colors.white,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (time == null || !mounted) return;
-    setState(
-      () => _dateTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
       ),
     );
   }
@@ -3031,8 +3275,252 @@ class _PremiumModalCancelButtonState extends State<_PremiumModalCancelButton> {
   }
 }
 
-class _PremiumApptVipStrip extends StatelessWidget {
-  const _PremiumApptVipStrip({
+class _PremiumApptSlotChip extends StatelessWidget {
+  const _PremiumApptSlotChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: selected
+                ? _ApptUi.purple.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: selected
+                  ? _ApptUi.purple2.withValues(alpha: 0.75)
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? _ApptUi.textPrimary
+                  : _ApptUi.lavender.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumApptLockedBanner extends StatelessWidget {
+  const _PremiumApptLockedBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0x33FF6B8A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x55FF6B8A)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline_rounded, size: 18, color: Color(0xFFFF8FA8)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFFFB4C4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumApptStatusRow extends StatelessWidget {
+  const _PremiumApptStatusRow({
+    required this.status,
+    required this.confirmed,
+    required this.paid,
+  });
+
+  final String status;
+  final bool confirmed;
+  final bool paid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        _PremiumApptMetaChip(label: status, accent: true),
+        if (confirmed)
+          const _PremiumApptMetaChip(label: 'Confirmed', accent: false),
+        if (paid) const _PremiumApptMetaChip(label: 'Paid', accent: false),
+      ],
+    );
+  }
+}
+
+class _PremiumApptMetaChip extends StatelessWidget {
+  const _PremiumApptMetaChip({
+    required this.label,
+    required this.accent,
+  });
+
+  final String label;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent
+            ? _ApptUi.purple.withValues(alpha: 0.28)
+            : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: accent
+              ? _ApptUi.purple2.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: accent
+              ? _ApptUi.textPrimary
+              : _ApptUi.lavender.withValues(alpha: 0.75),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumApptServiceSummary extends StatelessWidget {
+  const _PremiumApptServiceSummary({
+    required this.name,
+    required this.durationMinutes,
+    required this.priceLabel,
+  });
+
+  final String name;
+  final int durationMinutes;
+  final String priceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.spa_outlined,
+            size: 18,
+            color: _ApptUi.purple2.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
+          ),
+          Text(
+            '$durationMinutes min • $priceLabel',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _ApptUi.lavender.withValues(alpha: 0.75),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumApptNotesCard extends StatelessWidget {
+  const _PremiumApptNotesCard({required this.notes});
+
+  final String notes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Client notes for therapist',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: _ApptUi.lavender.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            notes,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: _ApptUi.textPrimary.withValues(alpha: 0.88),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumApptConfirmStrip extends StatelessWidget {
+  const _PremiumApptConfirmStrip({
     required this.value,
     required this.onChanged,
   });
@@ -3046,6 +3534,61 @@ class _PremiumApptVipStrip extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.verified_outlined,
+                size: 18,
+                color: value ? _ApptUi.purple2 : _ApptUi.lavender,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Confirm after create',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _ApptUi.lavender.withValues(alpha: 0.85),
+                ),
+              ),
+              const Spacer(),
+              Switch.adaptive(
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: _ApptUi.purple2,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumApptVipStrip extends StatelessWidget {
+  const _PremiumApptVipStrip({
+    required this.value,
+    this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onChanged == null ? null : () => onChanged!(!value),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           height: 40,
