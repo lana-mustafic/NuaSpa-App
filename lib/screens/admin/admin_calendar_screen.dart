@@ -1136,11 +1136,15 @@ class _WeekTimeline extends StatelessWidget {
           ),
         );
 
-        final timeline = contentH > viewportH + 1
+        final needsScroll = contentH > viewportH + 1;
+        final timeline = needsScroll
             ? Scrollbar(
                 thumbVisibility: true,
                 child: SingleChildScrollView(
                   primary: false,
+                  physics: const ClampingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
                   child: grid,
                 ),
               )
@@ -1360,8 +1364,10 @@ class _DayColumn extends StatelessWidget {
                         left: 4 + p.lane * laneW + 1,
                         width: laneW - 2,
                         top: topFor(p.item).clamp(0, height - 40),
-                        height: hFor(p.item)
-                            .clamp(isDayView ? 56.0 : 48.0, height),
+                        height: hFor(p.item).clamp(
+                          isDayView ? 56.0 : 52.0,
+                          height,
+                        ),
                         child: _ApptCard(
                           item: p.item,
                           selected: selected?.id == p.item.id,
@@ -1591,12 +1597,72 @@ class _ApptCardState extends State<_ApptCard> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final maxH = constraints.maxHeight;
-                        final showClient = maxH >= 44;
-                        final showTherapist =
-                            showClient &&
+                        final maxW = constraints.maxWidth;
+                        final compact = maxH < 52;
+                        final showClient =
+                            !compact && maxH >= 50 && client.isNotEmpty;
+                        final showTherapist = showClient &&
                             therapist != null &&
                             therapist.isNotEmpty &&
-                            maxH >= 58;
+                            maxH >= 64;
+                        final tSize = compact ? 10.0 : timeSize;
+                        final sSize = compact ? 11.0 : serviceSize;
+                        final lSize = compact ? 10.0 : lineSize;
+
+                        final column = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              timeStr,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _txt(
+                                tSize,
+                                FontWeight.w600,
+                                Colors.white.withValues(alpha: 0.78),
+                              ),
+                            ),
+                            SizedBox(height: compact ? 2 : (spacious ? 4 : 3)),
+                            Text(
+                              service,
+                              maxLines: compact ? 1 : (spacious ? 2 : 1),
+                              overflow: TextOverflow.ellipsis,
+                              style: _txt(
+                                sSize,
+                                FontWeight.w700,
+                                _CalUi.textPrimary,
+                                height: 1.12,
+                              ),
+                            ),
+                            if (showClient) ...[
+                              SizedBox(height: compact ? 2 : 3),
+                              Text(
+                                client,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _txt(
+                                  lSize,
+                                  FontWeight.w500,
+                                  Colors.white.withValues(alpha: 0.82),
+                                ),
+                              ),
+                            ],
+                            if (showTherapist) ...[
+                              SizedBox(height: compact ? 2 : 3),
+                              Text(
+                                therapist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _txt(
+                                  lSize,
+                                  FontWeight.w500,
+                                  _CalUi.lavender.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
 
                         return Padding(
                           padding: EdgeInsets.fromLTRB(
@@ -1606,63 +1672,20 @@ class _ApptCardState extends State<_ApptCard> {
                             spacious ? 8 : 6,
                           ),
                           child: ClipRect(
-                            child: Align(
-                              alignment: Alignment.topLeft,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                    Text(
-                                      timeStr,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: _txt(
-                                        timeSize,
-                                        FontWeight.w600,
-                                        Colors.white.withValues(alpha: 0.78),
-                                      ),
+                            child: compact
+                                ? FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.topLeft,
+                                    child: SizedBox(
+                                      width: maxW,
+                                      height: 46,
+                                      child: column,
                                     ),
-                                    SizedBox(height: spacious ? 4 : 3),
-                                    Text(
-                                      service,
-                                      maxLines: spacious ? 2 : 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: _txt(
-                                        serviceSize,
-                                        FontWeight.w700,
-                                        _CalUi.textPrimary,
-                                        height: 1.15,
-                                      ),
-                                    ),
-                                    if (showClient) ...[
-                                      SizedBox(height: spacious ? 3 : 2),
-                                      Text(
-                                        client,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: _txt(
-                                          lineSize,
-                                          FontWeight.w500,
-                                          Colors.white.withValues(alpha: 0.82),
-                                        ),
-                                      ),
-                                    ],
-                                    if (showTherapist) ...[
-                                      SizedBox(height: spacious ? 3 : 2),
-                                      Text(
-                                        therapist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: _txt(
-                                          lineSize,
-                                          FontWeight.w500,
-                                          _CalUi.lavender.withValues(alpha: 0.9),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                            ),
+                                  )
+                                : Align(
+                                    alignment: Alignment.topLeft,
+                                    child: column,
+                                  ),
                           ),
                         );
                       },
@@ -1756,29 +1779,29 @@ class _MonthOverview extends StatelessWidget {
                     final gridW = gridBox.maxWidth;
                     final gridH = gridBox.maxHeight;
                     final rowCount = rows.toDouble();
-                    final cellW =
-                        (gridW - gridSpacing * 6) / 7;
-                    final cellH = math.max(
-                      44.0,
-                      (gridH - gridSpacing * (rowCount - 1)) / rowCount,
-                    );
+                    final cellW = (gridW - gridSpacing * 6) / 7;
+                    final fitCellH =
+                        (gridH - gridSpacing * (rowCount - 1)) / rowCount;
+                    const minCellH = 44.0;
+                    final cellH = math.max(minCellH, fitCellH);
                     final aspectRatio = cellW / cellH;
+                    final totalGridH =
+                        rowCount * cellH + gridSpacing * (rowCount - 1);
+                    final needsScroll = totalGridH > gridH + 0.5;
 
-                    return Scrollbar(
-                      thumbVisibility: true,
-                      child: GridView.builder(
-                        padding: EdgeInsets.zero,
-                        physics: const ClampingScrollPhysics(),
-                        gridDelegate:
-                            SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 7,
-                          childAspectRatio:
-                              aspectRatio.clamp(0.72, 1.35),
-                          mainAxisSpacing: gridSpacing,
-                          crossAxisSpacing: gridSpacing,
-                        ),
-                        itemCount: totalCells,
-                        itemBuilder: (_, i) {
+                    final grid = GridView.builder(
+                      padding: EdgeInsets.zero,
+                      physics: needsScroll
+                          ? const ClampingScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 7,
+                        childAspectRatio: aspectRatio.clamp(0.72, 1.35),
+                        mainAxisSpacing: gridSpacing,
+                        crossAxisSpacing: gridSpacing,
+                      ),
+                      itemCount: totalCells,
+                      itemBuilder: (_, i) {
                           final dayNum = i - lead + 1;
                           if (i < lead ||
                               dayNum < 1 ||
@@ -1842,8 +1865,15 @@ class _MonthOverview extends StatelessWidget {
                             ),
                           );
                         },
-                      ),
                     );
+
+                    if (needsScroll) {
+                      return Scrollbar(
+                        thumbVisibility: true,
+                        child: grid,
+                      );
+                    }
+                    return grid;
                   },
                 ),
               ),
