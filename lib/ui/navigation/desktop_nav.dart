@@ -42,6 +42,7 @@ class DesktopNav extends ChangeNotifier {
   /// Jednokratni upit za [ServiceCatalogScreen] nakon navigacije iz globalne tračice.
   String? _pendingCatalogSearch;
   String? _pendingClientSearch;
+  String _clientSearchQuery = '';
   String _therapistSearchQuery = '';
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -89,6 +90,8 @@ class DesktopNav extends ChangeNotifier {
   AdminSuiteRoute get adminSuiteTarget => _adminSuiteTarget;
 
   String get therapistSearchQuery => _therapistSearchQuery;
+
+  String get clientSearchQuery => _clientSearchQuery;
 
   String get appointmentSearchQuery => _appointmentSearchQuery;
 
@@ -151,8 +154,13 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void goToClientsWithSearch(String raw) {
-    final t = raw.trim();
-    _pendingClientSearch = t.isEmpty ? null : t;
+    setClientSearchQuery(raw);
+  }
+
+  void setClientSearchQuery(String raw) {
+    final value = raw.trim();
+    _clientSearchQuery = value;
+    _pendingClientSearch = value.isEmpty ? null : value;
     goToAdminSuite(AdminSuiteRoute.clients);
   }
 

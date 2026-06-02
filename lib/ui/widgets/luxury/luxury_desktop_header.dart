@@ -399,9 +399,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Clients',
-          subtitle: 'Manage client profiles, visits, and loyalty status.',
+          subtitle: 'Manage client profiles and visit history.',
           searchHint: 'Search clients…',
-          onSearchSubmitted: nav.goToClientsWithSearch,
+          initialSearchQuery: nav.clientSearchQuery,
+          onSearchSubmitted: nav.setClientSearchQuery,
+          onSearchChanged: nav.setClientSearchQuery,
         );
       }
       if (isAdminPayments) {
