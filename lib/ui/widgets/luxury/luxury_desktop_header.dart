@@ -320,8 +320,29 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final badgeCount = notificationCount;
 
     if (isCommandCenter) {
-      return _CommandCenterDashboardHeader(
-        theme: theme,
+      return _SpaciousLuxuryPageHeader(
+        title: 'Dashboard',
+        subtitle: 'Welcome back, Admin. Here is today\'s overview.',
+        searchHint: 'Search appointments, clients, services…',
+        onSearchSubmitted: nav.performAdminGlobalSearch,
+        auth: auth,
+        day: day,
+        notificationCount: badgeCount,
+        fmtDay: _fmtDay,
+        onPickDate: () => _pickDate(context),
+        onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
+        onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
+      );
+    }
+
+    if (isAppointments && auth.isAdmin) {
+      return _SpaciousLuxuryPageHeader(
+        title: 'Appointments',
+        subtitle: 'Manage, view and organize all spa appointments.',
+        searchHint: 'Search clients, appointments…',
+        initialSearchQuery: nav.appointmentSearchQuery,
+        onSearchSubmitted: nav.setAppointmentSearchQuery,
+        onSearchChanged: nav.setAppointmentSearchQuery,
         auth: auth,
         day: day,
         notificationCount: badgeCount,
@@ -656,10 +677,13 @@ class _FocusDashboardSearchIntent extends Intent {
   const _FocusDashboardSearchIntent();
 }
 
-/// Spacious enterprise header used only on the admin Dashboard route.
-class _CommandCenterDashboardHeader extends StatefulWidget {
-  const _CommandCenterDashboardHeader({
-    required this.theme,
+/// Spacious enterprise header — Dashboard, Appointments, and matching admin routes.
+class _SpaciousLuxuryPageHeader extends StatefulWidget {
+  const _SpaciousLuxuryPageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.searchHint,
+    required this.onSearchSubmitted,
     required this.auth,
     required this.day,
     required this.notificationCount,
@@ -667,9 +691,16 @@ class _CommandCenterDashboardHeader extends StatefulWidget {
     required this.onPickDate,
     required this.onNotifications,
     required this.onProfile,
+    this.onSearchChanged,
+    this.initialSearchQuery,
   });
 
-  final ThemeData theme;
+  final String title;
+  final String subtitle;
+  final String searchHint;
+  final ValueChanged<String> onSearchSubmitted;
+  final ValueChanged<String>? onSearchChanged;
+  final String? initialSearchQuery;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -679,23 +710,40 @@ class _CommandCenterDashboardHeader extends StatefulWidget {
   final void Function(BuildContext) onProfile;
 
   @override
-  State<_CommandCenterDashboardHeader> createState() =>
-      _CommandCenterDashboardHeaderState();
+  State<_SpaciousLuxuryPageHeader> createState() =>
+      _SpaciousLuxuryPageHeaderState();
 }
 
-class _CommandCenterDashboardHeaderState
-    extends State<_CommandCenterDashboardHeader> {
+class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   final _searchFocus = FocusNode();
+  late final TextEditingController _searchController;
 
   static const _gap = 16.0;
 
   @override
-  void dispose() {
-    _searchFocus.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(
+      text: widget.initialSearchQuery ?? '',
+    );
   }
 
-  ThemeData get theme => widget.theme;
+  @override
+  void didUpdateWidget(covariant _SpaciousLuxuryPageHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.initialSearchQuery ?? '';
+    if (next != oldWidget.initialSearchQuery &&
+        next != _searchController.text) {
+      _searchController.text = next;
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   AuthProvider get auth => widget.auth;
 
@@ -718,7 +766,7 @@ class _CommandCenterDashboardHeaderState
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Dashboard',
+          widget.title,
           style: GoogleFonts.inter(
             fontSize: 28,
             fontWeight: FontWeight.w800,
@@ -729,7 +777,7 @@ class _CommandCenterDashboardHeaderState
         ),
         const SizedBox(height: 6),
         Text(
-          'Welcome back, Admin. Here is today\'s overview.',
+          widget.subtitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.inter(
@@ -877,8 +925,6 @@ class _CommandCenterDashboardHeaderState
 
   @override
   Widget build(BuildContext context) {
-    final nav = context.read<DesktopNav>();
-
     return Shortcuts(
       shortcuts: <ShortcutActivator, Intent>{
         const SingleActivator(LogicalKeyboardKey.keyK, control: true):
@@ -912,8 +958,10 @@ class _CommandCenterDashboardHeaderState
               showShortcutHint: true,
               maxWidth: searchMaxW,
               focusNode: _searchFocus,
-              hintText: 'Search appointments, clients, services…',
-              onSubmitted: nav.performAdminGlobalSearch,
+              controller: _searchController,
+              hintText: widget.searchHint,
+              onSubmitted: widget.onSearchSubmitted,
+              onChanged: widget.onSearchChanged,
             );
 
             if (w >= 1100 && showSearch) {
