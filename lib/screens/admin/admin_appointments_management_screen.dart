@@ -423,6 +423,10 @@ class _AdminAppointmentsManagementScreenState
   }
 
   Future<void> _cancel(Rezervacija r) async {
+    if (_AppointmentsTable.isCompleted(r)) {
+      _toast('Completed appointments cannot be cancelled.');
+      return;
+    }
     final reason = await showGeneralDialog<String>(
       context: context,
       barrierDismissible: true,
@@ -1040,6 +1044,9 @@ class _AppointmentsTable extends StatelessWidget {
     return l.year == n.year && l.month == n.month && l.day == n.day;
   }
 
+  static bool isCompleted(Rezervacija r) =>
+      r.status.toLowerCase() == 'completed';
+
   static String statusLabel(Rezervacija r) {
     switch (r.status) {
       case 'Completed':
@@ -1110,6 +1117,7 @@ class _ApptTableRowActions extends StatelessWidget {
     final r = appointment;
     final canComplete = !r.isOtkazana && r.status == 'Confirmed';
     final canManageStatus = !r.isOtkazana;
+    final isCompleted = _AppointmentsTable.isCompleted(r);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1126,9 +1134,13 @@ class _ApptTableRowActions extends StatelessWidget {
         ),
         if (canManageStatus)
           _ApptTableActionIcon(
-            tooltip: 'Cancel appointment',
+            tooltip: isCompleted
+                ? 'Completed appointments cannot be cancelled.'
+                : 'Cancel appointment',
             icon: Icons.cancel_outlined,
-            color: const Color(0xFFE87997),
+            color: isCompleted
+                ? Colors.white.withValues(alpha: 0.28)
+                : const Color(0xFFE87997),
             onPressed: () => onCancel(r),
           ),
         if (canManageStatus || canComplete)
@@ -1347,7 +1359,7 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFF6B8A).withValues(alpha: 0.18),
+                    color: _ApptUi.purple.withValues(alpha: 0.22),
                     blurRadius: 48,
                     offset: const Offset(0, 16),
                   ),
@@ -1367,11 +1379,8 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
                           height: 40,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFFFF6B8A).withValues(alpha: 0.9),
-                                const Color(0xFFFF8FA8).withValues(alpha: 0.85),
-                              ],
+                            gradient: const LinearGradient(
+                              colors: [_ApptUi.purple, _ApptUi.purple2],
                             ),
                           ),
                           child: const Icon(
@@ -1812,6 +1821,8 @@ class _ApptOverflowMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final canComplete =
         !appointment.isOtkazana && appointment.status == 'Confirmed';
+    final canCancel = !appointment.isOtkazana &&
+        !_AppointmentsTable.isCompleted(appointment);
     return PopupMenuButton<String>(
       color: NuaLuxuryTokens.voidViolet,
       padding: EdgeInsets.zero,
@@ -1838,7 +1849,7 @@ class _ApptOverflowMenu extends StatelessWidget {
             value: 'complete',
             child: Text('Mark as completed'),
           ),
-        if (includeCancelInMenu && !appointment.isOtkazana)
+        if (includeCancelInMenu && canCancel)
           const PopupMenuItem(
             value: 'cancel',
             child: Text('Cancel appointment'),
@@ -2641,7 +2652,7 @@ class _AdminAppointmentCreateDialogState
     if (a == null) return false;
     return a.isOtkazana ||
         a.isPlacena ||
-        a.status.toLowerCase() == 'completed';
+        _AppointmentsTable.isCompleted(a);
   }
 
   static const _months = [

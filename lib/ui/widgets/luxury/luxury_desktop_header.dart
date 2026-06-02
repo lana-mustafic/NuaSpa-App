@@ -725,7 +725,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   static const _gap = 16.0;
   static const _edgePadding = EdgeInsets.fromLTRB(28, 22, 28, 18);
   static const _wideContentHeight = 92.0;
-  static const _titleBlockHeight = 56.0;
+  static const _titleBlockHeight = 58.0;
   static const _stackedContentHeight = 122.0;
   static const _wideBreakpoint = 1100.0;
 
@@ -788,7 +788,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
               color: const Color(0xFFF5F3FA),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             widget.subtitle,
             maxLines: 1,
@@ -796,7 +796,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              height: 1.35,
+              height: 1.3,
               color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
             ),
           ),
