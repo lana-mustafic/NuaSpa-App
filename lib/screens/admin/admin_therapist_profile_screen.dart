@@ -120,19 +120,20 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
       existing: _therapist,
     );
     if (!mounted || editorResult == null) return;
-    final result = await _api.updateZaposlenik(editorResult.therapist);
+    final save = await _api.updateZaposlenik(editorResult.therapist);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result == null
-              ? 'Failed to save profile.'
-              : 'Therapist profile updated.',
+          save.error ??
+              (save.therapist == null
+                  ? 'Failed to save profile.'
+                  : 'Therapist profile updated.'),
         ),
       ),
     );
-    if (result != null) {
-      setState(() => _therapist = result);
+    if (save.therapist != null) {
+      setState(() => _therapist = save.therapist!);
       _reload();
     }
   }
