@@ -1669,6 +1669,7 @@ class ApiService {
     String? telefon,
     int? zaposlenikId,
     bool isVipKlijent = false,
+    String? napomenaZaTerapeuta,
   }) async {
     final response = await _dio.post<dynamic>(
       'AdminKlijent',
@@ -1682,6 +1683,8 @@ class ApiService {
         'gradId': gradId,
         'zaposlenikId': zaposlenikId,
         'isVipKlijent': isVipKlijent,
+        if (napomenaZaTerapeuta != null && napomenaZaTerapeuta.isNotEmpty)
+          'napomenaZaTerapeuta': napomenaZaTerapeuta,
       },
     );
     final data = response.data;

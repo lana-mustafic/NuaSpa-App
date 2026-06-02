@@ -271,215 +271,47 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     if (gradovi.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Nema gradova u bazi. Dodajte grad prije kreiranja klijenta.',
-          ),
+          content: Text('No cities found. Add a city before creating a client.'),
         ),
       );
       return;
     }
 
-    final formKey = GlobalKey<FormState>();
-    final imeC = TextEditingController();
-    final prezC = TextEditingController();
-    final emailC = TextEditingController();
-    final userC = TextEditingController();
-    final passC = TextEditingController();
-    final confirmPassC = TextEditingController();
-    final telC = TextEditingController();
-    int? zId;
-    int? gradId = gradovi.length == 1 ? gradovi.first.id : null;
-    var vip = false;
-    var attemptedSubmit = false;
-    var obscurePass = true;
-    var obscureConfirm = true;
-
-    await showDialog<void>(
+    await showGeneralDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          return AlertDialog(
-            backgroundColor: NuaLuxuryTokens.voidViolet,
-            title: const Text('Novi klijent'),
-            content: SizedBox(
-              width: 440,
-              child: Form(
-                key: formKey,
-                autovalidateMode: attemptedSubmit
-                    ? AutovalidateMode.onUserInteraction
-                    : AutovalidateMode.disabled,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: imeC,
-                        decoration: const InputDecoration(labelText: 'Ime'),
-                        validator: (v) => NuaValidators.requiredText(v, fieldLabel: 'Ime'),
-                      ),
-                      TextFormField(
-                        controller: prezC,
-                        decoration: const InputDecoration(labelText: 'Prezime'),
-                        validator: (v) =>
-                            NuaValidators.requiredText(v, fieldLabel: 'Prezime'),
-                      ),
-                      TextFormField(
-                        controller: emailC,
-                        decoration: const InputDecoration(labelText: 'E-mail'),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: NuaValidators.email,
-                      ),
-                      TextFormField(
-                        controller: userC,
-                        decoration:
-                            const InputDecoration(labelText: 'Korisničko ime'),
-                        validator: NuaValidators.userName,
-                      ),
-                      TextFormField(
-                        controller: passC,
-                        obscureText: obscurePass,
-                        decoration: InputDecoration(
-                          labelText: 'Lozinka',
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscurePass
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                            onPressed: () =>
-                                setLocal(() => obscurePass = !obscurePass),
-                          ),
-                        ),
-                        validator: NuaValidators.password,
-                      ),
-                      TextFormField(
-                        controller: confirmPassC,
-                        obscureText: obscureConfirm,
-                        decoration: InputDecoration(
-                          labelText: 'Potvrda lozinke',
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscureConfirm
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                            onPressed: () => setLocal(
-                              () => obscureConfirm = !obscureConfirm,
-                            ),
-                          ),
-                        ),
-                        validator: (v) =>
-                            NuaValidators.confirmPassword(v, passC.text),
-                      ),
-                      TextFormField(
-                        controller: telC,
-                        decoration: const InputDecoration(
-                          labelText: 'Telefon (opcionalno)',
-                        ),
-                        keyboardType: TextInputType.phone,
-                        validator: NuaValidators.phoneOptional,
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<int>(
-                        value: gradId,
-                        decoration: const InputDecoration(labelText: 'Grad'),
-                        items: [
-                          for (final g in gradovi)
-                            DropdownMenuItem<int>(
-                              value: g.id,
-                              child: Text(g.label),
-                            ),
-                        ],
-                        onChanged: (v) => setLocal(() => gradId = v),
-                        validator: (v) =>
-                            NuaValidators.selectionRequired(v, fieldLabel: 'grad'),
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<int?>(
-                        value: zId,
-                        decoration: const InputDecoration(
-                          labelText: 'Staff account link (optional)',
-                          helperText:
-                              'Links this client to a therapist staff login — not a booking preference.',
-                        ),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('—'),
-                          ),
-                          ...therapists.map(
-                            (z) => DropdownMenuItem<int?>(
-                              value: z.id,
-                              child: Text(_therapistName(z)),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) => setLocal(() => zId = v),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('VIP klijent'),
-                        value: vip,
-                        onChanged: (v) => setLocal(() => vip = v),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Odustani'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  setLocal(() => attemptedSubmit = true);
-                  if (!formKey.currentState!.validate()) return;
-                  try {
-                    await widget.api.createAdminClient(
-                      ime: imeC.text.trim(),
-                      prezime: prezC.text.trim(),
-                      email: emailC.text.trim(),
-                      userName: userC.text.trim(),
-                      password: passC.text,
-                      gradId: gradId!,
-                      telefon: telC.text.trim().isEmpty
-                          ? null
-                          : telC.text.trim(),
-                      zaposlenikId: zId,
-                      isVipKlijent: vip,
-                    );
-                    if (!ctx.mounted) return;
-                    Navigator.pop(ctx);
-                    _reloadFromApi();
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                        content: Text('Klijent je uspješno kreiran.'),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!ctx.mounted) return;
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text(_apiErr(e))),
-                    );
-                  }
-                },
-                child: const Text('Spremi'),
-              ),
-            ],
-          );
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, _) => _ClientCreateOverlay(
+        therapists: therapists,
+        gradovi: gradovi,
+        api: widget.api,
+        therapistName: _therapistName,
+        onCreated: () {
+          _reloadFromApi();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Client created successfully.')),
+            );
+          }
         },
+        formatError: _apiErr,
       ),
+      transitionBuilder: (ctx, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
-
-    imeC.dispose();
-    prezC.dispose();
-    emailC.dispose();
-    userC.dispose();
-    passC.dispose();
-    confirmPassC.dispose();
-    telC.dispose();
   }
 
   Future<void> _showEditClientDialog(
@@ -492,7 +324,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Nema gradova u bazi. Dodajte grad prije uređivanja klijenta.',
+            'No cities found. Add a city before editing a client.',
           ),
         ),
       );
@@ -516,7 +348,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Podaci klijenta su uspješno ažurirani.'),
+                content: Text('Client updated successfully.'),
               ),
             );
           }
@@ -1355,6 +1187,14 @@ class _ClientDetailsDialog extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             _ClientInfoRow(
+                              icon: Icons.person_outline_rounded,
+                              label: 'Username',
+                              value: client.userName.trim().isNotEmpty
+                                  ? client.userName.trim()
+                                  : '—',
+                            ),
+                            const SizedBox(height: 16),
+                            _ClientInfoRow(
                               icon: Icons.location_city_outlined,
                               label: 'City',
                               value: city != null && city.isNotEmpty
@@ -1370,7 +1210,7 @@ class _ClientDetailsDialog extends StatelessWidget {
                             const SizedBox(height: 16),
                             _ClientInfoRow(
                               icon: Icons.spa_outlined,
-                              label: 'Therapist',
+                              label: 'Preferred therapist',
                               value: therapistLabel,
                             ),
                             const SizedBox(height: 16),
@@ -1813,6 +1653,585 @@ class _VipBadge extends StatelessWidget {
   }
 }
 
+/// Full-screen scrim + premium create client modal (matches edit client styling).
+class _ClientCreateOverlay extends StatelessWidget {
+  const _ClientCreateOverlay({
+    required this.therapists,
+    required this.gradovi,
+    required this.api,
+    required this.therapistName,
+    required this.onCreated,
+    required this.formatError,
+  });
+
+  final List<Zaposlenik> therapists;
+  final List<GradLookup> gradovi;
+  final ApiService api;
+  final String Function(Zaposlenik z) therapistName;
+  final VoidCallback onCreated;
+  final String Function(Object) formatError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(color: Colors.black.withValues(alpha: 0.55)),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: GestureDetector(
+                onTap: () {},
+                child: _ClientCreateDialog(
+                  therapists: therapists,
+                  gradovi: gradovi,
+                  api: api,
+                  therapistName: therapistName,
+                  onClose: () => Navigator.of(context).pop(),
+                  onCreated: onCreated,
+                  formatError: formatError,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientCreateDialog extends StatefulWidget {
+  const _ClientCreateDialog({
+    required this.therapists,
+    required this.gradovi,
+    required this.api,
+    required this.therapistName,
+    required this.onClose,
+    required this.onCreated,
+    required this.formatError,
+  });
+
+  final List<Zaposlenik> therapists;
+  final List<GradLookup> gradovi;
+  final ApiService api;
+  final String Function(Zaposlenik z) therapistName;
+  final VoidCallback onClose;
+  final VoidCallback onCreated;
+  final String Function(Object) formatError;
+
+  @override
+  State<_ClientCreateDialog> createState() => _ClientCreateDialogState();
+}
+
+class _ClientCreateDialogState extends State<_ClientCreateDialog> {
+  static const Color _bg = Color(0xEB120A24);
+  static const double _width = 480;
+
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _firstNameC;
+  late final TextEditingController _lastNameC;
+  late final TextEditingController _emailC;
+  late final TextEditingController _usernameC;
+  late final TextEditingController _passwordC;
+  late final TextEditingController _confirmPasswordC;
+  late final TextEditingController _phoneC;
+  late final TextEditingController _noteC;
+  late int _gradId;
+  int? _therapistId;
+  bool _vip = false;
+  bool _saving = false;
+  bool _attemptedSubmit = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstNameC = TextEditingController();
+    _lastNameC = TextEditingController();
+    _emailC = TextEditingController();
+    _usernameC = TextEditingController();
+    _passwordC = TextEditingController();
+    _confirmPasswordC = TextEditingController();
+    _phoneC = TextEditingController();
+    _noteC = TextEditingController();
+    _gradId = widget.gradovi.first.id;
+    for (final c in [_firstNameC, _lastNameC]) {
+      c.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _firstNameC.dispose();
+    _lastNameC.dispose();
+    _emailC.dispose();
+    _usernameC.dispose();
+    _passwordC.dispose();
+    _confirmPasswordC.dispose();
+    _phoneC.dispose();
+    _noteC.dispose();
+    super.dispose();
+  }
+
+  String get _displayName {
+    final n = '${_firstNameC.text.trim()} ${_lastNameC.text.trim()}'.trim();
+    return n.isEmpty ? 'New client' : n;
+  }
+
+  Future<void> _save() async {
+    setState(() => _attemptedSubmit = true);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _saving = true);
+    try {
+      await widget.api.createAdminClient(
+        ime: _firstNameC.text.trim(),
+        prezime: _lastNameC.text.trim(),
+        email: _emailC.text.trim(),
+        userName: _usernameC.text.trim(),
+        password: _passwordC.text,
+        gradId: _gradId,
+        telefon: _phoneC.text.trim().isEmpty ? null : _phoneC.text.trim(),
+        zaposlenikId: _therapistId,
+        isVipKlijent: _vip,
+        napomenaZaTerapeuta: _noteC.text.trim().isEmpty
+            ? null
+            : _noteC.text.trim(),
+      );
+      if (!mounted) return;
+      widget.onClose();
+      widget.onCreated();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.formatError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fieldStyle = GoogleFonts.inter(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: _AdminClientsDesktopScreenState._textPrimary,
+    );
+    final maxH = MediaQuery.sizeOf(context).height * 0.88;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _bg,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.28),
+                blurRadius: 40,
+                spreadRadius: -6,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 32,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            width: _width,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxH),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _attemptedSubmit
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                      const SizedBox(height: 16),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              LuxuryValidatedField(
+                                icon: Icons.badge_outlined,
+                                label: 'First name',
+                                controller: _firstNameC,
+                                hint: 'Enter first name',
+                                enabled: !_saving,
+                                validator: (v) => NuaValidators.requiredText(
+                                  v,
+                                  fieldLabel: 'First name',
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.badge_outlined,
+                                label: 'Last name',
+                                controller: _lastNameC,
+                                hint: 'Enter last name',
+                                enabled: !_saving,
+                                validator: (v) => NuaValidators.requiredText(
+                                  v,
+                                  fieldLabel: 'Last name',
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.mail_outline_rounded,
+                                label: 'Email',
+                                controller: _emailC,
+                                hint: 'client@email.com',
+                                keyboardType: TextInputType.emailAddress,
+                                enabled: !_saving,
+                                validator: NuaValidators.email,
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.phone_outlined,
+                                label: 'Phone',
+                                controller: _phoneC,
+                                hint: 'Optional',
+                                keyboardType: TextInputType.phone,
+                                enabled: !_saving,
+                                validator: NuaValidators.phoneOptional,
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditFieldRow(
+                                icon: Icons.location_city_outlined,
+                                label: 'City',
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    canvasColor: NuaLuxuryTokens.voidViolet,
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int>(
+                                      isExpanded: true,
+                                      value: widget.gradovi.any(
+                                        (g) => g.id == _gradId,
+                                      )
+                                          ? _gradId
+                                          : widget.gradovi.first.id,
+                                      dropdownColor: NuaLuxuryTokens.voidViolet,
+                                      icon: Icon(
+                                        Icons.expand_more_rounded,
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                      ),
+                                      style: fieldStyle,
+                                      items: [
+                                        for (final g in widget.gradovi)
+                                          DropdownMenuItem<int>(
+                                            value: g.id,
+                                            child: Text(
+                                              g.label,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) {
+                                              if (v != null) {
+                                                setState(() => _gradId = v);
+                                              }
+                                            },
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.person_outline_rounded,
+                                label: 'Username',
+                                controller: _usernameC,
+                                hint: 'Login username',
+                                enabled: !_saving,
+                                validator: NuaValidators.userName,
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.vpn_key_outlined,
+                                label: 'Password',
+                                controller: _passwordC,
+                                hint: 'Create password',
+                                obscureText: _obscurePassword,
+                                enabled: !_saving,
+                                validator: NuaValidators.password,
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: Colors.white54,
+                                    size: 20,
+                                  ),
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(
+                                            () => _obscurePassword =
+                                                !_obscurePassword,
+                                          ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.vpn_key_outlined,
+                                label: 'Confirm password',
+                                controller: _confirmPasswordC,
+                                hint: 'Re-enter password',
+                                obscureText: _obscureConfirm,
+                                enabled: !_saving,
+                                validator: (v) => NuaValidators.confirmPassword(
+                                  v,
+                                  _passwordC.text,
+                                ),
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscureConfirm
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    color: Colors.white54,
+                                    size: 20,
+                                  ),
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(
+                                            () => _obscureConfirm =
+                                                !_obscureConfirm,
+                                          ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditFieldRow(
+                                icon: Icons.spa_outlined,
+                                label: 'Preferred therapist',
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    canvasColor: NuaLuxuryTokens.voidViolet,
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int?>(
+                                      isExpanded: true,
+                                      value: _therapistId,
+                                      hint: Text(
+                                        'None',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white.withValues(alpha: 0.4),
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      dropdownColor: NuaLuxuryTokens.voidViolet,
+                                      icon: Icon(
+                                        Icons.expand_more_rounded,
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                      ),
+                                      style: fieldStyle,
+                                      items: [
+                                        DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text(
+                                            'None',
+                                            style: GoogleFonts.inter(fontSize: 14),
+                                          ),
+                                        ),
+                                        ...widget.therapists.map(
+                                          (z) => DropdownMenuItem<int?>(
+                                            value: z.id,
+                                            child: Text(
+                                              widget.therapistName(z),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) => setState(() => _therapistId = v),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'Notes for therapist',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: _noteC,
+                                enabled: !_saving,
+                                maxLines: 3,
+                                maxLength: 1200,
+                                style: fieldStyle,
+                                decoration: InputDecoration(
+                                  hintText: 'Preferences, allergies, etc. (optional)',
+                                  hintStyle: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white.withValues(alpha: 0.04),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.1),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.1),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditToggleRow(
+                                icon: Icons.workspace_premium_rounded,
+                                label: 'Manual VIP',
+                                value: _vip,
+                                onChanged: _saving
+                                    ? null
+                                    : (v) => setState(() => _vip = v),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Opacity(
+                        opacity: _saving ? 0.65 : 1,
+                        child: _ClientDetailsCloseButton(
+                          onPressed: _saving ? () {} : _save,
+                          label: _saving ? 'Creating…' : 'Create client',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Opacity(
+                        opacity: _saving ? 0.45 : 1,
+                        child: _ClientEditCancelButton(
+                          onPressed: _saving ? () {} : widget.onClose,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _AdminClientsDesktopScreenState._purple,
+                _AdminClientsDesktopScreenState._purple2,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _AdminClientsDesktopScreenState._purple.withValues(alpha: 0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _ClientDetailsDialog._initials(_displayName),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4, right: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add client',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    height: 1.1,
+                    color: _AdminClientsDesktopScreenState._textPrimary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Create a new client account',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.55),
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _ContactChip(
+                  icon: Icons.person_add_outlined,
+                  text: _displayName,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _ClientDetailsIconClose(onPressed: widget.onClose),
+      ],
+    );
+  }
+}
+
 /// Full-screen scrim + premium edit client modal (matches view client styling).
 class _ClientEditOverlay extends StatelessWidget {
   const _ClientEditOverlay({
@@ -1899,7 +2318,7 @@ class _ClientEditDialog extends StatefulWidget {
 
 class _ClientEditDialogState extends State<_ClientEditDialog> {
   static const Color _bg = Color(0xEB120A24);
-  static const double _width = 440;
+  static const double _width = 480;
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _imeC;
@@ -2000,7 +2419,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   String? _newPasswordValidator(String? value) {
     if (!_changePassword) return null;
     if (value == null || value.isEmpty) {
-      return 'Unesite novu lozinku ili isključite opciju „Izmijeni lozinku”.';
+      return 'Enter a new password or turn off Change password.';
     }
     return NuaValidators.passwordOptional(value);
   }
@@ -2020,6 +2439,7 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
       fontWeight: FontWeight.w600,
       color: _AdminClientsDesktopScreenState._textPrimary,
     );
+    final maxH = MediaQuery.sizeOf(context).height * 0.88;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -2046,284 +2466,318 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
           ),
           child: SizedBox(
             width: _width,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
-              child: Form(
-                key: _formKey,
-                autovalidateMode: _attemptedSubmit
-                    ? AutovalidateMode.onUserInteraction
-                    : AutovalidateMode.disabled,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
-                  const SizedBox(height: 20),
-                  if (!widget.client.isActive) ...[
-                    _inactiveBanner(),
-                    const SizedBox(height: 18),
-                  ],
-                  LuxuryValidatedField(
-                    icon: Icons.badge_outlined,
-                    label: 'Ime',
-                    controller: _imeC,
-                    hint: 'Unesite ime',
-                    enabled: !_saving,
-                    validator: (v) =>
-                        NuaValidators.requiredText(v, fieldLabel: 'Ime'),
-                  ),
-                  const SizedBox(height: 14),
-                  LuxuryValidatedField(
-                    icon: Icons.badge_outlined,
-                    label: 'Prezime',
-                    controller: _prezC,
-                    hint: 'Unesite prezime',
-                    enabled: !_saving,
-                    validator: (v) =>
-                        NuaValidators.requiredText(v, fieldLabel: 'Prezime'),
-                  ),
-                  const SizedBox(height: 14),
-                  LuxuryValidatedField(
-                    icon: Icons.mail_outline_rounded,
-                    label: 'E-mail',
-                    controller: _emailC,
-                    hint: 'klijent@email.ba',
-                    keyboardType: TextInputType.emailAddress,
-                    enabled: !_saving,
-                    validator: NuaValidators.email,
-                  ),
-                  const SizedBox(height: 14),
-                  LuxuryValidatedField(
-                    icon: Icons.phone_outlined,
-                    label: 'Telefon',
-                    controller: _telC,
-                    hint: 'Opcionalno',
-                    keyboardType: TextInputType.phone,
-                    enabled: !_saving,
-                    validator: NuaValidators.phoneOptional,
-                  ),
-                  const SizedBox(height: 14),
-                  _ClientEditFieldRow(
-                    icon: Icons.location_city_outlined,
-                    label: 'Grad',
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        canvasColor: NuaLuxuryTokens.voidViolet,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxH),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(26, 22, 22, 24),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _attemptedSubmit
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.white.withValues(alpha: 0.08),
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
-                          isExpanded: true,
-                          value: widget.gradovi.any((g) => g.id == _gradId)
-                              ? _gradId
-                              : widget.gradovi.first.id,
-                          dropdownColor: NuaLuxuryTokens.voidViolet,
-                          icon: Icon(
-                            Icons.expand_more_rounded,
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                          style: fieldStyle,
-                          items: [
-                            for (final g in widget.gradovi)
-                              DropdownMenuItem<int>(
-                                value: g.id,
+                      const SizedBox(height: 16),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (!widget.client.isActive) ...[
+                                _inactiveBanner(),
+                                const SizedBox(height: 18),
+                              ],
+                              LuxuryValidatedField(
+                                icon: Icons.badge_outlined,
+                                label: 'First name',
+                                controller: _imeC,
+                                hint: 'Enter first name',
+                                enabled: !_saving,
+                                validator: (v) => NuaValidators.requiredText(
+                                  v,
+                                  fieldLabel: 'First name',
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.badge_outlined,
+                                label: 'Last name',
+                                controller: _prezC,
+                                hint: 'Enter last name',
+                                enabled: !_saving,
+                                validator: (v) => NuaValidators.requiredText(
+                                  v,
+                                  fieldLabel: 'Last name',
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.mail_outline_rounded,
+                                label: 'Email',
+                                controller: _emailC,
+                                hint: 'client@email.com',
+                                keyboardType: TextInputType.emailAddress,
+                                enabled: !_saving,
+                                validator: NuaValidators.email,
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditFieldRow(
+                                icon: Icons.person_outline_rounded,
+                                label: 'Username',
                                 child: Text(
-                                  g.label,
-                                  overflow: TextOverflow.ellipsis,
+                                  widget.client.userName.trim().isNotEmpty
+                                      ? widget.client.userName.trim()
+                                      : '—',
+                                  style: fieldStyle.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.45),
+                                  ),
                                 ),
                               ),
-                          ],
-                          onChanged: _saving
-                              ? null
-                              : (v) {
-                                  if (v != null) {
-                                    setState(() => _gradId = v);
-                                  }
-                                },
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _ClientEditToggleRow(
-                    icon: Icons.lock_outline_rounded,
-                    label: 'Izmijeni lozinku',
-                    value: _changePassword,
-                    onChanged: _saving
-                        ? null
-                        : (v) {
-                            setState(() {
-                              _changePassword = v;
-                              if (!v) {
-                                _newPassC.clear();
-                                _confirmPassC.clear();
-                              }
-                            });
-                          },
-                  ),
-                  if (_changePassword) ...[
-                    const SizedBox(height: 14),
-                    LuxuryValidatedField(
-                      icon: Icons.vpn_key_outlined,
-                      label: 'Nova',
-                      controller: _newPassC,
-                      hint: 'Nova lozinka',
-                      obscureText: _obscureNew,
-                      enabled: !_saving,
-                      validator: _newPasswordValidator,
-                      suffix: IconButton(
-                        icon: Icon(
-                          _obscureNew
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          color: Colors.white54,
-                          size: 20,
-                        ),
-                        onPressed: _saving
-                            ? null
-                            : () => setState(() => _obscureNew = !_obscureNew),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    LuxuryValidatedField(
-                      icon: Icons.vpn_key_outlined,
-                      label: 'Potvrda',
-                      controller: _confirmPassC,
-                      hint: 'Potvrda nove lozinke',
-                      obscureText: _obscureConfirm,
-                      enabled: !_saving,
-                      validator: _confirmNewPasswordValidator,
-                      suffix: IconButton(
-                        icon: Icon(
-                          _obscureConfirm
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          color: Colors.white54,
-                          size: 20,
-                        ),
-                        onPressed: _saving
-                            ? null
-                            : () => setState(
-                                  () => _obscureConfirm = !_obscureConfirm,
+                              const SizedBox(height: 14),
+                              LuxuryValidatedField(
+                                icon: Icons.phone_outlined,
+                                label: 'Phone',
+                                controller: _telC,
+                                hint: 'Optional',
+                                keyboardType: TextInputType.phone,
+                                enabled: !_saving,
+                                validator: NuaValidators.phoneOptional,
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditFieldRow(
+                                icon: Icons.location_city_outlined,
+                                label: 'City',
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    canvasColor: NuaLuxuryTokens.voidViolet,
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int>(
+                                      isExpanded: true,
+                                      value: widget.gradovi.any((g) => g.id == _gradId)
+                                          ? _gradId
+                                          : widget.gradovi.first.id,
+                                      dropdownColor: NuaLuxuryTokens.voidViolet,
+                                      icon: Icon(
+                                        Icons.expand_more_rounded,
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                      ),
+                                      style: fieldStyle,
+                                      items: [
+                                        for (final g in widget.gradovi)
+                                          DropdownMenuItem<int>(
+                                            value: g.id,
+                                            child: Text(
+                                              g.label,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) {
+                                              if (v != null) {
+                                                setState(() => _gradId = v);
+                                              }
+                                            },
+                                    ),
+                                  ),
                                 ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  _ClientEditFieldRow(
-                    icon: Icons.spa_outlined,
-                    label: 'Therapist',
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        canvasColor: NuaLuxuryTokens.voidViolet,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int?>(
-                          isExpanded: true,
-                          value: _zId,
-                          hint: Text(
-                            'None',
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              fontSize: 14,
-                            ),
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditFieldRow(
+                                icon: Icons.spa_outlined,
+                                label: 'Preferred therapist',
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    canvasColor: NuaLuxuryTokens.voidViolet,
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int?>(
+                                      isExpanded: true,
+                                      value: _zId,
+                                      hint: Text(
+                                        'None',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white.withValues(alpha: 0.4),
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      dropdownColor: NuaLuxuryTokens.voidViolet,
+                                      icon: Icon(
+                                        Icons.expand_more_rounded,
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                      ),
+                                      style: fieldStyle,
+                                      items: [
+                                        DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text(
+                                            'None',
+                                            style: GoogleFonts.inter(fontSize: 14),
+                                          ),
+                                        ),
+                                        ...widget.therapists.map(
+                                          (z) => DropdownMenuItem<int?>(
+                                            value: z.id,
+                                            child: Text(
+                                              widget.therapistName(z),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) => setState(() => _zId = v),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'Notes for therapist',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: _noteC,
+                                enabled: !_saving,
+                                maxLines: 3,
+                                maxLength: 1200,
+                                style: fieldStyle,
+                                decoration: InputDecoration(
+                                  hintText: 'Preferences, allergies, etc.',
+                                  hintStyle: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white.withValues(alpha: 0.04),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.1),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.1),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditToggleRow(
+                                icon: Icons.workspace_premium_rounded,
+                                label: 'Manual VIP',
+                                value: _vip,
+                                onChanged: _saving
+                                    ? null
+                                    : (v) => setState(() => _vip = v),
+                              ),
+                              const SizedBox(height: 14),
+                              _ClientEditToggleRow(
+                                icon: Icons.lock_outline_rounded,
+                                label: 'Change password',
+                                value: _changePassword,
+                                onChanged: _saving
+                                    ? null
+                                    : (v) {
+                                        setState(() {
+                                          _changePassword = v;
+                                          if (!v) {
+                                            _newPassC.clear();
+                                            _confirmPassC.clear();
+                                          }
+                                        });
+                                      },
+                              ),
+                              if (_changePassword) ...[
+                                const SizedBox(height: 14),
+                                LuxuryValidatedField(
+                                  icon: Icons.vpn_key_outlined,
+                                  label: 'New password',
+                                  controller: _newPassC,
+                                  hint: 'Enter new password',
+                                  obscureText: _obscureNew,
+                                  enabled: !_saving,
+                                  validator: _newPasswordValidator,
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscureNew
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      color: Colors.white54,
+                                      size: 20,
+                                    ),
+                                    onPressed: _saving
+                                        ? null
+                                        : () => setState(
+                                              () => _obscureNew = !_obscureNew,
+                                            ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                LuxuryValidatedField(
+                                  icon: Icons.vpn_key_outlined,
+                                  label: 'Confirm password',
+                                  controller: _confirmPassC,
+                                  hint: 'Re-enter new password',
+                                  obscureText: _obscureConfirm,
+                                  enabled: !_saving,
+                                  validator: _confirmNewPasswordValidator,
+                                  suffix: IconButton(
+                                    icon: Icon(
+                                      _obscureConfirm
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      color: Colors.white54,
+                                      size: 20,
+                                    ),
+                                    onPressed: _saving
+                                        ? null
+                                        : () => setState(
+                                              () => _obscureConfirm =
+                                                  !_obscureConfirm,
+                                            ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          dropdownColor: NuaLuxuryTokens.voidViolet,
-                          icon: Icon(
-                            Icons.expand_more_rounded,
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                          style: fieldStyle,
-                          items: [
-                            DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text(
-                                'None',
-                                style: GoogleFonts.inter(fontSize: 14),
-                              ),
-                            ),
-                            ...widget.therapists.map(
-                              (z) => DropdownMenuItem<int?>(
-                                value: z.id,
-                                child: Text(
-                                  widget.therapistName(z),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: _saving
-                              ? null
-                              : (v) => setState(() => _zId = v),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Notes for therapist',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white.withValues(alpha: 0.55),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _noteC,
-                    enabled: !_saving,
-                    maxLines: 3,
-                    maxLength: 1200,
-                    style: fieldStyle,
-                    decoration: InputDecoration(
-                      hintText: 'Preferences, allergies, etc.',
-                      hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.04),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1),
+                      const SizedBox(height: 20),
+                      Opacity(
+                        opacity: _saving ? 0.65 : 1,
+                        child: _ClientDetailsCloseButton(
+                          onPressed: _saving ? () {} : _save,
+                          label: _saving ? 'Saving…' : 'Save changes',
                         ),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1),
+                      const SizedBox(height: 12),
+                      Opacity(
+                        opacity: _saving ? 0.45 : 1,
+                        child: _ClientEditCancelButton(
+                          onPressed: _saving ? () {} : widget.onClose,
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 14),
-                  _ClientEditToggleRow(
-                    icon: Icons.workspace_premium_rounded,
-                    label: 'Manual VIP',
-                    value: _vip,
-                    onChanged: _saving ? null : (v) => setState(() => _vip = v),
-                  ),
-                  const SizedBox(height: 24),
-                  Opacity(
-                    opacity: _saving ? 0.65 : 1,
-                    child: _ClientDetailsCloseButton(
-                      onPressed: _saving ? () {} : _save,
-                      label: _saving ? 'Saving…' : 'Save changes',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Opacity(
-                    opacity: _saving ? 0.45 : 1,
-                    child:                   _ClientEditCancelButton(
-                      onPressed: _saving ? () {} : widget.onClose,
-                    ),
-                  ),
-                ],
                 ),
               ),
             ),

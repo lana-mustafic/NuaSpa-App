@@ -3,6 +3,7 @@ class AdminClientRow {
   final String ime;
   final String prezime;
   final String email;
+  final String userName;
   final String telefon;
   final DateTime datumRegistracije;
   final DateTime? zadnjaPosjeta;
@@ -33,6 +34,7 @@ class AdminClientRow {
     required this.ime,
     required this.prezime,
     required this.email,
+    this.userName = '',
     required this.telefon,
     required this.datumRegistracije,
     required this.zadnjaPosjeta,
@@ -69,6 +71,7 @@ class AdminClientRow {
       ime: (json['ime'] as String?) ?? '',
       prezime: (json['prezime'] as String?) ?? '',
       email: (json['email'] as String?) ?? '',
+      userName: (json['userName'] as String?) ?? '',
       telefon: (json['telefon'] as String?) ?? '',
       datumRegistracije: DateTime.parse(json['datumRegistracije'] as String),
       zadnjaPosjeta: (json['zadnjaPosjeta'] as String?) == null
