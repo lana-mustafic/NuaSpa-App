@@ -1394,11 +1394,6 @@ class _ClientDetailsDialog extends StatelessWidget {
                       onPressed: onClose,
                       label: 'Close',
                     ),
-                    const SizedBox(height: 12),
-                    _ClientEditCancelButton(
-                      onPressed: onClose,
-                      label: 'Back',
-                    ),
                   ],
                 ),
               ),
