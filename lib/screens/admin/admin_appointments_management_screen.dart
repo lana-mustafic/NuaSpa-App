@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,8 +15,6 @@ import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
-import '../../ui/widgets/service_network_image.dart';
-
 enum _AppointmentView { day, week, month }
 
 class AdminAppointmentsManagementScreen extends StatefulWidget {
@@ -40,7 +38,6 @@ class _AdminAppointmentsManagementScreenState
   int? _serviceId;
   String _status = 'All Status';
   _AppointmentView _view = _AppointmentView.day;
-  Rezervacija? _selected;
   int _handledCreateRequest = 0;
   int _lastFiltersPulse = 0;
   final ScrollController _mainScrollController = ScrollController();
@@ -224,106 +221,63 @@ class _AdminAppointmentsManagementScreenState
           });
         }
         final filtered = _filter(data.reservations, query);
-        final selected =
-            _selected != null && filtered.any((r) => r.id == _selected!.id)
-            ? _selected!
-            : (filtered.isNotEmpty ? filtered.first : null);
 
         return _ApptScrollbarTheme(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final sidebarW = (constraints.maxWidth * 0.24).clamp(
-                _ApptUi.sidebarMinWidth,
-                _ApptUi.sidebarMaxWidth,
-              );
-
-              return DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF07040F), Color(0xFF120A24)],
-                  ),
-                ),
-                child: Row(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF07040F), Color(0xFF120A24)],
+              ),
+            ),
+            child: Scrollbar(
+              controller: _mainScrollController,
+              child: SingleChildScrollView(
+                controller: _mainScrollController,
+                primary: false,
+                padding: const EdgeInsets.fromLTRB(32, 24, 32, 40),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Scrollbar(
-                        controller: _mainScrollController,
-                        child: SingleChildScrollView(
-                          controller: _mainScrollController,
-                          primary: false,
-                          padding: const EdgeInsets.fromLTRB(32, 24, 20, 40),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _FilterBar(
-                                therapists: data.therapists,
-                                services: data.services,
-                                therapistId: _therapistId,
-                                serviceId: _serviceId,
-                                status: _status,
-                                view: _view,
-                                onTherapistChanged: (v) =>
-                                    setState(() => _therapistId = v),
-                                onServiceChanged: (v) =>
-                                    setState(() => _serviceId = v),
-                                onStatusChanged: (v) => setState(() => _status = v),
-                                onViewChanged: (v) => setState(() => _view = v),
-                                onNew: () => _openCreate(data),
+                    _FilterBar(
+                      therapists: data.therapists,
+                      services: data.services,
+                      therapistId: _therapistId,
+                      serviceId: _serviceId,
+                      status: _status,
+                      view: _view,
+                      onTherapistChanged: (v) =>
+                          setState(() => _therapistId = v),
+                      onServiceChanged: (v) => setState(() => _serviceId = v),
+                      onStatusChanged: (v) => setState(() => _status = v),
+                      onViewChanged: (v) => setState(() => _view = v),
+                      onNew: () => _openCreate(data),
+                    ),
+                    const SizedBox(height: 22),
+                    _AppointmentsSummaryBar(
+                      reservations: data.reservations,
+                    ),
+                    const SizedBox(height: 22),
+                    snap.connectionState == ConnectionState.waiting
+                        ? const SizedBox(
+                            height: 420,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                               ),
-                              const SizedBox(height: 16),
-                              _AppointmentsSummaryBar(
-                                reservations: data.reservations,
-                              ),
-                              const SizedBox(height: 16),
-                              snap.connectionState == ConnectionState.waiting
-                                  ? const SizedBox(
-                                      height: 420,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    )
-                                  : _AppointmentsTable(
-                                      reservations: filtered,
-                                      services: data.services,
-                                      selectedId: selected?.id,
-                                      onSelect: (r) =>
-                                          setState(() => _selected = r),
-                                      onConfirmToggle: _toggleConfirmed,
-                                      onComplete: _complete,
-                                      onCancel: _cancel,
-                                      onEdit: _edit,
-                                    ),
-                            ],
+                            ),
+                          )
+                        : _AppointmentsTable(
+                            reservations: filtered,
+                            services: data.services,
+                            onViewDetails: (r) =>
+                                _showAppointmentDetails(r, data.services),
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    SizedBox(
-                      width: sidebarW,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 24, 28, 40),
-                        child: _AppointmentDetailsPanel(
-                          appointment: selected,
-                          services: data.services,
-                          onEdit: selected == null
-                              ? null
-                              : () => _edit(selected),
-                          onConfirmToggle: _toggleConfirmed,
-                          onComplete: _complete,
-                          onCancel: _cancel,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-              );
-            },
+              ),
+            ),
           ),
         );
       },
@@ -426,7 +380,6 @@ class _AdminAppointmentsManagementScreenState
     );
     if (created != null) {
       setState(() {
-        _selected = created;
         _selectedDate = DateTime(
           created.datumRezervacije.year,
           created.datumRezervacije.month,
@@ -547,7 +500,6 @@ class _AdminAppointmentsManagementScreenState
           : 'Appointment updated.',
     );
     if (updated != null) {
-      setState(() => _selected = updated);
       _reload();
     }
   }
@@ -556,6 +508,33 @@ class _AdminAppointmentsManagementScreenState
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showAppointmentDetails(Rezervacija r, List<Usluga> services) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (dialogContext) => _AppointmentDetailsModal(
+        appointment: r,
+        services: services,
+        onEdit: () {
+          Navigator.pop(dialogContext);
+          _edit(r);
+        },
+        onConfirmToggle: (appt) {
+          Navigator.pop(dialogContext);
+          _toggleConfirmed(appt);
+        },
+        onComplete: (appt) {
+          Navigator.pop(dialogContext);
+          _complete(appt);
+        },
+        onCancel: (appt) {
+          Navigator.pop(dialogContext);
+          _cancel(appt);
+        },
+      ),
+    );
   }
 
   bool _sameDay(DateTime a, DateTime b) =>
@@ -578,19 +557,14 @@ abstract final class _ApptUi {
   static const Color purple = Color(0xFF7B4DFF);
   static const Color purple2 = Color(0xFF9D6BFF);
 
-  static const double tableRowHeight = 88;
+  static const double tableDataRowHeight = 68;
   static const double tableRadius = 20;
-  static const Color tableBg = Color(0x08FFFFFF);
-  static const Color tableHeaderBg = Color(0x0DFFFFFF);
+  static const Color tableBg = Color(0x06FFFFFF);
   static const Color tableBorder = Color(0x14FFFFFF);
-  static const Color rowHover = Color(0x147B4DFF);
 
   static const double filterControlHeight = 40;
   static const double filterDropdownWidth = 168;
   static const double filterStatusWidth = 148;
-  static const double sectionGap = 32;
-  static const double sidebarMaxWidth = 360;
-  static const double sidebarMinWidth = 300;
 }
 
 /// Compact appointment create/edit modal (fits without scrolling).
@@ -831,22 +805,21 @@ class _AppointmentsSummaryBar extends StatelessWidget {
     final text =
         'Today: $total $label • Confirmed: $confirmed • Pending: $pending • Cancelled: $cancelled';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        color: _ApptUi.tableBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _ApptUi.tableBorder),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w600,
-          height: 1.35,
-          color: _ApptUi.textPrimary.withValues(alpha: 0.88),
-          letterSpacing: 0.1,
+    return _ApptGlass(
+      radius: 17,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      minHeight: 52,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          style: GoogleFonts.inter(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            height: 1.35,
+            color: _ApptUi.textPrimary.withValues(alpha: 0.88),
+            letterSpacing: 0.1,
+          ),
         ),
       ),
     );
@@ -857,98 +830,21 @@ class _AppointmentsTable extends StatelessWidget {
   const _AppointmentsTable({
     required this.reservations,
     required this.services,
-    required this.selectedId,
-    required this.onSelect,
-    required this.onConfirmToggle,
-    required this.onComplete,
-    required this.onCancel,
-    required this.onEdit,
+    required this.onViewDetails,
   });
 
   final List<Rezervacija> reservations;
   final List<Usluga> services;
-  final int? selectedId;
-  final ValueChanged<Rezervacija> onSelect;
-  final ValueChanged<Rezervacija> onConfirmToggle;
-  final ValueChanged<Rezervacija> onComplete;
-  final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onEdit;
+  final ValueChanged<Rezervacija> onViewDetails;
 
   @override
   Widget build(BuildContext context) {
-    final serviceImages = {
-      for (final s in services)
-        if (s.slikaUrl.isNotEmpty && !s.slikaUrl.contains('picsum.photos'))
-          s.id: s.slikaUrl,
-    };
+    final sorted = [...reservations]
+      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
 
-    if (reservations.isEmpty) {
-      return _appointmentsTableShell(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 32),
-          child: Column(
-            children: [
-              _ApptEmptyIllustration(icon: Icons.calendar_month_outlined),
-              const SizedBox(height: 24),
-              Text(
-                'No appointments found',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: _ApptUi.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'There are no appointments for the selected date and filters.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  height: 1.45,
-                  color: Colors.white.withValues(alpha: 0.55),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return _appointmentsTableShell(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _AppointmentsTableHeader(),
-          for (var i = 0; i < reservations.length; i++) ...[
-            if (i > 0)
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
-            _AppointmentTableRow(
-              appointment: reservations[i],
-              selected: selectedId == reservations[i].id,
-              serviceImageUrl: serviceImages[reservations[i].uslugaId],
-              serviceCategory: _AppointmentsTable.serviceCategoryLabel(
-                services,
-                reservations[i],
-              ),
-              onSelect: () => onSelect(reservations[i]),
-              onConfirmToggle: onConfirmToggle,
-              onComplete: onComplete,
-              onCancel: onCancel,
-              onEdit: onEdit,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _appointmentsTableShell({required Widget child}) {
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: _ApptUi.tableBg,
         borderRadius: BorderRadius.circular(_ApptUi.tableRadius),
@@ -957,24 +853,156 @@ class _AppointmentsTable extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-            child: Text(
-              'All Appointments',
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: _ApptUi.textPrimary,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'All Appointments',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: _ApptUi.textPrimary,
+                  ),
+                ),
               ),
+              Text(
+                '${sorted.length} shown',
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.42),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (sorted.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Column(
+                children: [
+                  const _ApptEmptyIllustration(
+                    icon: Icons.calendar_month_outlined,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'No appointments found',
+                    style: GoogleFonts.inter(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _ApptUi.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'There are no appointments for the selected date and filters.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: Colors.white.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        dividerColor: Colors.white.withValues(alpha: 0.08),
+                      ),
+                      child: DataTable(
+                        headingRowHeight: 44,
+                        dataRowMinHeight: _ApptUi.tableDataRowHeight,
+                        dataRowMaxHeight: _ApptUi.tableDataRowHeight,
+                        columnSpacing: 24,
+                        horizontalMargin: 0,
+                        headingTextStyle: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                        dataTextStyle: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _ApptUi.textPrimary,
+                        ),
+                        columns: const [
+                          DataColumn(label: Text('TIME')),
+                          DataColumn(label: Text('CLIENT')),
+                          DataColumn(label: Text('SERVICE')),
+                          DataColumn(label: Text('THERAPIST')),
+                          DataColumn(label: Text('STATUS')),
+                          DataColumn(label: Text('ACTIONS')),
+                        ],
+                        rows: [
+                          for (final r in sorted)
+                            DataRow(
+                              cells: [
+                                DataCell(_TimeTableCell(datetime: r.datumRezervacije)),
+                                DataCell(Text(
+                                  _clientName(r),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                                DataCell(Text(
+                                  r.uslugaNaziv ?? '—',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                                DataCell(Text(
+                                  _therapistLabel(r),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                                DataCell(_ApptRowStatusBadges(rezervacija: r)),
+                                DataCell(
+                                  IconButton(
+                                    tooltip: 'View details',
+                                    onPressed: () => onViewDetails(r),
+                                    icon: Icon(
+                                      Icons.visibility_outlined,
+                                      size: 18,
+                                      color: Colors.white.withValues(alpha: 0.72),
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(36, 36),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: child,
-          ),
         ],
       ),
     );
+  }
+
+  static String _clientName(Rezervacija r) {
+    final name = r.korisnikIme?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return 'Guest';
+  }
+
+  static String _therapistLabel(Rezervacija r) {
+    final name = r.zaposlenikIme?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (r.zaposlenikId > 0) return 'Assigned';
+    return 'Not assigned';
   }
 
   static String timeLabel(DateTime d) {
@@ -1056,185 +1084,8 @@ class _AppointmentsTable extends StatelessWidget {
   }
 }
 
-class _AppointmentsTableHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: _ApptUi.tableHeaderBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 12, child: _headerLabel('TIME')),
-          Expanded(flex: 22, child: _headerLabel('CLIENT')),
-          Expanded(flex: 26, child: _headerLabel('SERVICE')),
-          Expanded(flex: 12, child: _headerLabel('DURATION')),
-          Expanded(flex: 12, child: _headerLabel('STATUS')),
-          Expanded(flex: 10, child: _headerLabel('PAYMENT')),
-          SizedBox(width: 84, child: _headerLabel('ACTIONS')),
-        ],
-      ),
-    );
-  }
-
-  Widget _headerLabel(String text) => Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-          color: _ApptUi.lavender.withValues(alpha: 0.72),
-        ),
-      );
-}
-
-class _AppointmentTableRow extends StatefulWidget {
-  const _AppointmentTableRow({
-    required this.appointment,
-    required this.selected,
-    required this.serviceImageUrl,
-    required this.serviceCategory,
-    required this.onSelect,
-    required this.onConfirmToggle,
-    required this.onComplete,
-    required this.onCancel,
-    required this.onEdit,
-  });
-
-  final Rezervacija appointment;
-  final bool selected;
-  final String? serviceImageUrl;
-  final String serviceCategory;
-  final VoidCallback onSelect;
-  final ValueChanged<Rezervacija> onConfirmToggle;
-  final ValueChanged<Rezervacija> onComplete;
-  final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onEdit;
-
-  @override
-  State<_AppointmentTableRow> createState() => _AppointmentTableRowState();
-}
-
-class _AppointmentTableRowState extends State<_AppointmentTableRow> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final r = widget.appointment;
-    final status = _AppointmentsTable.statusLabel(r);
-    final duration = r.uslugaTrajanjeMinuta > 0 ? r.uslugaTrajanjeMinuta : 60;
-    final clientName = r.korisnikIme?.trim().isNotEmpty == true
-        ? r.korisnikIme!.trim()
-        : 'Guest';
-    final contact = (r.korisnikTelefon != null &&
-            r.korisnikTelefon!.trim().isNotEmpty)
-        ? r.korisnikTelefon!.trim()
-        : (r.korisnikEmail?.trim().isNotEmpty == true
-            ? r.korisnikEmail!.trim()
-            : '—');
-
-    Color? bg;
-    if (widget.selected) {
-      bg = NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.1);
-    } else if (_hover) {
-      bg = _ApptUi.rowHover;
-    }
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: bg ?? Colors.transparent,
-        child: InkWell(
-          onTap: widget.onSelect,
-          hoverColor: Colors.transparent,
-          splashColor: Colors.white.withValues(alpha: 0.04),
-          child: SizedBox(
-            height: _ApptUi.tableRowHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 12,
-                    child: _TimeCell(datetime: r.datumRezervacije),
-                  ),
-                  Expanded(
-                    flex: 22,
-                    child: _ClientTableCell(
-                      name: clientName,
-                      subtitle: contact,
-                      showVipTreatment: r.isVip,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 26,
-                    child: _ServiceTableCell(
-                      name: r.uslugaNaziv ?? 'Spa service',
-                      category: widget.serviceCategory,
-                      imageUrl: widget.serviceImageUrl,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 12,
-                    child: Text(
-                      '$duration min',
-                      style: GoogleFonts.inter(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: _ApptUi.textPrimary.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 12,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _StatusBadge(
-                        label: status,
-                        color: _AppointmentsTable.statusColor(r),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 10,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _StatusBadge(
-                        label: r.isPlacena ? 'Paid' : 'Unpaid',
-                        color: r.isPlacena
-                            ? const Color(0xFF4ADE80)
-                            : const Color(0xFFFF5E7A),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 84,
-                    child: _ApptTableActions(
-                      appointment: r,
-                      onView: widget.onSelect,
-                      onConfirmToggle: widget.onConfirmToggle,
-                      onComplete: widget.onComplete,
-                      onCancel: widget.onCancel,
-                      onEdit: widget.onEdit,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TimeCell extends StatelessWidget {
-  const _TimeCell({required this.datetime});
+class _TimeTableCell extends StatelessWidget {
+  const _TimeTableCell({required this.datetime});
 
   final DateTime datetime;
 
@@ -1247,225 +1098,98 @@ class _TimeCell extends StatelessWidget {
       children: [
         Text(
           _AppointmentsTable.timeLabel(datetime),
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: _ApptUi.textPrimary,
-          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        if (showDate) ...[
-          const SizedBox(height: 2),
+        if (showDate)
           Text(
             _AppointmentsTable.shortDateLabel(datetime),
-            style: GoogleFonts.inter(
-              fontSize: 11.5,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.45),
+              color: Colors.white.withValues(alpha: 0.42),
             ),
           ),
-        ],
       ],
     );
   }
 }
 
-class _ClientTableCell extends StatelessWidget {
-  const _ClientTableCell({
-    required this.name,
-    required this.subtitle,
-    this.showVipTreatment = false,
-  });
+class _ApptRowStatusBadges extends StatelessWidget {
+  const _ApptRowStatusBadges({required this.rezervacija});
 
-  final String name;
-  final String subtitle;
-  final bool showVipTreatment;
+  final Rezervacija rezervacija;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
-          child: Text(
-            _initials(name),
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: _ApptUi.textPrimary,
-                      ),
-                    ),
-                  ),
-                  if (showVipTreatment) ...[
-                    const SizedBox(width: 6),
-                    _StatusBadge(
-                      label: 'VIP',
-                      color: NuaLuxuryTokens.champagneGold,
-                    ),
-                  ],
-                ],
-              ),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.48),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+    final statusNorm = rezervacija.status.trim().toLowerCase();
+    final isCompleted =
+        statusNorm == 'completed' || statusNorm == 'zavrsena';
 
-  String _initials(String s) => s
-      .trim()
-      .split(RegExp(r'\s+'))
-      .take(2)
-      .map((p) => p.isEmpty ? '' : p[0])
-      .join()
-      .toUpperCase();
+    late final String primary;
+    late final Color color;
+    if (rezervacija.isOtkazana) {
+      primary = 'Cancelled';
+      color = const Color(0xFFE87997);
+    } else if (isCompleted) {
+      primary = 'Completed';
+      color = const Color(0xFF94A3B8);
+    } else if (!rezervacija.isPotvrdjena) {
+      primary = 'Pending';
+      color = const Color(0xFFF5B942);
+    } else {
+      primary = 'Confirmed';
+      color = const Color(0xFF2DD4BF);
+    }
+
+    final chips = <Widget>[
+      _ApptStatusChip(label: primary, color: color),
+      if (rezervacija.isVip)
+        const _ApptStatusChip(
+          label: 'VIP',
+          color: NuaLuxuryTokens.champagneGold,
+        ),
+      if (rezervacija.isPlacena)
+        const _ApptStatusChip(label: 'Paid', color: Color(0xFF2DD4BF))
+      else if (!rezervacija.isOtkazana)
+        const _ApptStatusChip(label: 'Unpaid', color: Color(0xFFF5B942)),
+    ];
+
+    return Wrap(spacing: 6, runSpacing: 4, children: chips);
+  }
 }
 
-class _ServiceTableCell extends StatelessWidget {
-  const _ServiceTableCell({
-    required this.name,
-    required this.category,
-    this.imageUrl,
-  });
+class _ApptStatusChip extends StatelessWidget {
+  const _ApptStatusChip({required this.label, required this.color});
 
-  final String name;
-  final String category;
-  final String? imageUrl;
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: imageUrl != null && imageUrl!.isNotEmpty
-              ? ServiceNetworkImage(
-                  imageUrl: imageUrl!,
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  error: _placeholder(),
-                )
-              : _placeholder(),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: _ApptUi.textPrimary,
-                ),
-              ),
-              Text(
-                category,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.48),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _placeholder() => Container(
-        width: 40,
-        height: 40,
-        color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.2),
-        child: Icon(
-          Icons.spa_outlined,
-          size: 20,
-          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.7),
-        ),
-      );
-}
-
-class _ApptTableActions extends StatelessWidget {
-  const _ApptTableActions({
-    required this.appointment,
-    required this.onView,
-    required this.onConfirmToggle,
-    required this.onComplete,
-    required this.onCancel,
-    required this.onEdit,
-  });
-
-  final Rezervacija appointment;
-  final VoidCallback onView;
-  final ValueChanged<Rezervacija> onConfirmToggle;
-  final ValueChanged<Rezervacija> onComplete;
-  final ValueChanged<Rezervacija> onCancel;
-  final ValueChanged<Rezervacija> onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        IconButton(
-          tooltip: 'View details',
-          onPressed: onView,
-          icon: Icon(
-            Icons.visibility_outlined,
-            size: 20,
-            color: Colors.white.withValues(alpha: 0.75),
-          ),
-          style: IconButton.styleFrom(
-            minimumSize: const Size(36, 36),
-            padding: EdgeInsets.zero,
-          ),
-        ),
-        _ActionsMenu(
-          appointment: appointment,
-          onConfirmToggle: onConfirmToggle,
-          onComplete: onComplete,
-          onCancel: onCancel,
-          onEdit: onEdit,
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _AppointmentDetailsPanel extends StatelessWidget {
-  const _AppointmentDetailsPanel({
+class _AppointmentDetailsModal extends StatelessWidget {
+  const _AppointmentDetailsModal({
     required this.appointment,
     required this.services,
     required this.onEdit,
@@ -1474,38 +1198,162 @@ class _AppointmentDetailsPanel extends StatelessWidget {
     required this.onCancel,
   });
 
-  final Rezervacija? appointment;
+  final Rezervacija appointment;
   final List<Usluga> services;
-  final VoidCallback? onEdit;
+  final VoidCallback onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onComplete;
   final ValueChanged<Rezervacija> onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final r = appointment;
-    return Column(
-      children: [
-        Expanded(
-          child: _ApptGlass(
-            radius: 28,
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-            child: r == null
-                ? _AppointmentSidebarEmpty()
-                : _AppointmentDetailsContent(
-                    appointment: r,
-                    services: services,
+    final maxH = MediaQuery.sizeOf(context).height * 0.8;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFA120A24),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: _ApptUi.purple.withValues(alpha: 0.22),
+                blurRadius: 48,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 80,
+                offset: const Offset(0, 24),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Appointment Details',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: _ApptUi.textPrimary,
+                        ),
+                      ),
+                    ),
+                    _DetailsModalMoreMenu(
+                      appointment: appointment,
+                      onConfirmToggle: onConfirmToggle,
+                      onComplete: onComplete,
+                      onCancel: onCancel,
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxH - 140),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                    child: _AppointmentDetailsContent(
+                      appointment: appointment,
+                      services: services,
+                    ),
                   ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit Appointment'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _ApptUi.purple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        _BottomEditBar(
-          appointment: r,
-          onEdit: onEdit,
-          onConfirmToggle: onConfirmToggle,
-          onComplete: onComplete,
-          onCancel: onCancel,
+      ),
+    );
+  }
+}
+
+class _DetailsModalMoreMenu extends StatelessWidget {
+  const _DetailsModalMoreMenu({
+    required this.appointment,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
+  });
+
+  final Rezervacija appointment;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final canComplete =
+        !appointment.isOtkazana && appointment.status == 'Confirmed';
+    return PopupMenuButton<String>(
+      color: NuaLuxuryTokens.voidViolet,
+      icon: Icon(
+        Icons.more_horiz_rounded,
+        color: Colors.white.withValues(alpha: 0.65),
+      ),
+      tooltip: 'More actions',
+      onSelected: (v) {
+        if (v == 'toggle') onConfirmToggle(appointment);
+        if (v == 'complete') onComplete(appointment);
+        if (v == 'cancel') onCancel(appointment);
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'toggle',
+          child: Text('Confirm / Pending'),
         ),
+        if (canComplete)
+          const PopupMenuItem(
+            value: 'complete',
+            child: Text('Mark as Completed'),
+          ),
+        const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
       ],
     );
   }
@@ -1533,155 +1381,133 @@ class _AppointmentDetailsContent extends StatelessWidget {
       builder: (context, snap) {
         final history = snap.data ?? const <RezervacijaPovijestItem>[];
         final spent = appointment.uslugaCijena * (history.length + 1);
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Appointment Details',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 18),
-              Center(
-                child: _LargeAvatar(
-                  name: appointment.korisnikIme ?? 'Nua Guest',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Column(
+        final phone = appointment.korisnikTelefon?.trim();
+        final email = appointment.korisnikEmail?.trim();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DetailsSectionTitle(title: 'Client information'),
+            _DetailRow(
+              icon: Icons.person_outline,
+              label: 'Name',
+              value: appointment.korisnikIme?.trim().isNotEmpty == true
+                  ? appointment.korisnikIme!.trim()
+                  : 'Guest',
+            ),
+            _DetailRow(
+              icon: Icons.phone_outlined,
+              label: 'Phone',
+              value: phone != null && phone.isNotEmpty ? phone : '—',
+            ),
+            _DetailRow(
+              icon: Icons.email_outlined,
+              label: 'Email',
+              value: email != null && email.isNotEmpty ? email : '—',
+            ),
+            if (appointment.isVip || appointment.premiumKlijent)
+              Padding(
+                padding: const EdgeInsets.only(left: 30, bottom: 8),
+                child: Wrap(
+                  spacing: 6,
                   children: [
-                    Text(
-                      appointment.korisnikIme ?? 'Nua Guest',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                    if (appointment.isVip)
+                      const _StatusBadge(
+                        label: 'VIP',
+                        color: NuaLuxuryTokens.champagneGold,
                       ),
-                    ),
-                    if (appointment.premiumKlijent ||
-                        appointment.isVip) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          if (appointment.premiumKlijent)
-                            const _StatusBadge(
-                              label: 'Loyal client',
-                              color: NuaLuxuryTokens.champagneGold,
-                            ),
-                          if (appointment.isVip)
-                            const _StatusBadge(
-                              label: 'VIP treatment',
-                              color: NuaLuxuryTokens.softPurpleGlow,
-                            ),
-                        ],
+                    if (appointment.premiumKlijent)
+                      const _StatusBadge(
+                        label: 'Loyal client',
+                        color: NuaLuxuryTokens.champagneGold,
                       ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      (appointment.korisnikTelefon != null &&
-                              appointment.korisnikTelefon!.trim().isNotEmpty)
-                          ? appointment.korisnikTelefon!.trim()
-                          : (appointment.korisnikEmail?.trim().isNotEmpty ==
-                                  true
-                              ? appointment.korisnikEmail!.trim()
-                              : '—'),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.62),
-                      ),
-                    ),
-                    if (appointment.korisnikEmail != null &&
-                        appointment.korisnikEmail!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        appointment.korisnikEmail!.trim(),
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.42),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 22),
+            const SizedBox(height: 8),
+            _DetailsSectionTitle(title: 'Appointment information'),
+            _DetailRow(
+              icon: Icons.event_outlined,
+              label: 'Date & time',
+              value:
+                  '${_date(appointment.datumRezervacije)} at ${_AppointmentsTable.timeLabel(appointment.datumRezervacije)}',
+            ),
+            _DetailRow(
+              icon: Icons.spa_outlined,
+              label: 'Service',
+              value: appointment.uslugaNaziv ?? 'Spa Ritual',
+            ),
+            _DetailRow(
+              icon: Icons.category_outlined,
+              label: 'Category',
+              value: _AppointmentsTable.serviceCategoryLabel(
+                services,
+                appointment,
+              ),
+            ),
+            _DetailRow(
+              icon: Icons.timer_outlined,
+              label: 'Duration',
+              value:
+                  '${appointment.uslugaTrajanjeMinuta > 0 ? appointment.uslugaTrajanjeMinuta : 60} min',
+            ),
+            _DetailRow(
+              icon: Icons.verified_outlined,
+              label: 'Status',
+              customValue: _StatusBadge(
+                label: _AppointmentsTable.statusLabel(appointment),
+                color: _AppointmentsTable.statusColor(appointment),
+              ),
+            ),
+            _DetailRow(
+              icon: Icons.payments_outlined,
+              label: 'Payment',
+              customValue: _StatusBadge(
+                label: appointment.isPlacena ? 'Paid' : 'Unpaid',
+                color: appointment.isPlacena
+                    ? const Color(0xFF2DD4BF)
+                    : const Color(0xFFF5B942),
+              ),
+            ),
+            _DetailRow(
+              icon: Icons.sell_outlined,
+              label: 'Price',
+              value: formatKm(appointment.uslugaCijena),
+            ),
+            const SizedBox(height: 8),
+            _DetailsSectionTitle(title: 'Therapist'),
+            _DetailRow(
+              icon: Icons.badge_outlined,
+              label: 'Assigned therapist',
+              value: _therapistDetailLabel(appointment),
+            ),
+            const SizedBox(height: 8),
+            _DetailsSectionTitle(title: 'Notes'),
+            _DetailRow(
+              icon: Icons.notes_outlined,
+              label: 'Client notes',
+              value: appointment.napomenaZaTerapeuta?.trim().isNotEmpty == true
+                  ? appointment.napomenaZaTerapeuta!.trim()
+                  : 'No notes on file.',
+            ),
+            if (appointment.isOtkazana &&
+                appointment.razlogOtkaza?.trim().isNotEmpty == true)
               _DetailRow(
-                icon: Icons.event_outlined,
-                label: 'Date & Time',
-                value:
-                    '${_date(appointment.datumRezervacije)} at ${_AppointmentsTable.timeLabel(appointment.datumRezervacije)}',
+                icon: Icons.cancel_outlined,
+                label: 'Cancellation reason',
+                value: appointment.razlogOtkaza!.trim(),
               ),
-              _DetailRow(
-                icon: Icons.spa_outlined,
-                label: 'Service',
-                value: appointment.uslugaNaziv ?? 'Spa Ritual',
-                helper: _AppointmentsTable.serviceCategoryLabel(
-                  services,
-                  appointment,
-                ),
-              ),
-              _DetailRow(
-                icon: Icons.payments_outlined,
-                label: 'Price',
-                value: formatKm(appointment.uslugaCijena),
-              ),
-              _DetailRow(
-                icon: Icons.person_outline,
-                label: 'Selected therapist',
-                value: _therapistDetailLabel(appointment),
-              ),
-              _DetailRow(
-                icon: Icons.timer_outlined,
-                label: 'Duration',
-                value:
-                    '${appointment.uslugaTrajanjeMinuta > 0 ? appointment.uslugaTrajanjeMinuta : 60} min',
-              ),
-              _DetailRow(
-                icon: Icons.verified_outlined,
-                label: 'Status',
-                customValue: _StatusBadge(
-                  label: _AppointmentsTable.statusLabel(appointment),
-                  color: _AppointmentsTable.statusColor(appointment),
-                ),
-              ),
-              _DetailRow(
-                icon: Icons.payments_outlined,
-                label: 'Payment',
-                customValue: _StatusBadge(
-                  label: appointment.isPlacena ? 'Paid' : 'Unpaid',
-                  color: appointment.isPlacena
-                      ? const Color(0xFF4ADE80)
-                      : const Color(0xFFFF5E7A),
-                ),
-              ),
-              _DetailRow(
-                icon: Icons.notes_outlined,
-                label: 'Client notes',
-                value: appointment.napomenaZaTerapeuta?.isNotEmpty == true
-                    ? appointment.napomenaZaTerapeuta!
-                    : 'No notes on file.',
-              ),
-              if (appointment.isOtkazana &&
-                  appointment.razlogOtkaza != null &&
-                  appointment.razlogOtkaza!.trim().isNotEmpty)
-                _DetailRow(
-                  icon: Icons.cancel_outlined,
-                  label: 'Cancellation reason',
-                  value: appointment.razlogOtkaza!.trim(),
-                ),
-              const SizedBox(height: 16),
-              _ClientHistoryCard(
-                total: history.length + 1,
-                spent: spent,
-                last: history.isEmpty
-                    ? '—'
-                    : _date(history.first.datumRezervacije),
-                history: history,
-              ),
-            ],
-          ),
+            const SizedBox(height: 12),
+            _DetailsSectionTitle(title: 'Client history'),
+            _ClientHistoryCard(
+              total: history.length + 1,
+              spent: spent,
+              last: history.isEmpty
+                  ? '—'
+                  : _date(history.first.datumRezervacije),
+              history: history,
+            ),
+          ],
         );
       },
     );
@@ -1709,50 +1535,27 @@ class _AppointmentDetailsContent extends StatelessWidget {
   static String _therapistDetailLabel(Rezervacija r) {
     final name = r.zaposlenikIme?.trim();
     if (name != null && name.isNotEmpty) return name;
-    if (r.zaposlenikId > 0) return 'Therapist assigned';
-    return 'Not assigned yet';
+    if (r.zaposlenikId > 0) return 'Assigned';
+    return 'Not assigned';
   }
 }
 
-class _AppointmentSidebarEmpty extends StatelessWidget {
+class _DetailsSectionTitle extends StatelessWidget {
+  const _DetailsSectionTitle({required this.title});
+
+  final String title;
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _ApptEmptyIllustration(
-              icon: Icons.event_note_outlined,
-              compact: true,
-            ),
-            const SizedBox(height: 22),
-            Text(
-              'No appointment selected',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: _ApptUi.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: Text(
-                'Select an appointment from the list to view details.',
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  height: 1.45,
-                  color: Colors.white.withValues(alpha: 0.55),
-                ),
-              ),
-            ),
-          ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
+          color: Colors.white.withValues(alpha: 0.52),
         ),
       ),
     );
@@ -2084,54 +1887,6 @@ class _StatusBadge extends StatelessWidget {
       );
 }
 
-class _ActionsMenu extends StatelessWidget {
-  const _ActionsMenu({
-    required this.appointment,
-    required this.onConfirmToggle,
-    required this.onComplete,
-    required this.onCancel,
-    required this.onEdit,
-  });
-  final Rezervacija appointment;
-  final ValueChanged<Rezervacija> onConfirmToggle, onComplete, onCancel, onEdit;
-  @override
-  Widget build(BuildContext context) => PopupMenuButton<String>(
-    color: NuaLuxuryTokens.voidViolet,
-    icon: const Icon(Icons.more_horiz_rounded),
-    onSelected: (v) {
-      if (v == 'edit') onEdit(appointment);
-      if (v == 'toggle') onConfirmToggle(appointment);
-      if (v == 'complete') onComplete(appointment);
-      if (v == 'cancel') onCancel(appointment);
-    },
-    itemBuilder: (_) {
-      final canComplete =
-          !appointment.isOtkazana && (appointment.status == 'Confirmed');
-      return [
-        const PopupMenuItem(value: 'edit', child: Text('Edit')),
-        const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
-        if (canComplete)
-          const PopupMenuItem(value: 'complete', child: Text('Mark as Completed')),
-        const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-      ];
-    },
-  );
-}
-
-class _LargeAvatar extends StatelessWidget {
-  const _LargeAvatar({required this.name});
-  final String name;
-  @override
-  Widget build(BuildContext context) => CircleAvatar(
-    radius: 42,
-    backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.45),
-    child: Text(
-      name.split(' ').take(2).map((p) => p[0]).join().toUpperCase(),
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-    ),
-  );
-}
-
 class _DetailRow extends StatelessWidget {
   const _DetailRow({
     required this.icon,
@@ -2307,118 +2062,6 @@ class _HistoryMetric extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _BottomEditBar extends StatelessWidget {
-  const _BottomEditBar({
-    required this.appointment,
-    required this.onEdit,
-    required this.onConfirmToggle,
-    required this.onComplete,
-    required this.onCancel,
-  });
-  final Rezervacija? appointment;
-  final VoidCallback? onEdit;
-  final ValueChanged<Rezervacija> onConfirmToggle;
-  final ValueChanged<Rezervacija> onComplete;
-  final ValueChanged<Rezervacija> onCancel;
-  @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      Expanded(
-        child: _GradientButton(
-          label: 'Edit Appointment',
-          onTap: onEdit ?? () {},
-          height: 58,
-          borderRadius: 18,
-          showIcon: false,
-        ),
-      ),
-      const SizedBox(width: 12),
-      _MoreMenuButton(
-        enabled: appointment != null,
-        onSelected: (v) {
-          final r = appointment;
-          if (r == null) return;
-          if (v == 'toggle') onConfirmToggle(r);
-          if (v == 'complete') onComplete(r);
-          if (v == 'cancel') onCancel(r);
-        },
-        itemBuilder: (ctx) {
-          final r = appointment;
-          final canComplete = r != null && !r.isOtkazana && r.status == 'Confirmed';
-          return [
-            const PopupMenuItem(value: 'toggle', child: Text('Confirm / Pending')),
-            if (canComplete)
-              const PopupMenuItem(value: 'complete', child: Text('Mark as Completed')),
-            const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-          ];
-        },
-      ),
-    ],
-  );
-}
-
-class _MoreMenuButton extends StatefulWidget {
-  const _MoreMenuButton({
-    required this.enabled,
-    required this.onSelected,
-    required this.itemBuilder,
-  });
-
-  final bool enabled;
-  final ValueChanged<String> onSelected;
-  final List<PopupMenuEntry<String>> Function(BuildContext) itemBuilder;
-
-  @override
-  State<_MoreMenuButton> createState() => _MoreMenuButtonState();
-}
-
-class _MoreMenuButtonState extends State<_MoreMenuButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 58,
-        height: 58,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: widget.enabled && _hover ? 0.1 : 0.05),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Colors.white.withValues(
-              alpha: widget.enabled && _hover ? 0.18 : 0.08,
-            ),
-          ),
-          boxShadow: widget.enabled && _hover
-              ? [
-                  BoxShadow(
-                    color: _ApptUi.purple.withValues(alpha: 0.25),
-                    blurRadius: 12,
-                  ),
-                ]
-              : null,
-        ),
-        child: PopupMenuButton<String>(
-          padding: EdgeInsets.zero,
-          enabled: widget.enabled,
-          color: NuaLuxuryTokens.voidViolet,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          onSelected: widget.onSelected,
-          itemBuilder: widget.itemBuilder,
-          icon: Icon(
-            Icons.more_horiz_rounded,
-            color: Colors.white.withValues(alpha: widget.enabled ? 0.85 : 0.35),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _AdminAppointmentDraft {
