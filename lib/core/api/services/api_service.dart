@@ -1667,7 +1667,6 @@ class ApiService {
     required String password,
     required int gradId,
     String? telefon,
-    int? zaposlenikId,
     bool isVipKlijent = false,
     String? napomenaZaTerapeuta,
   }) async {
@@ -1681,7 +1680,6 @@ class ApiService {
         'password': password,
         'telefon': telefon,
         'gradId': gradId,
-        'zaposlenikId': zaposlenikId,
         'isVipKlijent': isVipKlijent,
         if (napomenaZaTerapeuta != null && napomenaZaTerapeuta.isNotEmpty)
           'napomenaZaTerapeuta': napomenaZaTerapeuta,
@@ -1701,8 +1699,6 @@ class ApiService {
     bool? status,
     bool? isVipKlijent,
     int? gradId,
-    bool setZaposlenik = false,
-    int? zaposlenikId,
     String? napomenaZaTerapeuta,
     String? novaLozinka,
     String? potvrdaNoveLozinke,
@@ -1715,7 +1711,6 @@ class ApiService {
     if (status != null) body['status'] = status;
     if (isVipKlijent != null) body['isVipKlijent'] = isVipKlijent;
     if (gradId != null) body['gradId'] = gradId;
-    if (setZaposlenik) body['zaposlenikId'] = zaposlenikId ?? 0;
     if (napomenaZaTerapeuta != null) {
       body['napomenaZaTerapeuta'] = napomenaZaTerapeuta;
     }

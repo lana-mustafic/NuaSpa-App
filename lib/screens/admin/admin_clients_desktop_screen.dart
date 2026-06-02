@@ -12,7 +12,6 @@ import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../models/grad_lookup.dart';
-import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import 'package:provider/provider.dart';
@@ -46,11 +45,8 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         int? serverTotal,
         bool hitPageCap,
       })>? _payloadFuture;
-  Future<List<Zaposlenik>>? _therapistsFuture;
-
   String _statusFilter = 'all'; // all | active | inactive
   String _vipFilter = 'all'; // all | vip | manual | none
-  int? _therapistFilterIndex; // null = all; else index into therapists
   String _sortKey = 'new'; // new | old | visit | name
   int _page = 0;
   int _pageSize = 10;
@@ -60,7 +56,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   @override
   void initState() {
     super.initState();
-    _therapistsFuture = widget.api.getZaposlenici();
     _scheduleReload(immediate: true);
     _apiSearch.addListener(_onApiSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -136,31 +131,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   bool get _useServerStats =>
-      _statusFilter == 'all' &&
-      _vipFilter == 'all' &&
-      _therapistFilterIndex == null;
-
-  String _therapistDisplay(AdminClientRow c) {
-    final api = c.terapeutPunoIme;
-    if (api != null && api.isNotEmpty) return api;
-    return '—';
-  }
-
-  /// How [AdminClientRow.terapeutPunoIme] was chosen (preferred vs last visit).
-  String _therapistSourceHint(AdminClientRow c) {
-    final pref = c.preferiraniZaposlenikId;
-    if (pref != null && pref > 0) {
-      return 'Preferred therapist on profile';
-    }
-    if (c.terapeutZaposlenikId != null) {
-      return 'From most recent non-cancelled appointment';
-    }
-    return '';
-  }
-
-  int? _therapistIdForRow(AdminClientRow c) => c.terapeutZaposlenikId;
-
-  String _therapistName(Zaposlenik z) => '${z.ime} ${z.prezime}'.trim();
+      _statusFilter == 'all' && _vipFilter == 'all';
 
   String _fmtVisit(DateTime? d) {
     if (d == null) return '—';
@@ -197,10 +168,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
         fallback: ApiService.adminClientPatchErrorMessage(e),
       );
 
-  List<AdminClientRow> _applyLocalFilters(
-    List<AdminClientRow> raw,
-    List<Zaposlenik> therapists,
-  ) {
+  List<AdminClientRow> _applyLocalFilters(List<AdminClientRow> raw) {
     var xs = List<AdminClientRow>.from(raw);
 
     if (_statusFilter == 'active') {
@@ -215,13 +183,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       xs = xs.where((c) => c.isVipKlijent).toList();
     } else if (_vipFilter == 'none') {
       xs = xs.where((c) => !c.isVip).toList();
-    }
-
-    if (_therapistFilterIndex != null &&
-        therapists.isNotEmpty &&
-        _therapistFilterIndex! < therapists.length) {
-      final z = therapists[_therapistFilterIndex!];
-      xs = xs.where((c) => _therapistIdForRow(c) == z.id).toList();
     }
 
     int cmp(AdminClientRow a, AdminClientRow b) {
@@ -248,8 +209,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   void _openClientSheet(AdminClientRow c) {
-    final tName = _therapistDisplay(c);
-    final therapistHint = _therapistSourceHint(c);
     showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -259,8 +218,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       pageBuilder: (ctx, _, _) => _ClientDetailsOverlay(
         client: c,
         api: widget.api,
-        therapistLabel: tName,
-        therapistHint: therapistHint,
         fmtVisit: _fmtVisit,
       ),
       transitionBuilder: (ctx, animation, _, child) {
@@ -279,7 +236,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     );
   }
 
-  Future<void> _showCreateClientDialog(List<Zaposlenik> therapists) async {
+  Future<void> _showCreateClientDialog() async {
     final gradovi = await widget.api.getGradovi();
     if (!mounted) return;
     if (gradovi.isEmpty) {
@@ -298,10 +255,8 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, _) => _ClientCreateOverlay(
-        therapists: therapists,
         gradovi: gradovi,
         api: widget.api,
-        therapistName: _therapistName,
         onCreated: () {
           _reloadFromApi();
           if (mounted) {
@@ -328,10 +283,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     );
   }
 
-  Future<void> _showEditClientDialog(
-    AdminClientRow row,
-    List<Zaposlenik> therapists,
-  ) async {
+  Future<void> _showEditClientDialog(AdminClientRow row) async {
     final gradovi = await widget.api.getGradovi();
     if (!mounted) return;
     if (gradovi.isEmpty) {
@@ -353,10 +305,8 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, _) => _ClientEditOverlay(
         client: row,
-        therapists: therapists,
         gradovi: gradovi,
         api: widget.api,
-        therapistName: _therapistName,
         onSaved: () {
           _reloadFromApi();
           if (mounted) {
@@ -481,19 +431,11 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       _handledClientAddRequest = nav.clientAddRequest;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        final therapists =
-            await (_therapistsFuture ?? widget.api.getZaposlenici());
-        if (!mounted) return;
-        await _showCreateClientDialog(therapists);
+        await _showCreateClientDialog();
       });
     }
 
-    return FutureBuilder<List<Zaposlenik>>(
-      future: _therapistsFuture,
-      builder: (context, thSnap) {
-        final therapists = thSnap.data ?? const <Zaposlenik>[];
-
-        return FutureBuilder<
+    return FutureBuilder<
             ({
               List<AdminClientRow> clients,
               AdminClientStats? stats,
@@ -511,7 +453,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
             final serverTotal = payload?.serverTotal;
             final hitPageCap = payload?.hitPageCap ?? false;
             final truncated = serverTotal != null && raw.length < serverTotal;
-            final filtered = _applyLocalFilters(raw, therapists);
+            final filtered = _applyLocalFilters(raw);
             final totalFiltered = filtered.length;
             final pageCount = totalFiltered == 0
                 ? 1
@@ -593,7 +535,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                         _sortKey = s;
                         _page = 0;
                       }),
-                      onAdd: () => _showCreateClientDialog(therapists),
+                      onAdd: () => _showCreateClientDialog(),
                     ),
                     const SizedBox(height: 14),
                     Expanded(
@@ -605,7 +547,7 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                         fmtClientSince: _fmtClientSince,
                         onRetry: _reloadFromApi,
                         onView: (row) => _openClientSheet(row),
-                        onEdit: (row) => _showEditClientDialog(row, therapists),
+                        onEdit: (row) => _showEditClientDialog(row),
                         onToggleVip: _toggleManualVip,
                         onToggleActive: (row) => _confirmSetClientActive(
                           row,
@@ -634,8 +576,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
             );
           },
         );
-      },
-    );
   }
 
   String _fmtClientSince(DateTime d) {
@@ -984,15 +924,11 @@ class _ClientDetailsOverlay extends StatelessWidget {
   const _ClientDetailsOverlay({
     required this.client,
     required this.api,
-    required this.therapistLabel,
-    required this.therapistHint,
     required this.fmtVisit,
   });
 
   final AdminClientRow client;
   final ApiService api;
-  final String therapistLabel;
-  final String therapistHint;
   final String Function(DateTime? d) fmtVisit;
 
   @override
@@ -1018,8 +954,6 @@ class _ClientDetailsOverlay extends StatelessWidget {
                 child: _ClientDetailsDialog(
                   client: client,
                   api: api,
-                  therapistLabel: therapistLabel,
-                  therapistHint: therapistHint,
                   fmtVisit: fmtVisit,
                   onClose: () => Navigator.of(context).pop(),
                 ),
@@ -1036,16 +970,12 @@ class _ClientDetailsDialog extends StatelessWidget {
   const _ClientDetailsDialog({
     required this.client,
     required this.api,
-    required this.therapistLabel,
-    required this.therapistHint,
     required this.fmtVisit,
     required this.onClose,
   });
 
   final AdminClientRow client;
   final ApiService api;
-  final String therapistLabel;
-  final String therapistHint;
   final String Function(DateTime? d) fmtVisit;
   final VoidCallback onClose;
 
@@ -1064,39 +994,6 @@ class _ClientDetailsDialog extends StatelessWidget {
     return 'Standard client';
   }
 
-  Widget _therapistValue() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          therapistLabel,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.right,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: _AdminClientsDesktopScreenState._textPrimary,
-          ),
-        ),
-        if (therapistHint.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            therapistHint,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: Colors.white.withValues(alpha: 0.45),
-              height: 1.25,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final hasVisit = client.zadnjaPosjeta != null;
@@ -1104,7 +1001,6 @@ class _ClientDetailsDialog extends StatelessWidget {
         hasVisit ? fmtVisit(client.zadnjaPosjeta) : 'No visits yet';
     final lastVisitMuted = !hasVisit;
     final note = client.napomenaZaTerapeuta?.trim();
-    final city = client.gradNaziv?.trim();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -1185,19 +1081,18 @@ class _ClientDetailsDialog extends StatelessWidget {
                               icon: Icons.workspace_premium_rounded,
                               label: 'VIP status',
                               valueWidget: client.isVip
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
+                                  ? Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        _VipBadge(),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            _vipDetailLabel(),
-                                            style: GoogleFonts.inter(
-                                              fontSize: 12,
-                                              color: Colors.white.withValues(
-                                                alpha: 0.65,
-                                              ),
+                                        _ClientVipBadges(client: client),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _vipDetailLabel(),
+                                          textAlign: TextAlign.right,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.65,
                                             ),
                                           ),
                                         ),
@@ -1224,23 +1119,9 @@ class _ClientDetailsDialog extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             _ClientInfoRow(
-                              icon: Icons.location_city_outlined,
-                              label: 'City',
-                              value: city != null && city.isNotEmpty
-                                  ? city
-                                  : '—',
-                            ),
-                            const SizedBox(height: 12),
-                            _ClientInfoRow(
                               icon: Icons.calendar_month_outlined,
                               label: 'Registered',
                               value: fmtVisit(client.datumRegistracije),
-                            ),
-                            const SizedBox(height: 12),
-                            _ClientInfoRow(
-                              icon: Icons.spa_outlined,
-                              label: 'Therapist',
-                              valueWidget: _therapistValue(),
                             ),
                             const SizedBox(height: 20),
                             const _ClientDetailsSectionTitle(title: 'Activity'),
@@ -1944,18 +1825,14 @@ class _VipBadge extends StatelessWidget {
 /// Full-screen scrim + premium create client modal (matches edit client styling).
 class _ClientCreateOverlay extends StatelessWidget {
   const _ClientCreateOverlay({
-    required this.therapists,
     required this.gradovi,
     required this.api,
-    required this.therapistName,
     required this.onCreated,
     required this.formatError,
   });
 
-  final List<Zaposlenik> therapists;
   final List<GradLookup> gradovi;
   final ApiService api;
-  final String Function(Zaposlenik z) therapistName;
   final VoidCallback onCreated;
   final String Function(Object) formatError;
 
@@ -1980,10 +1857,8 @@ class _ClientCreateOverlay extends StatelessWidget {
               child: GestureDetector(
                 onTap: () {},
                 child: _ClientCreateDialog(
-                  therapists: therapists,
                   gradovi: gradovi,
                   api: api,
-                  therapistName: therapistName,
                   onClose: () => Navigator.of(context).pop(),
                   onCreated: onCreated,
                   formatError: formatError,
@@ -1999,19 +1874,15 @@ class _ClientCreateOverlay extends StatelessWidget {
 
 class _ClientCreateDialog extends StatefulWidget {
   const _ClientCreateDialog({
-    required this.therapists,
     required this.gradovi,
     required this.api,
-    required this.therapistName,
     required this.onClose,
     required this.onCreated,
     required this.formatError,
   });
 
-  final List<Zaposlenik> therapists;
   final List<GradLookup> gradovi;
   final ApiService api;
-  final String Function(Zaposlenik z) therapistName;
   final VoidCallback onClose;
   final VoidCallback onCreated;
   final String Function(Object) formatError;
@@ -2034,7 +1905,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
   late final TextEditingController _phoneC;
   late final TextEditingController _noteC;
   late int _gradId;
-  int? _therapistId;
   bool _vip = false;
   bool _saving = false;
   bool _attemptedSubmit = false;
@@ -2090,7 +1960,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
         password: _passwordC.text,
         gradId: _gradId,
         telefon: _phoneC.text.trim().isEmpty ? null : _phoneC.text.trim(),
-        zaposlenikId: _therapistId,
         isVipKlijent: _vip,
         napomenaZaTerapeuta: _noteC.text.trim().isEmpty
             ? null
@@ -2318,56 +2187,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              _ClientEditFieldRow(
-                                icon: Icons.spa_outlined,
-                                label: 'Preferred therapist',
-                                child: Theme(
-                                  data: Theme.of(context).copyWith(
-                                    canvasColor: NuaLuxuryTokens.voidViolet,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<int?>(
-                                      isExpanded: true,
-                                      value: _therapistId,
-                                      hint: Text(
-                                        'None',
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white.withValues(alpha: 0.4),
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      dropdownColor: NuaLuxuryTokens.voidViolet,
-                                      icon: Icon(
-                                        Icons.expand_more_rounded,
-                                        color: Colors.white.withValues(alpha: 0.5),
-                                      ),
-                                      style: fieldStyle,
-                                      items: [
-                                        DropdownMenuItem<int?>(
-                                          value: null,
-                                          child: Text(
-                                            'None',
-                                            style: GoogleFonts.inter(fontSize: 14),
-                                          ),
-                                        ),
-                                        ...widget.therapists.map(
-                                          (z) => DropdownMenuItem<int?>(
-                                            value: z.id,
-                                            child: Text(
-                                              widget.therapistName(z),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                      onChanged: _saving
-                                          ? null
-                                          : (v) => setState(() => _therapistId = v),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
                               Text(
                                 'Notes for therapist',
                                 style: GoogleFonts.inter(
@@ -2524,19 +2343,15 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
 class _ClientEditOverlay extends StatelessWidget {
   const _ClientEditOverlay({
     required this.client,
-    required this.therapists,
     required this.gradovi,
     required this.api,
-    required this.therapistName,
     required this.onSaved,
     required this.formatError,
   });
 
   final AdminClientRow client;
-  final List<Zaposlenik> therapists;
   final List<GradLookup> gradovi;
   final ApiService api;
-  final String Function(Zaposlenik z) therapistName;
   final VoidCallback onSaved;
   final String Function(Object) formatError;
 
@@ -2562,10 +2377,8 @@ class _ClientEditOverlay extends StatelessWidget {
                 onTap: () {},
                 child: _ClientEditDialog(
                   client: client,
-                  therapists: therapists,
                   gradovi: gradovi,
                   api: api,
-                  therapistName: therapistName,
                   onClose: () => Navigator.of(context).pop(),
                   onSaved: onSaved,
                   formatError: formatError,
@@ -2582,20 +2395,16 @@ class _ClientEditOverlay extends StatelessWidget {
 class _ClientEditDialog extends StatefulWidget {
   const _ClientEditDialog({
     required this.client,
-    required this.therapists,
     required this.gradovi,
     required this.api,
-    required this.therapistName,
     required this.onClose,
     required this.onSaved,
     required this.formatError,
   });
 
   final AdminClientRow client;
-  final List<Zaposlenik> therapists;
   final List<GradLookup> gradovi;
   final ApiService api;
-  final String Function(Zaposlenik z) therapistName;
   final VoidCallback onClose;
   final VoidCallback onSaved;
   final String Function(Object) formatError;
@@ -2616,7 +2425,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   late final TextEditingController _newPassC;
   late final TextEditingController _confirmPassC;
   late final TextEditingController _noteC;
-  late int? _zId;
   late int _gradId;
   late bool _vip;
   bool _saving = false;
@@ -2637,7 +2445,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _noteC = TextEditingController(
       text: widget.client.napomenaZaTerapeuta ?? '',
     );
-    _zId = widget.client.preferiraniZaposlenikId;
     _gradId = widget.client.gradId > 0
         ? widget.client.gradId
         : widget.gradovi.first.id;
@@ -2681,8 +2488,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
         telefon: _telC.text.trim(),
         gradId: _gradId,
         isVipKlijent: _vip,
-        setZaposlenik: true,
-        zaposlenikId: _zId,
         napomenaZaTerapeuta: _noteC.text.trim(),
         novaLozinka: _changePassword && _newPassC.text.isNotEmpty
             ? _newPassC.text
@@ -2880,56 +2685,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                                                 setState(() => _gradId = v);
                                               }
                                             },
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              _ClientEditFieldRow(
-                                icon: Icons.spa_outlined,
-                                label: 'Preferred therapist',
-                                child: Theme(
-                                  data: Theme.of(context).copyWith(
-                                    canvasColor: NuaLuxuryTokens.voidViolet,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<int?>(
-                                      isExpanded: true,
-                                      value: _zId,
-                                      hint: Text(
-                                        'None',
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white.withValues(alpha: 0.4),
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      dropdownColor: NuaLuxuryTokens.voidViolet,
-                                      icon: Icon(
-                                        Icons.expand_more_rounded,
-                                        color: Colors.white.withValues(alpha: 0.5),
-                                      ),
-                                      style: fieldStyle,
-                                      items: [
-                                        DropdownMenuItem<int?>(
-                                          value: null,
-                                          child: Text(
-                                            'None',
-                                            style: GoogleFonts.inter(fontSize: 14),
-                                          ),
-                                        ),
-                                        ...widget.therapists.map(
-                                          (z) => DropdownMenuItem<int?>(
-                                            value: z.id,
-                                            child: Text(
-                                              widget.therapistName(z),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                      onChanged: _saving
-                                          ? null
-                                          : (v) => setState(() => _zId = v),
                                     ),
                                   ),
                                 ),
@@ -3597,12 +3352,11 @@ class _TableDataRowState extends State<_TableDataRow> {
           children: [
             Expanded(flex: 28, child: _clientCell(c)),
             Expanded(flex: 22, child: _contactCell(c)),
-            Expanded(flex: 10, child: _metricCell('${c.ukupnoPosjeta}', 'Visits')),
+            Expanded(flex: 10, child: _tableMetric('${c.ukupnoPosjeta}')),
             Expanded(
               flex: 12,
-              child: _metricCell(
-                '${c.ukupnoPotroseno.toStringAsFixed(0)} KM',
-                'Spent',
+              child: _tableMetric(
+                '${c.ukupnoPotroseno.toStringAsFixed(2)} KM',
               ),
             ),
             Expanded(
@@ -3693,10 +3447,7 @@ class _TableDataRowState extends State<_TableDataRow> {
                   ),
                   if (c.isVip) ...[
                     const SizedBox(width: 8),
-                    _CompactStatusBadge(
-                      label: 'VIP',
-                      color: NuaLuxuryTokens.champagneGold,
-                    ),
+                    _ClientVipBadges(client: c),
                   ],
                 ],
               ),
@@ -3746,33 +3497,19 @@ class _TableDataRowState extends State<_TableDataRow> {
     );
   }
 
-  Widget _metricCell(String value, String label) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            height: 1.0,
-            letterSpacing: -0.4,
-            color: _AdminClientsDesktopScreenState._textPrimary,
-          ),
+  Widget _tableMetric(String value) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: _AdminClientsDesktopScreenState._textPrimary,
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -3783,6 +3520,33 @@ class _TableDataRowState extends State<_TableDataRow> {
         s.isEmpty ? '' : String.fromCharCode(s.runes.first).toUpperCase();
     if (p.length == 1) return ch(p.first);
     return '${ch(p.first)}${ch(p.last)}';
+  }
+}
+
+class _ClientVipBadges extends StatelessWidget {
+  const _ClientVipBadges({required this.client});
+
+  final AdminClientRow client;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (client.isVipKlijent)
+          const _CompactStatusBadge(
+            label: 'Manual',
+            color: Color(0xFFE8C547),
+          ),
+        if (client.isVipFromActivity) ...[
+          if (client.isVipKlijent) const SizedBox(width: 6),
+          const _CompactStatusBadge(
+            label: 'Earned',
+            color: Color(0xFF22C55E),
+          ),
+        ],
+      ],
+    );
   }
 }
 
