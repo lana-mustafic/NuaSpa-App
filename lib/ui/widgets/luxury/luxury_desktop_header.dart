@@ -343,6 +343,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         initialSearchQuery: nav.appointmentSearchQuery,
         onSearchSubmitted: nav.setAppointmentSearchQuery,
         onSearchChanged: nav.setAppointmentSearchQuery,
+        alignSearchWithControls: true,
         auth: auth,
         day: day,
         notificationCount: badgeCount,
@@ -693,6 +694,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     required this.onProfile,
     this.onSearchChanged,
     this.initialSearchQuery,
+    this.alignSearchWithControls = false,
   });
 
   final String title;
@@ -701,6 +703,8 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<String>? onSearchChanged;
   final String? initialSearchQuery;
+  /// When true, title expands left and search sits just before header controls.
+  final bool alignSearchWithControls;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -965,6 +969,18 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
             );
 
             if (w >= 1100 && showSearch) {
+              if (widget.alignSearchWithControls) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: _titleBlock()),
+                    const SizedBox(width: _gap),
+                    search,
+                    const SizedBox(width: _gap),
+                    _controlsRow(showProfileDetails: showProfileDetails),
+                  ],
+                );
+              }
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -995,7 +1011,9 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                 if (showSearch) ...[
                   const SizedBox(height: 14),
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: widget.alignSearchWithControls
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
                     child: search,
                   ),
                 ],
