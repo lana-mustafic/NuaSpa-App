@@ -273,6 +273,10 @@ class _AdminAppointmentsManagementScreenState
                             services: data.services,
                             onViewDetails: (r) =>
                                 _showAppointmentDetails(r, data.services),
+                            onEdit: _edit,
+                            onConfirmToggle: _toggleConfirmed,
+                            onComplete: _complete,
+                            onCancel: _cancel,
                           ),
                   ],
                 ),
@@ -831,11 +835,19 @@ class _AppointmentsTable extends StatelessWidget {
     required this.reservations,
     required this.services,
     required this.onViewDetails,
+    required this.onEdit,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
   });
 
   final List<Rezervacija> reservations;
   final List<Usluga> services;
   final ValueChanged<Rezervacija> onViewDetails;
+  final ValueChanged<Rezervacija> onEdit;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -964,18 +976,13 @@ class _AppointmentsTable extends StatelessWidget {
                                 )),
                                 DataCell(_ApptRowStatusBadges(rezervacija: r)),
                                 DataCell(
-                                  IconButton(
-                                    tooltip: 'View details',
-                                    onPressed: () => onViewDetails(r),
-                                    icon: Icon(
-                                      Icons.visibility_outlined,
-                                      size: 18,
-                                      color: Colors.white.withValues(alpha: 0.72),
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(36, 36),
-                                      padding: EdgeInsets.zero,
-                                    ),
+                                  _ApptTableRowActions(
+                                    appointment: r,
+                                    onViewDetails: onViewDetails,
+                                    onEdit: onEdit,
+                                    onConfirmToggle: onConfirmToggle,
+                                    onComplete: onComplete,
+                                    onCancel: onCancel,
                                   ),
                                 ),
                               ],
@@ -1081,6 +1088,95 @@ class _AppointmentsTable extends StatelessWidget {
       }
     }
     return categoryLabel(r.uslugaNaziv);
+  }
+}
+
+class _ApptTableRowActions extends StatelessWidget {
+  const _ApptTableRowActions({
+    required this.appointment,
+    required this.onViewDetails,
+    required this.onEdit,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
+  });
+
+  final Rezervacija appointment;
+  final ValueChanged<Rezervacija> onViewDetails;
+  final ValueChanged<Rezervacija> onEdit;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = appointment;
+    final canComplete = !r.isOtkazana && r.status == 'Confirmed';
+    final canManageStatus = !r.isOtkazana;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ApptTableActionIcon(
+          tooltip: 'View details',
+          icon: Icons.visibility_outlined,
+          onPressed: () => onViewDetails(r),
+        ),
+        _ApptTableActionIcon(
+          tooltip: 'Edit appointment',
+          icon: Icons.edit_outlined,
+          onPressed: () => onEdit(r),
+        ),
+        if (canManageStatus)
+          _ApptTableActionIcon(
+            tooltip: 'Cancel appointment',
+            icon: Icons.cancel_outlined,
+            color: const Color(0xFFE87997),
+            onPressed: () => onCancel(r),
+          ),
+        if (canManageStatus || canComplete)
+          _ApptOverflowMenu(
+            appointment: r,
+            onConfirmToggle: onConfirmToggle,
+            onComplete: onComplete,
+            onCancel: onCancel,
+            iconColor: Colors.white.withValues(alpha: 0.72),
+            includeCancelInMenu: false,
+          ),
+      ],
+    );
+  }
+}
+
+class _ApptTableActionIcon extends StatelessWidget {
+  const _ApptTableActionIcon({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.color,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: 18,
+        color: color ?? Colors.white.withValues(alpha: 0.72),
+      ),
+      style: IconButton.styleFrom(
+        minimumSize: const Size(34, 34),
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+      ),
+    );
   }
 }
 
@@ -1314,6 +1410,63 @@ class _AppointmentDetailsModal extends StatelessWidget {
   }
 }
 
+class _ApptOverflowMenu extends StatelessWidget {
+  const _ApptOverflowMenu({
+    required this.appointment,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
+    this.iconColor,
+    this.includeCancelInMenu = true,
+  });
+
+  final Rezervacija appointment;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
+  final Color? iconColor;
+  final bool includeCancelInMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final canComplete =
+        !appointment.isOtkazana && appointment.status == 'Confirmed';
+    return PopupMenuButton<String>(
+      color: NuaLuxuryTokens.voidViolet,
+      padding: EdgeInsets.zero,
+      icon: Icon(
+        Icons.more_horiz_rounded,
+        size: 20,
+        color: iconColor ?? Colors.white.withValues(alpha: 0.65),
+      ),
+      tooltip: 'More actions',
+      onSelected: (v) {
+        if (v == 'toggle') onConfirmToggle(appointment);
+        if (v == 'complete') onComplete(appointment);
+        if (v == 'cancel') onCancel(appointment);
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'toggle',
+          child: Text(
+            appointment.isPotvrdjena ? 'Mark as pending' : 'Confirm appointment',
+          ),
+        ),
+        if (canComplete)
+          const PopupMenuItem(
+            value: 'complete',
+            child: Text('Mark as completed'),
+          ),
+        if (includeCancelInMenu && !appointment.isOtkazana)
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Text('Cancel appointment'),
+          ),
+      ],
+    );
+  }
+}
+
 class _DetailsModalMoreMenu extends StatelessWidget {
   const _DetailsModalMoreMenu({
     required this.appointment,
@@ -1329,32 +1482,11 @@ class _DetailsModalMoreMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canComplete =
-        !appointment.isOtkazana && appointment.status == 'Confirmed';
-    return PopupMenuButton<String>(
-      color: NuaLuxuryTokens.voidViolet,
-      icon: Icon(
-        Icons.more_horiz_rounded,
-        color: Colors.white.withValues(alpha: 0.65),
-      ),
-      tooltip: 'More actions',
-      onSelected: (v) {
-        if (v == 'toggle') onConfirmToggle(appointment);
-        if (v == 'complete') onComplete(appointment);
-        if (v == 'cancel') onCancel(appointment);
-      },
-      itemBuilder: (_) => [
-        const PopupMenuItem(
-          value: 'toggle',
-          child: Text('Confirm / Pending'),
-        ),
-        if (canComplete)
-          const PopupMenuItem(
-            value: 'complete',
-            child: Text('Mark as Completed'),
-          ),
-        const PopupMenuItem(value: 'cancel', child: Text('Cancel')),
-      ],
+    return _ApptOverflowMenu(
+      appointment: appointment,
+      onConfirmToggle: onConfirmToggle,
+      onComplete: onComplete,
+      onCancel: onCancel,
     );
   }
 }
