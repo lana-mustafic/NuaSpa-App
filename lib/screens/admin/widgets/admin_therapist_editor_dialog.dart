@@ -299,11 +299,43 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     return '${names.take(2).join(', ')} +${names.length - 2}';
   }
 
-  void _onCategoryChanged(int id) {
+  Future<void> _onCategoryChanged(int id) async {
+    if (_categoryId == id) return;
+    if (_selectedServiceIds.isNotEmpty) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF120A24),
+          title: const Text('Change specialty category?'),
+          content: const Text(
+            'Changing the category clears the selected specialties. '
+            'You will need to pick services again in the new category.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Change category'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     setState(() {
       _categoryId = id;
       _selectedServiceIds.clear();
       _specializationError = null;
+      final names = _parseTags(widget.existing?.specijalizacija ?? '');
+      for (final service in _services.where((u) => u.kategorijaUslugaId == id)) {
+        final matchesTag = names.any(
+          (t) => t.toLowerCase() == service.naziv.trim().toLowerCase(),
+        );
+        if (matchesTag) _selectedServiceIds.add(service.id);
+      }
     });
   }
 
@@ -523,7 +555,8 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                                 label: _categoryLabel,
                                                 categories: _categories,
                                                 selectedId: _categoryId!,
-                                                onSelected: _onCategoryChanged,
+                                                onSelected: (id) =>
+                                                    _onCategoryChanged(id),
                                               ),
                                               const SizedBox(height: 12),
                                               if (_servicesInCategory.isEmpty)
