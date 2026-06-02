@@ -2149,10 +2149,18 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
                               _ClientEditToggleRow(
                                 icon: Icons.workspace_premium_rounded,
                                 label: 'Manual VIP',
+                                subtitle:
+                                    'Optional; same flag as Set manual VIP in the table',
                                 value: _vip,
                                 onChanged: _saving
                                     ? null
                                     : (v) => setState(() => _vip = v),
+                                valueBadge: _vip
+                                    ? const _CompactStatusBadge(
+                                        label: 'VIP',
+                                        color: Color(0xFFE8C547),
+                                      )
+                                    : null,
                               ),
                             ],
                           ),
@@ -2598,13 +2606,11 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              _ClientEditToggleRow(
-                                icon: Icons.workspace_premium_rounded,
-                                label: 'Manual VIP',
-                                value: _vip,
-                                onChanged: _saving
-                                    ? null
-                                    : (v) => setState(() => _vip = v),
+                              _ManualVipEditor(
+                                client: widget.client,
+                                manualVip: _vip,
+                                enabled: !_saving,
+                                onManualVipChanged: (v) => setState(() => _vip = v),
                               ),
                               const SizedBox(height: 14),
                               _ClientEditToggleRow(
@@ -2834,12 +2840,16 @@ class _ClientEditToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.subtitle,
+    this.valueBadge,
   });
 
   final IconData icon;
   final String label;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final Widget? valueBadge;
 
   static const Color _lavender = Color(0xFFC8B6E8);
   static const Color _vipGreen = Color(0xFF22C55E);
@@ -2847,29 +2857,49 @@ class _ClientEditToggleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      constraints: BoxConstraints(minHeight: subtitle != null ? 64 : 54),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, size: 18, color: _lavender.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle!,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.4),
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (value) _VipBadge(),
-          const SizedBox(width: 10),
+          if (valueBadge != null) ...[
+            valueBadge!,
+            const SizedBox(width: 10),
+          ],
           Switch(
             value: value,
             onChanged: onChanged == null
@@ -2882,6 +2912,78 @@ class _ClientEditToggleRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Manual VIP toggle + earned-VIP context (same field as table More actions).
+class _ManualVipEditor extends StatelessWidget {
+  const _ManualVipEditor({
+    required this.client,
+    required this.manualVip,
+    required this.enabled,
+    required this.onManualVipChanged,
+  });
+
+  final AdminClientRow client;
+  final bool manualVip;
+  final bool enabled;
+  final ValueChanged<bool> onManualVipChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (client.isVipFromActivity && !manualVip)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF22C55E).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const _CompactStatusBadge(
+                    label: 'VIP',
+                    color: Color(0xFF22C55E),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Earned from 10+ visits or 600+ KM spent. '
+                      'The toggle below only sets manual VIP (same as the table menu).',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        color: Colors.white.withValues(alpha: 0.55),
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        _ClientEditToggleRow(
+          icon: Icons.workspace_premium_rounded,
+          label: 'Manual VIP',
+          subtitle:
+              'Synced with Set/Remove manual VIP in the client row menu',
+          value: manualVip,
+          onChanged: enabled ? onManualVipChanged : null,
+          valueBadge: manualVip
+              ? const _CompactStatusBadge(
+                  label: 'VIP',
+                  color: Color(0xFFE8C547),
+                )
+              : null,
+        ),
+      ],
     );
   }
 }
@@ -3394,29 +3496,24 @@ class _TableDataRowState extends State<_TableDataRow> {
   }
 }
 
+/// Table/list VIP chip: always "VIP"; gold = manual flag, green = earned only.
 class _ClientVipBadges extends StatelessWidget {
   const _ClientVipBadges({required this.client});
 
   final AdminClientRow client;
 
+  static const Color _manualGold = Color(0xFFE8C547);
+  static const Color _earnedGreen = Color(0xFF22C55E);
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (client.isVipKlijent)
-          const _CompactStatusBadge(
-            label: 'Manual',
-            color: Color(0xFFE8C547),
-          ),
-        if (client.isVipFromActivity) ...[
-          if (client.isVipKlijent) const SizedBox(width: 6),
-          const _CompactStatusBadge(
-            label: 'Earned',
-            color: Color(0xFF22C55E),
-          ),
-        ],
-      ],
+    if (!client.isVip) return const SizedBox.shrink();
+
+    final color = client.isVipKlijent ? _manualGold : _earnedGreen;
+
+    return _CompactStatusBadge(
+      label: 'VIP',
+      color: color,
     );
   }
 }
@@ -3486,11 +3583,11 @@ class _ClientRowMoreMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final vipSubtitle = client.isVipKlijent
         ? (client.isVipFromActivity
-            ? 'Keeps activity-based VIP badge'
-            : null)
+            ? 'Turns off manual VIP; earned VIP may remain'
+            : 'Turns off manual VIP on profile')
         : (client.isVipFromActivity
-            ? 'Already VIP from visits or spend'
-            : 'Override profile VIP flag');
+            ? 'Adds manual VIP (client already VIP from activity)'
+            : 'Sets manual VIP on profile');
 
     return PopupMenuButton<String>(
       tooltip: 'More actions',
