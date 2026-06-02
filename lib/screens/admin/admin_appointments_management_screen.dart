@@ -1334,6 +1334,21 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
     Navigator.pop(context, reason);
   }
 
+  String get _serviceLine {
+    final name = widget.appointment.uslugaNaziv?.trim();
+    final label = (name != null && name.isNotEmpty) ? name : 'Spa service';
+    final mins = widget.appointment.uslugaTrajanjeMinuta;
+    if (mins > 0) return '$label • ${mins} min';
+    return label;
+  }
+
+  String get _therapistLine {
+    final name = widget.appointment.zaposlenikIme?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (widget.appointment.zaposlenikId > 0) return 'Assigned';
+    return 'Not assigned';
+  }
+
   @override
   Widget build(BuildContext context) {
     final appt = widget.appointment;
@@ -1341,9 +1356,10 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
+        constraints: BoxConstraints(
           minWidth: _ApptDialogLayout.minWidth,
           maxWidth: _ApptDialogLayout.maxWidth,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.88,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
@@ -1367,204 +1383,143 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
               ),
               child: Padding(
                 padding: _ApptDialogLayout.padding,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            gradient: const LinearGradient(
-                              colors: [_ApptUi.purple, _ApptUi.purple2],
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: const LinearGradient(
+                                colors: [_ApptUi.purple, _ApptUi.purple2],
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.event_busy_rounded,
+                              color: Colors.white,
+                              size: 22,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.event_busy_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Cancel appointment?',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: _ApptUi.textPrimary,
-                                ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Cancel Appointment',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ApptUi.textPrimary,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'This action cannot be undone.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.35,
-                                  color: _ApptUi.lavender.withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
+                          _PremiumModalCloseButton(
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: _ApptDialogLayout.sectionGap),
+                      _PremiumApptFieldCard(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Client',
+                        value: _clientLine,
+                        trailing: Icon(
+                          Icons.lock_outline_rounded,
+                          color: _ApptUi.lavender.withValues(alpha: 0.5),
+                          size: 20,
                         ),
-                        _PremiumModalCloseButton(
-                          onPressed: () => Navigator.pop(context),
+                        enabled: false,
+                      ),
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _PremiumApptFieldCard(
+                              icon: Icons.spa_outlined,
+                              label: 'Service',
+                              value: _serviceLine,
+                              trailing: Icon(
+                                Icons.lock_outline_rounded,
+                                color: _ApptUi.lavender.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              enabled: false,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _PremiumApptFieldCard(
+                              icon: Icons.badge_outlined,
+                              label: 'Therapist',
+                              value: _therapistLine,
+                              trailing: Icon(
+                                Icons.lock_outline_rounded,
+                                color: _ApptUi.lavender.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              enabled: false,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      _PremiumApptFieldCard(
+                        icon: Icons.schedule_rounded,
+                        label: 'Date & time',
+                        value: _whenLine,
+                        trailing: Icon(
+                          Icons.lock_outline_rounded,
+                          color: _ApptUi.lavender.withValues(alpha: 0.5),
+                          size: 20,
+                        ),
+                        enabled: false,
+                      ),
+                      if (appt.isPlacena) ...[
+                        const SizedBox(height: _ApptDialogLayout.fieldGap),
+                        const _PremiumApptPaidCancelBanner(),
+                      ],
+                      const SizedBox(height: _ApptDialogLayout.fieldGap),
+                      _PremiumApptReasonField(controller: _reasonCtrl),
+                      if (_formError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _formError!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: Color(0xFFFF6B8A),
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: _ApptDialogLayout.sectionGap),
-                    _CancelAppointmentSummaryCard(
-                      client: _clientLine,
-                      service: appt.uslugaNaziv ?? 'Spa service',
-                      when: _whenLine,
-                      therapist: appt.zaposlenikIme,
-                    ),
-                    if (appt.isPlacena) ...[
-                      const SizedBox(height: _ApptDialogLayout.fieldGap),
-                      const _PremiumApptPaidCancelBanner(),
-                    ],
-                    const SizedBox(height: _ApptDialogLayout.fieldGap),
-                    _PremiumApptReasonField(controller: _reasonCtrl),
-                    if (_formError != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _formError!,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: Color(0xFFFF6B8A),
-                          fontWeight: FontWeight.w500,
-                        ),
+                      const SizedBox(height: _ApptDialogLayout.sectionGap),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _PremiumModalCancelButton(
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const SizedBox(width: 12),
+                          _PremiumModalCreateButton(
+                            label: 'Cancel appointment',
+                            icon: Icons.event_busy_rounded,
+                            enabled: true,
+                            onPressed: _submit,
+                          ),
+                        ],
                       ),
                     ],
-                    const SizedBox(height: _ApptDialogLayout.sectionGap),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        _PremiumModalCancelButton(
-                          label: 'Back',
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 12),
-                        _PremiumModalDestructiveButton(
-                          onPressed: _submit,
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CancelAppointmentSummaryCard extends StatelessWidget {
-  const _CancelAppointmentSummaryCard({
-    required this.client,
-    required this.service,
-    required this.when,
-    this.therapist,
-  });
-
-  final String client;
-  final String service;
-  final String when;
-  final String? therapist;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        children: [
-          _CancelSummaryRow(
-            icon: Icons.person_outline_rounded,
-            label: 'Client',
-            value: client,
-          ),
-          const SizedBox(height: 8),
-          _CancelSummaryRow(
-            icon: Icons.spa_outlined,
-            label: 'Service',
-            value: service,
-          ),
-          const SizedBox(height: 8),
-          _CancelSummaryRow(
-            icon: Icons.schedule_rounded,
-            label: 'When',
-            value: when,
-          ),
-          if (therapist != null && therapist!.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _CancelSummaryRow(
-              icon: Icons.badge_outlined,
-              label: 'Therapist',
-              value: therapist!.trim(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CancelSummaryRow extends StatelessWidget {
-  const _CancelSummaryRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: _ApptUi.lavender.withValues(alpha: 0.55)),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 64,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: _ApptUi.lavender.withValues(alpha: 0.5),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _ApptUi.textPrimary,
-              height: 1.3,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1614,62 +1569,92 @@ class _PremiumApptReasonField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Cancellation reason',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: _ApptUi.lavender.withValues(alpha: 0.55),
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          maxLines: 4,
-          minLines: 3,
-          style: const TextStyle(
-            fontSize: 14,
-            height: 1.4,
-            color: _ApptUi.textPrimary,
-          ),
-          cursorColor: _ApptUi.purple2,
-          decoration: InputDecoration(
-            hintText: 'Describe why this appointment is being cancelled…',
-            hintStyle: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.32),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: _ApptUi.purple.withValues(alpha: 0.18),
             ),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.04),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.1),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: _ApptUi.purple2.withValues(alpha: 0.75),
-              ),
+            child: Icon(
+              Icons.notes_rounded,
+              size: 20,
+              color: _ApptUi.purple2.withValues(alpha: 0.9),
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cancellation reason',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _ApptUi.lavender.withValues(alpha: 0.75),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: controller,
+                  maxLines: 4,
+                  minLines: 3,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: _ApptUi.textPrimary,
+                  ),
+                  cursorColor: _ApptUi.purple2,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText:
+                        'Describe why this appointment is being cancelled…',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.32),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.04),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                        color: _ApptUi.purple2.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -4016,82 +4001,6 @@ class _PremiumApptVipStrip extends StatelessWidget {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumModalDestructiveButton extends StatefulWidget {
-  const _PremiumModalDestructiveButton({
-    required this.onPressed,
-    this.label = 'Cancel appointment',
-    this.icon = Icons.event_busy_rounded,
-  });
-
-  final VoidCallback onPressed;
-  final String label;
-  final IconData icon;
-
-  @override
-  State<_PremiumModalDestructiveButton> createState() =>
-      _PremiumModalDestructiveButtonState();
-}
-
-class _PremiumModalDestructiveButtonState
-    extends State<_PremiumModalDestructiveButton> {
-  bool _hover = false;
-
-  static const _coral = Color(0xFFFF6B8A);
-  static const _coralLight = Color(0xFFFF8FA8);
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onPressed,
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: LinearGradient(
-                colors: [
-                  _coral.withValues(alpha: _hover ? 1 : 0.92),
-                  _coralLight.withValues(alpha: _hover ? 1 : 0.88),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _coral.withValues(alpha: _hover ? 0.5 : 0.35),
-                  blurRadius: _hover ? 28 : 20,
-                  offset: Offset(0, _hover ? 8 : 5),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  widget.label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
