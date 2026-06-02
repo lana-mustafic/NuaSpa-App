@@ -272,9 +272,11 @@ class _AdminAppointmentsManagementScreenState
                                 onViewChanged: (v) => setState(() => _view = v),
                                 onNew: () => _openCreate(data),
                               ),
-                              const SizedBox(height: _ApptUi.sectionGap),
-                              _KpiCards(reservations: filtered),
-                              const SizedBox(height: 36),
+                              const SizedBox(height: 16),
+                              _AppointmentsSummaryBar(
+                                reservations: data.reservations,
+                              ),
+                              const SizedBox(height: 16),
                               snap.connectionState == ConnectionState.waiting
                                   ? const SizedBox(
                                       height: 420,
@@ -574,8 +576,13 @@ abstract final class _ApptUi {
   static const Color purple = Color(0xFF7B4DFF);
   static const Color purple2 = Color(0xFF9D6BFF);
 
-  static const double kpiCardHeight = 200;
-  static const double kpiCardMinWidth = 220;
+  static const double tableRowHeight = 88;
+  static const double tableRadius = 20;
+  static const Color tableBg = Color(0x08FFFFFF);
+  static const Color tableHeaderBg = Color(0x0DFFFFFF);
+  static const Color tableBorder = Color(0x14FFFFFF);
+  static const Color rowHover = Color(0x147B4DFF);
+
   static const double filterControlHeight = 40;
   static const double filterDropdownWidth = 168;
   static const double filterStatusWidth = 148;
@@ -797,147 +804,51 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-class _KpiCards extends StatelessWidget {
-  const _KpiCards({required this.reservations});
+class _AppointmentsSummaryBar extends StatelessWidget {
+  const _AppointmentsSummaryBar({required this.reservations});
 
   final List<Rezervacija> reservations;
 
-  @override
-  Widget build(BuildContext context) {
-    final total = reservations.length;
-    final confirmed = reservations
-        .where((r) => r.isPotvrdjena && !r.isOtkazana)
-        .length;
-    final pending = reservations
-        .where((r) => !r.isPotvrdjena && !r.isOtkazana)
-        .length;
-    final cancelled = reservations.where((r) => r.isOtkazana).length;
-    final cards = [
-      _KpiSpec(
-        "Appointments",
-        '$total',
-        'Based on current filters',
-        Icons.calendar_today_outlined,
-        NuaLuxuryTokens.softPurpleGlow,
-      ),
-      _KpiSpec(
-        'Confirmed',
-        '$confirmed',
-        _pct(confirmed, total),
-        Icons.check_circle_outline,
-        const Color(0xFF4ADE80),
-      ),
-      _KpiSpec(
-        'Pending',
-        '$pending',
-        _pct(pending, total),
-        Icons.schedule_outlined,
-        const Color(0xFFF5B942),
-      ),
-      _KpiSpec(
-        'Cancelled',
-        '$cancelled',
-        _pct(cancelled, total),
-        Icons.cancel_outlined,
-        const Color(0xFFFF5E7A),
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, c) {
-        const gap = 22.0;
-        final minCard = _ApptUi.kpiCardMinWidth;
-        final cardH = _ApptUi.kpiCardHeight;
-        final rawW = c.maxWidth;
-        final layoutW = rawW.isFinite && rawW > 0
-            ? rawW
-            : MediaQuery.sizeOf(context).width;
-        final fourCol = layoutW >= minCard * 4 + gap * 3;
-        final twoCol = layoutW >= minCard * 2 + gap;
-
-        if (fourCol) {
-          return SizedBox(
-            height: cardH,
-            child: Row(
-              children: [
-                for (var i = 0; i < cards.length; i++) ...[
-                  if (i > 0) const SizedBox(width: gap),
-                  Expanded(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: minCard),
-                      child: _KpiCard(spec: cards[i]),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }
-
-        if (twoCol) {
-          final cellW = (layoutW - gap) / 2;
-          return Column(
-            children: [
-              SizedBox(
-                height: cardH,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: cellW,
-                      child: _KpiCard(spec: cards[0]),
-                    ),
-                    const SizedBox(width: gap),
-                    SizedBox(
-                      width: cellW,
-                      child: _KpiCard(spec: cards[1]),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: gap),
-              SizedBox(
-                height: cardH,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: cellW,
-                      child: _KpiCard(spec: cards[2]),
-                    ),
-                    const SizedBox(width: gap),
-                    SizedBox(
-                      width: cellW,
-                      child: _KpiCard(spec: cards[3]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        }
-
-        return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            primary: false,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < cards.length; i++) ...[
-                  if (i > 0) const SizedBox(width: gap),
-                  SizedBox(
-                    width: minCard,
-                    height: cardH,
-                    child: _KpiCard(spec: cards[i]),
-                  ),
-                ],
-              ],
-            ),
-          );
-      },
-    );
+  static bool _isToday(DateTime d) {
+    final l = d.toLocal();
+    final n = DateTime.now();
+    return l.year == n.year && l.month == n.month && l.day == n.day;
   }
 
-  static String _pct(int value, int total) => total == 0
-      ? '0% of total'
-      : '${((value / total) * 100).toStringAsFixed(1)}% of total';
+  @override
+  Widget build(BuildContext context) {
+    final today = reservations.where((r) => _isToday(r.datumRezervacije)).toList();
+    final total = today.length;
+    final confirmed =
+        today.where((r) => r.isPotvrdjena && !r.isOtkazana).length;
+    final pending =
+        today.where((r) => !r.isPotvrdjena && !r.isOtkazana).length;
+    final cancelled = today.where((r) => r.isOtkazana).length;
+
+    final label = total == 1 ? 'appointment' : 'appointments';
+    final text =
+        'Today: $total $label • Confirmed: $confirmed • Pending: $pending • Cancelled: $cancelled';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: _ApptUi.tableBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _ApptUi.tableBorder),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          height: 1.35,
+          color: _ApptUi.textPrimary.withValues(alpha: 0.88),
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
 }
 
 class _AppointmentsTable extends StatelessWidget {
@@ -970,189 +881,128 @@ class _AppointmentsTable extends StatelessWidget {
     };
 
     if (reservations.isEmpty) {
-      return _ApptGlass(
-        radius: 28,
-        padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 32),
-        child: Column(
-          children: [
-            Text(
-              'All Appointments',
-              style: GoogleFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _ApptUi.textPrimary,
+      return _appointmentsTableShell(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 32),
+          child: Column(
+            children: [
+              _ApptEmptyIllustration(icon: Icons.calendar_month_outlined),
+              const SizedBox(height: 24),
+              Text(
+                'No appointments found',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _ApptUi.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            _ApptEmptyIllustration(icon: Icons.calendar_month_outlined),
-            const SizedBox(height: 24),
-            Text(
-              'No appointments found',
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _ApptUi.textPrimary,
+              const SizedBox(height: 8),
+              Text(
+                'There are no appointments for the selected date and filters.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'There are no appointments for the selected date and filters.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                height: 1.45,
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
-    return _ApptGlass(
-      radius: 28,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+    return _appointmentsTableShell(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Text(
-              'All Appointments',
-              style: GoogleFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _ApptUi.textPrimary,
+          _AppointmentsTableHeader(),
+          for (var i = 0; i < reservations.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: Colors.white.withValues(alpha: 0.06),
               ),
+            _AppointmentTableRow(
+              appointment: reservations[i],
+              selected: selectedId == reservations[i].id,
+              serviceImageUrl: serviceImages[reservations[i].uslugaId],
+              onSelect: () => onSelect(reservations[i]),
+              onConfirmToggle: onConfirmToggle,
+              onComplete: onComplete,
+              onCancel: onCancel,
+              onEdit: onEdit,
             ),
-          ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                primary: false,
-                child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 980),
-              child: DataTable(
-                showCheckboxColumn: false,
-                columnSpacing: 22,
-                horizontalMargin: 12,
-                headingRowHeight: 64,
-                dataRowMinHeight: 72,
-                dataRowMaxHeight: 88,
-                headingRowColor: WidgetStateProperty.all(
-                  Colors.white.withValues(alpha: 0.05),
-                ),
-                headingTextStyle: GoogleFonts.inter(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.35,
-                  color: _ApptUi.lavender.withValues(alpha: 0.75),
-                ),
-                columns: const [
-                  DataColumn(label: Text('TIME')),
-                  DataColumn(label: Text('CLIENT')),
-                  DataColumn(label: Text('SERVICE')),
-                  DataColumn(label: Text('THERAPIST')),
-                  DataColumn(label: Text('DURATION')),
-                  DataColumn(label: Text('STATUS')),
-                  DataColumn(label: Text('PAYMENT')),
-                  DataColumn(label: Text('ACTIONS')),
-                ],
-                rows: [
-                  for (final r in reservations)
-                    DataRow(
-                      selected: selectedId == r.id,
-                      color: WidgetStateProperty.resolveWith((states) {
-                        if (selectedId == r.id) {
-                          return NuaLuxuryTokens.softPurpleGlow.withValues(
-                            alpha: 0.08,
-                          );
-                        }
-                        if (states.contains(WidgetState.hovered)) {
-                          return Colors.white.withValues(alpha: 0.04);
-                        }
-                        return null;
-                      }),
-                      onSelectChanged: (_) => onSelect(r),
-                      cells: [
-                        DataCell(
-                          Text(
-                            _time(r.datumRezervacije),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        DataCell(
-                          _PersonCell(
-                            name: r.korisnikIme ?? 'Nua Guest',
-                            subtitle:
-                                (r.korisnikTelefon != null &&
-                                        r.korisnikTelefon!.trim().isNotEmpty)
-                                    ? r.korisnikTelefon!.trim()
-                                    : '—',
-                          ),
-                        ),
-                        DataCell(
-                          _ServiceListCell(
-                            name: r.uslugaNaziv ?? 'Spa Ritual',
-                            subtitle: _category(r.uslugaNaziv),
-                            imageUrl: serviceImages[r.uslugaId],
-                          ),
-                        ),
-                        DataCell(
-                          _PersonCell(
-                            name: r.zaposlenikIme ?? 'Nua Therapist',
-                            subtitle: '',
-                            compact: true,
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${r.uslugaTrajanjeMinuta > 0 ? r.uslugaTrajanjeMinuta : 60} min',
-                          ),
-                        ),
-                        DataCell(
-                          _StatusBadge(
-                            label: _status(r),
-                            color: _statusColor(r),
-                          ),
-                        ),
-                        DataCell(
-                          _StatusBadge(
-                            label: r.isPlacena ? 'Paid' : 'Unpaid',
-                            color: r.isPlacena
-                                ? const Color(0xFF4ADE80)
-                                : const Color(0xFFFF5E7A),
-                          ),
-                        ),
-                        DataCell(
-                          _ActionsMenu(
-                            appointment: r,
-                            onConfirmToggle: onConfirmToggle,
-                            onComplete: onComplete,
-                            onCancel: onCancel,
-                            onEdit: onEdit,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
+          ],
         ],
       ),
     );
   }
 
-  static String _time(DateTime d) {
+  Widget _appointmentsTableShell({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _ApptUi.tableBg,
+        borderRadius: BorderRadius.circular(_ApptUi.tableRadius),
+        border: Border.all(color: _ApptUi.tableBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+            child: Text(
+              'All Appointments',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: _ApptUi.textPrimary,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String timeLabel(DateTime d) {
     final l = d.toLocal();
     final hour = l.hour % 12 == 0 ? 12 : l.hour % 12;
     return '$hour:${l.minute.toString().padLeft(2, '0')} ${l.hour >= 12 ? 'PM' : 'AM'}';
   }
 
-  static String _status(Rezervacija r) {
+  static String shortDateLabel(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final l = d.toLocal();
+    return '${months[l.month - 1]} ${l.day}';
+  }
+
+  static bool isToday(DateTime d) {
+    final l = d.toLocal();
+    final n = DateTime.now();
+    return l.year == n.year && l.month == n.month && l.day == n.day;
+  }
+
+  static String statusLabel(Rezervacija r) {
     switch (r.status) {
       case 'Completed':
         return 'Completed';
@@ -1168,17 +1018,399 @@ class _AppointmentsTable extends StatelessWidget {
     return 'Pending';
   }
 
-  static Color _statusColor(Rezervacija r) {
-    final label = _status(r);
-    if (label == 'Cancelled') return const Color(0xFFFF5E7A);
-    if (label == 'Completed') return const Color(0xFF4ADE80);
-    if (label == 'Confirmed') return NuaLuxuryTokens.softPurpleGlow;
-    return const Color(0xFFF5B942);
+  static Color statusColor(Rezervacija r) {
+    switch (statusLabel(r)) {
+      case 'Pending':
+        return const Color(0xFFF5B942);
+      case 'Confirmed':
+        return const Color(0xFF2DD4BF);
+      case 'Cancelled':
+        return const Color(0xFFE87997);
+      case 'Completed':
+        return const Color(0xFFC8B6E8);
+      default:
+        return _ApptUi.lavender;
+    }
   }
-  static String _category(String? service) =>
+
+  static String categoryLabel(String? service) =>
       (service ?? '').toLowerCase().contains('massage')
       ? 'Relaxation'
       : 'Wellness';
+}
+
+class _AppointmentsTableHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: _ApptUi.tableHeaderBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 14, child: _headerLabel('TIME')),
+          Expanded(flex: 22, child: _headerLabel('CLIENT')),
+          Expanded(flex: 28, child: _headerLabel('SERVICE')),
+          Expanded(flex: 12, child: _headerLabel('DURATION')),
+          Expanded(flex: 14, child: _headerLabel('STATUS')),
+          SizedBox(width: 88, child: _headerLabel('ACTIONS')),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerLabel(String text) => Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+          color: _ApptUi.lavender.withValues(alpha: 0.72),
+        ),
+      );
+}
+
+class _AppointmentTableRow extends StatefulWidget {
+  const _AppointmentTableRow({
+    required this.appointment,
+    required this.selected,
+    required this.serviceImageUrl,
+    required this.onSelect,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
+    required this.onEdit,
+  });
+
+  final Rezervacija appointment;
+  final bool selected;
+  final String? serviceImageUrl;
+  final VoidCallback onSelect;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
+  final ValueChanged<Rezervacija> onEdit;
+
+  @override
+  State<_AppointmentTableRow> createState() => _AppointmentTableRowState();
+}
+
+class _AppointmentTableRowState extends State<_AppointmentTableRow> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.appointment;
+    final status = _AppointmentsTable.statusLabel(r);
+    final duration = r.uslugaTrajanjeMinuta > 0 ? r.uslugaTrajanjeMinuta : 60;
+    final clientName = r.korisnikIme?.trim().isNotEmpty == true
+        ? r.korisnikIme!.trim()
+        : 'Guest';
+    final contact = (r.korisnikTelefon != null &&
+            r.korisnikTelefon!.trim().isNotEmpty)
+        ? r.korisnikTelefon!.trim()
+        : (r.korisnikEmail?.trim().isNotEmpty == true
+            ? r.korisnikEmail!.trim()
+            : '—');
+
+    Color? bg;
+    if (widget.selected) {
+      bg = NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.1);
+    } else if (_hover) {
+      bg = _ApptUi.rowHover;
+    }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: bg ?? Colors.transparent,
+        child: InkWell(
+          onTap: widget.onSelect,
+          hoverColor: Colors.transparent,
+          splashColor: Colors.white.withValues(alpha: 0.04),
+          child: SizedBox(
+            height: _ApptUi.tableRowHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 14,
+                    child: _TimeCell(datetime: r.datumRezervacije),
+                  ),
+                  Expanded(
+                    flex: 22,
+                    child: _ClientTableCell(
+                      name: clientName,
+                      subtitle: contact,
+                    ),
+                  ),
+                  Expanded(
+                    flex: 28,
+                    child: _ServiceTableCell(
+                      name: r.uslugaNaziv ?? 'Spa service',
+                      category: _AppointmentsTable.categoryLabel(r.uslugaNaziv),
+                      imageUrl: widget.serviceImageUrl,
+                    ),
+                  ),
+                  Expanded(
+                    flex: 12,
+                    child: Text(
+                      '$duration min',
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: _ApptUi.textPrimary.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 14,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _StatusBadge(
+                        label: status,
+                        color: _AppointmentsTable.statusColor(r),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 88,
+                    child: _ApptTableActions(
+                      appointment: r,
+                      onView: widget.onSelect,
+                      onConfirmToggle: widget.onConfirmToggle,
+                      onComplete: widget.onComplete,
+                      onCancel: widget.onCancel,
+                      onEdit: widget.onEdit,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimeCell extends StatelessWidget {
+  const _TimeCell({required this.datetime});
+
+  final DateTime datetime;
+
+  @override
+  Widget build(BuildContext context) {
+    final showDate = !_AppointmentsTable.isToday(datetime);
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _AppointmentsTable.timeLabel(datetime),
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: _ApptUi.textPrimary,
+          ),
+        ),
+        if (showDate) ...[
+          const SizedBox(height: 2),
+          Text(
+            _AppointmentsTable.shortDateLabel(datetime),
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ClientTableCell extends StatelessWidget {
+  const _ClientTableCell({required this.name, required this.subtitle});
+
+  final String name;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
+          child: Text(
+            _initials(name),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: _ApptUi.textPrimary,
+                ),
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.48),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _initials(String s) => s
+      .trim()
+      .split(RegExp(r'\s+'))
+      .take(2)
+      .map((p) => p.isEmpty ? '' : p[0])
+      .join()
+      .toUpperCase();
+}
+
+class _ServiceTableCell extends StatelessWidget {
+  const _ServiceTableCell({
+    required this.name,
+    required this.category,
+    this.imageUrl,
+  });
+
+  final String name;
+  final String category;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: imageUrl != null && imageUrl!.isNotEmpty
+              ? ServiceNetworkImage(
+                  imageUrl: imageUrl!,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  error: _placeholder(),
+                )
+              : _placeholder(),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: _ApptUi.textPrimary,
+                ),
+              ),
+              Text(
+                category,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.48),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _placeholder() => Container(
+        width: 40,
+        height: 40,
+        color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.2),
+        child: Icon(
+          Icons.spa_outlined,
+          size: 20,
+          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.7),
+        ),
+      );
+}
+
+class _ApptTableActions extends StatelessWidget {
+  const _ApptTableActions({
+    required this.appointment,
+    required this.onView,
+    required this.onConfirmToggle,
+    required this.onComplete,
+    required this.onCancel,
+    required this.onEdit,
+  });
+
+  final Rezervacija appointment;
+  final VoidCallback onView;
+  final ValueChanged<Rezervacija> onConfirmToggle;
+  final ValueChanged<Rezervacija> onComplete;
+  final ValueChanged<Rezervacija> onCancel;
+  final ValueChanged<Rezervacija> onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        IconButton(
+          tooltip: 'View details',
+          onPressed: onView,
+          icon: Icon(
+            Icons.visibility_outlined,
+            size: 20,
+            color: Colors.white.withValues(alpha: 0.75),
+          ),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(36, 36),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        _ActionsMenu(
+          appointment: appointment,
+          onConfirmToggle: onConfirmToggle,
+          onComplete: onComplete,
+          onCancel: onCancel,
+          onEdit: onEdit,
+        ),
+      ],
+    );
+  }
 }
 
 class _AppointmentDetailsPanel extends StatelessWidget {
@@ -1275,7 +1507,13 @@ class _AppointmentDetailsContent extends StatelessWidget {
                       ),
                     ],
                     Text(
-                      appointment.korisnikTelefon ?? '+387 61 000 000',
+                      (appointment.korisnikTelefon != null &&
+                              appointment.korisnikTelefon!.trim().isNotEmpty)
+                          ? appointment.korisnikTelefon!.trim()
+                          : (appointment.korisnikEmail?.trim().isNotEmpty ==
+                                  true
+                              ? appointment.korisnikEmail!.trim()
+                              : '—'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.62),
                       ),
@@ -1294,19 +1532,18 @@ class _AppointmentDetailsContent extends StatelessWidget {
                 icon: Icons.event_outlined,
                 label: 'Date & Time',
                 value:
-                    '${_date(appointment.datumRezervacije)} at ${_AppointmentsTable._time(appointment.datumRezervacije)}',
+                    '${_date(appointment.datumRezervacije)} at ${_AppointmentsTable.timeLabel(appointment.datumRezervacije)}',
               ),
               _DetailRow(
                 icon: Icons.spa_outlined,
                 label: 'Service',
                 value: appointment.uslugaNaziv ?? 'Spa Ritual',
-                helper: _AppointmentsTable._category(appointment.uslugaNaziv),
+                helper: _AppointmentsTable.categoryLabel(appointment.uslugaNaziv),
               ),
               _DetailRow(
                 icon: Icons.person_outline,
-                label: 'Therapist',
-                value: appointment.zaposlenikIme ?? 'Nua Therapist',
-                helper: null,
+                label: 'Selected therapist',
+                value: _therapistDetailLabel(appointment),
               ),
               _DetailRow(
                 icon: Icons.timer_outlined,
@@ -1318,8 +1555,8 @@ class _AppointmentDetailsContent extends StatelessWidget {
                 icon: Icons.verified_outlined,
                 label: 'Status',
                 customValue: _StatusBadge(
-                  label: _AppointmentsTable._status(appointment),
-                  color: _AppointmentsTable._statusColor(appointment),
+                  label: _AppointmentsTable.statusLabel(appointment),
+                  color: _AppointmentsTable.statusColor(appointment),
                 ),
               ),
               _DetailRow(
@@ -1373,157 +1610,12 @@ class _AppointmentDetailsContent extends StatelessWidget {
     final l = d.toLocal();
     return '${months[l.month - 1]} ${l.day}, ${l.year}';
   }
-}
 
-// Small UI building blocks
-class _KpiSpec {
-  const _KpiSpec(this.title, this.value, this.subtitle, this.icon, this.color);
-  final String title, value, subtitle;
-  final IconData icon;
-  final Color color;
-}
-
-class _KpiCard extends StatefulWidget {
-  const _KpiCard({required this.spec});
-  final _KpiSpec spec;
-
-  @override
-  State<_KpiCard> createState() => _KpiCardState();
-}
-
-class _KpiCardState extends State<_KpiCard> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final spec = widget.spec;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final valueSize = constraints.maxWidth < 200 ? 36.0 : 42.0;
-
-        return MouseRegion(
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            height: _ApptUi.kpiCardHeight,
-            transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.035),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: _hover ? 0.14 : 0.08),
-              ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: spec.color.withValues(alpha: 0.22),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(26),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              color: spec.color.withValues(alpha: 0.16),
-                              border: Border.all(
-                                color: spec.color.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            child: Icon(spec.icon, color: spec.color, size: 24),
-                          ),
-                        ),
-                        Text(
-                          spec.value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          softWrap: false,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: valueSize,
-                            fontWeight: FontWeight.w700,
-                            color: _ApptUi.textPrimary,
-                            height: 1,
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              spec.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: _ApptUi.lavender.withValues(alpha: 0.85),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              spec.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: spec.color.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: FractionallySizedBox(
-                        widthFactor: 0.55,
-                        child: Container(
-                          height: 3,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            gradient: LinearGradient(
-                              colors: [
-                                spec.color.withValues(alpha: 0),
-                                spec.color.withValues(alpha: 0.85),
-                                spec.color.withValues(alpha: 0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+  static String _therapistDetailLabel(Rezervacija r) {
+    final name = r.zaposlenikIme?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (r.zaposlenikId > 0) return 'Therapist assigned';
+    return 'Not assigned yet';
   }
 }
 
@@ -1869,155 +1961,32 @@ class _GradientButtonState extends State<_GradientButton> {
   }
 }
 
-class _PersonCell extends StatelessWidget {
-  const _PersonCell({
-    required this.name,
-    required this.subtitle,
-    this.compact = false,
-  });
-  final String name, subtitle;
-  final bool compact;
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      CircleAvatar(
-        radius: compact ? 15 : 18,
-        backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.35),
-        child: Text(
-          _ini(name),
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-        ),
-      ),
-      const SizedBox(width: 10),
-      _TwoLine(title: name, subtitle: subtitle),
-    ],
-  );
-  String _ini(String s) => s
-      .trim()
-      .split(RegExp(r'\s+'))
-      .take(2)
-      .map((p) => p.isEmpty ? '' : p[0])
-      .join()
-      .toUpperCase();
-}
-
-class _TwoLine extends StatelessWidget {
-  const _TwoLine({required this.title, required this.subtitle});
-  final String title, subtitle;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 150,
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.48),
-            fontSize: 12,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ServiceListCell extends StatelessWidget {
-  const _ServiceListCell({
-    required this.name,
-    required this.subtitle,
-    this.imageUrl,
-  });
-
-  final String name;
-  final String subtitle;
-  final String? imageUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: imageUrl != null && imageUrl!.isNotEmpty
-                ? ServiceNetworkImage(
-                    imageUrl: imageUrl!,
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.cover,
-                    error: _placeholder(),
-                  )
-                : _placeholder(),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.48),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _placeholder() => Container(
-        width: 44,
-        height: 44,
-        color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.2),
-        child: Icon(
-          Icons.spa_outlined,
-          size: 22,
-          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.7),
-        ),
-      );
-}
-
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.label, required this.color});
   final String label;
   final Color color;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.13),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: color.withValues(alpha: 0.38)),
-    ),
-    child: Text(
-      label,
-      style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 12),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        constraints: const BoxConstraints(minWidth: 72),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.38)),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.visible,
+          softWrap: false,
+          style: GoogleFonts.inter(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 11.5,
+            letterSpacing: 0.15,
+          ),
+        ),
+      );
 }
 
 class _ActionsMenu extends StatelessWidget {
