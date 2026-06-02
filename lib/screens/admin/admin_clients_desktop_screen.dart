@@ -443,69 +443,27 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
     }
   }
 
-  Future<void> _onClientMore(
-    AdminClientRow row,
-    List<Zaposlenik> therapists,
-  ) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: NuaLuxuryTokens.voidViolet,
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit client'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showEditClientDialog(row, therapists);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: Text(row.isVipKlijent ? 'Remove manual VIP' : 'Set manual VIP'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    await widget.api.patchAdminClient(
-                      id: row.id,
-                      isVipKlijent: !row.isVipKlijent,
-                    );
-                    if (!mounted) return;
-                    _reloadFromApi();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          row.isVipKlijent ? 'Manual VIP removed.' : 'Manual VIP set.',
-                        ),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(_apiErr(e))),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  row.isActive ? Icons.person_off_outlined : Icons.person_outline,
-                  color: row.isActive ? Colors.red.shade300 : Colors.green.shade300,
-                ),
-                title: Text(row.isActive ? 'Deactivate account' : 'Reactivate account'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _confirmSetClientActive(row, activate: !row.isActive);
-                },
-              ),
-            ],
+  Future<void> _toggleManualVip(AdminClientRow row) async {
+    try {
+      await widget.api.patchAdminClient(
+        id: row.id,
+        isVipKlijent: !row.isVipKlijent,
+      );
+      if (!mounted) return;
+      _reloadFromApi();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            row.isVipKlijent ? 'Manual VIP removed.' : 'Manual VIP set.',
           ),
-        );
-      },
-    );
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_apiErr(e))),
+      );
+    }
   }
 
   @override
@@ -647,7 +605,12 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                         fmtClientSince: _fmtClientSince,
                         onRetry: _reloadFromApi,
                         onView: (row) => _openClientSheet(row),
-                        onMore: (row) => _onClientMore(row, therapists),
+                        onEdit: (row) => _showEditClientDialog(row, therapists),
+                        onToggleVip: _toggleManualVip,
+                        onToggleActive: (row) => _confirmSetClientActive(
+                          row,
+                          activate: !row.isActive,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -3425,7 +3388,9 @@ class _ClientsTableCard extends StatelessWidget {
     required this.fmtVisit,
     required this.fmtClientSince,
     required this.onView,
-    required this.onMore,
+    required this.onEdit,
+    required this.onToggleVip,
+    required this.onToggleActive,
     this.onRetry,
   });
 
@@ -3435,7 +3400,9 @@ class _ClientsTableCard extends StatelessWidget {
   final String Function(DateTime? d) fmtVisit;
   final String Function(DateTime d) fmtClientSince;
   final void Function(AdminClientRow) onView;
-  final void Function(AdminClientRow) onMore;
+  final void Function(AdminClientRow) onEdit;
+  final void Function(AdminClientRow) onToggleVip;
+  final void Function(AdminClientRow) onToggleActive;
   final VoidCallback? onRetry;
 
   @override
@@ -3508,7 +3475,9 @@ class _ClientsTableCard extends StatelessWidget {
                         fmtVisit: fmtVisit,
                         fmtClientSince: fmtClientSince,
                         onView: () => onView(c),
-                        onMore: () => onMore(c),
+                        onEdit: () => onEdit(c),
+                        onToggleVip: () => onToggleVip(c),
+                        onToggleActive: () => onToggleActive(c),
                       );
                     },
                   ),
@@ -3591,14 +3560,18 @@ class _TableDataRow extends StatefulWidget {
     required this.fmtVisit,
     required this.fmtClientSince,
     required this.onView,
-    required this.onMore,
+    required this.onEdit,
+    required this.onToggleVip,
+    required this.onToggleActive,
   });
 
   final AdminClientRow client;
   final String Function(DateTime? d) fmtVisit;
   final String Function(DateTime d) fmtClientSince;
   final VoidCallback onView;
-  final VoidCallback onMore;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleVip;
+  final VoidCallback onToggleActive;
 
   @override
   State<_TableDataRow> createState() => _TableDataRowState();
@@ -3660,11 +3633,11 @@ class _TableDataRowState extends State<_TableDataRow> {
                     onTap: widget.onView,
                   ),
                   const SizedBox(width: 6),
-                  _ActionIconButton(
-                    icon: Icons.more_horiz_rounded,
-                    tooltip: 'More actions',
-                    compact: true,
-                    onTap: widget.onMore,
+                  _ClientRowMoreMenu(
+                    client: c,
+                    onEdit: widget.onEdit,
+                    onToggleVip: widget.onToggleVip,
+                    onToggleActive: widget.onToggleActive,
                   ),
                 ],
               ),
@@ -3857,6 +3830,197 @@ class _CompactStatusBadge extends StatelessWidget {
           letterSpacing: 0.2,
         ),
       ),
+    );
+  }
+}
+
+class _ClientRowMoreMenu extends StatelessWidget {
+  const _ClientRowMoreMenu({
+    required this.client,
+    required this.onEdit,
+    required this.onToggleVip,
+    required this.onToggleActive,
+  });
+
+  final AdminClientRow client;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleVip;
+  final VoidCallback onToggleActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final vipSubtitle = client.isVipKlijent
+        ? (client.isVipFromActivity
+            ? 'Keeps activity-based VIP badge'
+            : null)
+        : (client.isVipFromActivity
+            ? 'Already VIP from visits or spend'
+            : 'Override profile VIP flag');
+
+    return PopupMenuButton<String>(
+      tooltip: 'More actions',
+      color: NuaLuxuryTokens.voidViolet,
+      padding: EdgeInsets.zero,
+      offset: const Offset(0, 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      constraints: const BoxConstraints(minWidth: 248),
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            onEdit();
+          case 'vip':
+            onToggleVip();
+          case 'status':
+            onToggleActive();
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'edit',
+          height: 44,
+          child: _ClientMenuRow(
+            icon: Icons.edit_outlined,
+            label: 'Edit client',
+          ),
+        ),
+        const PopupMenuDivider(height: 8),
+        PopupMenuItem<String>(
+          value: 'vip',
+          height: vipSubtitle != null ? 52 : 44,
+          child: _ClientMenuRow(
+            icon: Icons.workspace_premium_outlined,
+            label: client.isVipKlijent ? 'Remove manual VIP' : 'Set manual VIP',
+            subtitle: vipSubtitle,
+            iconColor: const Color(0xFFE8C547),
+          ),
+        ),
+        const PopupMenuDivider(height: 8),
+        PopupMenuItem<String>(
+          value: 'status',
+          height: 44,
+          child: _ClientMenuRow(
+            icon: client.isActive
+                ? Icons.person_off_outlined
+                : Icons.person_add_alt_1_outlined,
+            label: client.isActive
+                ? 'Deactivate account'
+                : 'Reactivate account',
+            destructive: client.isActive,
+            iconColor: client.isActive
+                ? const Color(0xFFF87171)
+                : const Color(0xFF4ADE80),
+          ),
+        ),
+      ],
+      child: const _MoreMenuTrigger(),
+    );
+  }
+}
+
+class _MoreMenuTrigger extends StatefulWidget {
+  const _MoreMenuTrigger();
+
+  @override
+  State<_MoreMenuTrigger> createState() => _MoreMenuTriggerState();
+}
+
+class _MoreMenuTriggerState extends State<_MoreMenuTrigger> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF7B4DFF).withValues(alpha: 0.35),
+                    blurRadius: 14,
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(
+          Icons.more_horiz_rounded,
+          size: 17,
+          color: Colors.white.withValues(alpha: _hover ? 0.95 : 0.72),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClientMenuRow extends StatelessWidget {
+  const _ClientMenuRow({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    this.iconColor,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final Color? iconColor;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = destructive
+        ? const Color(0xFFF87171)
+        : Colors.white.withValues(alpha: 0.92);
+
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: iconColor ?? Colors.white.withValues(alpha: 0.7),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: labelColor,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.45),
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
