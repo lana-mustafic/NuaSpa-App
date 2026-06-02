@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../models/admin/rezervacija_calendar_item.dart';
-import '../../models/admin/therapist_kpi.dart';
+import '../../models/admin/therapist_admin_roster.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../ui/navigation/desktop_nav.dart';
@@ -59,7 +58,16 @@ class _AdminTherapistRosterScreenState
             if (mounted) _editTherapist(null);
           });
         }
+        if (snap.hasError) {
+          return _RosterErrorState(
+            message: snap.error.toString(),
+            onRetry: _reload,
+          );
+        }
         final data = snap.data ?? _TherapistRosterData.empty();
+        if (data.error != null && data.therapists.isEmpty) {
+          return _RosterErrorState(message: data.error!, onRetry: _reload);
+        }
         final therapists = data.therapists;
         final filtered = therapists.where((t) {
           final q = navQuery.trim().toLowerCase();
@@ -122,12 +130,20 @@ class _AdminTherapistRosterScreenState
                     onChanged: () => setState(() => _page = 0),
                     onAdd: () => _editTherapist(null),
                   ),
+                  if (data.error != null && data.therapists.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _RosterInlineWarning(message: data.error!),
+                  ],
                   const SizedBox(height: 18),
                   Expanded(
                     child: snap.connectionState == ConnectionState.waiting
                         ? const Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
+                        : therapists.isEmpty && data.error == null
+                            ? const Center(
+                                child: Text('No therapists yet. Add your first therapist.'),
+                              )
                         : _TherapistRosterList(
                             therapists: visible,
                             totalCount: filtered.length,
@@ -152,102 +168,62 @@ class _AdminTherapistRosterScreenState
 
   Future<_TherapistRosterData> _loadRoster() async {
     final weekStart = _startOfWeek(DateTime.now());
-    final weekDays = List.generate(7, (i) => weekStart.add(Duration(days: i)));
-    final therapists = await _api.getZaposlenici();
     final from30 = DateTime.now().subtract(const Duration(days: 30));
-    final kpis = await Future.wait(
-      therapists.map(
-        (t) => _api.getTherapistKpis(
-          zaposlenikId: t.id,
-          from: from30,
-          to: DateTime.now(),
-        ),
-      ),
+    final result = await _api.getTherapistAdminRoster(
+      kpiFrom: from30,
+      kpiTo: DateTime.now(),
+      weekStart: weekStart,
     );
-    final calendarResult = await _api.getRezervacijeCalendar(
-      from: weekStart,
-      to: weekStart.add(const Duration(days: 6)),
-      includeOtkazane: false,
-    );
-    final calendar = calendarResult.items;
-
-    final kpiById = <int, TherapistKpi?>{};
-    for (var i = 0; i < therapists.length; i++) {
-      kpiById[therapists[i].id] = kpis[i];
+    final roster = result.data;
+    if (roster == null) {
+      return _TherapistRosterData.empty(error: result.error);
     }
 
+    final weekDays = roster.therapists.isNotEmpty
+        ? roster.therapists.first.weekDays.map((d) => d.date).toList()
+        : List.generate(7, (i) => weekStart.add(Duration(days: i)));
+
     return _TherapistRosterData(
+      error: result.error,
       weekDays: weekDays,
       therapists: [
-        for (final therapist in therapists)
-          _buildRosterTherapist(
-            therapist,
-            kpiById[therapist.id],
-            weekDays,
-            calendar,
+        for (final row in roster.therapists)
+          _RosterTherapist(
+            zaposlenik: row.terapeut,
+            name: '${row.terapeut.ime} ${row.terapeut.prezime}'.trim(),
+            employmentStatus: row.terapeut.status,
+            role: row.uloga,
+            rating: row.prosjecnaOcjena <= 0 ? null : row.prosjecnaOcjena,
+            reviewCount: row.brojRecenzija,
+            appointmentCount: row.ukupnoRezervacija,
+            specializations: _tags(row.terapeut.specijalizacija),
+            weekDays: row.weekDays.map((d) => d.date).toList(),
+            weekLoads: row.weekDays.map(_loadFromApi).toList(),
           ),
       ],
     );
   }
 
-  _RosterTherapist _buildRosterTherapist(
-    Zaposlenik therapist,
-    TherapistKpi? kpi,
-    List<DateTime> weekDays,
-    List<RezervacijaCalendarItem> calendar,
-  ) {
-    final statuses = [
-      for (final day in weekDays)
-        _statusFromBookings(
-          calendar
-              .where(
-                (r) =>
-                    r.zaposlenikId == therapist.id &&
-                    _sameDay(r.datumRezervacije, day),
-              )
-              .length,
-        ),
-    ];
-    final rating = (kpi?.prosjecnaOcjena ?? 0) <= 0
-        ? null
-        : kpi!.prosjecnaOcjena;
-    final appointmentCount = kpi?.ukupnoRezervacija ?? 0;
-    return _RosterTherapist(
-      zaposlenik: therapist,
-      name: '${therapist.ime} ${therapist.prezime}'.trim(),
-      employmentStatus: therapist.status,
-      role: appointmentCount >= 20 ? 'Senior Therapist' : 'Therapist',
-      rating: rating,
-      reviews: appointmentCount,
-      specializations: _tags(therapist.specijalizacija),
-      weekDays: weekDays,
-      weekStatuses: statuses,
-    );
-  }
-
   List<String> _tags(String raw) {
-    final tags = raw
+    return raw
         .split(RegExp(r'[,;/]'))
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .take(4)
+        .take(6)
         .toList();
-    return tags;
   }
 
-  _AvailabilityStatus _statusFromBookings(int count) {
-    if (count >= 5) return _AvailabilityStatus.unavailable;
-    if (count > 0) return _AvailabilityStatus.partial;
-    return _AvailabilityStatus.available;
-  }
+  _WeekLoad _loadFromApi(TherapistRosterDay day) => switch (day.load) {
+        'heavy' => _WeekLoad.heavy,
+        'moderate' => _WeekLoad.moderate,
+        'light' => _WeekLoad.light,
+        _ => _WeekLoad.off,
+      };
 
   String _hm(DateTime d) {
     final loc = d.toLocal();
     return '${loc.hour.toString().padLeft(2, '0')}:${loc.minute.toString().padLeft(2, '0')}';
   }
-
-  bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 
   DateTime _startOfWeek(DateTime d) {
     final day = DateTime(d.year, d.month, d.day);
@@ -312,17 +288,19 @@ class _AdminTherapistRosterScreenState
     if (editorResult == null || !mounted) return;
 
     final isNew = existing == null;
-    final result = isNew
+    final save = isNew
         ? await _api.createZaposlenik(editorResult.therapist)
         : await _api.updateZaposlenik(editorResult.therapist);
     if (!mounted) return;
 
-    if (result == null) {
+    if (save.therapist == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save therapist.')),
+        SnackBar(content: Text(save.error ?? 'Failed to save therapist.')),
       );
       return;
     }
+
+    final result = save.therapist!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -665,11 +643,11 @@ class _TherapistRosterCardState extends State<_TherapistRosterCard> {
                     child: _Specializations(tags: t.specializations),
                   ),
                   const SizedBox(width: 30),
-                  SizedBox(
+                    SizedBox(
                     width: 360,
-                    child: _WeeklyAvailability(
+                    child: _WeeklyLoadStrip(
                       weekDays: t.weekDays,
-                      statuses: t.weekStatuses,
+                      loads: t.weekLoads,
                       onOpenDay: (day) => widget.onOpenDay(t, day),
                     ),
                   ),
@@ -809,7 +787,9 @@ class _TherapistProfile extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '(${t.reviews} appointments)',
+                    t.reviewCount == 0
+                        ? '(${t.appointmentCount} appointments · no reviews)'
+                        : '(${t.reviewCount} reviews · ${t.appointmentCount} appointments)',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: Colors.white.withValues(alpha: 0.5),
                     ),
@@ -889,15 +869,15 @@ class _Specializations extends StatelessWidget {
   }
 }
 
-class _WeeklyAvailability extends StatelessWidget {
-  const _WeeklyAvailability({
+class _WeeklyLoadStrip extends StatelessWidget {
+  const _WeeklyLoadStrip({
     required this.weekDays,
-    required this.statuses,
+    required this.loads,
     required this.onOpenDay,
   });
 
   final List<DateTime> weekDays;
-  final List<_AvailabilityStatus> statuses;
+  final List<_WeekLoad> loads;
   final ValueChanged<DateTime> onOpenDay;
 
   @override
@@ -910,7 +890,7 @@ class _WeeklyAvailability extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Weekly Availability',
+                'Weekly booking load',
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: Colors.white.withValues(alpha: 0.78),
@@ -926,14 +906,22 @@ class _WeeklyAvailability extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 15),
+        const SizedBox(height: 6),
+        Text(
+          'Tap a day for available slots · colors show appointment volume',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.42),
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             for (var i = 0; i < weekDays.length; i++)
               Expanded(
-                child: _DayStatus(
+                child: _DayLoadDot(
                   day: weekDays[i],
-                  status: statuses[i],
+                  load: loads[i],
                   onTap: () => onOpenDay(weekDays[i]),
                 ),
               ),
@@ -962,24 +950,25 @@ class _WeeklyAvailability extends StatelessWidget {
   }
 }
 
-class _DayStatus extends StatelessWidget {
-  const _DayStatus({
+class _DayLoadDot extends StatelessWidget {
+  const _DayLoadDot({
     required this.day,
-    required this.status,
+    required this.load,
     required this.onTap,
   });
 
   final DateTime day;
-  final _AvailabilityStatus status;
+  final _WeekLoad load;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final color = switch (status) {
-      _AvailabilityStatus.available => const Color(0xFF6EE7B7),
-      _AvailabilityStatus.partial => NuaLuxuryTokens.champagneGold,
-      _AvailabilityStatus.unavailable => NuaLuxuryTokens.softPurpleGlow,
+    final color = switch (load) {
+      _WeekLoad.off => const Color(0xFF6EE7B7),
+      _WeekLoad.light => const Color(0xFF86EFAC),
+      _WeekLoad.moderate => NuaLuxuryTokens.champagneGold,
+      _WeekLoad.heavy => NuaLuxuryTokens.softPurpleGlow,
     };
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1234,16 +1223,19 @@ class _TherapistRosterData {
   const _TherapistRosterData({
     required this.weekDays,
     required this.therapists,
+    this.error,
   });
 
   final List<DateTime> weekDays;
   final List<_RosterTherapist> therapists;
+  final String? error;
 
-  factory _TherapistRosterData.empty() {
+  factory _TherapistRosterData.empty({String? error}) {
     final start = DateTime.now();
     return _TherapistRosterData(
       weekDays: List.generate(7, (i) => start.add(Duration(days: i))),
       therapists: const [],
+      error: error,
     );
   }
 }
@@ -1255,10 +1247,11 @@ class _RosterTherapist {
     required this.employmentStatus,
     required this.role,
     required this.rating,
-    required this.reviews,
+    required this.reviewCount,
+    required this.appointmentCount,
     required this.specializations,
     required this.weekDays,
-    required this.weekStatuses,
+    required this.weekLoads,
   });
 
   final Zaposlenik zaposlenik;
@@ -1266,20 +1259,76 @@ class _RosterTherapist {
   final ZaposlenikStatus employmentStatus;
   final String role;
   final double? rating;
-  final int reviews;
+  final int reviewCount;
+  final int appointmentCount;
   final List<String> specializations;
   final List<DateTime> weekDays;
-  final List<_AvailabilityStatus> weekStatuses;
+  final List<_WeekLoad> weekLoads;
 
   String get weekLoadLabel {
-    if (weekStatuses.every((x) => x == _AvailabilityStatus.available)) {
-      return 'Open week';
+    if (weekLoads.every((x) => x == _WeekLoad.off)) {
+      return 'Light week';
     }
-    if (weekStatuses.every((x) => x == _AvailabilityStatus.unavailable)) {
-      return 'Fully booked';
+    if (weekLoads.every((x) => x == _WeekLoad.heavy)) {
+      return 'Heavy week';
     }
-    return 'Partially booked';
+    return 'Mixed load';
   }
 }
 
-enum _AvailabilityStatus { available, partial, unavailable }
+enum _WeekLoad { off, light, moderate, heavy }
+
+class _RosterErrorState extends StatelessWidget {
+  const _RosterErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RosterInlineWarning extends StatelessWidget {
+  const _RosterInlineWarning({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0x33FF5E7A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x55FF5E7A)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+  }
+}
