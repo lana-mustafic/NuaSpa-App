@@ -100,7 +100,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     final service = await _apiService.getUslugaById(widget.serviceId);
     if (service != null && mounted) {
       PreporukaTracker.instance.trackServiceView(service.id);
-      await _loadTherapistsForCategory(service);
+      await _loadTherapistsForService(service);
     }
     return service;
   }
@@ -118,15 +118,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     });
   }
 
-  Future<void> _loadTherapistsForCategory(Usluga service) async {
+  Future<void> _loadTherapistsForService(Usluga service) async {
     if (_therapistsLoading || _therapistsLoadedForUslugaId == service.id) {
       return;
     }
     setState(() => _therapistsLoading = true);
-    final kat = service.kategorijaUslugaId;
-    final therapists = kat > 0
-        ? await _apiService.getZaposleniciForCategory(kat)
-        : <Zaposlenik>[];
+    final therapists =
+        await _apiService.getZaposleniciForService(service.id);
     if (!mounted) return;
     setState(() {
       _therapists = therapists;

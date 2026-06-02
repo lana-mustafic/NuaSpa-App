@@ -372,7 +372,9 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
                       DropdownButtonFormField<int?>(
                         value: zId,
                         decoration: const InputDecoration(
-                          labelText: 'Preferirani terapeut',
+                          labelText: 'Staff account link (optional)',
+                          helperText:
+                              'Links this client to a therapist staff login — not a booking preference.',
                         ),
                         items: [
                           const DropdownMenuItem<int?>(

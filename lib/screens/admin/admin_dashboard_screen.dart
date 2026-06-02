@@ -312,16 +312,28 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     final serviceCtrl = ValueNotifier<int?>(null);
     final vipCtrl = ValueNotifier<bool>(r.isVip);
 
-    final therapists = await _api.getZaposlenici();
     final services = await _api.getUsluge();
+    if (!mounted) return;
+
+    serviceCtrl.value = r.uslugaId > 0
+        ? r.uslugaId
+        : _findServiceIdFromName(services, r.uslugaNaziv);
+
+    var eligibleTherapists = <Zaposlenik>[];
+    if (serviceCtrl.value != null) {
+      eligibleTherapists =
+          await _api.getZaposleniciForService(serviceCtrl.value!);
+    }
     if (!mounted) return;
 
     therapistCtrl.value = r.zaposlenikId > 0
         ? r.zaposlenikId
-        : _findTherapistIdFromName(therapists, r.zaposlenikIme);
-    serviceCtrl.value = r.uslugaId > 0
-        ? r.uslugaId
-        : _findServiceIdFromName(services, r.uslugaNaziv);
+        : _findTherapistIdFromName(eligibleTherapists, r.zaposlenikIme);
+    if (therapistCtrl.value != null &&
+        !eligibleTherapists.any((t) => t.id == therapistCtrl.value)) {
+      therapistCtrl.value =
+          eligibleTherapists.length == 1 ? eligibleTherapists.first.id : null;
+    }
 
     Future<void> pickDate() async {
       final picked = await showDatePicker(
@@ -405,7 +417,21 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                               ),
                             )
                             .toList(),
-                        onChanged: (v) => setLocal(() => serviceCtrl.value = v),
+                        onChanged: (v) async {
+                          serviceCtrl.value = v;
+                          therapistCtrl.value = null;
+                          if (v != null) {
+                            eligibleTherapists =
+                                await _api.getZaposleniciForService(v);
+                            if (eligibleTherapists.length == 1) {
+                              therapistCtrl.value =
+                                  eligibleTherapists.first.id;
+                            }
+                          } else {
+                            eligibleTherapists = [];
+                          }
+                          if (ctx.mounted) setLocal(() {});
+                        },
                       ),
                     ),
                   ),
@@ -419,8 +445,12 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                       child: DropdownButton<int>(
                         isExpanded: true,
                         value: therapistCtrl.value,
-                        hint: const Text('Odaberite terapeuta'),
-                        items: therapists
+                        hint: Text(
+                          eligibleTherapists.isEmpty
+                              ? 'Nema terapeuta za uslugu'
+                              : 'Odaberite terapeuta',
+                        ),
+                        items: eligibleTherapists
                             .map(
                               (t) => DropdownMenuItem(
                                 value: t.id,
@@ -428,7 +458,9 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                               ),
                             )
                             .toList(),
-                        onChanged: (v) => setLocal(() => therapistCtrl.value = v),
+                        onChanged: eligibleTherapists.isEmpty
+                            ? null
+                            : (v) => setLocal(() => therapistCtrl.value = v),
                       ),
                     ),
                   ),

@@ -2458,12 +2458,17 @@ class _AdminAppointmentCreateDialog extends StatefulWidget {
 
 class _AdminAppointmentCreateDialogState
     extends State<_AdminAppointmentCreateDialog> {
+  final ApiService _api = ApiService();
+
   late DateTime _dateTime;
   late int? _clientId;
   late int? _serviceId;
   late int? _therapistId;
   late bool _isVip;
   String? _formError;
+
+  List<Zaposlenik> _eligibleTherapists = [];
+  bool _loadingTherapists = false;
 
   bool get _isEdit => widget.appointment != null;
 
@@ -2511,6 +2516,40 @@ class _AdminAppointmentCreateDialogState
       }
       _isVip = false;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadEligibleTherapists(preserveTherapistId: _therapistId);
+    });
+  }
+
+  Future<void> _loadEligibleTherapists({int? preserveTherapistId}) async {
+    final serviceId = _serviceId;
+    if (serviceId == null) {
+      if (!mounted) return;
+      setState(() {
+        _eligibleTherapists = [];
+        _therapistId = null;
+        _loadingTherapists = false;
+      });
+      return;
+    }
+
+    setState(() => _loadingTherapists = true);
+    final list = await _api.getZaposleniciForService(serviceId);
+    if (!mounted) return;
+
+    int? nextTherapist = preserveTherapistId;
+    if (nextTherapist != null &&
+        !list.any((t) => t.id == nextTherapist)) {
+      nextTherapist = list.length == 1 ? list.first.id : null;
+    } else if (nextTherapist == null && list.length == 1) {
+      nextTherapist = list.first.id;
+    }
+
+    setState(() {
+      _eligibleTherapists = list;
+      _therapistId = nextTherapist;
+      _loadingTherapists = false;
+    });
   }
 
   int? _initialServiceId(Rezervacija appt, List<Usluga> services) {
@@ -2583,8 +2622,13 @@ class _AdminAppointmentCreateDialogState
   }
 
   String _therapistLabel() {
-    if (_therapistId == null) return 'Select a therapist';
-    for (final t in widget.data.therapists) {
+    if (_loadingTherapists) return 'Loading therapists…';
+    if (_therapistId == null) {
+      return _eligibleTherapists.isEmpty
+          ? 'No therapists for this service'
+          : 'Select a therapist';
+    }
+    for (final t in _eligibleTherapists) {
       if (t.id == _therapistId) {
         return '${t.ime} ${t.prezime}'.trim();
       }
@@ -2658,10 +2702,8 @@ class _AdminAppointmentCreateDialogState
   @override
   Widget build(BuildContext context) {
     final missingData = _isEdit
-        ? widget.data.services.isEmpty || widget.data.therapists.isEmpty
-        : widget.data.clients.isEmpty ||
-            widget.data.services.isEmpty ||
-            widget.data.therapists.isEmpty;
+        ? widget.data.services.isEmpty
+        : widget.data.clients.isEmpty || widget.data.services.isEmpty;
 
     return Material(
       color: Colors.transparent,
@@ -2811,10 +2853,14 @@ class _AdminAppointmentCreateDialogState
                                                 '${s.naziv} • ${s.trajanjeMinuta}m',
                                           ),
                                       ],
-                                      onPick: (id) => setState(() {
-                                        _serviceId = id;
-                                        _formError = null;
-                                      }),
+                                      onPick: (id) {
+                                        setState(() {
+                                          _serviceId = id;
+                                          _therapistId = null;
+                                          _formError = null;
+                                        });
+                                        _loadEligibleTherapists();
+                                      },
                                     ),
                           ),
                         ),
@@ -2829,17 +2875,21 @@ class _AdminAppointmentCreateDialogState
                               color: Color(0x99FFFFFF),
                               size: 20,
                             ),
-                            enabled: widget.data.therapists.isNotEmpty,
-                            disabledReason: widget.data.therapists.isEmpty
-                                ? 'No therapists found.'
-                                : null,
-                            onTap: widget.data.therapists.isEmpty
+                            enabled: !_loadingTherapists &&
+                                _eligibleTherapists.isNotEmpty,
+                            disabledReason: _loadingTherapists
+                                ? 'Loading therapists for this service…'
+                                : _eligibleTherapists.isEmpty
+                                    ? 'No therapists are assigned to perform this service.'
+                                    : null,
+                            onTap: _loadingTherapists ||
+                                    _eligibleTherapists.isEmpty
                                 ? null
                                 : () => _pickFromList(
                                       title: 'Select therapist',
                                       currentId: _therapistId,
                                       options: [
-                                        for (final t in widget.data.therapists)
+                                        for (final t in _eligibleTherapists)
                                           (
                                             id: t.id,
                                             label:
@@ -2864,8 +2914,8 @@ class _AdminAppointmentCreateDialogState
                       const SizedBox(height: 8),
                       Text(
                         _isEdit
-                            ? 'Load services and therapists before editing.'
-                            : 'Load clients, services, and therapists before creating appointments.',
+                            ? 'Load services before editing.'
+                            : 'Load clients and services before creating appointments.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.white.withValues(alpha: 0.45),
@@ -2900,8 +2950,8 @@ class _AdminAppointmentCreateDialogState
                           enabled: !missingData,
                           disabledTooltip: missingData
                               ? (_isEdit
-                                  ? 'Load services and therapists before editing.'
-                                  : 'Load clients, services, and therapists before creating appointments.')
+                                  ? 'Load services before editing.'
+                                  : 'Load clients and services before creating appointments.')
                               : null,
                           onPressed: missingData
                               ? null
