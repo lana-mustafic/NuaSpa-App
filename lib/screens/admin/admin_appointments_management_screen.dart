@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/format/km_format.dart';
 import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
@@ -309,6 +310,7 @@ class _AdminAppointmentsManagementScreenState
                         padding: const EdgeInsets.fromLTRB(0, 24, 28, 40),
                         child: _AppointmentDetailsPanel(
                           appointment: selected,
+                          services: data.services,
                           onEdit: selected == null
                               ? null
                               : () => _edit(selected),
@@ -928,6 +930,10 @@ class _AppointmentsTable extends StatelessWidget {
               appointment: reservations[i],
               selected: selectedId == reservations[i].id,
               serviceImageUrl: serviceImages[reservations[i].uslugaId],
+              serviceCategory: _AppointmentsTable.serviceCategoryLabel(
+                services,
+                reservations[i],
+              ),
               onSelect: () => onSelect(reservations[i]),
               onConfirmToggle: onConfirmToggle,
               onComplete: onComplete,
@@ -1037,6 +1043,17 @@ class _AppointmentsTable extends StatelessWidget {
       (service ?? '').toLowerCase().contains('massage')
       ? 'Relaxation'
       : 'Wellness';
+
+  static String serviceCategoryLabel(List<Usluga> services, Rezervacija r) {
+    for (final s in services) {
+      if (s.id == r.uslugaId) {
+        final k = s.kategorija.trim();
+        if (k.isNotEmpty) return k;
+        break;
+      }
+    }
+    return categoryLabel(r.uslugaNaziv);
+  }
 }
 
 class _AppointmentsTableHeader extends StatelessWidget {
@@ -1051,12 +1068,13 @@ class _AppointmentsTableHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 14, child: _headerLabel('TIME')),
+          Expanded(flex: 12, child: _headerLabel('TIME')),
           Expanded(flex: 22, child: _headerLabel('CLIENT')),
-          Expanded(flex: 28, child: _headerLabel('SERVICE')),
+          Expanded(flex: 26, child: _headerLabel('SERVICE')),
           Expanded(flex: 12, child: _headerLabel('DURATION')),
-          Expanded(flex: 14, child: _headerLabel('STATUS')),
-          SizedBox(width: 88, child: _headerLabel('ACTIONS')),
+          Expanded(flex: 12, child: _headerLabel('STATUS')),
+          Expanded(flex: 10, child: _headerLabel('PAYMENT')),
+          SizedBox(width: 84, child: _headerLabel('ACTIONS')),
         ],
       ),
     );
@@ -1078,6 +1096,7 @@ class _AppointmentTableRow extends StatefulWidget {
     required this.appointment,
     required this.selected,
     required this.serviceImageUrl,
+    required this.serviceCategory,
     required this.onSelect,
     required this.onConfirmToggle,
     required this.onComplete,
@@ -1088,6 +1107,7 @@ class _AppointmentTableRow extends StatefulWidget {
   final Rezervacija appointment;
   final bool selected;
   final String? serviceImageUrl;
+  final String serviceCategory;
   final VoidCallback onSelect;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onComplete;
@@ -1140,7 +1160,7 @@ class _AppointmentTableRowState extends State<_AppointmentTableRow> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    flex: 14,
+                    flex: 12,
                     child: _TimeCell(datetime: r.datumRezervacije),
                   ),
                   Expanded(
@@ -1148,13 +1168,14 @@ class _AppointmentTableRowState extends State<_AppointmentTableRow> {
                     child: _ClientTableCell(
                       name: clientName,
                       subtitle: contact,
+                      showVipTreatment: r.isVip,
                     ),
                   ),
                   Expanded(
-                    flex: 28,
+                    flex: 26,
                     child: _ServiceTableCell(
                       name: r.uslugaNaziv ?? 'Spa service',
-                      category: _AppointmentsTable.categoryLabel(r.uslugaNaziv),
+                      category: widget.serviceCategory,
                       imageUrl: widget.serviceImageUrl,
                     ),
                   ),
@@ -1170,7 +1191,7 @@ class _AppointmentTableRowState extends State<_AppointmentTableRow> {
                     ),
                   ),
                   Expanded(
-                    flex: 14,
+                    flex: 12,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _StatusBadge(
@@ -1179,8 +1200,20 @@ class _AppointmentTableRowState extends State<_AppointmentTableRow> {
                       ),
                     ),
                   ),
+                  Expanded(
+                    flex: 10,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _StatusBadge(
+                        label: r.isPlacena ? 'Paid' : 'Unpaid',
+                        color: r.isPlacena
+                            ? const Color(0xFF4ADE80)
+                            : const Color(0xFFFF5E7A),
+                      ),
+                    ),
+                  ),
                   SizedBox(
-                    width: 88,
+                    width: 84,
                     child: _ApptTableActions(
                       appointment: r,
                       onView: widget.onSelect,
@@ -1237,10 +1270,15 @@ class _TimeCell extends StatelessWidget {
 }
 
 class _ClientTableCell extends StatelessWidget {
-  const _ClientTableCell({required this.name, required this.subtitle});
+  const _ClientTableCell({
+    required this.name,
+    required this.subtitle,
+    this.showVipTreatment = false,
+  });
 
   final String name;
   final String subtitle;
+  final bool showVipTreatment;
 
   @override
   Widget build(BuildContext context) {
@@ -1260,15 +1298,28 @@ class _ClientTableCell extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: _ApptUi.textPrimary,
-                ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: _ApptUi.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (showVipTreatment) ...[
+                    const SizedBox(width: 6),
+                    _StatusBadge(
+                      label: 'VIP',
+                      color: NuaLuxuryTokens.champagneGold,
+                    ),
+                  ],
+                ],
               ),
               Text(
                 subtitle,
@@ -1416,6 +1467,7 @@ class _ApptTableActions extends StatelessWidget {
 class _AppointmentDetailsPanel extends StatelessWidget {
   const _AppointmentDetailsPanel({
     required this.appointment,
+    required this.services,
     required this.onEdit,
     required this.onConfirmToggle,
     required this.onComplete,
@@ -1423,6 +1475,7 @@ class _AppointmentDetailsPanel extends StatelessWidget {
   });
 
   final Rezervacija? appointment;
+  final List<Usluga> services;
   final VoidCallback? onEdit;
   final ValueChanged<Rezervacija> onConfirmToggle;
   final ValueChanged<Rezervacija> onComplete;
@@ -1439,7 +1492,10 @@ class _AppointmentDetailsPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child: r == null
                 ? _AppointmentSidebarEmpty()
-                : _AppointmentDetailsContent(appointment: r),
+                : _AppointmentDetailsContent(
+                    appointment: r,
+                    services: services,
+                  ),
           ),
         ),
         const SizedBox(height: 16),
@@ -1456,9 +1512,13 @@ class _AppointmentDetailsPanel extends StatelessWidget {
 }
 
 class _AppointmentDetailsContent extends StatelessWidget {
-  const _AppointmentDetailsContent({required this.appointment});
+  const _AppointmentDetailsContent({
+    required this.appointment,
+    required this.services,
+  });
 
   final Rezervacija appointment;
+  final List<Usluga> services;
 
   @override
   Widget build(BuildContext context) {
@@ -1499,13 +1559,28 @@ class _AppointmentDetailsContent extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (appointment.premiumKlijent) ...[
-                      const SizedBox(height: 6),
-                      const _StatusBadge(
-                        label: 'VIP',
-                        color: NuaLuxuryTokens.champagneGold,
+                    if (appointment.premiumKlijent ||
+                        appointment.isVip) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          if (appointment.premiumKlijent)
+                            const _StatusBadge(
+                              label: 'Loyal client',
+                              color: NuaLuxuryTokens.champagneGold,
+                            ),
+                          if (appointment.isVip)
+                            const _StatusBadge(
+                              label: 'VIP treatment',
+                              color: NuaLuxuryTokens.softPurpleGlow,
+                            ),
+                        ],
                       ),
                     ],
+                    const SizedBox(height: 4),
                     Text(
                       (appointment.korisnikTelefon != null &&
                               appointment.korisnikTelefon!.trim().isNotEmpty)
@@ -1518,12 +1593,16 @@ class _AppointmentDetailsContent extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.62),
                       ),
                     ),
-                    Text(
-                      appointment.korisnikEmail ?? 'No email on file',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.42),
+                    if (appointment.korisnikEmail != null &&
+                        appointment.korisnikEmail!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        appointment.korisnikEmail!.trim(),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.42),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1538,7 +1617,15 @@ class _AppointmentDetailsContent extends StatelessWidget {
                 icon: Icons.spa_outlined,
                 label: 'Service',
                 value: appointment.uslugaNaziv ?? 'Spa Ritual',
-                helper: _AppointmentsTable.categoryLabel(appointment.uslugaNaziv),
+                helper: _AppointmentsTable.serviceCategoryLabel(
+                  services,
+                  appointment,
+                ),
+              ),
+              _DetailRow(
+                icon: Icons.payments_outlined,
+                label: 'Price',
+                value: formatKm(appointment.uslugaCijena),
               ),
               _DetailRow(
                 icon: Icons.person_outline,
@@ -1571,11 +1658,19 @@ class _AppointmentDetailsContent extends StatelessWidget {
               ),
               _DetailRow(
                 icon: Icons.notes_outlined,
-                label: 'Notes',
+                label: 'Client notes',
                 value: appointment.napomenaZaTerapeuta?.isNotEmpty == true
                     ? appointment.napomenaZaTerapeuta!
                     : 'No notes on file.',
               ),
+              if (appointment.isOtkazana &&
+                  appointment.razlogOtkaza != null &&
+                  appointment.razlogOtkaza!.trim().isNotEmpty)
+                _DetailRow(
+                  icon: Icons.cancel_outlined,
+                  label: 'Cancellation reason',
+                  value: appointment.razlogOtkaza!.trim(),
+                ),
               const SizedBox(height: 16),
               _ClientHistoryCard(
                 total: history.length + 1,
