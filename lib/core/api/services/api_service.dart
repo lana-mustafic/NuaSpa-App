@@ -1665,7 +1665,6 @@ class ApiService {
     required String email,
     required String userName,
     required String password,
-    required int gradId,
     String? telefon,
     bool isVipKlijent = false,
     String? napomenaZaTerapeuta,
@@ -1679,7 +1678,6 @@ class ApiService {
         'userName': userName,
         'password': password,
         'telefon': telefon,
-        'gradId': gradId,
         'isVipKlijent': isVipKlijent,
         if (napomenaZaTerapeuta != null && napomenaZaTerapeuta.isNotEmpty)
           'napomenaZaTerapeuta': napomenaZaTerapeuta,
@@ -1698,7 +1696,6 @@ class ApiService {
     String? telefon,
     bool? status,
     bool? isVipKlijent,
-    int? gradId,
     String? napomenaZaTerapeuta,
     String? novaLozinka,
     String? potvrdaNoveLozinke,
@@ -1710,7 +1707,6 @@ class ApiService {
     if (telefon != null) body['telefon'] = telefon;
     if (status != null) body['status'] = status;
     if (isVipKlijent != null) body['isVipKlijent'] = isVipKlijent;
-    if (gradId != null) body['gradId'] = gradId;
     if (napomenaZaTerapeuta != null) {
       body['napomenaZaTerapeuta'] = napomenaZaTerapeuta;
     }

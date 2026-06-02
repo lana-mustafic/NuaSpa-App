@@ -17,8 +17,6 @@ class AdminClientRow {
   /// Account active (API: status).
   final bool isActive;
 
-  final int gradId;
-  final String? gradNaziv;
   final String? napomenaZaTerapeuta;
 
   const AdminClientRow({
@@ -35,8 +33,6 @@ class AdminClientRow {
     required this.isVip,
     this.isVipKlijent = false,
     this.isActive = true,
-    this.gradId = 0,
-    this.gradNaziv,
     this.napomenaZaTerapeuta,
   });
 
@@ -63,8 +59,6 @@ class AdminClientRow {
       isVip: (json['isVip'] as bool?) ?? false,
       isVipKlijent: (json['isVipKlijent'] as bool?) ?? false,
       isActive: (json['status'] as bool?) ?? true,
-      gradId: (json['gradId'] as num?)?.toInt() ?? 0,
-      gradNaziv: json['gradNaziv'] as String?,
       napomenaZaTerapeuta: json['napomenaZaTerapeuta'] as String?,
     );
   }

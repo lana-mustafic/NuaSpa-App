@@ -11,7 +11,6 @@ import '../../widgets/forms/luxury_validated_field.dart';
 import '../../models/admin/admin_client_row.dart';
 import '../../models/admin/admin_client_stats.dart';
 import '../../models/rezervacija_povijest_item.dart';
-import '../../models/grad_lookup.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import 'package:provider/provider.dart';
@@ -237,17 +236,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   Future<void> _showCreateClientDialog() async {
-    final gradovi = await widget.api.getGradovi();
-    if (!mounted) return;
-    if (gradovi.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No cities found. Add a city before creating a client.'),
-        ),
-      );
-      return;
-    }
-
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -255,7 +243,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, _) => _ClientCreateOverlay(
-        gradovi: gradovi,
         api: widget.api,
         onCreated: () {
           _reloadFromApi();
@@ -284,19 +271,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   }
 
   Future<void> _showEditClientDialog(AdminClientRow row) async {
-    final gradovi = await widget.api.getGradovi();
-    if (!mounted) return;
-    if (gradovi.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No cities found. Add a city before editing a client.',
-          ),
-        ),
-      );
-      return;
-    }
-
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -305,7 +279,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, _) => _ClientEditOverlay(
         client: row,
-        gradovi: gradovi,
         api: widget.api,
         onSaved: () {
           _reloadFromApi();
@@ -1825,13 +1798,11 @@ class _VipBadge extends StatelessWidget {
 /// Full-screen scrim + premium create client modal (matches edit client styling).
 class _ClientCreateOverlay extends StatelessWidget {
   const _ClientCreateOverlay({
-    required this.gradovi,
     required this.api,
     required this.onCreated,
     required this.formatError,
   });
 
-  final List<GradLookup> gradovi;
   final ApiService api;
   final VoidCallback onCreated;
   final String Function(Object) formatError;
@@ -1857,7 +1828,6 @@ class _ClientCreateOverlay extends StatelessWidget {
               child: GestureDetector(
                 onTap: () {},
                 child: _ClientCreateDialog(
-                  gradovi: gradovi,
                   api: api,
                   onClose: () => Navigator.of(context).pop(),
                   onCreated: onCreated,
@@ -1874,14 +1844,12 @@ class _ClientCreateOverlay extends StatelessWidget {
 
 class _ClientCreateDialog extends StatefulWidget {
   const _ClientCreateDialog({
-    required this.gradovi,
     required this.api,
     required this.onClose,
     required this.onCreated,
     required this.formatError,
   });
 
-  final List<GradLookup> gradovi;
   final ApiService api;
   final VoidCallback onClose;
   final VoidCallback onCreated;
@@ -1904,7 +1872,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
   late final TextEditingController _confirmPasswordC;
   late final TextEditingController _phoneC;
   late final TextEditingController _noteC;
-  late int _gradId;
   bool _vip = false;
   bool _saving = false;
   bool _attemptedSubmit = false;
@@ -1922,7 +1889,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
     _confirmPasswordC = TextEditingController();
     _phoneC = TextEditingController();
     _noteC = TextEditingController();
-    _gradId = widget.gradovi.first.id;
     for (final c in [_firstNameC, _lastNameC]) {
       c.addListener(() => setState(() {}));
     }
@@ -1958,7 +1924,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
         email: _emailC.text.trim(),
         userName: _usernameC.text.trim(),
         password: _passwordC.text,
-        gradId: _gradId,
         telefon: _phoneC.text.trim().isEmpty ? null : _phoneC.text.trim(),
         isVipKlijent: _vip,
         napomenaZaTerapeuta: _noteC.text.trim().isEmpty
@@ -2080,49 +2045,6 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
                                 keyboardType: TextInputType.phone,
                                 enabled: !_saving,
                                 validator: NuaValidators.phoneOptional,
-                              ),
-                              const SizedBox(height: 14),
-                              _ClientEditFieldRow(
-                                icon: Icons.location_city_outlined,
-                                label: 'City',
-                                child: Theme(
-                                  data: Theme.of(context).copyWith(
-                                    canvasColor: NuaLuxuryTokens.voidViolet,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<int>(
-                                      isExpanded: true,
-                                      value: widget.gradovi.any(
-                                        (g) => g.id == _gradId,
-                                      )
-                                          ? _gradId
-                                          : widget.gradovi.first.id,
-                                      dropdownColor: NuaLuxuryTokens.voidViolet,
-                                      icon: Icon(
-                                        Icons.expand_more_rounded,
-                                        color: Colors.white.withValues(alpha: 0.5),
-                                      ),
-                                      style: fieldStyle,
-                                      items: [
-                                        for (final g in widget.gradovi)
-                                          DropdownMenuItem<int>(
-                                            value: g.id,
-                                            child: Text(
-                                              g.label,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                      ],
-                                      onChanged: _saving
-                                          ? null
-                                          : (v) {
-                                              if (v != null) {
-                                                setState(() => _gradId = v);
-                                              }
-                                            },
-                                    ),
-                                  ),
-                                ),
                               ),
                               const SizedBox(height: 14),
                               LuxuryValidatedField(
@@ -2343,14 +2265,12 @@ class _ClientCreateDialogState extends State<_ClientCreateDialog> {
 class _ClientEditOverlay extends StatelessWidget {
   const _ClientEditOverlay({
     required this.client,
-    required this.gradovi,
     required this.api,
     required this.onSaved,
     required this.formatError,
   });
 
   final AdminClientRow client;
-  final List<GradLookup> gradovi;
   final ApiService api;
   final VoidCallback onSaved;
   final String Function(Object) formatError;
@@ -2377,7 +2297,6 @@ class _ClientEditOverlay extends StatelessWidget {
                 onTap: () {},
                 child: _ClientEditDialog(
                   client: client,
-                  gradovi: gradovi,
                   api: api,
                   onClose: () => Navigator.of(context).pop(),
                   onSaved: onSaved,
@@ -2395,7 +2314,6 @@ class _ClientEditOverlay extends StatelessWidget {
 class _ClientEditDialog extends StatefulWidget {
   const _ClientEditDialog({
     required this.client,
-    required this.gradovi,
     required this.api,
     required this.onClose,
     required this.onSaved,
@@ -2403,7 +2321,6 @@ class _ClientEditDialog extends StatefulWidget {
   });
 
   final AdminClientRow client;
-  final List<GradLookup> gradovi;
   final ApiService api;
   final VoidCallback onClose;
   final VoidCallback onSaved;
@@ -2425,7 +2342,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
   late final TextEditingController _newPassC;
   late final TextEditingController _confirmPassC;
   late final TextEditingController _noteC;
-  late int _gradId;
   late bool _vip;
   bool _saving = false;
   bool _changePassword = false;
@@ -2445,9 +2361,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
     _noteC = TextEditingController(
       text: widget.client.napomenaZaTerapeuta ?? '',
     );
-    _gradId = widget.client.gradId > 0
-        ? widget.client.gradId
-        : widget.gradovi.first.id;
     _vip = widget.client.isVipKlijent;
     for (final c in [_imeC, _prezC]) {
       c.addListener(() => setState(() {}));
@@ -2486,7 +2399,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
         prezime: prez,
         email: email,
         telefon: _telC.text.trim(),
-        gradId: _gradId,
         isVipKlijent: _vip,
         napomenaZaTerapeuta: _noteC.text.trim(),
         novaLozinka: _changePassword && _newPassC.text.isNotEmpty
@@ -2647,47 +2559,6 @@ class _ClientEditDialogState extends State<_ClientEditDialog> {
                                 keyboardType: TextInputType.phone,
                                 enabled: !_saving,
                                 validator: NuaValidators.phoneOptional,
-                              ),
-                              const SizedBox(height: 14),
-                              _ClientEditFieldRow(
-                                icon: Icons.location_city_outlined,
-                                label: 'City',
-                                child: Theme(
-                                  data: Theme.of(context).copyWith(
-                                    canvasColor: NuaLuxuryTokens.voidViolet,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<int>(
-                                      isExpanded: true,
-                                      value: widget.gradovi.any((g) => g.id == _gradId)
-                                          ? _gradId
-                                          : widget.gradovi.first.id,
-                                      dropdownColor: NuaLuxuryTokens.voidViolet,
-                                      icon: Icon(
-                                        Icons.expand_more_rounded,
-                                        color: Colors.white.withValues(alpha: 0.5),
-                                      ),
-                                      style: fieldStyle,
-                                      items: [
-                                        for (final g in widget.gradovi)
-                                          DropdownMenuItem<int>(
-                                            value: g.id,
-                                            child: Text(
-                                              g.label,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                      ],
-                                      onChanged: _saving
-                                          ? null
-                                          : (v) {
-                                              if (v != null) {
-                                                setState(() => _gradId = v);
-                                              }
-                                            },
-                                    ),
-                                  ),
-                                ),
                               ),
                               const SizedBox(height: 14),
                               Text(
