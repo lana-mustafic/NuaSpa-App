@@ -27,6 +27,7 @@ import '../../../models/admin/rezervacija_calendar_item.dart';
 import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/therapist_account_status.dart';
+import '../../../models/admin/therapist_admin_roster.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
@@ -243,48 +244,126 @@ class ApiService {
   }
 
   Future<List<Zaposlenik>> getZaposlenici() async {
+    final result = await getZaposleniciResult();
+    return result.therapists;
+  }
+
+  Future<({List<Zaposlenik> therapists, String? error})> getZaposleniciResult() async {
     try {
-      final response = await _dio.get<dynamic>(
-        'Zaposlenik',
-        queryParameters: {'pageSize': 100},
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => Zaposlenik.fromJson(json),
-      );
+      final all = <Zaposlenik>[];
+      var page = 1;
+      const pageSize = 100;
+      while (true) {
+        final response = await _dio.get<dynamic>(
+          'Zaposlenik',
+          queryParameters: {'page': page, 'pageSize': pageSize},
+        );
+        final data = response.data;
+        final items = parsePagedItems(
+          data,
+          (json) => Zaposlenik.fromJson(json),
+        );
+        all.addAll(items);
+        final total = parsePagedTotal(data);
+        if (total == null || all.length >= total || items.isEmpty) {
+          break;
+        }
+        page++;
+      }
+      return (therapists: all, error: null);
     } catch (e) {
       debugPrint('Greška u ApiService.getZaposlenici: $e');
-      return [];
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        therapists: <Zaposlenik>[],
+        error: message ?? 'Unable to load therapists.',
+      );
     }
   }
 
-  Future<Zaposlenik?> createZaposlenik(Zaposlenik zaposlenik) async {
+  Future<({TherapistAdminRoster? data, String? error})> getTherapistAdminRoster({
+    DateTime? kpiFrom,
+    DateTime? kpiTo,
+    DateTime? weekStart,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/admin-roster',
+        queryParameters: {
+          if (kpiFrom != null) 'kpiFrom': _apiDateOnly(kpiFrom),
+          if (kpiTo != null) 'kpiTo': _apiDateOnly(kpiTo),
+          if (weekStart != null) 'weekStart': _apiDateOnly(weekStart),
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Invalid therapist roster response.');
+      }
+      return (
+        data: TherapistAdminRoster.fromJson(data),
+        error: null,
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistAdminRoster: $e');
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        data: null,
+        error: message ?? 'Unable to load therapist roster.',
+      );
+    }
+  }
+
+  Future<({Zaposlenik? therapist, String? error})> createZaposlenik(
+    Zaposlenik zaposlenik,
+  ) async {
     try {
       final response = await _dio.post<dynamic>(
         'Zaposlenik',
         data: zaposlenik.toJson(includeId: false),
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Zaposlenik.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (therapist: null, error: 'Invalid response when creating therapist.');
+      }
+      return (therapist: Zaposlenik.fromJson(data), error: null);
     } catch (e) {
       debugPrint('Greška u ApiService.createZaposlenik: $e');
-      return null;
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        therapist: null,
+        error: message ?? 'Failed to save therapist.',
+      );
     }
   }
 
-  Future<Zaposlenik?> updateZaposlenik(Zaposlenik zaposlenik) async {
+  Future<({Zaposlenik? therapist, String? error})> updateZaposlenik(
+    Zaposlenik zaposlenik,
+  ) async {
     try {
       final response = await _dio.put<dynamic>(
         'Zaposlenik/${zaposlenik.id}',
         data: zaposlenik.toJson(),
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Zaposlenik.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (therapist: null, error: 'Invalid response when updating therapist.');
+      }
+      return (therapist: Zaposlenik.fromJson(data), error: null);
     } catch (e) {
       debugPrint('Greška u ApiService.updateZaposlenik: $e');
-      return null;
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        therapist: null,
+        error: message ?? 'Failed to save therapist.',
+      );
     }
   }
 
@@ -293,14 +372,8 @@ class ApiService {
       await _dio.delete<void>('Zaposlenik/$id');
       return null;
     } on DioException catch (e) {
-      final data = e.response?.data;
-      if (data is Map && data['message'] != null) {
-        return data['message'].toString();
-      }
-      final code = e.response?.statusCode;
-      if (code == 409) {
-        return 'Therapist cannot be deleted while linked reservations exist.';
-      }
+      final message = ApiErrorMessages.fromDio(e);
+      if (message != null) return message;
       debugPrint('Greška u ApiService.deleteZaposlenik: $e');
       return 'Failed to delete therapist. Please try again.';
     }
@@ -315,8 +388,8 @@ class ApiService {
       final response = await _dio.get<dynamic>(
         'Zaposlenik/$zaposlenikId/kpi',
         queryParameters: {
-          'from': from.toIso8601String(),
-          'to': to.toIso8601String(),
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
         },
       );
       final data = response.data;

@@ -47,12 +47,14 @@ class TherapistInviteResult {
     required this.message,
     this.inviteUrl,
     this.expiresAt,
+    this.emailQueued = true,
   });
 
   final bool success;
   final String message;
   final String? inviteUrl;
   final DateTime? expiresAt;
+  final bool emailQueued;
 
   factory TherapistInviteResult.fromJson(Map<String, dynamic> json) {
     return TherapistInviteResult(
@@ -62,6 +64,7 @@ class TherapistInviteResult {
       expiresAt: json['expiresAt'] == null
           ? null
           : DateTime.tryParse(json['expiresAt'].toString()),
+      emailQueued: json['emailQueued'] as bool? ?? true,
     );
   }
 }

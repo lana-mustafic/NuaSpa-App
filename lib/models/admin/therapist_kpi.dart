@@ -3,6 +3,7 @@ class TherapistKpi {
   final DateTime from;
   final DateTime to;
   final int ukupnoRezervacija;
+  final int brojRecenzija;
   final int potvrdjeneRezervacije;
   final int otkazaneRezervacije;
   final int placeneRezervacije;
@@ -23,6 +24,7 @@ class TherapistKpi {
     required this.from,
     required this.to,
     required this.ukupnoRezervacija,
+    this.brojRecenzija = 0,
     required this.potvrdjeneRezervacije,
     required this.otkazaneRezervacije,
     required this.placeneRezervacije,
@@ -45,6 +47,7 @@ class TherapistKpi {
       from: DateTime.parse(json['from'] as String),
       to: DateTime.parse(json['to'] as String),
       ukupnoRezervacija: (json['ukupnoRezervacija'] as num?)?.toInt() ?? 0,
+      brojRecenzija: (json['brojRecenzija'] as num?)?.toInt() ?? 0,
       potvrdjeneRezervacije:
           (json['potvrdjeneRezervacije'] as num?)?.toInt() ?? 0,
       otkazaneRezervacije: (json['otkazaneRezervacije'] as num?)?.toInt() ?? 0,
@@ -66,7 +69,7 @@ class TherapistKpi {
           (json['trendProsjecnaOcjenaDelta'] as num?)?.toDouble(),
       trendPrihodPostotak: (json['trendPrihodPostotak'] as num?)?.toDouble(),
       trendZadovoljstvoPostotak:
-          (json['trendZadovjstvoPostotak'] as num?)?.toDouble(),
+          (json['trendZadovoljstvoPostotak'] as num?)?.toDouble(),
     );
   }
 
