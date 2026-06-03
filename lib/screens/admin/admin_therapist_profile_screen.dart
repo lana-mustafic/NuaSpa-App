@@ -283,10 +283,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       onNavigateTab: (tab) => setState(() => _tab = tab),
                     )
                   else if (_tab == _ProfileTab.schedule)
-                    _WeekScheduleListCard(
-                      schedule: schedule,
-                      showFootnote: true,
-                    )
+                    _ScheduleTabPanel(schedule: schedule)
                   else if (_tab == _ProfileTab.appointments)
                     _TherapistAppointmentsPanel(
                       api: _api,
@@ -1630,13 +1627,9 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _WeekScheduleListCard extends StatelessWidget {
-  const _WeekScheduleListCard({
-    required this.schedule,
-    this.showFootnote = false,
-  });
+  const _WeekScheduleListCard({required this.schedule});
 
   final List<TherapistWeeklyScheduleDay> schedule;
-  final bool showFootnote;
 
   @override
   Widget build(BuildContext context) {
@@ -1659,13 +1652,6 @@ class _WeekScheduleListCard extends StatelessWidget {
               ),
               if (i < schedule.length - 1) const SizedBox(height: 8),
             ],
-          if (showFootnote) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Based on non-cancelled appointments this week.',
-              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
-            ),
-          ],
         ],
       ),
     );
@@ -2274,12 +2260,383 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
-Set<String> _qualifiedServiceNames(Zaposlenik therapist) {
+/// Shared tab shell: title → summary metrics → content.
+class _ProfileTabHeader extends StatelessWidget {
+  const _ProfileTabHeader({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _ProfileUi.title(context).copyWith(fontSize: 20)),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(subtitle!, style: _ProfileUi.bodyMuted(context)),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
+  }
+}
+
+class _ProfileSummaryStrip extends StatelessWidget {
+  const _ProfileSummaryStrip({required this.metrics});
+
+  final List<_ProfileSummaryMetric> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final narrow = c.maxWidth < 560;
+        if (narrow) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: metrics.map((m) => _SummaryMetricChip(metric: m)).toList(),
+          );
+        }
+        return Row(
+          children: [
+            for (var i = 0; i < metrics.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(child: _SummaryMetricChip(metric: metrics[i])),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProfileSummaryMetric {
+  const _ProfileSummaryMetric({
+    required this.label,
+    required this.value,
+    this.accent,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final Color? accent;
+  final bool selected;
+  final VoidCallback? onTap;
+}
+
+class _SummaryMetricChip extends StatefulWidget {
+  const _SummaryMetricChip({required this.metric});
+
+  final _ProfileSummaryMetric metric;
+
+  @override
+  State<_SummaryMetricChip> createState() => _SummaryMetricChipState();
+}
+
+class _SummaryMetricChipState extends State<_SummaryMetricChip> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.metric;
+    final accent = m.accent ?? _ProfileUi.accentPurple;
+    final interactive = m.onTap != null;
+    final selected = m.selected;
+
+    final child = AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: selected
+            ? accent.withValues(alpha: 0.14)
+            : (_hover && interactive
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.white.withValues(alpha: 0.03)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected
+              ? accent.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            m.value,
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: selected ? accent : _ProfileUi.textPrimary,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            m.label,
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: _ProfileUi.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!interactive) return child;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: m.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _ProfileStatusBadge extends StatelessWidget {
+  const _ProfileStatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+int _scheduleWorkingDays(List<TherapistWeeklyScheduleDay> schedule) =>
+    schedule.where((d) => d.isWorking).length;
+
+String? _scheduleNextAppointment(List<TherapistWeeklyScheduleDay> schedule) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  for (final d in schedule) {
+    if (!d.isWorking || d.hoursText == 'Day off') continue;
+    final parts = d.label.split(' ');
+    if (parts.length < 3) continue;
+    final monthName = parts[1];
+    final dayNum = int.tryParse(parts[2]);
+    if (dayNum == null) continue;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final monthIndex = months.indexOf(monthName);
+    if (monthIndex < 0) continue;
+    final dayDate = DateTime(now.year, monthIndex + 1, dayNum);
+    if (dayDate.isBefore(today)) continue;
+    final shortDay = parts.first;
+    final time = d.hoursText.contains('–')
+        ? d.hoursText.split('–').first.trim()
+        : d.hoursText;
+    return '$shortDay $time';
+  }
+  return null;
+}
+
+_ScheduleDayStatus _scheduleDayStatus(TherapistWeeklyScheduleDay day) {
+  if (!day.isWorking || day.hoursText == 'Day off') {
+    return _ScheduleDayStatus.dayOff;
+  }
+  final span = day.hoursText;
+  if (span.contains('–')) {
+    final parts = span.split('–');
+    if (parts.length == 2) {
+      final start = _parseHm(parts[0].trim());
+      final end = _parseHm(parts[1].trim());
+      if (start != null && end != null && end - start >= 480) {
+        return _ScheduleDayStatus.fullyBooked;
+      }
+    }
+  }
+  return _ScheduleDayStatus.scheduled;
+}
+
+int? _parseHm(String raw) {
+  final p = raw.split(':');
+  if (p.length != 2) return null;
+  final h = int.tryParse(p[0]);
+  final m = int.tryParse(p[1]);
+  if (h == null || m == null) return null;
+  return h * 60 + m;
+}
+
+enum _ScheduleDayStatus { scheduled, dayOff, fullyBooked }
+
+class _ScheduleTabPanel extends StatelessWidget {
+  const _ScheduleTabPanel({required this.schedule});
+
+  final List<TherapistWeeklyScheduleDay> schedule;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduledDays = _scheduleWorkingDays(schedule);
+    final next = _scheduleNextAppointment(schedule);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _ProfileTabHeader(title: 'Schedule'),
+        const SizedBox(height: 16),
+        _ProfileSummaryStrip(
+          metrics: [
+            _ProfileSummaryMetric(
+              label: 'Scheduled days',
+              value: schedule.isEmpty ? '—' : '$scheduledDays',
+              accent: const Color(0xFF5EEAD4),
+            ),
+            _ProfileSummaryMetric(
+              label: 'Appointments',
+              value: schedule.isEmpty ? '—' : '$scheduledDays',
+              accent: _ProfileUi.accentSecondary,
+            ),
+            _ProfileSummaryMetric(
+              label: 'Next',
+              value: next ?? '—',
+              accent: const Color(0xFFF5B942),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _GlassCard(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          borderRadius: 18,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Weekly availability',
+                style: _ProfileUi.cardTitle(context),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Non-cancelled appointments this week',
+                style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11.5),
+              ),
+              const SizedBox(height: 12),
+              if (schedule.isEmpty)
+                Text(
+                  'No schedule data.',
+                  style: _ProfileUi.bodyMuted(context),
+                )
+              else
+                for (var i = 0; i < schedule.length; i++)
+                  _CompactScheduleDayRow(day: schedule[i]),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactScheduleDayRow extends StatelessWidget {
+  const _CompactScheduleDayRow({required this.day});
+
+  final TherapistWeeklyScheduleDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _scheduleDayStatus(day);
+    final (badgeLabel, badgeColor) = switch (status) {
+      _ScheduleDayStatus.dayOff => (
+          'Day off',
+          Colors.white.withValues(alpha: 0.38),
+        ),
+      _ScheduleDayStatus.fullyBooked => (
+          'Fully booked',
+          const Color(0xFFF59E0B),
+        ),
+      _ScheduleDayStatus.scheduled => (
+          'Scheduled',
+          const Color(0xFF5EEAD4),
+        ),
+    };
+
+    final dayShort = day.label.split(' ').first;
+    final detail = status == _ScheduleDayStatus.dayOff
+        ? 'Day off'
+        : day.hoursText;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            child: Text(
+              dayShort,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _ProfileUi.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              detail,
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: status == _ScheduleDayStatus.dayOff
+                    ? _ProfileUi.textSecondary
+                    : _ProfileUi.textPrimary,
+              ),
+            ),
+          ),
+          _ProfileStatusBadge(label: badgeLabel, color: badgeColor),
+        ],
+      ),
+    );
+  }
+}
+
+List<String> _specializationTags(Zaposlenik therapist) {
   return therapist.specijalizacija
       .split(RegExp(r'[,;/]'))
-      .map((e) => e.trim().toLowerCase())
+      .map((e) => e.trim())
       .where((e) => e.isNotEmpty)
-      .toSet();
+      .toList();
 }
 
 class _TherapistServicesPanel extends StatefulWidget {
@@ -2312,7 +2669,7 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final qualified = _qualifiedServiceNames(widget.therapist);
+    final tags = _specializationTags(widget.therapist);
     final katName = widget.therapist.kategorijaUslugaNaziv?.trim();
     final hasCategory =
         (widget.therapist.kategorijaUslugaId ?? 0) > 0 &&
@@ -2322,252 +2679,226 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasCategory)
-          _GlassCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: const LinearGradient(
-                      colors: [
-                        _ProfileUi.accentPurple,
-                        _ProfileUi.accentSecondary,
-                      ],
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.spa_outlined,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Service category',
-                        style: _ProfileUi.bodyMuted(context),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        katName,
-                        style: _ProfileUi.cardTitle(context),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        _ProfileTabHeader(
+          title: 'Services',
+          subtitle: hasCategory
+              ? 'Qualified treatments · $katName'
+              : 'Assign a service category in profile settings',
+          trailing: IconButton(
+            onPressed: _refresh,
+            tooltip: 'Refresh',
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: Colors.white.withValues(alpha: 0.65),
             ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Specializations',
+          style: _ProfileUi.cardTitle(context),
+        ),
+        const SizedBox(height: 10),
+        if (tags.isEmpty)
+          Text(
+            'No specializations listed yet.',
+            style: _ProfileUi.bodyMuted(context),
           )
         else
-          _GlassCard(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: _ProfileUi.accentSecondary.withValues(alpha: 0.9),
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'No service category is assigned. Edit the therapist profile '
-                    'and link a category to show eligible services here.',
-                    style: _ProfileUi.bodyMuted(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 16),
-        _GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Linked services',
-                      style: _ProfileUi.cardTitle(context),
+              for (final tag in tags)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        _ProfileUi.accentPurple.withValues(alpha: 0.22),
+                        _ProfileUi.accentSecondary.withValues(alpha: 0.12),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
                     ),
                   ),
-                  TextButton.icon(
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Refresh'),
+                  child: Text(
+                    tag,
+                    style: GoogleFonts.inter(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: _ProfileUi.textPrimary,
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                hasCategory
-                    ? 'All services in this category. Qualified services match the therapist\'s specialties and are bookable.'
-                    : 'Assign a category to list services.',
-                style: _ProfileUi.bodyMuted(context),
-              ),
-              const SizedBox(height: 16),
-              FutureBuilder<List<Usluga>>(
-                future: _servicesFuture,
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(28),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: _ProfileUi.accentPurple,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    );
-                  }
-                  final services = snap.data ?? const <Usluga>[];
-                  if (!hasCategory) {
-                    return Text(
-                      '—',
-                      style: _ProfileUi.bodyMuted(context),
-                    );
-                  }
-                  if (services.isEmpty) {
-                    return Text(
-                      'No services found for this category.',
-                      style: _ProfileUi.bodyMuted(context),
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (var i = 0; i < services.length; i++) ...[
-                        _TherapistServiceTile(
-                          service: services[i],
-                          isQualified: qualified.contains(
-                            services[i].naziv.trim().toLowerCase(),
-                          ),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => ServiceDetailsScreen(
-                                  serviceId: services[i].id,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        if (i < services.length - 1)
-                          Divider(
-                            height: 1,
-                            color: Colors.white.withValues(alpha: 0.06),
-                          ),
-                      ],
-                    ],
-                  );
-                },
-              ),
+                ),
             ],
           ),
+        const SizedBox(height: 20),
+        Text(
+          'Available services',
+          style: _ProfileUi.cardTitle(context),
+        ),
+        const SizedBox(height: 12),
+        FutureBuilder<List<Usluga>>(
+          future: _servicesFuture,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: _ProfileUi.accentPurple,
+                    strokeWidth: 2,
+                  ),
+                ),
+              );
+            }
+            if (!hasCategory) {
+              return _GlassCard(
+                padding: const EdgeInsets.all(16),
+                borderRadius: 18,
+                child: Text(
+                  'Link a service category to show treatments this therapist can perform.',
+                  style: _ProfileUi.bodyMuted(context),
+                ),
+              );
+            }
+            final services = snap.data ?? const <Usluga>[];
+            if (services.isEmpty) {
+              return _GlassCard(
+                padding: const EdgeInsets.all(16),
+                borderRadius: 18,
+                child: Text(
+                  'No services in this category.',
+                  style: _ProfileUi.bodyMuted(context),
+                ),
+              );
+            }
+            return LayoutBuilder(
+              builder: (context, c) {
+                final cols = c.maxWidth >= 900
+                    ? 3
+                    : (c.maxWidth >= 560 ? 2 : 1);
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: cols == 1 ? 2.8 : 1.35,
+                  ),
+                  itemCount: services.length,
+                  itemBuilder: (context, i) {
+                    return _TherapistServiceGridCard(
+                      service: services[i],
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ServiceDetailsScreen(
+                              serviceId: services[i].id,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
         ),
       ],
     );
   }
 }
 
-class _TherapistServiceTile extends StatelessWidget {
-  const _TherapistServiceTile({
+class _TherapistServiceGridCard extends StatefulWidget {
+  const _TherapistServiceGridCard({
     required this.service,
     required this.onTap,
-    this.isQualified = false,
   });
 
   final Usluga service;
-  final bool isQualified;
   final VoidCallback onTap;
 
   @override
+  State<_TherapistServiceGridCard> createState() =>
+      _TherapistServiceGridCardState();
+}
+
+class _TherapistServiceGridCardState extends State<_TherapistServiceGridCard> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _ProfileUi.accentPurple.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.design_services_outlined,
-                  color: _ProfileUi.accentSecondary,
-                  size: 22,
-                ),
+    final duration = widget.service.trajanjeMinuta > 0
+        ? '${widget.service.trajanjeMinuta} min'
+        : widget.service.trajanje;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: _hover
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: _hover
+                    ? _ProfileUi.accentPurple.withValues(alpha: 0.35)
+                    : Colors.white.withValues(alpha: 0.08),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            service.naziv,
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: _ProfileUi.textPrimary,
-                            ),
-                          ),
-                        ),
-                        if (isQualified)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _ProfileUi.success.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: _ProfileUi.success.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            child: Text(
-                              'Qualified',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: _ProfileUi.success,
-                              ),
-                            ),
-                          ),
-                      ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.service.naziv,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _ProfileUi.textPrimary,
+                      height: 1.25,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${service.cijenaKm} · ${service.trajanje}',
-                      style: _ProfileUi.bodyMuted(context),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white.withValues(alpha: 0.35),
-              ),
-            ],
+                const SizedBox(height: 10),
+                Text(
+                  duration,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: _ProfileUi.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.service.cijenaKm,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFD4AF7A),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2683,12 +3014,12 @@ class _TherapistAppointmentsPanel extends StatefulWidget {
       _TherapistAppointmentsPanelState();
 }
 
-enum _AppointmentFilter { all, upcoming, past, cancelled }
+enum _AppointmentFilter { upcoming, past, cancelled }
 
 class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel> {
   late Future<({List<Rezervacija> items, String? error})> _future =
       _loadAppointments();
-  _AppointmentFilter _filter = _AppointmentFilter.all;
+  _AppointmentFilter _filter = _AppointmentFilter.upcoming;
 
   Future<({List<Rezervacija> items, String? error})> _loadAppointments() {
     return widget.api.getRezervacijeFilteredAllResult(
@@ -2712,9 +3043,7 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
       ..sort((a, b) => b.datumRezervacije.compareTo(a.datumRezervacije));
 
     return switch (_filter) {
-      _AppointmentFilter.all => sorted,
-      _AppointmentFilter.upcoming =>
-        sorted.where(isUpcoming).toList(),
+      _AppointmentFilter.upcoming => sorted.where(isUpcoming).toList(),
       _AppointmentFilter.past => sorted.where((r) {
           final d = r.datumRezervacije.toLocal();
           final day = DateTime(d.year, d.month, d.day);
@@ -2723,6 +3052,54 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
       _AppointmentFilter.cancelled =>
         sorted.where((r) => r.isOtkazana).toList(),
     };
+  }
+
+  ({int upcoming, int completed, int cancelled}) _counts(
+    List<Rezervacija> all,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var upcoming = 0;
+    var completed = 0;
+    var cancelled = 0;
+    for (final r in all) {
+      if (r.isOtkazana) {
+        cancelled++;
+        continue;
+      }
+      final d = r.datumRezervacije.toLocal();
+      final day = DateTime(d.year, d.month, d.day);
+      if (day.isBefore(today)) {
+        completed++;
+      } else {
+        upcoming++;
+      }
+    }
+    return (upcoming: upcoming, completed: completed, cancelled: cancelled);
+  }
+
+  static String _appointmentDateLabel(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final l = d.toLocal();
+    return '${months[l.month - 1]} ${l.day}, ${l.year}';
+  }
+
+  static String _appointmentTimeLabel(DateTime d) {
+    final l = d.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:'
+        '${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  static (String label, Color color) _statusStyle(Rezervacija r) {
+    if (r.isOtkazana) {
+      return ('Cancelled', _ProfileUi.danger);
+    }
+    if (r.isPlacena) return ('Paid', const Color(0xFF5EEAD4));
+    if (r.isPotvrdjena) return ('Confirmed', _ProfileUi.success);
+    return ('Pending', const Color(0xFFF5B942));
   }
 
   void _showDetails(BuildContext context, Rezervacija r) {
@@ -2754,7 +3131,11 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
           children: [
             _DetailLine('Client', client),
             _DetailLine('Service', r.uslugaNaziv ?? '—'),
-            _DetailLine('When', _fmt(r.datumRezervacije)),
+            _DetailLine(
+              'When',
+              '${_appointmentDateLabel(r.datumRezervacije)} '
+              '${_appointmentTimeLabel(r.datumRezervacije)}',
+            ),
             _DetailLine('Status', status),
             if (r.isVip) const _DetailLine('VIP', 'Yes'),
           ],
@@ -2771,173 +3152,263 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
 
   @override
   Widget build(BuildContext context) {
-    return _GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('Appointments', style: _ProfileUi.cardTitle(context)),
+    return FutureBuilder<({List<Rezervacija> items, String? error})>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: _ProfileUi.accentPurple,
+                strokeWidth: 2,
               ),
-              TextButton.icon(
+            ),
+          );
+        }
+
+        final error = snap.data?.error;
+        final all = snap.data?.items ?? const <Rezervacija>[];
+        final counts = _counts(all);
+        final list = _filtered(all);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ProfileTabHeader(
+              title: 'Appointments',
+              trailing: IconButton(
                 onPressed: _refresh,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Refresh'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _AppointmentFilter.values.map((f) {
-              final selected = _filter == f;
-              final label = switch (f) {
-                _AppointmentFilter.all => 'All',
-                _AppointmentFilter.upcoming => 'Upcoming',
-                _AppointmentFilter.past => 'Past',
-                _AppointmentFilter.cancelled => 'Cancelled',
-              };
-              return GestureDetector(
-                onTap: () => setState(() => _filter = f),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    color: selected
-                        ? _ProfileUi.accentPurple.withValues(alpha: 0.3)
-                        : Colors.white.withValues(alpha: 0.05),
-                    border: Border.all(
-                      color: selected
-                          ? _ProfileUi.accentPurple.withValues(alpha: 0.5)
-                          : Colors.white.withValues(alpha: 0.1),
-                    ),
-                  ),
-                  child: Text(
-                    label,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _ProfileUi.textPrimary,
-                    ),
-                  ),
+                tooltip: 'Refresh',
+                icon: Icon(
+                  Icons.refresh_rounded,
+                  color: Colors.white.withValues(alpha: 0.65),
                 ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          FutureBuilder<({List<Rezervacija> items, String? error})>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: _ProfileUi.accentPurple,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              }
-              final error = snap.data?.error;
-              if (error != null) {
-                return Column(
+              ),
+            ),
+            const SizedBox(height: 16),
+            _ProfileSummaryStrip(
+              metrics: [
+                _ProfileSummaryMetric(
+                  label: 'Upcoming',
+                  value: '${counts.upcoming}',
+                  accent: const Color(0xFF5EEAD4),
+                  selected: _filter == _AppointmentFilter.upcoming,
+                  onTap: () =>
+                      setState(() => _filter = _AppointmentFilter.upcoming),
+                ),
+                _ProfileSummaryMetric(
+                  label: 'Completed',
+                  value: '${counts.completed}',
+                  accent: _ProfileUi.accentSecondary,
+                  selected: _filter == _AppointmentFilter.past,
+                  onTap: () => setState(() => _filter = _AppointmentFilter.past),
+                ),
+                _ProfileSummaryMetric(
+                  label: 'Cancelled',
+                  value: '${counts.cancelled}',
+                  accent: _ProfileUi.danger,
+                  selected: _filter == _AppointmentFilter.cancelled,
+                  onTap: () =>
+                      setState(() => _filter = _AppointmentFilter.cancelled),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (error != null) ...[
+              _GlassCard(
+                padding: const EdgeInsets.all(16),
+                borderRadius: 18,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(error, style: _ProfileUi.bodyMuted(context)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
                         onPressed: _refresh,
-                        icon: const Icon(Icons.refresh_rounded),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: const Text('Retry'),
                       ),
                     ),
                   ],
-                );
-              }
-              final list = _filtered(snap.data?.items ?? const []);
-              if (list.isEmpty) {
-                return Text(
-                  'No appointments match this filter.',
+                ),
+              ),
+            ] else if (list.isEmpty)
+              _GlassCard(
+                padding: const EdgeInsets.all(16),
+                borderRadius: 18,
+                child: Text(
+                  switch (_filter) {
+                    _AppointmentFilter.upcoming => 'No upcoming appointments.',
+                    _AppointmentFilter.past => 'No completed appointments yet.',
+                    _AppointmentFilter.cancelled =>
+                      'No cancelled appointments.',
+                  },
                   style: _ProfileUi.bodyMuted(context),
-                );
-              }
-              return Column(
-                children: [
-                  for (var i = 0; i < list.length; i++) ...[
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
+                ),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, c) {
+                  final twoCol = c.maxWidth >= 640;
+                  if (!twoCol) {
+                    return Column(
+                      children: [
+                        for (final r in list)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _AppointmentGridCard(
+                              rezervacija: r,
+                              onTap: () => _showDetails(context, r),
+                            ),
+                          ),
+                      ],
+                    );
+                  }
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.55,
+                    ),
+                    itemCount: list.length,
+                    itemBuilder: (context, i) => _AppointmentGridCard(
+                      rezervacija: list[i],
                       onTap: () => _showDetails(context, list[i]),
-                      title: Text(
-                        list[i].korisnikIme?.trim().isNotEmpty == true
-                            ? list[i].korisnikIme!
-                            : (list[i].korisnikEmail?.trim().isNotEmpty == true
-                                ? list[i].korisnikEmail!
-                                : 'Unknown client'),
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AppointmentGridCard extends StatefulWidget {
+  const _AppointmentGridCard({
+    required this.rezervacija,
+    required this.onTap,
+  });
+
+  final Rezervacija rezervacija;
+  final VoidCallback onTap;
+
+  @override
+  State<_AppointmentGridCard> createState() => _AppointmentGridCardState();
+}
+
+class _AppointmentGridCardState extends State<_AppointmentGridCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.rezervacija;
+    final client = r.korisnikIme?.trim().isNotEmpty == true
+        ? r.korisnikIme!
+        : (r.korisnikEmail?.trim().isNotEmpty == true
+            ? r.korisnikEmail!
+            : 'Unknown client');
+    final (statusLabel, statusColor) =
+        _TherapistAppointmentsPanelState._statusStyle(r);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: _hover
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: _hover
+                    ? _ProfileUi.accentPurple.withValues(alpha: 0.32)
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        client,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
                           color: _ProfileUi.textPrimary,
                         ),
                       ),
-                      subtitle: Text(
-                        '${list[i].uslugaNaziv ?? 'Service'} · '
-                        '${_fmt(list[i].datumRezervacije)}',
-                        style: _ProfileUi.bodyMuted(context),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            list[i].isOtkazana
-                                ? 'Cancelled'
-                                : (list[i].isPlacena
-                                    ? 'Paid'
-                                    : (list[i].isPotvrdjena
-                                        ? 'Confirmed'
-                                        : 'Pending')),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: list[i].isOtkazana
-                                  ? _ProfileUi.danger
-                                  : _ProfileUi.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: Colors.white.withValues(alpha: 0.35),
-                          ),
-                        ],
+                    ),
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      size: 16,
+                      color: Colors.white.withValues(
+                        alpha: _hover ? 0.55 : 0.28,
                       ),
                     ),
-                    if (i < list.length - 1)
-                      Divider(
-                        height: 1,
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
                   ],
-                ],
-              );
-            },
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  r.uslugaNaziv ?? 'Service',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: _ProfileUi.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _TherapistAppointmentsPanelState._appointmentDateLabel(
+                    r.datumRezervacije,
+                  ),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _ProfileUi.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _TherapistAppointmentsPanelState._appointmentTimeLabel(
+                    r.datumRezervacije,
+                  ),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: _ProfileUi.accentSecondary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _ProfileStatusBadge(label: statusLabel, color: statusColor),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  String _fmt(DateTime d) {
-    final l = d.toLocal();
-    return '${l.day.toString().padLeft(2, '0')}.'
-        '${l.month.toString().padLeft(2, '0')}.'
-        '${l.year} '
-        '${l.hour.toString().padLeft(2, '0')}:'
-        '${l.minute.toString().padLeft(2, '0')}';
   }
 }
 
