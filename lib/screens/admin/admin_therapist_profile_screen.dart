@@ -80,6 +80,13 @@ abstract final class _ProfileUi {
         height: 1.45,
         color: textSecondary,
       );
+
+  /// Shared tab rhythm (title → summary → content).
+  static const double tabSectionGap = 10;
+  static const double tabBlockGap = 12;
+  static const double cardRadius = 18;
+  static const EdgeInsets cardPadding =
+      EdgeInsets.symmetric(horizontal: 20, vertical: 16);
 }
 
 class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScreen> {
@@ -266,7 +273,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                     reviewCount: reviewCount,
                     onSelect: (tab) => setState(() => _tab = tab),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   if (_tab == _ProfileTab.overview)
                     _OverviewSection(
                       therapist: t,
@@ -2281,10 +2288,21 @@ class _ProfileTabHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: _ProfileUi.title(context).copyWith(fontSize: 20)),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
               if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(subtitle!, style: _ProfileUi.bodyMuted(context)),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+                ),
               ],
             ],
           ),
@@ -2362,7 +2380,7 @@ class _SummaryMetricChipState extends State<_SummaryMetricChip> {
 
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 140),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.14)
@@ -2382,8 +2400,10 @@ class _SummaryMetricChipState extends State<_SummaryMetricChip> {
         children: [
           Text(
             m.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               color: selected ? accent : _ProfileUi.textPrimary,
               letterSpacing: -0.3,
@@ -2444,7 +2464,17 @@ class _ProfileStatusBadge extends StatelessWidget {
 }
 
 int _scheduleWorkingDays(List<TherapistWeeklyScheduleDay> schedule) =>
-    schedule.where((d) => d.isWorking).length;
+    schedule.where((d) => d.isWorking && d.hoursText != 'Day off').length;
+
+int _scheduleWeekAppointments(List<TherapistWeeklyScheduleDay> schedule) =>
+    schedule
+        .where(
+          (d) =>
+              d.isWorking &&
+              d.hoursText != 'Day off' &&
+              d.hoursText.trim().isNotEmpty,
+        )
+        .length;
 
 String? _scheduleNextAppointment(List<TherapistWeeklyScheduleDay> schedule) {
   final now = DateTime.now();
@@ -2510,57 +2540,85 @@ class _ScheduleTabPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheduledDays = _scheduleWorkingDays(schedule);
+    final weekAppointments = _scheduleWeekAppointments(schedule);
     final next = _scheduleNextAppointment(schedule);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _ProfileTabHeader(title: 'Schedule'),
-        const SizedBox(height: 16),
+        const SizedBox(height: _ProfileUi.tabSectionGap),
         _ProfileSummaryStrip(
           metrics: [
             _ProfileSummaryMetric(
-              label: 'Scheduled days',
+              label: 'Scheduled days this week',
               value: schedule.isEmpty ? '—' : '$scheduledDays',
               accent: const Color(0xFF5EEAD4),
             ),
             _ProfileSummaryMetric(
-              label: 'Appointments',
-              value: schedule.isEmpty ? '—' : '$scheduledDays',
+              label: 'Total appointments',
+              value: schedule.isEmpty ? '—' : '$weekAppointments',
               accent: _ProfileUi.accentSecondary,
             ),
             _ProfileSummaryMetric(
-              label: 'Next',
+              label: 'Next appointment',
               value: next ?? '—',
               accent: const Color(0xFFF5B942),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: _ProfileUi.tabBlockGap),
         _GlassCard(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-          borderRadius: 18,
+          padding: _ProfileUi.cardPadding,
+          borderRadius: _ProfileUi.cardRadius,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Weekly availability',
-                style: _ProfileUi.cardTitle(context),
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_view_week_rounded,
+                    size: 18,
+                    color: _ProfileUi.accentSecondary.withValues(alpha: 0.9),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Weekly availability',
+                    style: _ProfileUi.cardTitle(context).copyWith(fontSize: 15),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Non-cancelled appointments this week',
-                style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11.5),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               if (schedule.isEmpty)
-                Text(
-                  'No schedule data.',
-                  style: _ProfileUi.bodyMuted(context),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'No appointments scheduled this week.',
+                    style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
+                  ),
                 )
               else
-                for (var i = 0; i < schedule.length; i++)
-                  _CompactScheduleDayRow(day: schedule[i]),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.02),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < schedule.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            color: Colors.white.withValues(alpha: 0.06),
+                          ),
+                        _CompactScheduleDayRow(day: schedule[i]),
+                      ],
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -2598,17 +2656,18 @@ class _CompactScheduleDayRow extends StatelessWidget {
         : day.hoursText;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
         children: [
           SizedBox(
-            width: 40,
+            width: 36,
             child: Text(
               dayShort,
               style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
                 color: _ProfileUi.textPrimary,
+                letterSpacing: 0.2,
               ),
             ),
           ),
@@ -2616,14 +2675,15 @@ class _CompactScheduleDayRow extends StatelessWidget {
             child: Text(
               detail,
               style: GoogleFonts.inter(
-                fontSize: 12.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: status == _ScheduleDayStatus.dayOff
                     ? _ProfileUi.textSecondary
-                    : _ProfileUi.textPrimary,
+                    : _ProfileUi.textPrimary.withValues(alpha: 0.92),
               ),
             ),
           ),
+          const SizedBox(width: 8),
           _ProfileStatusBadge(label: badgeLabel, color: badgeColor),
         ],
       ),
@@ -2681,9 +2741,6 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
       children: [
         _ProfileTabHeader(
           title: 'Services',
-          subtitle: hasCategory
-              ? 'Qualified treatments · $katName'
-              : 'Assign a service category in profile settings',
           trailing: IconButton(
             onPressed: _refresh,
             tooltip: 'Refresh',
@@ -2693,78 +2750,133 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          'Specializations',
-          style: _ProfileUi.cardTitle(context),
+        const SizedBox(height: _ProfileUi.tabSectionGap),
+        FutureBuilder<List<Usluga>>(
+          future: _servicesFuture,
+          builder: (context, snap) {
+            final loading = snap.connectionState == ConnectionState.waiting;
+            final services = snap.data ?? const <Usluga>[];
+            final serviceCount = hasCategory && !loading ? services.length : 0;
+
+            return _ProfileSummaryStrip(
+              metrics: [
+                _ProfileSummaryMetric(
+                  label: 'Specializations',
+                  value: tags.isEmpty ? '—' : '${tags.length}',
+                  accent: _ProfileUi.accentPurple,
+                ),
+                _ProfileSummaryMetric(
+                  label: 'Available services',
+                  value: !hasCategory
+                      ? '—'
+                      : (loading ? '…' : '$serviceCount'),
+                  accent: const Color(0xFF5EEAD4),
+                ),
+                _ProfileSummaryMetric(
+                  label: 'Category',
+                  value: hasCategory ? (katName ?? '—') : '—',
+                  accent: _ProfileUi.accentSecondary,
+                ),
+              ],
+            );
+          },
         ),
-        const SizedBox(height: 10),
-        if (tags.isEmpty)
-          Text(
-            'No specializations listed yet.',
-            style: _ProfileUi.bodyMuted(context),
-          )
-        else
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+        const SizedBox(height: _ProfileUi.tabBlockGap),
+        _GlassCard(
+          padding: _ProfileUi.cardPadding,
+          borderRadius: _ProfileUi.cardRadius,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final tag in tags)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _ProfileUi.accentPurple.withValues(alpha: 0.22),
-                        _ProfileUi.accentSecondary.withValues(alpha: 0.12),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    tag,
-                    style: GoogleFonts.inter(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: _ProfileUi.textPrimary,
-                    ),
-                  ),
+              Text(
+                'Specializations',
+                style: _ProfileUi.cardTitle(context).copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              if (tags.isEmpty)
+                Text(
+                  'No specializations listed yet.',
+                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final tag in tags)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              _ProfileUi.accentPurple.withValues(alpha: 0.28),
+                              _ProfileUi.accentSecondary.withValues(alpha: 0.14),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: _ProfileUi.accentPurple.withValues(alpha: 0.4),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _ProfileUi.accentPurple
+                                  .withValues(alpha: 0.12),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          tag,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _ProfileUi.textPrimary,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
             ],
           ),
-        const SizedBox(height: 20),
+        ),
+        const SizedBox(height: _ProfileUi.tabBlockGap),
         Text(
           'Available services',
-          style: _ProfileUi.cardTitle(context),
+          style: _ProfileUi.cardTitle(context).copyWith(fontSize: 15),
         ),
-        const SizedBox(height: 12),
-        FutureBuilder<List<Usluga>>(
+        const SizedBox(height: 8),
+        if (!hasCategory)
+          _GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: _ProfileUi.cardRadius,
+            child: Text(
+              'Link a service category to show treatments this therapist can perform.',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
+            ),
+          )
+        else
+          FutureBuilder<List<Usluga>>(
           future: _servicesFuture,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+                padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                  child: CircularProgressIndicator(
-                    color: _ProfileUi.accentPurple,
-                    strokeWidth: 2,
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: _ProfileUi.accentPurple,
+                      strokeWidth: 2,
+                    ),
                   ),
-                ),
-              );
-            }
-            if (!hasCategory) {
-              return _GlassCard(
-                padding: const EdgeInsets.all(16),
-                borderRadius: 18,
-                child: Text(
-                  'Link a service category to show treatments this therapist can perform.',
-                  style: _ProfileUi.bodyMuted(context),
                 ),
               );
             }
@@ -2772,42 +2884,42 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
             if (services.isEmpty) {
               return _GlassCard(
                 padding: const EdgeInsets.all(16),
-                borderRadius: 18,
+                borderRadius: _ProfileUi.cardRadius,
                 child: Text(
                   'No services in this category.',
-                  style: _ProfileUi.bodyMuted(context),
+                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
                 ),
               );
             }
             return LayoutBuilder(
               builder: (context, c) {
-                final cols = c.maxWidth >= 900
+                final cols = c.maxWidth >= 880
                     ? 3
-                    : (c.maxWidth >= 560 ? 2 : 1);
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: cols == 1 ? 2.8 : 1.35,
-                  ),
-                  itemCount: services.length,
-                  itemBuilder: (context, i) {
-                    return _TherapistServiceGridCard(
-                      service: services[i],
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => ServiceDetailsScreen(
-                              serviceId: services[i].id,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
+                    : (c.maxWidth >= 520 ? 2 : 1);
+                final cardWidth = cols == 1
+                    ? c.maxWidth
+                    : (c.maxWidth - (cols - 1) * 12) / cols;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final service in services)
+                      SizedBox(
+                        width: cardWidth,
+                        child: _TherapistServiceGridCard(
+                          service: service,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ServiceDetailsScreen(
+                                  serviceId: service.id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 );
               },
             );
@@ -2851,12 +2963,12 @@ class _TherapistServiceGridCardState extends State<_TherapistServiceGridCard> {
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
             decoration: BoxDecoration(
               color: _hover
                   ? Colors.white.withValues(alpha: 0.06)
                   : Colors.white.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(_ProfileUi.cardRadius),
               border: Border.all(
                 color: _hover
                     ? _ProfileUi.accentPurple.withValues(alpha: 0.35)
@@ -2865,37 +2977,46 @@ class _TherapistServiceGridCardState extends State<_TherapistServiceGridCard> {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: Text(
-                    widget.service.naziv,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _ProfileUi.textPrimary,
-                      height: 1.25,
+                Text(
+                  widget.service.naziv,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: _ProfileUi.textPrimary,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: _ProfileUi.textSecondary.withValues(alpha: 0.85),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  duration,
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: _ProfileUi.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.service.cijenaKm,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFD4AF7A),
-                  ),
+                    const SizedBox(width: 5),
+                    Text(
+                      duration,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _ProfileUi.textSecondary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      widget.service.cijenaKm,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFD4AF7A),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -3156,14 +3277,25 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
       future: _future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Center(
-              child: CircularProgressIndicator(
-                color: _ProfileUi.accentPurple,
-                strokeWidth: 2,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _ProfileTabHeader(title: 'Appointments'),
+              const SizedBox(height: _ProfileUi.tabSectionGap),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: _ProfileUi.accentPurple,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           );
         }
 
@@ -3186,7 +3318,7 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: _ProfileUi.tabSectionGap),
             _ProfileSummaryStrip(
               metrics: [
                 _ProfileSummaryMetric(
@@ -3214,16 +3346,19 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: _ProfileUi.tabBlockGap),
             if (error != null) ...[
               _GlassCard(
                 padding: const EdgeInsets.all(16),
-                borderRadius: 18,
+                borderRadius: _ProfileUi.cardRadius,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(error, style: _ProfileUi.bodyMuted(context)),
-                    const SizedBox(height: 10),
+                    Text(
+                      error,
+                      style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
@@ -3237,8 +3372,8 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
               ),
             ] else if (list.isEmpty)
               _GlassCard(
-                padding: const EdgeInsets.all(16),
-                borderRadius: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                borderRadius: _ProfileUi.cardRadius,
                 child: Text(
                   switch (_filter) {
                     _AppointmentFilter.upcoming => 'No upcoming appointments.',
@@ -3246,41 +3381,29 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                     _AppointmentFilter.cancelled =>
                       'No cancelled appointments.',
                   },
-                  style: _ProfileUi.bodyMuted(context),
+                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
                 ),
               )
             else
               LayoutBuilder(
                 builder: (context, c) {
-                  final twoCol = c.maxWidth >= 640;
-                  if (!twoCol) {
-                    return Column(
-                      children: [
-                        for (final r in list)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _AppointmentGridCard(
-                              rezervacija: r,
-                              onTap: () => _showDetails(context, r),
-                            ),
+                  final twoCol = c.maxWidth >= 600;
+                  final cardWidth = twoCol
+                      ? (c.maxWidth - 12) / 2
+                      : c.maxWidth;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final r in list)
+                        SizedBox(
+                          width: cardWidth,
+                          child: _AppointmentGridCard(
+                            rezervacija: r,
+                            onTap: () => _showDetails(context, r),
                           ),
-                      ],
-                    );
-                  }
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.55,
-                    ),
-                    itemCount: list.length,
-                    itemBuilder: (context, i) => _AppointmentGridCard(
-                      rezervacija: list[i],
-                      onTap: () => _showDetails(context, list[i]),
-                    ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -3328,12 +3451,13 @@ class _AppointmentGridCardState extends State<_AppointmentGridCard> {
           borderRadius: BorderRadius.circular(18),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(18),
+            constraints: const BoxConstraints(minHeight: 132),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
             decoration: BoxDecoration(
               color: _hover
                   ? Colors.white.withValues(alpha: 0.06)
                   : Colors.white.withValues(alpha: 0.03),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(_ProfileUi.cardRadius),
               border: Border.all(
                 color: _hover
                     ? _ProfileUi.accentPurple.withValues(alpha: 0.32)
@@ -3352,7 +3476,7 @@ class _AppointmentGridCardState extends State<_AppointmentGridCard> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
-                          fontSize: 15,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w700,
                           color: _ProfileUi.textPrimary,
                         ),
@@ -3360,20 +3484,20 @@ class _AppointmentGridCardState extends State<_AppointmentGridCard> {
                     ),
                     Icon(
                       Icons.arrow_outward_rounded,
-                      size: 16,
+                      size: 15,
                       color: Colors.white.withValues(
                         alpha: _hover ? 0.55 : 0.28,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 5),
                 Text(
                   r.uslugaNaziv ?? 'Service',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: _ProfileUi.textSecondary,
                     height: 1.35,
@@ -3385,9 +3509,9 @@ class _AppointmentGridCardState extends State<_AppointmentGridCard> {
                     r.datumRezervacije,
                   ),
                   style: GoogleFonts.inter(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    color: _ProfileUi.textPrimary,
+                    color: _ProfileUi.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3396,12 +3520,13 @@ class _AppointmentGridCardState extends State<_AppointmentGridCard> {
                     r.datumRezervacije,
                   ),
                   style: GoogleFonts.inter(
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: _ProfileUi.accentSecondary,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 _ProfileStatusBadge(label: statusLabel, color: statusColor),
               ],
             ),
