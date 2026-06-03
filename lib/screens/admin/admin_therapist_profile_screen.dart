@@ -11,6 +11,7 @@ import '../../models/admin/therapist_weekly_schedule_day.dart';
 import '../../models/rezervacija.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../../models/zaposlenik_status.dart';
 import '../catalog/service_details_screen.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
 import 'widgets/admin_therapist_portal_access_card.dart';
@@ -19,10 +20,16 @@ class _TherapistScreenBundle {
   const _TherapistScreenBundle({
     required this.profile,
     required this.accountStatus,
+    this.profileError,
+    this.accountError,
   });
 
   final TherapistAdminProfile? profile;
   final TherapistAccountStatus? accountStatus;
+  final String? profileError;
+  final String? accountError;
+
+  bool get profileLoaded => profile != null;
 }
 
 /// Simplified luxury therapist profile — overview-focused layout.
@@ -79,7 +86,14 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
   final ApiService _api = ApiService();
   _ProfileTab _tab = _ProfileTab.overview;
   late Zaposlenik _therapist = widget.therapist;
+  int _kpiPeriodDays = 30;
   Future<_TherapistScreenBundle>? _bundleFuture;
+
+  static DateTime _mondayOf(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = (day.weekday + 6) % 7;
+    return day.subtract(Duration(days: diff));
+  }
 
   @override
   void initState() {
@@ -95,23 +109,38 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
 
   Future<_TherapistScreenBundle> _loadBundle() async {
     final now = DateTime.now();
-    final fromD = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(days: 30));
     final toD = DateTime(now.year, now.month, now.day);
+    final fromD = toD.subtract(Duration(days: _kpiPeriodDays - 1));
+    final weekStart = _mondayOf(toD);
 
     final results = await Future.wait([
       _api.getTherapistAdminProfile(
         zaposlenikId: _therapist.id,
         from: fromD,
         to: toD,
+        weekStart: weekStart,
       ),
       _api.getTherapistAccountStatus(_therapist.id),
     ]);
 
+    final profileResult = results[0] as ({TherapistAdminProfile? data, String? error});
+    final accountResult =
+        results[1] as ({TherapistAccountStatus? data, String? error});
+
     return _TherapistScreenBundle(
-      profile: results[0] as TherapistAdminProfile?,
-      accountStatus: results[1] as TherapistAccountStatus?,
+      profile: profileResult.data,
+      profileError: profileResult.error,
+      accountStatus: accountResult.data,
+      accountError: accountResult.error,
     );
+  }
+
+  void _setKpiPeriod(int days) {
+    if (_kpiPeriodDays == days) return;
+    setState(() {
+      _kpiPeriodDays = days;
+      _bundleFuture = _loadBundle();
+    });
   }
 
   Future<void> _editProfile() async {
@@ -171,8 +200,11 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
         child: FutureBuilder<_TherapistScreenBundle>(
         future: _bundleFuture,
         builder: (context, snap) {
-          final profile = snap.data?.profile;
-          final accountStatus = snap.data?.accountStatus;
+          final bundle = snap.data;
+          final profile = bundle?.profile;
+          final profileError = bundle?.profileError;
+          final accountStatus = bundle?.accountStatus;
+          final accountError = bundle?.accountError;
           final kpi = profile?.kpi;
           final schedule = profile?.sedmicniRaspored ?? const [];
           final topServices = profile?.topUsluge ?? const [];
@@ -182,6 +214,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
           final role = profile?.uloga ?? kpi?.uloga ?? 'Therapist';
           final location = profile?.lokacijaPrikaz?.trim();
           final loading = snap.connectionState == ConnectionState.waiting;
+          final profileFailed = !loading && profile == null && profileError != null;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
@@ -202,7 +235,19 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       ),
                     ),
                   )
+                else if (profileFailed)
+                  _ProfileErrorState(
+                    message: profileError,
+                    therapistName: name,
+                    onRetry: _reload,
+                  )
                 else ...[
+                  if (profileError != null)
+                    _InlineWarningBanner(message: profileError),
+                  if (accountError != null) ...[
+                    const SizedBox(height: 12),
+                    _InlineWarningBanner(message: accountError),
+                  ],
                   _HeroCard(
                     name: name,
                     role: role,
@@ -215,6 +260,7 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                   AdminTherapistPortalAccessCard(
                     therapist: t,
                     accountStatus: accountStatus,
+                    accountError: accountError,
                     onChanged: _reload,
                   ),
                   const SizedBox(height: 22),
@@ -228,11 +274,16 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       therapist: t,
                       profile: profile,
                       kpi: kpi,
+                      kpiPeriodDays: _kpiPeriodDays,
+                      onKpiPeriodChanged: _setKpiPeriod,
                       schedule: schedule,
                       topServices: topServices,
                     )
                   else if (_tab == _ProfileTab.schedule)
-                    _WeekScheduleListCard(schedule: schedule)
+                    _WeekScheduleListCard(
+                      schedule: schedule,
+                      showFootnote: true,
+                    )
                   else if (_tab == _ProfileTab.appointments)
                     _TherapistAppointmentsPanel(
                       api: _api,
@@ -249,20 +300,105 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       zaposlenikId: t.id,
                       profile: profile,
                       onSaved: _reload,
+                      onInvitePortal: () => setState(() => _tab = _ProfileTab.overview),
                     )
                   else if (_tab == _ProfileTab.services)
                     _TherapistServicesPanel(
                       api: _api,
                       therapist: t,
-                      topServices: topServices,
-                    )
-                  else
-                    const _PlaceholderTab(label: 'Section'),
+                    ),
                 ],
               ],
             ),
           );
         },
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileErrorState extends StatelessWidget {
+  const _ProfileErrorState({
+    required this.message,
+    required this.therapistName,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String therapistName;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Could not load profile',
+            style: _ProfileUi.cardTitle(context),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            therapistName,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: _ProfileUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(message, style: _ProfileUi.bodyMuted(context)),
+          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _PurpleButton(label: 'Retry', onPressed: onRetry),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineWarningBanner extends StatelessWidget {
+  const _InlineWarningBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5B942).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFF5B942).withValues(alpha: 0.35),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              size: 20,
+              color: Color(0xFFF5B942),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -475,7 +611,10 @@ class _HeroCard extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final stack = c.maxWidth < 720;
-          final avatar = _Avatar(initials: initials.isEmpty ? '?' : initials);
+          final avatar = _Avatar(
+            initials: initials.isEmpty ? '?' : initials,
+            status: therapist.status,
+          );
           final info = Column(
             crossAxisAlignment:
                 stack ? CrossAxisAlignment.center : CrossAxisAlignment.start,
@@ -490,10 +629,18 @@ class _HeroCard extends StatelessWidget {
                   letterSpacing: -0.3,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                role,
-                style: _ProfileUi.bodyMuted(context),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
+                children: [
+                  _EmploymentStatusBadge(status: therapist.status),
+                  Text(
+                    role,
+                    style: _ProfileUi.bodyMuted(context),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -547,10 +694,60 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
+class _EmploymentStatusBadge extends StatelessWidget {
+  const _EmploymentStatusBadge({required this.status});
+
+  final ZaposlenikStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, border) = switch (status) {
+      ZaposlenikStatus.active => (
+          const Color(0xFF6EE7B7).withValues(alpha: 0.14),
+          const Color(0xFF6EE7B7),
+          const Color(0xFF6EE7B7).withValues(alpha: 0.35),
+        ),
+      ZaposlenikStatus.onLeave => (
+          const Color(0xFFE8C872).withValues(alpha: 0.14),
+          const Color(0xFFE8C872),
+          const Color(0xFFE8C872).withValues(alpha: 0.35),
+        ),
+      ZaposlenikStatus.inactive => (
+          const Color(0xFFF87171).withValues(alpha: 0.12),
+          const Color(0xFFF87171),
+          const Color(0xFFF87171).withValues(alpha: 0.32),
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        status.label,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials});
+  const _Avatar({required this.initials, required this.status});
 
   final String initials;
+  final ZaposlenikStatus status;
+
+  Color get _dotColor => switch (status) {
+        ZaposlenikStatus.active => _ProfileUi.success,
+        ZaposlenikStatus.onLeave => const Color(0xFFF5B942),
+        ZaposlenikStatus.inactive => _ProfileUi.danger,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -596,7 +793,7 @@ class _Avatar extends StatelessWidget {
             width: 14,
             height: 14,
             decoration: BoxDecoration(
-              color: _ProfileUi.success,
+              color: _dotColor,
               shape: BoxShape.circle,
               border: Border.all(color: _ProfileUi.bgDeep, width: 2),
             ),
@@ -759,6 +956,8 @@ class _OverviewSection extends StatelessWidget {
     required this.therapist,
     required this.profile,
     required this.kpi,
+    required this.kpiPeriodDays,
+    required this.onKpiPeriodChanged,
     required this.schedule,
     required this.topServices,
   });
@@ -766,6 +965,8 @@ class _OverviewSection extends StatelessWidget {
   final Zaposlenik therapist;
   final TherapistAdminProfile? profile;
   final TherapistKpi? kpi;
+  final int kpiPeriodDays;
+  final ValueChanged<int> onKpiPeriodChanged;
   final List<TherapistWeeklyScheduleDay> schedule;
   final List<TherapistTopService> topServices;
 
@@ -784,7 +985,11 @@ class _OverviewSection extends StatelessWidget {
                   const SizedBox(height: 16),
                   _WeekScheduleListCard(schedule: schedule),
                   const SizedBox(height: 16),
-                  _PerformanceSummaryCard(kpi: kpi),
+                  _PerformanceSummaryCard(
+                    kpi: kpi,
+                    periodDays: kpiPeriodDays,
+                    onPeriodChanged: onKpiPeriodChanged,
+                  ),
                 ],
               )
             : IntrinsicHeight(
@@ -802,7 +1007,13 @@ class _OverviewSection extends StatelessWidget {
                       child: _WeekScheduleListCard(schedule: schedule),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(child: _PerformanceSummaryCard(kpi: kpi)),
+                    Expanded(
+                      child: _PerformanceSummaryCard(
+                        kpi: kpi,
+                        periodDays: kpiPeriodDays,
+                        onPeriodChanged: onKpiPeriodChanged,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -908,9 +1119,13 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _WeekScheduleListCard extends StatelessWidget {
-  const _WeekScheduleListCard({required this.schedule});
+  const _WeekScheduleListCard({
+    required this.schedule,
+    this.showFootnote = false,
+  });
 
   final List<TherapistWeeklyScheduleDay> schedule;
+  final bool showFootnote;
 
   @override
   Widget build(BuildContext context) {
@@ -930,6 +1145,14 @@ class _WeekScheduleListCard extends StatelessWidget {
               ),
               if (i < schedule.length - 1) const SizedBox(height: 10),
             ],
+          if (showFootnote) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Hours are derived from non-cancelled appointments this week '
+              '(earliest start to latest end). Days without appointments show as Day off.',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+            ),
+          ],
         ],
       ),
     );
@@ -984,14 +1207,22 @@ class _ScheduleRow extends StatelessWidget {
 }
 
 class _PerformanceSummaryCard extends StatelessWidget {
-  const _PerformanceSummaryCard({required this.kpi});
+  const _PerformanceSummaryCard({
+    required this.kpi,
+    required this.periodDays,
+    required this.onPeriodChanged,
+  });
 
   final TherapistKpi? kpi;
+  final int periodDays;
+  final ValueChanged<int> onPeriodChanged;
 
   @override
   Widget build(BuildContext context) {
     final total = kpi?.ukupnoRezervacija ?? 0;
-    final completed = kpi?.placeneRezervacije ?? kpi?.potvrdjeneRezervacije ?? 0;
+    final confirmed = kpi?.potvrdjeneRezervacije ?? 0;
+    final paid = kpi?.placeneRezervacije ?? 0;
+    final reviewCount = kpi?.brojRecenzija ?? 0;
     final cancelPct = kpi?.stopaOtkazivanjaPostotak ?? 0;
     final rating = (kpi?.prosjecnaOcjena ?? 0) > 0 ? kpi!.prosjecnaOcjena : 0;
     final satisfaction = kpi?.zadovoljstvoKlijenataPostotak;
@@ -1009,22 +1240,30 @@ class _PerformanceSummaryCard extends StatelessWidget {
         positive: (kpi?.trendUkupnoRezervacijaPostotak ?? 0) >= 0,
       ),
       _PerfRow(
-        'Completed Appointments',
-        '$completed',
+        'Confirmed',
+        '$confirmed',
         badge: TherapistKpi.badgePercent(kpi?.trendPotvrdjenePostotak),
         positive: (kpi?.trendPotvrdjenePostotak ?? 0) >= 0,
+      ),
+      _PerfRow(
+        'Paid',
+        '$paid',
+        badge: null,
+        positive: true,
       ),
       _PerfRow(
         'Cancellation Rate',
         '${cancelPct.toStringAsFixed(0)}%',
         badge: cancelTrendBadge,
         positive: cancelTrendPositive,
+        footnote: 'Lower is better. Green trend means cancellations decreased.',
       ),
       _PerfRow(
         'Average Rating',
         rating > 0 ? '${rating.toStringAsFixed(1)} / 5' : '—',
         badge: TherapistKpi.badgeRatingDelta(kpi?.trendProsjecnaOcjenaDelta),
         positive: (kpi?.trendProsjecnaOcjenaDelta ?? 0) >= 0,
+        subtitle: reviewCount > 0 ? '$reviewCount reviews in period' : null,
       ),
       _PerfRow(
         'Client Satisfaction',
@@ -1044,7 +1283,25 @@ class _PerformanceSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Performance Summary', style: _ProfileUi.cardTitle(context)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Performance Summary',
+                  style: _ProfileUi.cardTitle(context),
+                ),
+              ),
+              _KpiPeriodChips(
+                selectedDays: periodDays,
+                onChanged: onPeriodChanged,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Last $periodDays days vs previous $periodDays days',
+            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+          ),
           const SizedBox(height: 14),
           for (final row in rows) ...[
             _PerformanceRow(row: row),
@@ -1056,13 +1313,72 @@ class _PerformanceSummaryCard extends StatelessWidget {
   }
 }
 
+class _KpiPeriodChips extends StatelessWidget {
+  const _KpiPeriodChips({
+    required this.selectedDays,
+    required this.onChanged,
+  });
+
+  final int selectedDays;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final days in const [30, 90]) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: GestureDetector(
+              onTap: () => onChanged(days),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: selectedDays == days
+                      ? _ProfileUi.accentPurple.withValues(alpha: 0.35)
+                      : Colors.white.withValues(alpha: 0.06),
+                  border: Border.all(
+                    color: selectedDays == days
+                        ? _ProfileUi.accentPurple.withValues(alpha: 0.6)
+                        : Colors.white.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Text(
+                  '${days}d',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _ProfileUi.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _PerfRow {
-  const _PerfRow(this.label, this.value, {this.badge, this.positive = true});
+  const _PerfRow(
+    this.label,
+    this.value, {
+    this.badge,
+    this.positive = true,
+    this.subtitle,
+    this.footnote,
+  });
 
   final String label;
   final String value;
   final String? badge;
   final bool positive;
+  final String? subtitle;
+  final String? footnote;
 }
 
 class _PerformanceRow extends StatelessWidget {
@@ -1072,22 +1388,46 @@ class _PerformanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Text(row.label, style: _ProfileUi.bodyMuted(context)),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(row.label, style: _ProfileUi.bodyMuted(context)),
+                  if (row.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      row.subtitle!,
+                      style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Text(
+              row.value,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _ProfileUi.textPrimary,
+              ),
+            ),
+            if (row.badge != null) ...[
+              const SizedBox(width: 8),
+              _TrendBadge(text: row.badge!, positive: row.positive),
+            ],
+          ],
         ),
-        Text(
-          row.value,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: _ProfileUi.textPrimary,
+        if (row.footnote != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            row.footnote!,
+            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
           ),
-        ),
-        if (row.badge != null) ...[
-          const SizedBox(width: 8),
-          _TrendBadge(text: row.badge!, positive: row.positive),
         ],
       ],
     );
@@ -1166,6 +1506,19 @@ class _TopServicesCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Top Services Performed', style: _ProfileUi.cardTitle(context)),
+          if (!useApi && rows.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'No booking history yet — bars show specialties only (not real volume).',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+            ),
+          ] else if (useApi) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Based on completed appointments in the last 90 days.',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 18),
           if (rows.isEmpty)
             Text(
@@ -1177,6 +1530,7 @@ class _TopServicesCard extends StatelessWidget {
               _ServiceProgressRow(
                 label: rows[i].$1,
                 percent: rows[i].$2,
+                showPercent: useApi,
               ),
               if (i < rows.length - 1) const SizedBox(height: 14),
             ],
@@ -1187,10 +1541,15 @@ class _TopServicesCard extends StatelessWidget {
 }
 
 class _ServiceProgressRow extends StatelessWidget {
-  const _ServiceProgressRow({required this.label, required this.percent});
+  const _ServiceProgressRow({
+    required this.label,
+    required this.percent,
+    this.showPercent = true,
+  });
 
   final String label;
   final int percent;
+  final bool showPercent;
 
   @override
   Widget build(BuildContext context) {
@@ -1236,19 +1595,21 @@ class _ServiceProgressRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 40,
-          child: Text(
-            '$percent%',
-            textAlign: TextAlign.right,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _ProfileUi.textSecondary,
+        if (showPercent) ...[
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 40,
+            child: Text(
+              '$percent%',
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _ProfileUi.textSecondary,
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1281,37 +1642,22 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassCard(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: Text(
-            '${label[0].toUpperCase()}${label.substring(1)} — coming soon.',
-            style: _ProfileUi.bodyMuted(context),
-          ),
-        ),
-      ),
-    );
-  }
+Set<String> _qualifiedServiceNames(Zaposlenik therapist) {
+  return therapist.specijalizacija
+      .split(RegExp(r'[,;/]'))
+      .map((e) => e.trim().toLowerCase())
+      .where((e) => e.isNotEmpty)
+      .toSet();
 }
 
 class _TherapistServicesPanel extends StatefulWidget {
   const _TherapistServicesPanel({
     required this.api,
     required this.therapist,
-    required this.topServices,
   });
 
   final ApiService api;
   final Zaposlenik therapist;
-  final List<TherapistTopService> topServices;
 
   @override
   State<_TherapistServicesPanel> createState() => _TherapistServicesPanelState();
@@ -1332,17 +1678,9 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
     setState(() => _servicesFuture = _loadServices());
   }
 
-  Map<String, TherapistTopService> get _topByName {
-    final map = <String, TherapistTopService>{};
-    for (final s in widget.topServices) {
-      final key = s.naziv.trim().toLowerCase();
-      if (key.isNotEmpty) map[key] = s;
-    }
-    return map;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final qualified = _qualifiedServiceNames(widget.therapist);
     final katName = widget.therapist.kategorijaUslugaNaziv?.trim();
     final hasCategory =
         (widget.therapist.kategorijaUslugaId ?? 0) > 0 &&
@@ -1417,11 +1755,6 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
             ),
           ),
         const SizedBox(height: 16),
-        _TopServicesCard(
-          topServices: widget.topServices,
-          fallbackTags: widget.therapist.specijalizacija,
-        ),
-        const SizedBox(height: 16),
         _GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1444,7 +1777,7 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
               const SizedBox(height: 8),
               Text(
                 hasCategory
-                    ? 'Services in this therapist\'s category from the catalog.'
+                    ? 'All services in this category. Qualified services match the therapist\'s specialties and are bookable.'
                     : 'Assign a category to list services.',
                 style: _ProfileUi.bodyMuted(context),
               ),
@@ -1481,7 +1814,9 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
                       for (var i = 0; i < services.length; i++) ...[
                         _TherapistServiceTile(
                           service: services[i],
-                          top: _topByName[services[i].naziv.trim().toLowerCase()],
+                          isQualified: qualified.contains(
+                            services[i].naziv.trim().toLowerCase(),
+                          ),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
@@ -1514,11 +1849,11 @@ class _TherapistServiceTile extends StatelessWidget {
   const _TherapistServiceTile({
     required this.service,
     required this.onTap,
-    this.top,
+    this.isQualified = false,
   });
 
   final Usluga service;
-  final TherapistTopService? top;
+  final bool isQualified;
   final VoidCallback onTap;
 
   @override
@@ -1552,32 +1887,47 @@ class _TherapistServiceTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      service.naziv,
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: _ProfileUi.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            service.naziv,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _ProfileUi.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (isQualified)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _ProfileUi.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: _ProfileUi.success.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Text(
+                              'Qualified',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: _ProfileUi.success,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${service.cijenaKm} · ${service.trajanje}',
                       style: _ProfileUi.bodyMuted(context),
                     ),
-                    if (top != null && top!.broj > 0) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '${top!.broj} completed · ${top!.postotak.round()}% of volume',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _ProfileUi.accentSecondary.withValues(
-                            alpha: 0.95,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -1609,10 +1959,15 @@ class _ReviewsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Client Reviews', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 6),
+          Text(
+            'Reviews linked to this therapist (by therapist ID or matching non-cancelled appointment).',
+            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+          ),
           const SizedBox(height: 16),
           if (reviews.isEmpty)
             Text(
-              'No reviews yet for confirmed sessions with this therapist.',
+              'No reviews yet for this therapist.',
               style: _ProfileUi.bodyMuted(context),
             )
           else
@@ -1696,11 +2051,91 @@ class _TherapistAppointmentsPanel extends StatefulWidget {
       _TherapistAppointmentsPanelState();
 }
 
+enum _AppointmentFilter { all, upcoming, past, cancelled }
+
 class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel> {
-  late Future<List<Rezervacija>> _future = widget.api.getRezervacijeFiltered(
-    includeOtkazane: true,
-    zaposlenikId: widget.zaposlenikId,
-  );
+  late Future<({List<Rezervacija> items, String? error})> _future =
+      _loadAppointments();
+  _AppointmentFilter _filter = _AppointmentFilter.all;
+
+  Future<({List<Rezervacija> items, String? error})> _loadAppointments() {
+    return widget.api.getRezervacijeFilteredAllResult(
+      includeOtkazane: true,
+      zaposlenikId: widget.zaposlenikId,
+    );
+  }
+
+  void _refresh() => setState(() => _future = _loadAppointments());
+
+  List<Rezervacija> _filtered(List<Rezervacija> all) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool isUpcoming(Rezervacija r) {
+      final d = r.datumRezervacije.toLocal();
+      final day = DateTime(d.year, d.month, d.day);
+      return !r.isOtkazana && !day.isBefore(today);
+    }
+
+    final sorted = List<Rezervacija>.from(all)
+      ..sort((a, b) => b.datumRezervacije.compareTo(a.datumRezervacije));
+
+    return switch (_filter) {
+      _AppointmentFilter.all => sorted,
+      _AppointmentFilter.upcoming =>
+        sorted.where(isUpcoming).toList(),
+      _AppointmentFilter.past => sorted.where((r) {
+          final d = r.datumRezervacije.toLocal();
+          final day = DateTime(d.year, d.month, d.day);
+          return !r.isOtkazana && day.isBefore(today);
+        }).toList(),
+      _AppointmentFilter.cancelled =>
+        sorted.where((r) => r.isOtkazana).toList(),
+    };
+  }
+
+  void _showDetails(BuildContext context, Rezervacija r) {
+    final client = r.korisnikIme?.trim().isNotEmpty == true
+        ? r.korisnikIme!
+        : (r.korisnikEmail?.trim().isNotEmpty == true
+            ? r.korisnikEmail!
+            : 'Unknown client');
+    final status = r.isOtkazana
+        ? 'Cancelled'
+        : (r.isPlacena
+            ? 'Paid'
+            : (r.isPotvrdjena ? 'Confirmed' : 'Pending'));
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _ProfileUi.bgMid,
+        title: Text(
+          'Appointment',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: _ProfileUi.textPrimary,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DetailLine('Client', client),
+            _DetailLine('Service', r.uslugaNaziv ?? '—'),
+            _DetailLine('When', _fmt(r.datumRezervacije)),
+            _DetailLine('Status', status),
+            if (r.isVip) const _DetailLine('VIP', 'Yes'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1714,19 +2149,54 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                 child: Text('Appointments', style: _ProfileUi.cardTitle(context)),
               ),
               TextButton.icon(
-                onPressed: () => setState(() {
-                  _future = widget.api.getRezervacijeFiltered(
-                    includeOtkazane: true,
-                    zaposlenikId: widget.zaposlenikId,
-                  );
-                }),
+                onPressed: _refresh,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Refresh'),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _AppointmentFilter.values.map((f) {
+              final selected = _filter == f;
+              final label = switch (f) {
+                _AppointmentFilter.all => 'All',
+                _AppointmentFilter.upcoming => 'Upcoming',
+                _AppointmentFilter.past => 'Past',
+                _AppointmentFilter.cancelled => 'Cancelled',
+              };
+              return GestureDetector(
+                onTap: () => setState(() => _filter = f),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: selected
+                        ? _ProfileUi.accentPurple.withValues(alpha: 0.3)
+                        : Colors.white.withValues(alpha: 0.05),
+                    border: Border.all(
+                      color: selected
+                          ? _ProfileUi.accentPurple.withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _ProfileUi.textPrimary,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
           const SizedBox(height: 12),
-          FutureBuilder<List<Rezervacija>>(
+          FutureBuilder<({List<Rezervacija> items, String? error})>(
             future: _future,
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
@@ -1740,10 +2210,28 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                   ),
                 );
               }
-              final list = snap.data ?? const <Rezervacija>[];
+              final error = snap.data?.error;
+              if (error != null) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(error, style: _ProfileUi.bodyMuted(context)),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _refresh,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Retry'),
+                      ),
+                    ),
+                  ],
+                );
+              }
+              final list = _filtered(snap.data?.items ?? const []);
               if (list.isEmpty) {
                 return Text(
-                  'No appointments for this therapist.',
+                  'No appointments match this filter.',
                   style: _ProfileUi.bodyMuted(context),
                 );
               }
@@ -1752,11 +2240,13 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                   for (var i = 0; i < list.length; i++) ...[
                     ListTile(
                       contentPadding: EdgeInsets.zero,
+                      onTap: () => _showDetails(context, list[i]),
                       title: Text(
-                        list[i].korisnikIme ??
-                            (list[i].korisnikEmail?.trim().isNotEmpty == true
+                        list[i].korisnikIme?.trim().isNotEmpty == true
+                            ? list[i].korisnikIme!
+                            : (list[i].korisnikEmail?.trim().isNotEmpty == true
                                 ? list[i].korisnikEmail!
-                                : 'Nepoznat klijent'),
+                                : 'Unknown client'),
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w600,
                           color: _ProfileUi.textPrimary,
@@ -1767,17 +2257,31 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
                         '${_fmt(list[i].datumRezervacije)}',
                         style: _ProfileUi.bodyMuted(context),
                       ),
-                      trailing: Text(
-                        list[i].isOtkazana
-                            ? 'Cancelled'
-                            : (list[i].isPotvrdjena ? 'Confirmed' : 'Pending'),
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: list[i].isOtkazana
-                              ? _ProfileUi.danger
-                              : _ProfileUi.textSecondary,
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            list[i].isOtkazana
+                                ? 'Cancelled'
+                                : (list[i].isPlacena
+                                    ? 'Paid'
+                                    : (list[i].isPotvrdjena
+                                        ? 'Confirmed'
+                                        : 'Pending')),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: list[i].isOtkazana
+                                  ? _ProfileUi.danger
+                                  : _ProfileUi.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white.withValues(alpha: 0.35),
+                          ),
+                        ],
                       ),
                     ),
                     if (i < list.length - 1)
@@ -1805,18 +2309,49 @@ class _TherapistAppointmentsPanelState extends State<_TherapistAppointmentsPanel
   }
 }
 
+class _DetailLine extends StatelessWidget {
+  const _DetailLine(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RichText(
+        text: TextSpan(
+          style: _ProfileUi.bodyMuted(context),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(color: _ProfileUi.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InternaNapomenaPanel extends StatefulWidget {
   const _InternaNapomenaPanel({
     required this.api,
     required this.zaposlenikId,
     required this.profile,
     required this.onSaved,
+    this.onInvitePortal,
   });
 
   final ApiService api;
   final int zaposlenikId;
   final TherapistAdminProfile? profile;
   final VoidCallback onSaved;
+  final VoidCallback? onInvitePortal;
 
   @override
   State<_InternaNapomenaPanel> createState() => _InternaNapomenaPanelState();
@@ -1857,9 +2392,21 @@ class _InternaNapomenaPanelState extends State<_InternaNapomenaPanel> {
         const SnackBar(content: Text('Note saved.')),
       );
       widget.onSaved();
+    } else if (ok == false) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No linked portal account. Send a portal invite first, then save the note.',
+          ),
+        ),
+      );
     } else {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not save note.')),
+        const SnackBar(
+          content: Text(
+            'Network error. Check your connection and try again.',
+          ),
+        ),
       );
     }
   }
@@ -1879,12 +2426,30 @@ class _InternaNapomenaPanelState extends State<_InternaNapomenaPanel> {
             style: _ProfileUi.bodyMuted(context),
           ),
           const SizedBox(height: 16),
-          if (!canEdit)
+          if (!canEdit) ...[
             Text(
-              'This therapist has no linked user account.',
+              'Internal notes are stored on the portal user account. '
+              'Invite this therapist to the portal first.',
               style: _ProfileUi.bodyMuted(context),
-            )
-          else ...[
+            ),
+            if (widget.onInvitePortal != null) ...[
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: widget.onInvitePortal,
+                  icon: const Icon(Icons.vpn_key_outlined, size: 18),
+                  label: const Text('Go to Portal access'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _ProfileUi.accentSecondary,
+                    side: BorderSide(
+                      color: _ProfileUi.accentPurple.withValues(alpha: 0.45),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ] else ...[
             TextField(
               controller: _controller,
               minLines: 5,

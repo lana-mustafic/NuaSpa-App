@@ -13,10 +13,12 @@ class AdminTherapistPortalAccessCard extends StatefulWidget {
     required this.therapist,
     required this.accountStatus,
     required this.onChanged,
+    this.accountError,
   });
 
   final Zaposlenik therapist;
   final TherapistAccountStatus? accountStatus;
+  final String? accountError;
   final VoidCallback onChanged;
 
   @override
@@ -39,6 +41,7 @@ class _AdminTherapistPortalAccessCardState
   }
 
   Color get _statusColor {
+    if (widget.accountError != null) return const Color(0xFFF87171);
     final s = widget.accountStatus;
     if (s == null) return Colors.white54;
     if (s.hasPassword && s.accountActive) return const Color(0xFF4ADE80);
@@ -204,6 +207,16 @@ class _AdminTherapistPortalAccessCardState
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
+          if (widget.accountError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              widget.accountError!,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFFF87171).withValues(alpha: 0.9),
               ),
             ),
           ],

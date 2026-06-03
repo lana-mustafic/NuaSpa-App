@@ -401,32 +401,46 @@ class ApiService {
     }
   }
 
-  Future<TherapistAdminProfile?> getTherapistAdminProfile({
+  Future<({TherapistAdminProfile? data, String? error})>
+      getTherapistAdminProfile({
     required int zaposlenikId,
     int maxReviews = 20,
     DateTime? from,
     DateTime? to,
+    DateTime? weekStart,
   }) async {
     try {
       final query = <String, dynamic>{'maxReviews': maxReviews};
       if (from != null) {
-        query['from'] = DateTime(from.year, from.month, from.day)
-            .toIso8601String();
+        query['from'] = _apiDateOnly(from);
       }
       if (to != null) {
-        query['to'] =
-            DateTime(to.year, to.month, to.day).toIso8601String();
+        query['to'] = _apiDateOnly(to);
+      }
+      if (weekStart != null) {
+        query['weekStart'] = _apiDateOnly(weekStart);
       }
       final response = await _dio.get<dynamic>(
         'Zaposlenik/$zaposlenikId/admin-profile',
         queryParameters: query,
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return TherapistAdminProfile.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Invalid therapist profile response.');
+      }
+      return (
+        data: TherapistAdminProfile.fromJson(data),
+        error: null,
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getTherapistAdminProfile: $e');
-      return null;
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        data: null,
+        error: message ?? 'Unable to load therapist profile.',
+      );
     }
   }
 
@@ -451,17 +465,29 @@ class ApiService {
     }
   }
 
-  Future<TherapistAccountStatus?> getTherapistAccountStatus(int zaposlenikId) async {
+  Future<({TherapistAccountStatus? data, String? error})>
+      getTherapistAccountStatus(int zaposlenikId) async {
     try {
       final response = await _dio.get<dynamic>(
         'admin/therapists/$zaposlenikId/account/status',
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return TherapistAccountStatus.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Invalid portal account status response.');
+      }
+      return (
+        data: TherapistAccountStatus.fromJson(data),
+        error: null,
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getTherapistAccountStatus: $e');
-      return null;
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        data: null,
+        error: message ?? 'Unable to load portal account status.',
+      );
     }
   }
 
@@ -713,20 +739,51 @@ class ApiService {
     int pageSize = 100,
     int maxPages = 50,
   }) async {
-    final all = <Rezervacija>[];
-    for (var page = 1; page <= maxPages; page++) {
-      final pageItems = await _getRezervacijeFilteredPage(
-        page: page,
-        pageSize: pageSize,
-        datum: datum,
-        isPotvrdjena: isPotvrdjena,
-        includeOtkazane: includeOtkazane,
-        zaposlenikId: zaposlenikId,
+    final result = await getRezervacijeFilteredAllResult(
+      datum: datum,
+      isPotvrdjena: isPotvrdjena,
+      includeOtkazane: includeOtkazane,
+      zaposlenikId: zaposlenikId,
+      pageSize: pageSize,
+      maxPages: maxPages,
+    );
+    return result.items;
+  }
+
+  Future<({List<Rezervacija> items, String? error})>
+      getRezervacijeFilteredAllResult({
+    DateTime? datum,
+    bool? isPotvrdjena,
+    bool includeOtkazane = false,
+    int? zaposlenikId,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    try {
+      final all = <Rezervacija>[];
+      for (var page = 1; page <= maxPages; page++) {
+        final pageItems = await _getRezervacijeFilteredPage(
+          page: page,
+          pageSize: pageSize,
+          datum: datum,
+          isPotvrdjena: isPotvrdjena,
+          includeOtkazane: includeOtkazane,
+          zaposlenikId: zaposlenikId,
+        );
+        all.addAll(pageItems);
+        if (pageItems.length < pageSize) break;
+      }
+      return (items: all, error: null);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getRezervacijeFilteredAllResult: $e');
+      final message = e is DioException
+          ? ApiErrorMessages.fromDio(e)
+          : null;
+      return (
+        items: <Rezervacija>[],
+        error: message ?? 'Unable to load appointments.',
       );
-      all.addAll(pageItems);
-      if (pageItems.length < pageSize) break;
     }
-    return all;
   }
 
   Future<List<Rezervacija>> _getRezervacijeFilteredPage({
