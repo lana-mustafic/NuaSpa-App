@@ -14,12 +14,14 @@ class AdminTherapistPortalAccessCard extends StatefulWidget {
     required this.accountStatus,
     required this.onChanged,
     this.accountError,
+    this.compact = false,
   });
 
   final Zaposlenik therapist;
   final TherapistAccountStatus? accountStatus;
   final String? accountError;
   final VoidCallback onChanged;
+  final bool compact;
 
   @override
   State<AdminTherapistPortalAccessCard> createState() =>
@@ -32,6 +34,7 @@ class _AdminTherapistPortalAccessCardState
   bool _inviting = false;
 
   String get _statusLabel {
+    if (widget.accountError != null) return 'Unavailable';
     final s = widget.accountStatus;
     if (s == null) return 'Loading…';
     if (s.hasPassword && s.accountActive) return 'Active — can sign in';
@@ -130,11 +133,14 @@ class _AdminTherapistPortalAccessCardState
         !(s.hasPassword && s.accountActive) &&
         canInvite;
 
+    final compact = widget.compact;
+    final title = compact ? 'Portal Account' : 'Portal access';
+
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.all(compact ? 16 : 22),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(compact ? 18 : 22),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
@@ -143,84 +149,77 @@ class _AdminTherapistPortalAccessCardState
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: compact ? 32 : 40,
+                height: compact ? 32 : 40,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: const Color(0xFF7B4DFF).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(compact ? 10 : 14),
+                  color: const Color(0xFF7B4DFF).withValues(alpha: 0.22),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.vpn_key_outlined,
-                  color: Color(0xFF9D6BFF),
+                  size: compact ? 16 : 22,
+                  color: const Color(0xFF9D6BFF),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Portal access',
+                      title,
                       style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontSize: compact ? 14 : 16,
+                        fontWeight: FontWeight.w700,
                         color: const Color(0xFFF5F3FA),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Therapist login is separate from the staff profile. Invite them to set a password.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        height: 1.4,
-                        color: Colors.white.withValues(alpha: 0.55),
+                    if (!compact) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Therapist login is separate from the staff profile. Invite them to set a password.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          height: 1.4,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: _statusColor.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  _statusLabel,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFF5F3FA),
-                  ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Text(
+            'Status: $_statusLabel',
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: _statusColor,
+            ),
+          ),
           if (s?.linkedEmail != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 6),
             Text(
               'Linked email: ${s!.linkedEmail}',
               style: GoogleFonts.inter(
-                fontSize: 13,
+                fontSize: 12,
                 color: Colors.white.withValues(alpha: 0.72),
               ),
             ),
           ],
           if (widget.accountError != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               widget.accountError!,
               style: GoogleFonts.inter(
-                fontSize: 12,
+                fontSize: 11,
                 color: const Color(0xFFF87171).withValues(alpha: 0.9),
               ),
             ),
           ],
-          if (s?.message != null) ...[
+          if (!compact && s?.message != null) ...[
             const SizedBox(height: 8),
             Text(
               s!.message!,
@@ -231,28 +230,32 @@ class _AdminTherapistPortalAccessCardState
             ),
           ],
           if (showInvite) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: compact ? 10 : 16),
             FilledButton.icon(
               onPressed: _inviting ? null : _invite,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF7B4DFF),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: EdgeInsets.symmetric(vertical: compact ? 10 : 14),
+                visualDensity: compact ? VisualDensity.compact : null,
               ),
               icon: _inviting
                   ? const SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.send_rounded, size: 18),
+                  : Icon(Icons.send_rounded, size: compact ? 16 : 18),
               label: Text(
                 s.hasLinkedAccount && !s.hasPassword
-                    ? 'Resend portal invite'
+                    ? 'Resend invite'
                     : 'Invite to portal',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                style: GoogleFonts.inter(
+                  fontSize: compact ? 12 : 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],

@@ -216,15 +216,17 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
           final loading = snap.connectionState == ConnectionState.waiting;
           final profileFailed = !loading && profile == null && profileError != null;
 
+          final reviewCount = profile?.nedavneRecenzije.length;
+
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _BackLink(onTap: () => Navigator.pop(context)),
                 const SizedBox(height: 12),
                 _PageTopBar(onEdit: _editProfile, onRefresh: _reload),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 if (loading)
                   const Padding(
                     padding: EdgeInsets.all(48),
@@ -255,20 +257,16 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                     linkedEmail: profile?.povezanEmail,
                     location: location,
                     tags: tags,
+                    kpi: kpi,
+                    schedule: schedule,
                   ),
-                  const SizedBox(height: 18),
-                  AdminTherapistPortalAccessCard(
-                    therapist: t,
-                    accountStatus: accountStatus,
-                    accountError: accountError,
-                    onChanged: _reload,
-                  ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 14),
                   _TabRow(
                     selected: _tab,
+                    reviewCount: reviewCount,
                     onSelect: (tab) => setState(() => _tab = tab),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
                   if (_tab == _ProfileTab.overview)
                     _OverviewSection(
                       therapist: t,
@@ -278,6 +276,11 @@ class _AdminTherapistProfileScreenState extends State<AdminTherapistProfileScree
                       onKpiPeriodChanged: _setKpiPeriod,
                       schedule: schedule,
                       topServices: topServices,
+                      accountStatus: accountStatus,
+                      accountError: accountError,
+                      onPortalChanged: _reload,
+                      onEdit: _editProfile,
+                      onNavigateTab: (tab) => setState(() => _tab = tab),
                     )
                   else if (_tab == _ProfileTab.schedule)
                     _WeekScheduleListCard(
@@ -586,6 +589,8 @@ class _HeroCard extends StatelessWidget {
     required this.tags,
     this.linkedEmail,
     this.location,
+    this.kpi,
+    this.schedule = const [],
   });
 
   final String name;
@@ -594,101 +599,170 @@ class _HeroCard extends StatelessWidget {
   final List<String> tags;
   final String? linkedEmail;
   final String? location;
+  final TherapistKpi? kpi;
+  final List<TherapistWeeklyScheduleDay> schedule;
 
   @override
   Widget build(BuildContext context) {
-    final phone = therapist.telefon?.trim().isNotEmpty == true
-        ? therapist.telefon!
-        : '—';
     final contactEmail = _contactEmail(therapist, linkedEmail);
     final initials =
         '${therapist.ime.isNotEmpty ? therapist.ime[0] : ''}'
         '${therapist.prezime.isNotEmpty ? therapist.prezime[0] : ''}'
         .toUpperCase();
+    final rating = (kpi?.prosjecnaOcjena ?? 0) > 0 ? kpi!.prosjecnaOcjena : 0.0;
+    final weekDays = schedule.where((d) => d.isWorking).length;
+    final loc = location?.trim().isNotEmpty == true ? location!.trim() : null;
+
+    final metaParts = <String>[
+      if (contactEmail != '—') contactEmail,
+      if (loc != null) loc,
+    ];
+    final metaLine = metaParts.isEmpty ? '—' : metaParts.join(' · ');
 
     return _GlassCard(
-      padding: const EdgeInsets.all(32),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final stack = c.maxWidth < 720;
-          final avatar = _Avatar(
-            initials: initials.isEmpty ? '?' : initials,
-            status: therapist.status,
-          );
-          final info = Column(
-            crossAxisAlignment:
-                stack ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                textAlign: stack ? TextAlign.center : TextAlign.start,
-                style: GoogleFonts.inter(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: _ProfileUi.textPrimary,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
-                children: [
-                  _EmploymentStatusBadge(status: therapist.status),
-                  Text(
-                    role,
-                    style: _ProfileUi.bodyMuted(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 18,
-                runSpacing: 8,
-                alignment: stack ? WrapAlignment.center : WrapAlignment.start,
-                children: [
-                  _ContactItem(icon: Icons.phone_outlined, text: phone),
-                  _ContactItem(
-                    icon: Icons.mail_outline_rounded,
-                    text: contactEmail,
-                  ),
-                  _ContactItem(
-                    icon: Icons.location_on_outlined,
-                    text: location?.isNotEmpty == true
-                        ? location!
-                        : '—',
-                  ),
-                ],
-              ),
-              if (tags.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: stack ? WrapAlignment.center : WrapAlignment.start,
-                  children: [
-                    for (final tag in tags) _SpecPill(label: tag),
-                  ],
-                ),
-              ],
-            ],
-          );
-
-          if (stack) {
-            return Column(
-              children: [avatar, const SizedBox(height: 20), info],
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      borderRadius: 18,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 120, maxHeight: 180),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 860;
+            final avatar = _Avatar(
+              initials: initials.isEmpty ? '?' : initials,
+              status: therapist.status,
+              size: 56,
             );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              avatar,
-              const SizedBox(width: 24),
-              Expanded(child: info),
-            ],
-          );
-        },
+
+            final center = Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: _ProfileUi.textPrimary,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '$role · ${therapist.status.label}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _ProfileUi.bodyMuted(context).copyWith(
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    metaLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: _ProfileUi.textSecondary,
+                    ),
+                  ),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final tag in tags.take(4))
+                          _SpecPill(label: tag, compact: true),
+                        if (tags.length > 4)
+                          _SpecPill(label: '+${tags.length - 4}', compact: true),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            );
+
+            final stats = Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _EmploymentStatusBadge(status: therapist.status),
+                if (rating > 0) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ...List.generate(
+                        5,
+                        (i) => Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: i < rating.round()
+                              ? const Color(0xFFF5B942)
+                              : Colors.white.withValues(alpha: 0.15),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        rating.toStringAsFixed(1),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _ProfileUi.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (schedule.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    weekDays > 0
+                        ? '$weekDays days scheduled this week'
+                        : 'No days scheduled this week',
+                    style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
+                    textAlign: TextAlign.end,
+                  ),
+                ],
+              ],
+            );
+
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [avatar, const SizedBox(width: 14), center],
+                  ),
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerLeft, child: stats),
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                avatar,
+                const SizedBox(width: 16),
+                center,
+                const SizedBox(width: 12),
+                stats,
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -738,10 +812,15 @@ class _EmploymentStatusBadge extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials, required this.status});
+  const _Avatar({
+    required this.initials,
+    required this.status,
+    this.size = 56,
+  });
 
   final String initials;
   final ZaposlenikStatus status;
+  final double size;
 
   Color get _dotColor => switch (status) {
         ZaposlenikStatus.active => _ProfileUi.success,
@@ -751,12 +830,14 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fontSize = size * 0.38;
+    final dot = size * 0.16;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 88,
-          height: 88,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: const LinearGradient(
@@ -770,9 +851,9 @@ class _Avatar extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+                color: _ProfileUi.accentPurple.withValues(alpha: 0.28),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -780,18 +861,18 @@ class _Avatar extends StatelessWidget {
           child: Text(
             initials,
             style: GoogleFonts.inter(
-              fontSize: 28,
+              fontSize: fontSize,
               fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
           ),
         ),
         Positioned(
-          right: 4,
-          bottom: 4,
+          right: 2,
+          bottom: 2,
           child: Container(
-            width: 14,
-            height: 14,
+            width: dot,
+            height: dot,
             decoration: BoxDecoration(
               color: _dotColor,
               shape: BoxShape.circle,
@@ -804,45 +885,30 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _ContactItem extends StatelessWidget {
-  const _ContactItem({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: _ProfileUi.textSecondary),
-        const SizedBox(width: 6),
-        Text(text, style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 13)),
-      ],
-    );
-  }
-}
-
 class _SpecPill extends StatelessWidget {
-  const _SpecPill({required this.label});
+  const _SpecPill({required this.label, this.compact = false});
 
   final String label;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 12,
+        vertical: compact ? 3 : 6,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: _ProfileUi.accentPurple.withValues(alpha: 0.18),
+        color: _ProfileUi.accentPurple.withValues(alpha: 0.16),
         border: Border.all(
-          color: _ProfileUi.accentPurple.withValues(alpha: 0.35),
+          color: _ProfileUi.accentPurple.withValues(alpha: 0.3),
         ),
       ),
       child: Text(
         label,
         style: GoogleFonts.inter(
-          fontSize: 12.5,
+          fontSize: compact ? 11 : 12.5,
           fontWeight: FontWeight.w600,
           color: _ProfileUi.textPrimary,
         ),
@@ -852,43 +918,61 @@ class _SpecPill extends StatelessWidget {
 }
 
 class _TabRow extends StatelessWidget {
-  const _TabRow({required this.selected, required this.onSelect});
+  const _TabRow({
+    required this.selected,
+    required this.onSelect,
+    this.reviewCount,
+  });
 
   final _ProfileTab selected;
   final ValueChanged<_ProfileTab> onSelect;
+  final int? reviewCount;
 
   static const _tabs = _ProfileTab.values;
 
-  static String _label(_ProfileTab t) => switch (t) {
-        _ProfileTab.overview => 'Overview',
-        _ProfileTab.schedule => 'Schedule',
-        _ProfileTab.appointments => 'Appointments',
-        _ProfileTab.services => 'Services',
-        _ProfileTab.reviews => 'Client Reviews',
-        _ProfileTab.notes => 'Notes',
-      };
+  String _label(_ProfileTab t) {
+    final base = switch (t) {
+      _ProfileTab.overview => 'Overview',
+      _ProfileTab.schedule => 'Schedule',
+      _ProfileTab.appointments => 'Appointments',
+      _ProfileTab.services => 'Services',
+      _ProfileTab.reviews => 'Client Reviews',
+      _ProfileTab.notes => 'Notes',
+    };
+    if (t == _ProfileTab.reviews && reviewCount != null) {
+      return '$base ($reviewCount)';
+    }
+    return base;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final tab in _tabs) ...[
-            _TabItem(
-              label: _label(tab),
-              selected: selected == tab,
-              onTap: () => onSelect(tab),
-            ),
-            const SizedBox(width: 24),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final tab in _tabs) ...[
+              _TabItem(
+                label: _label(tab),
+                selected: selected == tab,
+                onTap: () => onSelect(tab),
+              ),
+              const SizedBox(width: 20),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _TabItem extends StatelessWidget {
+class _TabItem extends StatefulWidget {
   const _TabItem({
     required this.label,
     required this.selected,
@@ -900,43 +984,65 @@ class _TabItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_TabItem> createState() => _TabItemState();
+}
+
+class _TabItemState extends State<_TabItem> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: IntrinsicWidth(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected
-                    ? _ProfileUi.textPrimary
-                    : _ProfileUi.textSecondary,
+    final color = widget.selected
+        ? _ProfileUi.textPrimary
+        : (_hover
+            ? _ProfileUi.accentSecondary.withValues(alpha: 0.95)
+            : _ProfileUi.textSecondary);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.5,
+                    fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500,
+                    color: color,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              height: 2,
-              decoration: BoxDecoration(
-                color: selected ? _ProfileUi.accentPurple : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: _ProfileUi.accentPurple.withValues(alpha: 0.5),
-                          blurRadius: 8,
-                        ),
-                      ]
-                    : null,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 2,
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? _ProfileUi.accentPurple
+                      : (_hover
+                          ? _ProfileUi.accentPurple.withValues(alpha: 0.35)
+                          : Colors.transparent),
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: widget.selected
+                      ? [
+                          BoxShadow(
+                            color:
+                                _ProfileUi.accentPurple.withValues(alpha: 0.45),
+                            blurRadius: 6,
+                          ),
+                        ]
+                      : null,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -960,6 +1066,11 @@ class _OverviewSection extends StatelessWidget {
     required this.onKpiPeriodChanged,
     required this.schedule,
     required this.topServices,
+    required this.accountStatus,
+    this.accountError,
+    required this.onPortalChanged,
+    required this.onEdit,
+    required this.onNavigateTab,
   });
 
   final Zaposlenik therapist;
@@ -969,67 +1080,445 @@ class _OverviewSection extends StatelessWidget {
   final ValueChanged<int> onKpiPeriodChanged;
   final List<TherapistWeeklyScheduleDay> schedule;
   final List<TherapistTopService> topServices;
+  final TherapistAccountStatus? accountStatus;
+  final String? accountError;
+  final VoidCallback onPortalChanged;
+  final VoidCallback onEdit;
+  final ValueChanged<_ProfileTab> onNavigateTab;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final stacked = c.maxWidth < 1100;
-        final grid = stacked
-            ? Column(
-                children: [
-                  _AboutCard(
-                    therapist: therapist,
-                    profile: profile,
-                  ),
-                  const SizedBox(height: 16),
-                  _WeekScheduleListCard(schedule: schedule),
-                  const SizedBox(height: 16),
-                  _PerformanceSummaryCard(
-                    kpi: kpi,
-                    periodDays: kpiPeriodDays,
-                    onPeriodChanged: onKpiPeriodChanged,
-                  ),
+        final w = c.maxWidth;
+        final cols = w >= 1100 ? 3 : (w >= 720 ? 2 : 1);
+        final gap = 14.0;
+
+        Widget gridRow(List<Widget> children) {
+          if (cols == 1) {
+            return Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) SizedBox(height: gap),
+                  children[i],
                 ],
-              )
-            : IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _AboutCard(
-                        therapist: therapist,
-                        profile: profile,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _WeekScheduleListCard(schedule: schedule),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _PerformanceSummaryCard(
-                        kpi: kpi,
-                        periodDays: kpiPeriodDays,
-                        onPeriodChanged: onKpiPeriodChanged,
-                      ),
-                    ),
-                  ],
-                ),
-              );
+              ],
+            );
+          }
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) SizedBox(width: gap),
+                  Expanded(child: children[i]),
+                ],
+              ],
+            ),
+          );
+        }
+
+        final mainCards = [
+          _AboutCard(therapist: therapist, profile: profile),
+          _WeekScheduleListCard(schedule: schedule),
+          _PerformanceSummaryCard(
+            kpi: kpi,
+            periodDays: kpiPeriodDays,
+            onPeriodChanged: onKpiPeriodChanged,
+          ),
+        ];
+
+        final secondaryCards = [
+          AdminTherapistPortalAccessCard(
+            therapist: therapist,
+            accountStatus: accountStatus,
+            accountError: accountError,
+            onChanged: onPortalChanged,
+            compact: true,
+          ),
+          _QuickActionsCard(
+            onEdit: onEdit,
+            onNavigateTab: onNavigateTab,
+          ),
+          _LastActivityCard(
+            schedule: schedule,
+            reviews: profile?.nedavneRecenzije ?? const [],
+          ),
+        ];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            grid,
-            const SizedBox(height: 16),
-            _TopServicesCard(
-              topServices: topServices,
-              fallbackTags: therapist.specijalizacija,
+            _OverviewKpiStrip(
+              kpi: kpi,
+              schedule: schedule,
+              periodDays: kpiPeriodDays,
             ),
+            SizedBox(height: gap),
+            if (cols >= 3)
+              gridRow(mainCards)
+            else ...[
+              gridRow(mainCards.take(2).toList()),
+              SizedBox(height: gap),
+              mainCards[2],
+            ],
+            SizedBox(height: gap),
+            if (cols >= 3)
+              gridRow(secondaryCards)
+            else ...[
+              gridRow(secondaryCards.take(2).toList()),
+              SizedBox(height: gap),
+              secondaryCards[2],
+            ],
+            if (topServices.isNotEmpty ||
+                therapist.specijalizacija.trim().isNotEmpty) ...[
+              SizedBox(height: gap),
+              _TopServicesCard(
+                topServices: topServices,
+                fallbackTags: therapist.specijalizacija,
+              ),
+            ],
           ],
         );
       },
+    );
+  }
+}
+
+class _OverviewKpiStrip extends StatelessWidget {
+  const _OverviewKpiStrip({
+    required this.kpi,
+    required this.schedule,
+    required this.periodDays,
+  });
+
+  final TherapistKpi? kpi;
+  final List<TherapistWeeklyScheduleDay> schedule;
+  final int periodDays;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekDays = schedule.where((d) => d.isWorking).length;
+    final weekValue = schedule.isEmpty ? '—' : '$weekDays';
+    final completed = kpi != null ? '${kpi!.potvrdjeneRezervacije}' : '—';
+    final rating = (kpi?.prosjecnaOcjena ?? 0) > 0
+        ? kpi!.prosjecnaOcjena.toStringAsFixed(1)
+        : '—';
+    final revenue = (kpi?.prihod ?? 0) > 0 ? formatKm(kpi!.prihod) : '—';
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final narrow = c.maxWidth < 720;
+        final cards = [
+          _MetricKpiCard(
+            label: 'This week',
+            value: weekValue,
+            subtitle: 'scheduled days',
+            accent: const Color(0xFF5EEAD4),
+            icon: Icons.calendar_today_outlined,
+          ),
+          _MetricKpiCard(
+            label: 'Completed',
+            value: completed,
+            subtitle: 'last $periodDays days',
+            accent: _ProfileUi.accentPurple,
+            icon: Icons.check_circle_outline_rounded,
+          ),
+          _MetricKpiCard(
+            label: 'Average rating',
+            value: rating,
+            subtitle: rating != '—' ? 'out of 5' : null,
+            accent: const Color(0xFFF5B942),
+            icon: Icons.star_outline_rounded,
+          ),
+          _MetricKpiCard(
+            label: 'Revenue',
+            value: revenue,
+            subtitle: 'in KPI period',
+            accent: const Color(0xFF9D6BFF),
+            icon: Icons.payments_outlined,
+          ),
+        ];
+
+        if (narrow) {
+          return Column(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                cards[i],
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: cards[i]),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MetricKpiCard extends StatelessWidget {
+  const _MetricKpiCard({
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.icon,
+    this.subtitle,
+  });
+
+  final String label;
+  final String value;
+  final String? subtitle;
+  final Color accent;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 18,
+      child: SizedBox(
+        height: 118,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: accent.withValues(alpha: 0.28)),
+                  ),
+                  child: Icon(icon, size: 16, color: accent),
+                ),
+                const Spacer(),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: _ProfileUi.textPrimary,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+            ),
+            if (subtitle != null)
+              Text(
+                subtitle!,
+                style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionsCard extends StatelessWidget {
+  const _QuickActionsCard({
+    required this.onEdit,
+    required this.onNavigateTab,
+  });
+
+  final VoidCallback onEdit;
+  final ValueChanged<_ProfileTab> onNavigateTab;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Quick Actions', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _QuickActionChip(
+                icon: Icons.calendar_month_outlined,
+                label: 'View Schedule',
+                onTap: () => onNavigateTab(_ProfileTab.schedule),
+              ),
+              _QuickActionChip(
+                icon: Icons.event_note_outlined,
+                label: 'View Appointments',
+                onTap: () => onNavigateTab(_ProfileTab.appointments),
+              ),
+              _QuickActionChip(
+                icon: Icons.edit_outlined,
+                label: 'Edit Therapist',
+                onTap: onEdit,
+              ),
+              _QuickActionChip(
+                icon: Icons.rate_review_outlined,
+                label: 'View Reviews',
+                onTap: () => onNavigateTab(_ProfileTab.reviews),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionChip extends StatefulWidget {
+  const _QuickActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_QuickActionChip> createState() => _QuickActionChipState();
+}
+
+class _QuickActionChipState extends State<_QuickActionChip> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: _hover
+                ? _ProfileUi.accentPurple.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: _hover
+                  ? _ProfileUi.accentPurple.withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 16, color: _ProfileUi.accentSecondary),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LastActivityCard extends StatelessWidget {
+  const _LastActivityCard({
+    required this.schedule,
+    required this.reviews,
+  });
+
+  final List<TherapistWeeklyScheduleDay> schedule;
+  final List<TherapistReviewRow> reviews;
+
+  List<String> _lines() {
+    final lines = <String>[];
+    final latestReview = reviews.isEmpty
+        ? null
+        : reviews.reduce(
+            (a, b) => a.createdAt.isAfter(b.createdAt) ? a : b,
+          );
+    if (latestReview != null) {
+      final d = latestReview.createdAt.toLocal();
+      lines.add(
+        '${d.day.toString().padLeft(2, '0')}.'
+        '${d.month.toString().padLeft(2, '0')}. — '
+        'Client review (${latestReview.ocjena}/5)',
+      );
+    }
+    final working = schedule.where((d) => d.isWorking).toList();
+    if (working.isNotEmpty) {
+      final d = working.last;
+      lines.add('${d.label} — Scheduled ${d.hoursText}');
+    }
+    return lines.take(3).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = _lines();
+    return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Last Activity', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 12),
+          if (lines.isEmpty)
+            Text('No recent activity.', style: _ProfileUi.bodyMuted(context))
+          else
+            for (final line in lines)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(top: 6, right: 10),
+                      decoration: BoxDecoration(
+                        color: _ProfileUi.accentPurple.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        line,
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: _ProfileUi.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
     );
   }
 }
@@ -1049,35 +1538,45 @@ class _AboutCard extends StatelessWidget {
         ? therapist.telefon!
         : '—';
     final email = _contactEmail(therapist, profile?.povezanEmail);
+    final education = therapist.obrazovanje?.trim().isNotEmpty == true
+        ? therapist.obrazovanje!
+        : '—';
 
     return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('About ${therapist.ime}', style: _ProfileUi.cardTitle(context)),
-          const SizedBox(height: 16),
-          _InfoRow(label: 'Phone', value: phone),
-          _InfoRow(label: 'Email', value: email),
+          Text('Personal Information', style: _ProfileUi.cardTitle(context)),
+          const SizedBox(height: 14),
+          _InfoRow(
+            icon: Icons.phone_outlined,
+            label: 'Phone',
+            value: phone,
+          ),
+          _InfoRow(
+            icon: Icons.mail_outline_rounded,
+            label: 'Email',
+            value: email,
+          ),
           if (therapist.kategorijaUslugaNaziv?.trim().isNotEmpty == true)
             _InfoRow(
+              icon: Icons.category_outlined,
               label: 'Category',
               value: therapist.kategorijaUslugaNaziv!,
             ),
-          const SizedBox(height: 12),
           _InfoRow(
+            icon: Icons.translate_rounded,
             label: 'Languages',
             value: therapist.jezici?.trim().isNotEmpty == true
                 ? therapist.jezici!
                 : '—',
           ),
-          const SizedBox(height: 8),
-          Text('Education', style: _ProfileUi.bodyMuted(context)),
-          const SizedBox(height: 6),
-          Text(
-            therapist.obrazovanje?.trim().isNotEmpty == true
-                ? therapist.obrazovanje!
-                : '—',
-            style: _ProfileUi.bodyMuted(context).copyWith(height: 1.5),
+          _InfoRow(
+            icon: Icons.school_outlined,
+            label: 'Education',
+            value: education,
           ),
         ],
       ),
@@ -1086,28 +1585,40 @@ class _AboutCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 110,
-            child: Text(label, style: _ProfileUi.bodyMuted(context)),
+          Icon(icon, size: 16, color: _ProfileUi.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12.5),
+            ),
           ),
           Expanded(
+            flex: 3,
             child: Text(
               value,
+              textAlign: TextAlign.end,
               style: GoogleFonts.inter(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: _ProfileUi.textPrimary,
               ),
             ),
@@ -1130,11 +1641,13 @@ class _WeekScheduleListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("This Week's Schedule", style: _ProfileUi.cardTitle(context)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           if (schedule.isEmpty)
             Text('No schedule data.', style: _ProfileUi.bodyMuted(context))
           else
@@ -1142,15 +1655,15 @@ class _WeekScheduleListCard extends StatelessWidget {
               _ScheduleRow(
                 label: schedule[i].label,
                 hours: schedule[i].hoursText,
+                isWorking: schedule[i].isWorking,
               ),
-              if (i < schedule.length - 1) const SizedBox(height: 10),
+              if (i < schedule.length - 1) const SizedBox(height: 8),
             ],
           if (showFootnote) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Text(
-              'Hours are derived from non-cancelled appointments this week '
-              '(earliest start to latest end). Days without appointments show as Day off.',
-              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+              'Based on non-cancelled appointments this week.',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
             ),
           ],
         ],
@@ -1160,48 +1673,70 @@ class _WeekScheduleListCard extends StatelessWidget {
 }
 
 class _ScheduleRow extends StatelessWidget {
-  const _ScheduleRow({required this.label, required this.hours});
+  const _ScheduleRow({
+    required this.label,
+    required this.hours,
+    required this.isWorking,
+  });
 
   final String label;
   final String hours;
+  final bool isWorking;
 
-  bool get _isOff => hours == 'Day off';
+  bool get _isOff => hours == 'Day off' || !isWorking;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (!_isOff) ...[
+    final (badgeLabel, badgeColor) = _isOff
+        ? ('Day off', Colors.white.withValues(alpha: 0.35))
+        : ('Scheduled', const Color(0xFF5EEAD4));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: _ProfileUi.textPrimary,
+              ),
+            ),
+          ),
           Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: _ProfileUi.success,
-              shape: BoxShape.circle,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: badgeColor.withValues(alpha: 0.35)),
+            ),
+            child: Text(
+              badgeLabel,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: badgeColor,
+              ),
             ),
           ),
           const SizedBox(width: 10),
-        ] else
-          const SizedBox(width: 18),
-        Expanded(
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-              color: _ProfileUi.textPrimary,
+          SizedBox(
+            width: 88,
+            child: Text(
+              hours,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _isOff ? _ProfileUi.textSecondary : _ProfileUi.textPrimary,
+              ),
             ),
           ),
-        ),
-        Text(
-          hours,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: _isOff ? _ProfileUi.textSecondary : _ProfileUi.textPrimary,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1231,55 +1766,11 @@ class _PerformanceSummaryCard extends StatelessWidget {
     final cancelTrend = kpi?.trendOtkazanePostotak;
     final cancelTrendBadge = TherapistKpi.badgePercent(cancelTrend);
     final cancelTrendPositive = cancelTrend == null || cancelTrend <= 0;
-
-    final rows = <_PerfRow>[
-      _PerfRow(
-        'Total Appointments',
-        '$total',
-        badge: TherapistKpi.badgePercent(kpi?.trendUkupnoRezervacijaPostotak),
-        positive: (kpi?.trendUkupnoRezervacijaPostotak ?? 0) >= 0,
-      ),
-      _PerfRow(
-        'Confirmed',
-        '$confirmed',
-        badge: TherapistKpi.badgePercent(kpi?.trendPotvrdjenePostotak),
-        positive: (kpi?.trendPotvrdjenePostotak ?? 0) >= 0,
-      ),
-      _PerfRow(
-        'Paid',
-        '$paid',
-        badge: null,
-        positive: true,
-      ),
-      _PerfRow(
-        'Cancellation Rate',
-        '${cancelPct.toStringAsFixed(0)}%',
-        badge: cancelTrendBadge,
-        positive: cancelTrendPositive,
-        footnote: 'Lower is better. Green trend means cancellations decreased.',
-      ),
-      _PerfRow(
-        'Average Rating',
-        rating > 0 ? '${rating.toStringAsFixed(1)} / 5' : '—',
-        badge: TherapistKpi.badgeRatingDelta(kpi?.trendProsjecnaOcjenaDelta),
-        positive: (kpi?.trendProsjecnaOcjenaDelta ?? 0) >= 0,
-        subtitle: reviewCount > 0 ? '$reviewCount reviews in period' : null,
-      ),
-      _PerfRow(
-        'Client Satisfaction',
-        satisfaction != null ? '$satisfaction%' : '—',
-        badge: TherapistKpi.badgePercent(kpi?.trendZadovoljstvoPostotak),
-        positive: (kpi?.trendZadovoljstvoPostotak ?? 0) >= 0,
-      ),
-      _PerfRow(
-        'Revenue Generated',
-        revenue > 0 ? formatKm(revenue) : '—',
-        badge: TherapistKpi.badgePercent(kpi?.trendPrihodPostotak),
-        positive: (kpi?.trendPrihodPostotak ?? 0) >= 0,
-      ),
-    ];
+    final maxRevenue = revenue > 0 ? revenue : 1.0;
 
     return _GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1297,18 +1788,225 @@ class _PerformanceSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
-            'Last $periodDays days vs previous $periodDays days',
-            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+            'Last $periodDays days',
+            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
           ),
           const SizedBox(height: 14),
-          for (final row in rows) ...[
-            _PerformanceRow(row: row),
-            const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _PerfHighlight(
+                  label: 'Total Appointments',
+                  value: '$total',
+                  badge: TherapistKpi.badgePercent(
+                    kpi?.trendUkupnoRezervacijaPostotak,
+                  ),
+                  positive: (kpi?.trendUkupnoRezervacijaPostotak ?? 0) >= 0,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PerfHighlight(
+                  label: 'Revenue',
+                  value: revenue > 0 ? formatKm(revenue) : '—',
+                  badge: TherapistKpi.badgePercent(kpi?.trendPrihodPostotak),
+                  positive: (kpi?.trendPrihodPostotak ?? 0) >= 0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _PerfMetricBar(
+            label: 'Average Rating',
+            valueLabel: rating > 0 ? '${rating.toStringAsFixed(1)} / 5' : '—',
+            progress: rating > 0 ? rating / 5.0 : 0,
+            color: const Color(0xFFF5B942),
+            trailing: rating > 0
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      5,
+                      (i) => Icon(
+                        Icons.star_rounded,
+                        size: 14,
+                        color: i < rating.round()
+                            ? const Color(0xFFF5B942)
+                            : Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 12),
+          _PerfMetricBar(
+            label: 'Cancellation Rate',
+            valueLabel: '${cancelPct.toStringAsFixed(0)}%',
+            progress: (cancelPct / 100).clamp(0.0, 1.0),
+            color: cancelPct > 20 ? _ProfileUi.danger : _ProfileUi.success,
+            badge: cancelTrendBadge,
+            badgePositive: cancelTrendPositive,
+          ),
+          const SizedBox(height: 12),
+          _PerfMetricBar(
+            label: 'Client Satisfaction',
+            valueLabel: satisfaction != null ? '$satisfaction%' : '—',
+            progress: satisfaction != null ? satisfaction / 100.0 : 0,
+            color: _ProfileUi.accentSecondary,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Confirmed · Paid',
+                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+                ),
+              ),
+              Text(
+                '$confirmed · $paid',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          if (reviewCount > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              '$reviewCount reviews in period',
+              style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
+            ),
+          ],
+          if (revenue > 0) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: (revenue / maxRevenue).clamp(0.05, 1.0),
+                minHeight: 4,
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                color: _ProfileUi.accentPurple,
+              ),
+            ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _PerfHighlight extends StatelessWidget {
+  const _PerfHighlight({
+    required this.label,
+    required this.value,
+    this.badge,
+    this.positive = true,
+  });
+
+  final String label;
+  final String value;
+  final String? badge;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: _ProfileUi.textPrimary,
+                ),
+              ),
+              if (badge != null) ...[
+                const SizedBox(width: 6),
+                _TrendBadge(text: badge!, positive: positive),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PerfMetricBar extends StatelessWidget {
+  const _PerfMetricBar({
+    required this.label,
+    required this.valueLabel,
+    required this.progress,
+    required this.color,
+    this.trailing,
+    this.badge,
+    this.badgePositive = true,
+  });
+
+  final String label;
+  final String valueLabel;
+  final double progress;
+  final Color color;
+  final Widget? trailing;
+  final String? badge;
+  final bool badgePositive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
+              ),
+            ),
+            if (trailing != null) trailing!,
+            if (badge != null) ...[
+              const SizedBox(width: 6),
+              _TrendBadge(text: badge!, positive: badgePositive),
+            ],
+            const SizedBox(width: 8),
+            Text(
+              valueLabel,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _ProfileUi.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress > 0 ? progress.clamp(0.0, 1.0) : null,
+            minHeight: 6,
+            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1356,77 +2054,6 @@ class _KpiPeriodChips extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PerfRow {
-  const _PerfRow(
-    this.label,
-    this.value, {
-    this.badge,
-    this.positive = true,
-    this.subtitle,
-    this.footnote,
-  });
-
-  final String label;
-  final String value;
-  final String? badge;
-  final bool positive;
-  final String? subtitle;
-  final String? footnote;
-}
-
-class _PerformanceRow extends StatelessWidget {
-  const _PerformanceRow({required this.row});
-
-  final _PerfRow row;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(row.label, style: _ProfileUi.bodyMuted(context)),
-                  if (row.subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      row.subtitle!,
-                      style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Text(
-              row.value,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: _ProfileUi.textPrimary,
-              ),
-            ),
-            if (row.badge != null) ...[
-              const SizedBox(width: 8),
-              _TrendBadge(text: row.badge!, positive: row.positive),
-            ],
-          ],
-        ),
-        if (row.footnote != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            row.footnote!,
-            style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 11),
           ),
         ],
       ],
@@ -1616,24 +2243,29 @@ class _ServiceProgressRow extends StatelessWidget {
 }
 
 class _GlassCard extends StatelessWidget {
-  const _GlassCard({required this.child, this.padding});
+  const _GlassCard({
+    required this.child,
+    this.padding,
+    this.borderRadius = 20,
+  });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding ?? const EdgeInsets.all(22),
+      padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
-            color: _ProfileUi.accentPurple.withValues(alpha: 0.12),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+            color: _ProfileUi.accentPurple.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
