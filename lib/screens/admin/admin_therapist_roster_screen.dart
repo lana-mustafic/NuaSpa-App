@@ -10,6 +10,7 @@ import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 import 'admin_therapist_profile_screen.dart';
+import 'widgets/admin_therapist_day_availability_dialog.dart';
 import 'widgets/admin_therapist_editor_dialog.dart';
 import 'widgets/admin_therapist_invite_feedback.dart';
 
@@ -245,11 +246,6 @@ class _AdminTherapistRosterScreenState
         _ => _WeekLoad.off,
       };
 
-  String _hm(DateTime d) {
-    final loc = d.toLocal();
-    return '${loc.hour.toString().padLeft(2, '0')}:${loc.minute.toString().padLeft(2, '0')}';
-  }
-
   DateTime _startOfWeek(DateTime d) {
     final day = DateTime(d.year, d.month, d.day);
     return day.subtract(Duration(days: day.weekday - DateTime.monday));
@@ -272,36 +268,22 @@ class _AdminTherapistRosterScreenState
   }
 
   Future<void> _openDaySlots(_RosterTherapist therapist, DateTime day) async {
-    final slots = await _api.getDostupniTermini(
+    final result = await _api.getTherapistDayAvailability(
       zaposlenikId: therapist.zaposlenik.id,
       datum: day,
     );
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          '${therapist.name} · ${day.toLocal().toString().split(' ').first}',
+    if (result.data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? 'Unable to load day availability.'),
         ),
-        content: SizedBox(
-          width: 520,
-          child: slots.isEmpty
-              ? const Text('No available slots for this day.')
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final slot in slots) Chip(label: Text(_hm(slot))),
-                  ],
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+      );
+      return;
+    }
+    await showAdminTherapistDayAvailabilityDialog(
+      context,
+      data: result.data!,
     );
   }
 

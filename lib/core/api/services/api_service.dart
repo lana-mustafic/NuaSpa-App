@@ -28,6 +28,7 @@ import '../../../models/admin/therapist_kpi.dart';
 import '../../../models/admin/therapist_admin_profile.dart';
 import '../../../models/admin/therapist_account_status.dart';
 import '../../../models/admin/therapist_admin_roster.dart';
+import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
@@ -910,6 +911,39 @@ class ApiService {
       }
       debugPrint('Greška u ApiService.deleteRezervacijaAdmin: $e');
       return e.message;
+    }
+  }
+
+  Future<({TherapistDayAvailability? data, String? error})>
+      getTherapistDayAvailability({
+    required int zaposlenikId,
+    required DateTime datum,
+  }) async {
+    try {
+      final d = DateTime(datum.year, datum.month, datum.day);
+      final response = await _dio.get<dynamic>(
+        'Rezervacija/therapist-day-availability',
+        queryParameters: {
+          'zaposlenikId': zaposlenikId,
+          'datum': _apiDateOnly(d),
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Invalid day availability response.');
+      }
+      return (
+        data: TherapistDayAvailability.fromJson(data),
+        error: null,
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistDayAvailability: $e');
+      final message =
+          e is DioException ? ApiErrorMessages.fromDio(e) : null;
+      return (
+        data: null,
+        error: message ?? 'Unable to load day availability.',
+      );
     }
   }
 
