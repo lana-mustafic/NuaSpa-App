@@ -386,6 +386,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           notificationCount: badgeCount,
           title: 'Therapists',
           subtitle: 'Manage your spa therapists, specialties and schedules.',
+          summaryLine: nav.therapistPageSummary,
           searchHint: 'Search therapists…',
           onSearchSubmitted: nav.setTherapistSearchQuery,
           onSearchChanged: nav.setTherapistSearchQuery,
@@ -761,10 +762,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
     ValueChanged<String>? onSearchChanged,
     String? initialSearchQuery,
     TextEditingController? searchController,
+    String? summaryLine,
   }) {
     return _SpaciousLuxuryPageHeader(
       title: title,
       subtitle: subtitle,
+      summaryLine: summaryLine,
       searchHint: searchHint,
       onSearchSubmitted: onSearchSubmitted,
       onSearchChanged: onSearchChanged,
@@ -790,6 +793,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   const _SpaciousLuxuryPageHeader({
     required this.title,
     required this.subtitle,
+    this.summaryLine,
     required this.searchHint,
     required this.onSearchSubmitted,
     required this.auth,
@@ -806,6 +810,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
 
   final String title;
   final String subtitle;
+  final String? summaryLine;
   final String searchHint;
   final ValueChanged<String> onSearchSubmitted;
   final ValueChanged<String>? onSearchChanged;
@@ -882,8 +887,10 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   void Function(BuildContext) get onProfile => widget.onProfile;
 
   Widget _titleBlock() {
+    final summary = widget.summaryLine?.trim();
+    final hasSummary = summary != null && summary.isNotEmpty;
     return SizedBox(
-      height: LuxuryPageChrome.titleBlockHeight,
+      height: hasSummary ? 78 : LuxuryPageChrome.titleBlockHeight,
       child: ClipRect(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -914,6 +921,20 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                 color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
               ),
             ),
+            if (hasSummary) ...[
+              const SizedBox(height: 6),
+              Text(
+                summary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
           ],
         ),
       ),

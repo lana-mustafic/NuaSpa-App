@@ -41,6 +41,7 @@ class _AdminTherapistRosterScreenState
   @override
   void dispose() {
     _specialty.dispose();
+    context.read<DesktopNav>().setTherapistPageSummary(null);
     super.dispose();
   }
 
@@ -96,6 +97,14 @@ class _AdminTherapistRosterScreenState
             .skip(page * _pageSize)
             .take(_pageSize)
             .toList();
+
+        if (snap.connectionState == ConnectionState.done) {
+          final summary = _buildPageSummary(therapists);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            context.read<DesktopNav>().setTherapistPageSummary(summary);
+          });
+        }
 
         return Stack(
           children: [
@@ -199,6 +208,8 @@ class _AdminTherapistRosterScreenState
             specializations: _tags(row.terapeut.specijalizacija),
             weekDays: row.weekDays.map((d) => d.date).toList(),
             weekLoads: row.weekDays.map(_loadFromApi).toList(),
+            weekAppointmentCounts:
+                row.weekDays.map((d) => d.appointmentCount).toList(),
           ),
       ],
     );
@@ -209,8 +220,22 @@ class _AdminTherapistRosterScreenState
         .split(RegExp(r'[,;/]'))
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .take(6)
         .toList();
+  }
+
+  String? _buildPageSummary(List<_RosterTherapist> all) {
+    if (all.isEmpty) return null;
+    final active =
+        all.where((t) => t.employmentStatus == ZaposlenikStatus.active).length;
+    final onLeave =
+        all.where((t) => t.employmentStatus == ZaposlenikStatus.onLeave).length;
+    final inactive = all
+        .where((t) => t.employmentStatus == ZaposlenikStatus.inactive)
+        .length;
+    final parts = <String>['${all.length} therapists', '$active active'];
+    if (onLeave > 0) parts.add('$onLeave on leave');
+    if (inactive > 0) parts.add('$inactive inactive');
+    return parts.join(' • ');
   }
 
   _WeekLoad _loadFromApi(TherapistRosterDay day) => switch (day.load) {
@@ -506,16 +531,22 @@ class _AddTherapistButtonState extends State<_AddTherapistButton> {
         scale: _hover ? 1.018 : 1,
         duration: const Duration(milliseconds: 180),
         child: Container(
+          height: 48,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF7B4DFF), Color(0xFF9B6DFF)],
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF7B4DFF),
+                NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.92),
+              ],
             ),
             boxShadow: [
               BoxShadow(
-                color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.32),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
+                color: NuaLuxuryTokens.softPurpleGlow.withValues(
+                  alpha: _hover ? 0.42 : 0.28,
+                ),
+                blurRadius: _hover ? 20 : 14,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -523,9 +554,10 @@ class _AddTherapistButtonState extends State<_AddTherapistButton> {
             style: FilledButton.styleFrom(
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
             onPressed: widget.onPressed,
@@ -572,7 +604,7 @@ class _TherapistRosterList extends StatelessWidget {
           child: ListView.separated(
             padding: const EdgeInsets.only(bottom: 18),
             itemCount: therapists.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 14),
+            separatorBuilder: (_, _) => const SizedBox(height: 16),
             itemBuilder: (context, i) => _TherapistRosterCard(
               therapist: therapists[i],
               onEdit: onEdit,
@@ -582,12 +614,13 @@ class _TherapistRosterList extends StatelessWidget {
             ),
           ),
         ),
-        _RosterPagination(
-          totalCount: totalCount,
-          page: page,
-          pageSize: pageSize,
-          onPageChanged: onPageChanged,
-        ),
+        if (totalCount > pageSize)
+          _RosterPagination(
+            totalCount: totalCount,
+            page: page,
+            pageSize: pageSize,
+            onPageChanged: onPageChanged,
+          ),
       ],
     );
   }
@@ -629,36 +662,32 @@ class _TherapistRosterCardState extends State<_TherapistRosterCard> {
           blurSigma: _hover ? 30 : 22,
           opacity: _hover ? 0.46 : 0.36,
           borderOpacity: _hover ? 0.2 : 0.1,
-          padding: const EdgeInsets.fromLTRB(22, 20, 18, 20),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 1030),
-              child: Row(
-                children: [
-                  SizedBox(width: 250, child: _TherapistProfile(t: t)),
-                  const SizedBox(width: 24),
-                  SizedBox(
-                    width: 300,
-                    child: _Specializations(tags: t.specializations),
+          padding: const EdgeInsets.fromLTRB(22, 18, 16, 18),
+          child: SizedBox(
+            height: 140,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(flex: 26, child: _TherapistProfile(t: t)),
+                const SizedBox(width: 20),
+                Expanded(flex: 22, child: _Specializations(tags: t.specializations)),
+                const SizedBox(width: 20),
+                Expanded(
+                  flex: 32,
+                  child: _WeeklyAvailabilityPanel(
+                    weekDays: t.weekDays,
+                    loads: t.weekLoads,
+                    appointmentCounts: t.weekAppointmentCounts,
+                    onOpenDay: (day) => widget.onOpenDay(t, day),
                   ),
-                  const SizedBox(width: 30),
-                    SizedBox(
-                    width: 360,
-                    child: _WeeklyLoadStrip(
-                      weekDays: t.weekDays,
-                      loads: t.weekLoads,
-                      onOpenDay: (day) => widget.onOpenDay(t, day),
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  _RosterActions(
-                    onEdit: () => widget.onEdit(t),
-                    onDelete: () => widget.onDelete(t),
-                    onOpenProfile: () => widget.onOpenProfile(t),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 14),
+                _RosterActions(
+                  onEdit: () => widget.onEdit(t),
+                  onDelete: () => widget.onDelete(t),
+                  onOpenProfile: () => widget.onOpenProfile(t),
+                ),
+              ],
             ),
           ),
         ),
@@ -742,6 +771,8 @@ class _TherapistProfile extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 t.name,
@@ -753,49 +784,38 @@ class _TherapistProfile extends StatelessWidget {
                   letterSpacing: -0.1,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 5),
               Text(
-                '${t.role} · ${t.employmentStatus.label}',
+                t.role,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: NuaLuxuryTokens.lavenderWhisper.withValues(
                     alpha: 0.62,
                   ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                t.weekLoadLabel,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.45),
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 11),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    color: NuaLuxuryTokens.champagneGold,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    t.rating == null ? '—' : t.rating!.toStringAsFixed(1),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    t.reviewCount == 0
-                        ? '(${t.appointmentCount} appointments · no reviews)'
-                        : '(${t.reviewCount} reviews · ${t.appointmentCount} appointments)',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 6),
+              _EmploymentStatusBadge(status: t.employmentStatus),
+              const SizedBox(height: 4),
+              Text(
+                t.availabilityLabel,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.48),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+              if (t.ratingLine != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  t.ratingLine!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -815,69 +835,138 @@ class _TherapistProfile extends StatelessWidget {
   }
 }
 
+class _EmploymentStatusBadge extends StatelessWidget {
+  const _EmploymentStatusBadge({required this.status});
+
+  final ZaposlenikStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, border) = switch (status) {
+      ZaposlenikStatus.active => (
+          const Color(0xFF6EE7B7).withValues(alpha: 0.14),
+          const Color(0xFF6EE7B7),
+          const Color(0xFF6EE7B7).withValues(alpha: 0.35),
+        ),
+      ZaposlenikStatus.onLeave => (
+          const Color(0xFFE8C872).withValues(alpha: 0.14),
+          const Color(0xFFE8C872),
+          const Color(0xFFE8C872).withValues(alpha: 0.35),
+        ),
+      ZaposlenikStatus.inactive => (
+          const Color(0xFFF87171).withValues(alpha: 0.12),
+          const Color(0xFFF87171),
+          const Color(0xFFF87171).withValues(alpha: 0.32),
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        status.label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
 class _Specializations extends StatelessWidget {
   const _Specializations({required this.tags});
 
   final List<String> tags;
+  static const _maxVisible = 3;
 
   @override
   Widget build(BuildContext context) {
+    final visible = tags.take(_maxVisible).toList();
+    final extra = tags.length - visible.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Specializations',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
             fontWeight: FontWeight.w900,
+            fontSize: 13,
             color: Colors.white.withValues(alpha: 0.78),
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final tag in tags)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.22,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  tag,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                      alpha: 0.86,
-                    ),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ClipRect(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final tag in visible) _SpecChip(label: tag),
+                  if (extra > 0) _SpecChip(label: '+$extra more', muted: true),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _WeeklyLoadStrip extends StatelessWidget {
-  const _WeeklyLoadStrip({
+class _SpecChip extends StatelessWidget {
+  const _SpecChip({required this.label, this.muted = false});
+
+  final String label;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: muted
+            ? Colors.white.withValues(alpha: 0.04)
+            : NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: muted
+              ? Colors.white.withValues(alpha: 0.12)
+              : NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: muted
+              ? Colors.white.withValues(alpha: 0.55)
+              : NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.86),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _WeeklyAvailabilityPanel extends StatelessWidget {
+  const _WeeklyAvailabilityPanel({
     required this.weekDays,
     required this.loads,
+    required this.appointmentCounts,
     required this.onOpenDay,
   });
 
   final List<DateTime> weekDays;
   final List<_WeekLoad> loads;
+  final List<int> appointmentCounts;
   final ValueChanged<DateTime> onOpenDay;
 
   @override
@@ -890,121 +979,201 @@ class _WeeklyLoadStrip extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Weekly booking load',
-                style: theme.textTheme.labelLarge?.copyWith(
+                'Weekly availability',
+                style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w900,
+                  fontSize: 13,
                   color: Colors.white.withValues(alpha: 0.78),
                 ),
               ),
             ),
-            Text(
-              '${_dateLabel(weekDays.first)} – ${_dateLabel(weekDays.last)}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Tap a day for available slots · colors show appointment volume',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: Colors.white.withValues(alpha: 0.42),
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            for (var i = 0; i < weekDays.length; i++)
-              Expanded(
-                child: _DayLoadDot(
-                  day: weekDays[i],
-                  load: loads[i],
-                  onTap: () => onOpenDay(weekDays[i]),
+            if (weekDays.isNotEmpty)
+              Text(
+                '${_RosterUi.dateLabel(weekDays.first)} – ${_RosterUi.dateLabel(weekDays.last)}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.55),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
           ],
         ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < weekDays.length; i++)
+                Expanded(
+                  child: _DayAvailabilityCell(
+                    day: weekDays[i],
+                    load: loads[i],
+                    appointmentCount: appointmentCounts[i],
+                    onTap: () => onOpenDay(weekDays[i]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        const _WeekLoadLegend(),
       ],
     );
   }
-
-  String _dateLabel(DateTime day) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[day.month - 1]} ${day.day}';
-  }
 }
 
-class _DayLoadDot extends StatelessWidget {
-  const _DayLoadDot({
+class _DayAvailabilityCell extends StatelessWidget {
+  const _DayAvailabilityCell({
     required this.day,
     required this.load,
+    required this.appointmentCount,
     required this.onTap,
   });
 
   final DateTime day;
   final _WeekLoad load;
+  final int appointmentCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final color = switch (load) {
-      _WeekLoad.off => const Color(0xFF6EE7B7),
-      _WeekLoad.light => const Color(0xFF86EFAC),
-      _WeekLoad.moderate => NuaLuxuryTokens.champagneGold,
-      _WeekLoad.heavy => NuaLuxuryTokens.softPurpleGlow,
-    };
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Column(
-        children: [
-          Text(
-            names[day.weekday - 1],
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.56),
-              fontWeight: FontWeight.w800,
-            ),
+    final color = _RosterUi.loadColor(load);
+    final statusText = _RosterUi.dayStatusLabel(load, appointmentCount);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+          child: Column(
+            children: [
+              Text(
+                names[day.weekday - 1],
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.52),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                ),
+              ),
+              Text(
+                '${day.day}',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.82),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                statusText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.46),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            '${day.day}',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 11),
-          Container(
-            width: 15,
-            height: 15,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              boxShadow: [
-                BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 12),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
+  }
+}
+
+class _WeekLoadLegend extends StatelessWidget {
+  const _WeekLoadLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _LegendItem(color: _RosterUi.loadColor(_WeekLoad.off), label: 'Open'),
+        const SizedBox(width: 10),
+        _LegendItem(
+          color: _RosterUi.loadColor(_WeekLoad.moderate),
+          label: 'Busy',
+        ),
+        const SizedBox(width: 10),
+        _LegendItem(
+          color: _RosterUi.loadColor(_WeekLoad.heavy),
+          label: 'Full',
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.4),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+abstract final class _RosterUi {
+  static String dateLabel(DateTime day) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[day.month - 1]} ${day.day}';
+  }
+
+  static Color loadColor(_WeekLoad load) => switch (load) {
+        _WeekLoad.off => const Color(0xFF6EE7B7),
+        _WeekLoad.light => const Color(0xFF86EFAC),
+        _WeekLoad.moderate => NuaLuxuryTokens.champagneGold,
+        _WeekLoad.heavy => const Color(0xFF9CA3AF),
+      };
+
+  static String dayStatusLabel(_WeekLoad load, int count) {
+    if (load == _WeekLoad.off) return 'Open';
+    if (load == _WeekLoad.heavy) return 'Full';
+    if (count == 1) return '1 booked';
+    return '$count booked';
   }
 }
 
@@ -1021,36 +1190,62 @@ class _RosterActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _RosterActionButton(icon: Icons.edit_outlined, onTap: onEdit),
-        const SizedBox(height: 10),
-        PopupMenuButton<String>(
-          tooltip: 'Akcije',
-          color: NuaLuxuryTokens.voidViolet,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RosterActionButton(
+            icon: Icons.edit_outlined,
+            onTap: onEdit,
+            tooltip: 'Edit therapist',
           ),
-          onSelected: (value) {
-            if (value == 'profile') onOpenProfile();
-            if (value == 'delete') onDelete();
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'profile', child: Text('View profile')),
-            PopupMenuItem(value: 'delete', child: Text('Delete therapist')),
-          ],
-          child: const _RosterActionButton(icon: Icons.more_horiz_rounded),
-        ),
-      ],
+          Container(
+            width: 1,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'More actions',
+            color: NuaLuxuryTokens.voidViolet,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            offset: const Offset(0, 40),
+            onSelected: (value) {
+              if (value == 'profile') onOpenProfile();
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'profile', child: Text('View profile')),
+              PopupMenuItem(value: 'delete', child: Text('Delete therapist')),
+            ],
+            child: const _RosterActionButton(
+              icon: Icons.more_horiz_rounded,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _RosterActionButton extends StatefulWidget {
-  const _RosterActionButton({required this.icon, this.onTap});
+  const _RosterActionButton({
+    required this.icon,
+    this.onTap,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback? onTap;
+  final String? tooltip;
 
   @override
   State<_RosterActionButton> createState() => _RosterActionButtonState();
@@ -1061,40 +1256,42 @@ class _RosterActionButtonState extends State<_RosterActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final button = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       cursor: SystemMouseCursors.click,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          width: 42,
-          height: 42,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: _hover ? 0.09 : 0.045),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                alpha: _hover ? 0.3 : 0.12,
+                alpha: _hover ? 0.28 : 0.1,
               ),
             ),
             boxShadow: _hover
                 ? [
                     BoxShadow(
                       color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                        alpha: 0.18,
+                        alpha: 0.16,
                       ),
-                      blurRadius: 16,
+                      blurRadius: 12,
                     ),
                   ]
                 : null,
           ),
-          child: Icon(widget.icon, size: 20),
+          child: Icon(widget.icon, size: 19),
         ),
       ),
     );
+    if (widget.tooltip == null) return button;
+    return Tooltip(message: widget.tooltip!, child: button);
   }
 }
 
@@ -1252,6 +1449,7 @@ class _RosterTherapist {
     required this.specializations,
     required this.weekDays,
     required this.weekLoads,
+    required this.weekAppointmentCounts,
   });
 
   final Zaposlenik zaposlenik;
@@ -1264,15 +1462,30 @@ class _RosterTherapist {
   final List<String> specializations;
   final List<DateTime> weekDays;
   final List<_WeekLoad> weekLoads;
+  final List<int> weekAppointmentCounts;
 
-  String get weekLoadLabel {
-    if (weekLoads.every((x) => x == _WeekLoad.off)) {
-      return 'Light week';
+  String get availabilityLabel {
+    if (employmentStatus == ZaposlenikStatus.onLeave) return 'On leave';
+    if (employmentStatus == ZaposlenikStatus.inactive) return 'Inactive';
+    if (weekLoads.every((x) => x == _WeekLoad.off)) return 'Open week';
+    if (weekLoads.every((x) => x == _WeekLoad.heavy)) return 'Fully booked';
+    return 'Partially booked';
+  }
+
+  String? get ratingLine {
+    if (rating != null && reviewCount > 0) {
+      return '★ ${rating!.toStringAsFixed(1)} · $reviewCount reviews';
     }
-    if (weekLoads.every((x) => x == _WeekLoad.heavy)) {
-      return 'Heavy week';
+    if (rating != null) {
+      return '★ ${rating!.toStringAsFixed(1)}';
     }
-    return 'Mixed load';
+    if (reviewCount > 0) {
+      return '$reviewCount reviews';
+    }
+    final weekTotal = weekAppointmentCounts.fold<int>(0, (a, b) => a + b);
+    if (weekTotal == 1) return '1 appointment this week';
+    if (weekTotal > 1) return '$weekTotal appointments this week';
+    return null;
   }
 }
 

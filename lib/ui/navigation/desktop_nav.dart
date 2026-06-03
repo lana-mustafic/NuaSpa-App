@@ -44,6 +44,7 @@ class DesktopNav extends ChangeNotifier {
   String? _pendingClientSearch;
   String _clientSearchQuery = '';
   String _therapistSearchQuery = '';
+  String? _therapistPageSummary;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
   int _appointmentEditRequest = 0;
@@ -90,6 +91,15 @@ class DesktopNav extends ChangeNotifier {
   AdminSuiteRoute get adminSuiteTarget => _adminSuiteTarget;
 
   String get therapistSearchQuery => _therapistSearchQuery;
+
+  /// One-line roster stats shown under the Therapists page subtitle.
+  String? get therapistPageSummary => _therapistPageSummary;
+
+  void setTherapistPageSummary(String? summary) {
+    if (_therapistPageSummary == summary) return;
+    _therapistPageSummary = summary;
+    notifyListeners();
+  }
 
   String get clientSearchQuery => _clientSearchQuery;
 
