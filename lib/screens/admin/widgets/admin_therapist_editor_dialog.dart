@@ -147,6 +147,9 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   late final TextEditingController _obrazovanje = TextEditingController(
     text: widget.existing?.obrazovanje ?? '',
   );
+  late final TextEditingController _lokacija = TextEditingController(
+    text: widget.existing?.lokacija ?? '',
+  );
 
   bool _loading = true;
   String? _loadError;
@@ -157,6 +160,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
   int? _categoryId;
   ZaposlenikStatus _status = ZaposlenikStatus.active;
   final Set<int> _selectedServiceIds = {};
+  String? _categoryError;
   String? _specializationError;
   bool _sendPortalInvite = false;
   bool _invitePreferenceSetByUser = false;
@@ -209,11 +213,9 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
       final existingTags = _parseTags(widget.existing?.specijalizacija ?? '');
 
       int? categoryId = widget.existing?.kategorijaUslugaId;
-      if (categoryId == null || categoryId <= 0) {
-        categoryId = _inferCategoryId(services, existingTags);
-      }
-      if (categoryId == null && categories.isNotEmpty) {
-        categoryId = categories.first.id;
+      if (categoryId != null && categoryId <= 0) categoryId = null;
+      if (!widget.isNew) {
+        categoryId ??= _inferCategoryId(services, existingTags);
       }
 
       final selectedIds = <int>{};
@@ -280,12 +282,12 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
 
   String get _categoryLabel {
     if (_categoryId == null || _categories.isEmpty) {
-      return 'Select specialties';
+      return 'Select service category';
     }
     for (final k in _categories) {
       if (k.id == _categoryId) return k.naziv;
     }
-    return 'Select specialties';
+    return 'Select service category';
   }
 
   String get _specialtiesSummary {
@@ -328,6 +330,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     setState(() {
       _categoryId = id;
       _selectedServiceIds.clear();
+      _categoryError = null;
       _specializationError = null;
       final names = _parseTags(widget.existing?.specijalizacija ?? '');
       for (final service in _services.where((u) => u.kategorijaUslugaId == id)) {
@@ -361,11 +364,23 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
 
   void _close() => Navigator.of(context).pop();
 
+  String _formatDate(DateTime d) {
+    final x = d.toLocal();
+    return '${x.day.toString().padLeft(2, '0')}.'
+        '${x.month.toString().padLeft(2, '0')}.'
+        '${x.year}';
+  }
+
   void _save() {
     if (_loading || _loadError != null) return;
     setState(() => _attemptedSubmit = true);
     if (!_formKey.currentState!.validate()) return;
-    if (_categoryId == null) return;
+    if (_categoryId == null) {
+      setState(() {
+        _categoryError = 'Select a service category.';
+      });
+      return;
+    }
     if (_selectedServiceIds.isEmpty) {
       setState(() {
         _specializationError =
@@ -388,7 +403,12 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
           obrazovanje: _obrazovanje.text.trim().isEmpty
               ? null
               : _obrazovanje.text.trim(),
+          lokacija: _lokacija.text.trim().isEmpty
+              ? null
+              : _lokacija.text.trim(),
           kategorijaUslugaId: _categoryId,
+          kategorijaUslugaNaziv: widget.existing?.kategorijaUslugaNaziv,
+          datumZaposlenja: widget.existing?.datumZaposlenja,
           status: _status,
         ),
         sendPortalInvite: widget.isNew && _sendPortalInvite,
@@ -408,6 +428,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
     _emailFocus.dispose();
     _jezici.dispose();
     _obrazovanje.dispose();
+    _lokacija.dispose();
     super.dispose();
   }
 
@@ -479,6 +500,11 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
+                                      const _EditorSectionTitle(
+                                        title: 'Personal details',
+                                        subtitle:
+                                            'Required for every therapist.',
+                                      ),
                                       _LuxuryTherapistField(
                                         label: 'First name',
                                         icon: Icons.person_outline_rounded,
@@ -506,40 +532,15 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 18),
-                                      _LuxuryTherapistField(
-                                        label: 'Status',
-                                        icon: Icons.badge_outlined,
-                                        child: DropdownButtonFormField<
-                                            ZaposlenikStatus>(
-                                          value: _status,
-                                          dropdownColor:
-                                              NuaLuxuryTokens.voidViolet,
-                                          decoration:
-                                              LuxuryModalStyle.fieldDecoration(
-                                            hint: 'Employment status',
-                                          ),
-                                          items: [
-                                            for (final s
-                                                in ZaposlenikStatus.values)
-                                              DropdownMenuItem(
-                                                value: s,
-                                                child: Text(s.label),
-                                              ),
-                                          ],
-                                          onChanged: (v) {
-                                            if (v != null) {
-                                              setState(() => _status = v);
-                                            }
-                                          },
-                                        ),
+                                      const SizedBox(height: 22),
+                                      const _EditorSectionTitle(
+                                        title: 'Services & specialties',
+                                        subtitle:
+                                            'Category and at least one service they can perform.',
                                       ),
-                                      const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Specialties',
-                                        icon: Icons.star_outline_rounded,
-                                        helper:
-                                            'You can select multiple specialties, e.g., Swedish, Facial',
+                                        label: 'Service category',
+                                        icon: Icons.category_outlined,
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
@@ -550,15 +551,44 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                                 style: LuxuryModalStyle
                                                     .subtitleStyle(context),
                                               )
-                                            else if (_categoryId != null) ...[
+                                            else ...[
                                               _TherapistCategoryDropdown(
                                                 label: _categoryLabel,
                                                 categories: _categories,
-                                                selectedId: _categoryId!,
+                                                selectedId: _categoryId,
                                                 onSelected: (id) =>
                                                     _onCategoryChanged(id),
                                               ),
-                                              const SizedBox(height: 12),
+                                              if (_categoryError != null)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(
+                                                    top: 8,
+                                                  ),
+                                                  child: Text(
+                                                    _categoryError!,
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 12,
+                                                      color: const Color(
+                                                        0xFFFF6B8A,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      if (_categoryId != null) ...[
+                                        const SizedBox(height: 18),
+                                        _LuxuryTherapistField(
+                                          label: 'Specialties (services)',
+                                          icon: Icons.star_outline_rounded,
+                                          helper:
+                                              'Select every treatment this therapist is qualified to deliver.',
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
                                               if (_servicesInCategory.isEmpty)
                                                 Text(
                                                   'No services in this category yet.',
@@ -625,26 +655,32 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                                   ),
                                                 ),
                                               ],
-                                            ],
-                                            if (_specializationError != null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 8,
-                                                ),
-                                                child: Text(
-                                                  _specializationError!,
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 12,
-                                                    color: const Color(
-                                                      0xFFFF6B8A,
+                                              if (_specializationError != null)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(
+                                                    top: 8,
+                                                  ),
+                                                  child: Text(
+                                                    _specializationError!,
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 12,
+                                                      color: const Color(
+                                                        0xFFFF6B8A,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
+                                      ],
+                                      const SizedBox(height: 22),
+                                      _EditorSectionTitle(
+                                        title: 'Contact',
+                                        subtitle: widget.isNew
+                                            ? 'Phone is optional. Email is needed for portal access.'
+                                            : 'Used for admin contact and portal login.',
                                       ),
-                                      const SizedBox(height: 18),
                                       _LuxuryTherapistField(
                                         label: 'Phone',
                                         icon: Icons.phone_outlined,
@@ -659,7 +695,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Email',
+                                        label: 'Work email',
                                         icon: Icons.mail_outline_rounded,
                                         child: LuxuryModalTextField(
                                           controller: _email,
@@ -670,8 +706,11 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                           autofillHints: const [
                                             AutofillHints.email,
                                           ],
-                                          onChanged: (_) =>
-                                              _syncPortalInviteOption(),
+                                          onChanged: (_) {
+                                            if (widget.isNew) {
+                                              _syncPortalInviteOption();
+                                            }
+                                          },
                                           validator: (v) =>
                                               _TherapistFormValidation
                                                   .emailOptionalOrRequiredForInvite(
@@ -694,13 +733,88 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                             _formKey.currentState?.validate();
                                           },
                                         ),
+                                      ] else ...[
+                                        const SizedBox(height: 10),
+                                        _EditorInfoBanner(
+                                          icon: Icons.info_outline_rounded,
+                                          text:
+                                              'To send or resend a portal invite, open the therapist profile after saving.',
+                                        ),
                                       ],
+                                      const SizedBox(height: 22),
+                                      const _EditorSectionTitle(
+                                        title: 'Employment',
+                                        subtitle:
+                                            'Inactive or on leave therapists are hidden from new bookings.',
+                                      ),
+                                      _LuxuryTherapistField(
+                                        label: 'Employment status',
+                                        icon: Icons.badge_outlined,
+                                        child: DropdownButtonFormField<
+                                            ZaposlenikStatus>(
+                                          value: _status,
+                                          dropdownColor:
+                                              NuaLuxuryTokens.voidViolet,
+                                          decoration:
+                                              LuxuryModalStyle.fieldDecoration(
+                                            hint: 'Employment status',
+                                          ),
+                                          items: [
+                                            for (final s
+                                                in ZaposlenikStatus.values)
+                                              DropdownMenuItem(
+                                                value: s,
+                                                child: Text(s.label),
+                                              ),
+                                          ],
+                                          onChanged: (v) {
+                                            if (v != null) {
+                                              setState(() => _status = v);
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      if (_status != ZaposlenikStatus.active) ...[
+                                        const SizedBox(height: 10),
+                                        _EditorInfoBanner(
+                                          icon: Icons.event_busy_outlined,
+                                          text: _status == ZaposlenikStatus.onLeave
+                                              ? 'On leave — existing appointments stay, but they will not appear for new bookings.'
+                                              : 'Inactive — they will not appear when scheduling new appointments.',
+                                        ),
+                                      ],
+                                      if (!widget.isNew &&
+                                          widget.existing?.datumZaposlenja !=
+                                              null) ...[
+                                        const SizedBox(height: 14),
+                                        _EditorReadOnlyRow(
+                                          label: 'Employed since',
+                                          value: _formatDate(
+                                            widget.existing!.datumZaposlenja!,
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 22),
+                                      const _EditorSectionTitle(
+                                        title: 'Profile (optional)',
+                                        subtitle:
+                                            'Shown on admin profile; not required to save.',
+                                      ),
+                                      _LuxuryTherapistField(
+                                        label: 'Location',
+                                        icon: Icons.location_on_outlined,
+                                        helper:
+                                            'Leave empty to use the default spa location.',
+                                        child: LuxuryModalTextField(
+                                          controller: _lokacija,
+                                          hint: 'e.g. Sarajevo · NuaSpa',
+                                        ),
+                                      ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Languages (optional)',
+                                        label: 'Languages',
                                         icon: Icons.translate_rounded,
-                                        helper:
-                                            'e.g. English, Bosnian',
+                                        helper: 'e.g. English, Bosnian',
                                         child: LuxuryModalTextField(
                                           controller: _jezici,
                                           hint: 'English, Bosnian',
@@ -708,7 +822,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                       ),
                                       const SizedBox(height: 18),
                                       _LuxuryTherapistField(
-                                        label: 'Education (optional)',
+                                        label: 'Education',
                                         icon: Icons.school_outlined,
                                         helper:
                                             'Certifications, degrees, training',
@@ -788,8 +902,8 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                 const SizedBox(height: 6),
                 Text(
                   isNew
-                      ? 'Add a new therapist to your team.'
-                      : 'Update therapist profile and specialties.',
+                      ? 'Create the profile, assign services they can perform, and optionally invite them to the portal.'
+                      : 'Update employment details, specialties, and contact info. Portal invites are managed on the profile page.',
                   style: GoogleFonts.inter(
                     fontSize: 13.5,
                     height: 1.45,
@@ -869,6 +983,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                       ? 'Add at least one service category first.'
                       : (_loadError ?? ''),
                   child: _TherapistSaveButton(
+                    label: widget.isNew ? 'Add therapist' : 'Save changes',
                     enabled: !_loading &&
                         _loadError == null &&
                         _categories.isNotEmpty,
@@ -877,6 +992,123 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditorSectionTitle extends StatelessWidget {
+  const _EditorSectionTitle({
+    required this.title,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: LuxuryModalStyle.accentLavender.withValues(alpha: 0.9),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: LuxuryModalStyle.subtitleStyle(context).copyWith(
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EditorInfoBanner extends StatelessWidget {
+  const _EditorInfoBanner({
+    required this.icon,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.5)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  height: 1.45,
+                  color: Colors.white.withValues(alpha: 0.62),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditorReadOnlyRow extends StatelessWidget {
+  const _EditorReadOnlyRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.5),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: Colors.white.withValues(alpha: 0.82),
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -936,7 +1168,7 @@ class _TherapistCategoryDropdown extends StatefulWidget {
 
   final String label;
   final List<KategorijaUsluga> categories;
-  final int selectedId;
+  final int? selectedId;
   final ValueChanged<int> onSelected;
 
   @override
@@ -1222,10 +1454,12 @@ class _TherapistSaveButton extends StatefulWidget {
   const _TherapistSaveButton({
     required this.onPressed,
     required this.enabled,
+    required this.label,
   });
 
   final VoidCallback onPressed;
   final bool enabled;
+  final String label;
 
   @override
   State<_TherapistSaveButton> createState() => _TherapistSaveButtonState();
@@ -1295,7 +1529,7 @@ class _TherapistSaveButtonState extends State<_TherapistSaveButton> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Save therapist',
+                widget.label,
                 style: GoogleFonts.inter(
                   color: Colors.white.withValues(
                     alpha: widget.enabled ? 1 : 0.5,
