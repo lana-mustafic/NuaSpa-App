@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/format/km_format.dart';
+import '../../models/kategorija_usluga.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
@@ -146,6 +147,16 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
       });
     }
 
+    final visibleCategories = _categoriesWithServices(serviceProvider);
+    final selectedId = serviceProvider.selectedCategoryId;
+    if (selectedId != null &&
+        !visibleCategories.any((c) => c.id == selectedId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        serviceProvider.setCategoryFilter(null);
+      });
+    }
+
     return Material(
       color: Colors.transparent,
       child: Padding(
@@ -153,33 +164,31 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isAdmin)
-              _CatalogAdminToolbar(
-                onManageCategories: () =>
-                    showServiceCategoryManagerDialog(context),
-                onAddService: () => _openServiceEditor(null),
-              )
-            else
+            if (!isAdmin)
               PageHeader(
                 title: 'Services',
                 subtitle: 'Browse treatments and save your favorites.',
                 trailing: const _BackIfPossible(),
               ),
-            const SizedBox(height: 16),
+            if (!isAdmin) const SizedBox(height: 16),
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               _CatalogSummaryRow(
                 totalServices: serviceProvider.allServices.length,
-                categoryCount: serviceProvider.categories.length,
+                categoryCount: visibleCategories.length,
                 favoriteCount: serviceProvider.favoriteIds.length,
                 averagePrice: _averagePrice(serviceProvider.allServices),
               ),
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               const SizedBox(height: 16),
-            if (serviceProvider.categories.isNotEmpty) ...[
-              ServiceCategoryFilterBar(
-                categories: serviceProvider.categories,
+            if (visibleCategories.isNotEmpty || isAdmin) ...[
+              _CatalogFiltersRow(
+                categories: visibleCategories,
                 selectedCategoryId: serviceProvider.selectedCategoryId,
-                onSelected: serviceProvider.setCategoryFilter,
+                onCategorySelected: serviceProvider.setCategoryFilter,
+                showAdminActions: isAdmin,
+                onManageCategories: () =>
+                    showServiceCategoryManagerDialog(context),
+                onAddService: () => _openServiceEditor(null),
               ),
               const SizedBox(height: 16),
             ],
@@ -195,6 +204,14 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         ),
       ),
     );
+  }
+
+  List<KategorijaUsluga> _categoriesWithServices(ServiceProvider provider) {
+    final usedIds = provider.allServices
+        .map((u) => u.kategorijaUslugaId)
+        .where((id) => id > 0)
+        .toSet();
+    return provider.categories.where((c) => usedIds.contains(c.id)).toList();
   }
 
   String? _averagePrice(List<Usluga> services) {
@@ -289,41 +306,64 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   }
 }
 
-class _CatalogAdminToolbar extends StatelessWidget {
-  const _CatalogAdminToolbar({
+class _CatalogFiltersRow extends StatelessWidget {
+  const _CatalogFiltersRow({
+    required this.categories,
+    required this.selectedCategoryId,
+    required this.onCategorySelected,
+    required this.showAdminActions,
     required this.onManageCategories,
     required this.onAddService,
   });
 
+  final List<KategorijaUsluga> categories;
+  final int? selectedCategoryId;
+  final ValueChanged<int?> onCategorySelected;
+  final bool showAdminActions;
   final VoidCallback onManageCategories;
   final VoidCallback onAddService;
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Spacer(),
-        OutlinedButton.icon(
-          onPressed: onManageCategories,
-          icon: const Icon(Icons.category_outlined, size: 18),
-          label: const Text('Categories'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white.withValues(alpha: 0.82),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        if (categories.isNotEmpty)
+          Expanded(
+            child: ServiceCategoryFilterBar(
+              categories: categories,
+              selectedCategoryId: selectedCategoryId,
+              onSelected: onCategorySelected,
+            ),
+          )
+        else
+          const Spacer(),
+        if (showAdminActions) ...[
+          const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: onManageCategories,
+            icon: const Icon(Icons.category_outlined, size: 18),
+            label: const Text('Categories'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white.withValues(alpha: 0.82),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        FilledButton.icon(
-          onPressed: onAddService,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add service'),
-          style: FilledButton.styleFrom(
-            backgroundColor: NuaLuxuryTokens.softPurpleGlow,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: onAddService,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add service'),
+            style: FilledButton.styleFrom(
+              backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
           ),
-        ),
-        const _BackIfPossible(),
+          const _BackIfPossible(),
+        ],
       ],
     );
   }
