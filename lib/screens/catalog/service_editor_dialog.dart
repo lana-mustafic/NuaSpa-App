@@ -26,6 +26,8 @@ class _ServiceEditorFormData {
     required this.opis,
     required this.categoryId,
     this.pickedImagePath,
+    this.pickedImageBytes,
+    this.pickedImageFileName,
   });
 
   final String naziv;
@@ -34,6 +36,8 @@ class _ServiceEditorFormData {
   final String opis;
   final int categoryId;
   final String? pickedImagePath;
+  final Uint8List? pickedImageBytes;
+  final String? pickedImageFileName;
 }
 
 /// Opens a luxury modal to create or edit a service (Admin API).
@@ -118,26 +122,37 @@ Future<bool> showServiceEditorDialog(
   final opis = formData.opis;
   final katId = formData.categoryId;
   final pickedImagePath = formData.pickedImagePath;
+  final pickedImageBytes = formData.pickedImageBytes;
+  final pickedImageFileName = formData.pickedImageFileName;
 
   if (naziv.isEmpty || cijena <= 0 || katId <= 0) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Provjerite naziv, cijenu i kategoriju usluge.'),
+        content: Text('Check the service name, price, and category.'),
       ),
     );
     return false;
   }
 
   String slikaUrl;
-  if (pickedImagePath != null) {
-    if (kIsWeb) {
+  if (pickedImageBytes != null && pickedImageFileName != null) {
+    final uploaded = await api.uploadUslugaImageBytes(
+      pickedImageBytes,
+      fileName: pickedImageFileName,
+    );
+    if (!context.mounted) return false;
+    if (uploaded == null || uploaded.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Image upload is not available in the web browser.'),
+          content: Text(
+            'Image upload failed. Check your connection and try again.',
+          ),
         ),
       );
       return false;
     }
+    slikaUrl = uploaded;
+  } else if (pickedImagePath != null) {
     final uploaded = await api.uploadUslugaImage(pickedImagePath);
     if (!context.mounted) return false;
     if (uploaded == null || uploaded.isEmpty) {
@@ -215,6 +230,8 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
 
   late int _categoryId;
   String? _localImagePath;
+  Uint8List? _localImageBytes;
+  String? _localImageFileName;
   bool _closeHover = false;
   bool _attemptedSubmit = false;
 
@@ -268,19 +285,54 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
         opis: opis,
         categoryId: _categoryId,
         pickedImagePath: _localImagePath,
+        pickedImageBytes: _localImageBytes,
+        pickedImageFileName: _localImageFileName,
       ),
     );
+  }
+
+  void _clearPickedImage() {
+    setState(() {
+      _localImagePath = null;
+      _localImageBytes = null;
+      _localImageFileName = null;
+    });
   }
 
   Future<void> _pickImage() async {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
-      withData: false,
+      withData: kIsWeb,
     );
-    if (r != null && r.files.isNotEmpty && r.files.single.path != null) {
-      setState(() => _localImagePath = r.files.single.path);
+    final file = r?.files.single;
+    if (file == null) return;
+
+    if (kIsWeb) {
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) return;
+      setState(() {
+        _localImageBytes = bytes;
+        _localImageFileName = file.name;
+        _localImagePath = file.name;
+      });
+      return;
     }
+
+    final path = file.path;
+    if (path == null) return;
+    setState(() {
+      _localImagePath = path;
+      _localImageBytes = null;
+      _localImageFileName = null;
+    });
+  }
+
+  String? get _selectedImageLabel {
+    if (_localImagePath == null) return null;
+    return kIsWeb
+        ? (_localImageFileName ?? _localImagePath)
+        : _fileNameFromPath(_localImagePath!);
   }
 
   @override
@@ -406,22 +458,12 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                           const SizedBox(height: 18),
                           _LuxuryField(
                             label: 'Service image',
-                            child: kIsWeb
-                                ? Text(
-                                    'Image upload from files is not supported in the browser; use the desktop or mobile app.',
-                                    style: LuxuryModalStyle.subtitleStyle(
-                                      context,
-                                    ),
-                                  )
-                                : _LuxuryImageUploadBox(
-                                    fileName: _localImagePath == null
-                                        ? null
-                                        : _fileNameFromPath(_localImagePath!),
-                                    onTap: _pickImage,
-                                    onRemove: _localImagePath == null
-                                        ? null
-                                        : () => setState(() => _localImagePath = null),
-                                  ),
+                            child: _LuxuryImageUploadBox(
+                              fileName: _selectedImageLabel,
+                              onTap: _pickImage,
+                              onRemove:
+                                  _localImagePath == null ? null : _clearPickedImage,
+                            ),
                           ),
                         ],
                         ),

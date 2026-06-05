@@ -1375,7 +1375,15 @@ class ApiService {
     }
   }
 
-  /// Admin: multipart upload slike usluge; vraća puni URL iz odgovora API-ja.
+  Future<String?> _parseUploadedImageUrl(Response<dynamic> response) async {
+    final data = response.data;
+    if (data is Map && data['url'] != null) {
+      return data['url'].toString();
+    }
+    return null;
+  }
+
+  /// Admin: multipart upload slike usluge s diska; vraća URL iz odgovora API-ja.
   Future<String?> uploadUslugaImage(String filePath) async {
     try {
       final normalized = filePath.replaceAll(r'\', '/');
@@ -1389,11 +1397,7 @@ class ApiService {
         'Usluga/upload-image',
         data: form,
       );
-      final data = response.data;
-      if (data is Map && data['url'] != null) {
-        return data['url'].toString();
-      }
-      return null;
+      return _parseUploadedImageUrl(response);
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is Map && data['message'] != null) {
@@ -1403,6 +1407,33 @@ class ApiService {
       return null;
     } catch (e) {
       debugPrint('Greška u ApiService.uploadUslugaImage: $e');
+      return null;
+    }
+  }
+
+  /// Admin: multipart upload from in-memory bytes (Flutter web and desktop).
+  Future<String?> uploadUslugaImageBytes(
+    List<int> bytes, {
+    required String fileName,
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      });
+      final response = await _dio.post<dynamic>(
+        'Usluga/upload-image',
+        data: form,
+      );
+      return _parseUploadedImageUrl(response);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        debugPrint('uploadUslugaImageBytes: ${data['message']}');
+      }
+      debugPrint('Greška u ApiService.uploadUslugaImageBytes: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.uploadUslugaImageBytes: $e');
       return null;
     }
   }
