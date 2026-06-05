@@ -11,7 +11,6 @@ import '../../providers/mobile_nav_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../ui/widgets/notifications_panel.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
-import '../../ui/widgets/favorites_quick_link.dart';
 import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/service_category_filter_bar.dart';
 import '../../ui/widgets/service_network_image.dart';
@@ -149,6 +148,45 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
       slivers: [
         SliverToBoxAdapter(child: _buildHeader(context, tt, isAdmin)),
         SliverToBoxAdapter(child: _buildSearchRow(context)),
+        if (canFavorite)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: SegmentedButton<ServiceCatalogTab>(
+                showSelectedIcon: false,
+                segments: [
+                  const ButtonSegment(
+                    value: ServiceCatalogTab.all,
+                    label: Text('All Services'),
+                  ),
+                  ButtonSegment(
+                    value: ServiceCatalogTab.favorites,
+                    label: Text(
+                      sp.favoriteIds.isEmpty
+                          ? 'Favorites'
+                          : 'Favorites (${sp.favoriteIds.length})',
+                    ),
+                  ),
+                ],
+                selected: {sp.catalogTab},
+                onSelectionChanged: (value) =>
+                    sp.setCatalogTab(value.first),
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: WidgetStateProperty.resolveWith((states) {
+                    return states.contains(WidgetState.selected)
+                        ? Colors.white
+                        : MobileSpaColors.royalPurple.withValues(alpha: 0.75);
+                  }),
+                  backgroundColor: WidgetStateProperty.resolveWith((states) {
+                    return states.contains(WidgetState.selected)
+                        ? MobileSpaColors.royalPurple
+                        : MobileSpaColors.lavender.withValues(alpha: 0.35);
+                  }),
+                ),
+              ),
+            ),
+          ),
         if (sp.categories.isNotEmpty)
           SliverToBoxAdapter(
             child: ServiceCategoryFilterBar(
@@ -158,34 +196,58 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
               variant: ServiceCategoryFilterVariant.mobile,
             ),
           ),
-        if (canFavorite)
-          SliverToBoxAdapter(
-            child: FavoritesQuickLink(
-              count: sp.favoriteServices.length,
-              compact: true,
-            ),
-          ),
         if (visible.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 48, 24, 120),
               child: Column(
                 children: [
-                  Text(
-                    'No services match the selected filters.',
-                    style: tt.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  if (sp.selectedCategoryId != null || _search.text.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () {
-                        _search.clear();
-                        sp.clearCatalogFilters();
-                        setState(() {});
-                      },
-                      child: const Text('Clear filters'),
+                  if (sp.isFavoritesTab &&
+                      sp.selectedCategoryId == null &&
+                      _search.text.isEmpty) ...[
+                    Icon(
+                      Icons.favorite_border_rounded,
+                      size: 40,
+                      color: MobileSpaColors.royalPurple.withValues(alpha: 0.55),
                     ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No favorite services yet',
+                      style: tt.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Save services you use often for faster access.',
+                      style: tt.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () =>
+                          sp.setCatalogTab(ServiceCatalogTab.all),
+                      child: const Text('Browse all services'),
+                    ),
+                  ] else ...[
+                    Text(
+                      sp.isFavoritesTab
+                          ? 'No favorite services match your search or filters.'
+                          : 'No services match the selected filters.',
+                      style: tt.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (sp.selectedCategoryId != null ||
+                        _search.text.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          _search.clear();
+                          sp.clearCatalogFilters();
+                          setState(() {});
+                        },
+                        child: const Text('Clear filters'),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -217,17 +279,35 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                     },
                     onAddTap: canFavorite
                         ? () async {
+                            final wasFavorite = sp.isFavorite(u.id);
                             final ok = await context
                                 .read<ServiceProvider>()
                                 .toggleFavorite(u.id);
-                            if (!context.mounted || ok) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Could not save favorite. Sign in as a client or admin.',
+                            if (!context.mounted) return;
+                            if (!ok) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not save favorite. Sign in as a client or admin.',
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                              return;
+                            }
+                            if (wasFavorite) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      const Text('Removed from favorites'),
+                                  action: SnackBarAction(
+                                    label: 'Undo',
+                                    onPressed: () => context
+                                        .read<ServiceProvider>()
+                                        .toggleFavorite(u.id),
+                                  ),
+                                ),
+                              );
+                            }
                           }
                         : null,
                     isFavorite: sp.isFavorite(u.id),

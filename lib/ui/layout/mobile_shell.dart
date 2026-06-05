@@ -7,7 +7,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../screens/admin/admin_dashboard_screen.dart';
 import '../../screens/catalog/mobile_service_catalog_screen.dart';
-import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/mobile/mobile_home_screen.dart';
 import '../../screens/mobile/mobile_packages_placeholder_screen.dart';
 import '../../screens/mobile/mobile_profile_screen.dart';
@@ -312,20 +311,6 @@ class _MobileDrawer extends StatelessWidget {
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => const ReservationListScreen(),
-                    ),
-                  );
-                },
-              ),
-            if (!auth.isZaposlenik)
-              ListTile(
-                leading: const Icon(Icons.favorite_border),
-                title: const Text('Favorites'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const FavoritesScreen(),
                     ),
                   );
                 },

@@ -5,6 +5,8 @@ import '../models/usluga.dart';
 import '../core/api/services/api_service.dart';
 import '../core/preporuka/preporuka_tracker.dart';
 
+enum ServiceCatalogTab { all, favorites }
+
 class ServiceProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
 
@@ -19,6 +21,7 @@ class ServiceProvider with ChangeNotifier {
   String? _favoritesError;
   String _searchQuery = '';
   int? _selectedCategoryId;
+  ServiceCatalogTab _catalogTab = ServiceCatalogTab.all;
 
   List<Usluga> get services => _filteredServices;
 
@@ -31,6 +34,10 @@ class ServiceProvider with ChangeNotifier {
   int? get selectedCategoryId => _selectedCategoryId;
 
   String get searchQuery => _searchQuery;
+
+  ServiceCatalogTab get catalogTab => _catalogTab;
+
+  bool get isFavoritesTab => _catalogTab == ServiceCatalogTab.favorites;
 
   bool get isLoading => _isLoading;
   bool get favoritesLoading => _favoritesLoading;
@@ -147,7 +154,7 @@ class ServiceProvider with ChangeNotifier {
     _favoriteServices = _allServices
         .where((u) => _favoriteIds.contains(u.id))
         .toList();
-    notifyListeners();
+    _applyFilters();
 
     try {
       final ok = wasFavorite
@@ -158,17 +165,18 @@ class ServiceProvider with ChangeNotifier {
         _favoriteServices = _allServices
             .where((u) => _favoriteIds.contains(u.id))
             .toList();
-        notifyListeners();
+        _applyFilters();
         return false;
       }
       await fetchFavorites();
+      _applyFilters();
       return true;
     } catch (e) {
       _favoriteIds = previousIds;
       _favoriteServices = _allServices
           .where((u) => _favoriteIds.contains(u.id))
           .toList();
-      notifyListeners();
+      _applyFilters();
       debugPrint('Greška pri toggle favorite: $e');
       return false;
     }
@@ -193,8 +201,17 @@ class ServiceProvider with ChangeNotifier {
     _applyFilters();
   }
 
+  void setCatalogTab(ServiceCatalogTab tab) {
+    if (_catalogTab == tab) return;
+    _catalogTab = tab;
+    _applyFilters();
+  }
+
   void _applyFilters() {
     var list = _allServices;
+    if (_catalogTab == ServiceCatalogTab.favorites) {
+      list = list.where((u) => _favoriteIds.contains(u.id)).toList();
+    }
     if (_selectedCategoryId != null) {
       list = list
           .where((u) => u.kategorijaUslugaId == _selectedCategoryId)

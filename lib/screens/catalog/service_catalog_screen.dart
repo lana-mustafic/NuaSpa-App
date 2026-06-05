@@ -43,6 +43,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final nav = Provider.of<DesktopNav>(context, listen: false);
+        _applyPendingCatalogNav(nav);
         final pending = nav.takePendingCatalogSearch();
         final q = (pending ?? nav.catalogSearchQuery).trim();
         if (q.isNotEmpty) {
@@ -66,7 +67,15 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
 
   void _onNavSearchChanged() {
     if (!mounted || _nav == null) return;
+    _applyPendingCatalogNav(_nav!);
     _syncCatalogSearchFromNav(_nav!.catalogSearchQuery);
+  }
+
+  void _applyPendingCatalogNav(DesktopNav nav) {
+    if (!nav.takePendingCatalogFavoritesTab()) return;
+    context
+        .read<ServiceProvider>()
+        .setCatalogTab(ServiceCatalogTab.favorites);
   }
 
   void _syncCatalogSearchFromNav(String query) {
@@ -200,6 +209,16 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                 trailing: const _BackIfPossible(),
               ),
             if (!isAdmin) const SizedBox(height: 16),
+            if (!serviceProvider.isLoading &&
+                !serviceProvider.loadFailed &&
+                canFavorite) ...[
+              _CatalogViewTabs(
+                selected: serviceProvider.catalogTab,
+                favoriteCount: serviceProvider.favoriteIds.length,
+                onSelected: serviceProvider.setCatalogTab,
+              ),
+              const SizedBox(height: 16),
+            ],
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               _CatalogSummaryRow(
                 totalServices: serviceProvider.allServices.length,
@@ -208,6 +227,10 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                     : _categoriesWithServices(serviceProvider).length,
                 favoriteCount: serviceProvider.favoriteIds.length,
                 averagePrice: _averagePrice(serviceProvider.allServices),
+                onFavoritesTap: canFavorite
+                    ? () => serviceProvider
+                        .setCatalogTab(ServiceCatalogTab.favorites)
+                    : null,
               ),
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               const SizedBox(height: 16),
@@ -275,9 +298,15 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     if (serviceProvider.services.isEmpty) {
       final hasFilters = serviceProvider.selectedCategoryId != null ||
           serviceProvider.searchQuery.isNotEmpty;
+      if (serviceProvider.isFavoritesTab && !hasFilters) {
+        return _FavoritesEmptyState(
+          onBrowseAll: () => serviceProvider.setCatalogTab(ServiceCatalogTab.all),
+        );
+      }
       return _CatalogEmptyState(
         hasFilters: hasFilters,
         isAdmin: isAdmin,
+        isFavoritesTab: serviceProvider.isFavoritesTab,
         onClearFilters: hasFilters ? _clearFilters : null,
         onAddService: isAdmin ? () => _openServiceEditor(null) : null,
       );
@@ -326,16 +355,32 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                 onEdit: () => _openServiceEditor(usluga),
                 onDelete: () => _confirmDeleteService(usluga),
                 onToggleFavorite: () async {
+                  final wasFavorite = isFav;
                   final ok =
                       await serviceProvider.toggleFavorite(usluga.id);
-                  if (!context.mounted || ok) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Could not save favorite. Sign in as a client or admin.',
+                  if (!context.mounted) return;
+                  if (!ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Could not save favorite. Sign in as a client or admin.',
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                    return;
+                  }
+                  if (wasFavorite) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Removed from favorites'),
+                        action: SnackBarAction(
+                          label: 'Undo',
+                          onPressed: () =>
+                              serviceProvider.toggleFavorite(usluga.id),
+                        ),
+                      ),
+                    );
+                  }
                 },
               );
             },
@@ -356,6 +401,116 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _CatalogViewTabs extends StatelessWidget {
+  const _CatalogViewTabs({
+    required this.selected,
+    required this.favoriteCount,
+    required this.onSelected,
+  });
+
+  final ServiceCatalogTab selected;
+  final int favoriteCount;
+  final ValueChanged<ServiceCatalogTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<ServiceCatalogTab>(
+      showSelectedIcon: false,
+      segments: [
+        const ButtonSegment(
+          value: ServiceCatalogTab.all,
+          label: Text('All Services'),
+        ),
+        ButtonSegment(
+          value: ServiceCatalogTab.favorites,
+          label: Text(
+            favoriteCount > 0 ? 'Favorites ($favoriteCount)' : 'Favorites',
+          ),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (value) => onSelected(value.first),
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.62);
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? const Color(0xFF7B4DFF)
+              : Colors.white.withValues(alpha: 0.04);
+        }),
+        side: WidgetStateProperty.all(
+          BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        shape: WidgetStateProperty.all(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoritesEmptyState extends StatelessWidget {
+  const _FavoritesEmptyState({required this.onBrowseAll});
+
+  final VoidCallback onBrowseAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.favorite_border_rounded,
+              size: 44,
+              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.55),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'No favorite services yet',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFF5F3FA),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Save services you use often for faster access.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.58),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: onBrowseAll,
+              style: FilledButton.styleFrom(
+                backgroundColor: NuaLuxuryTokens.softPurpleGlow,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text('Browse all services'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -429,12 +584,14 @@ class _CatalogSummaryRow extends StatelessWidget {
     required this.categoryCount,
     required this.favoriteCount,
     required this.averagePrice,
+    this.onFavoritesTap,
   });
 
   final int totalServices;
   final int categoryCount;
   final int favoriteCount;
   final String? averagePrice;
+  final VoidCallback? onFavoritesTap;
 
   @override
   Widget build(BuildContext context) {
@@ -459,6 +616,7 @@ class _CatalogSummaryRow extends StatelessWidget {
             value: '$favoriteCount',
             icon: Icons.favorite_border_rounded,
             accent: const Color(0xFFD4AF7A),
+            onTap: onFavoritesTap,
           ),
           _SummaryMetricCard(
             label: 'Average Price',
@@ -502,16 +660,18 @@ class _SummaryMetricCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.accent,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
+    final card = ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
@@ -564,6 +724,13 @@ class _SummaryMetricCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (onTap == null) return card;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: card),
     );
   }
 }
@@ -1047,12 +1214,14 @@ class _CatalogEmptyState extends StatelessWidget {
   const _CatalogEmptyState({
     required this.hasFilters,
     required this.isAdmin,
+    this.isFavoritesTab = false,
     this.onClearFilters,
     this.onAddService,
   });
 
   final bool hasFilters;
   final bool isAdmin;
+  final bool isFavoritesTab;
   final VoidCallback? onClearFilters;
   final VoidCallback? onAddService;
 
@@ -1081,7 +1250,9 @@ class _CatalogEmptyState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               hasFilters
-                  ? 'Try changing filters or add a new service.'
+                  ? (isFavoritesTab
+                      ? 'No favorite services match your search or filters.'
+                      : 'Try changing filters or add a new service.')
                   : 'Add your first treatment to build the catalog.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(

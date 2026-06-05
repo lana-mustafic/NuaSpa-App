@@ -421,7 +421,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
         icon: Icons.favorite_border,
         label: 'Favorites',
         subtitle: 'Saved services',
-        onTap: () => nav.goTo(DesktopRouteKey.favorites),
+        onTap: () => nav.goToCatalogFavorites(),
       ),
     ];
   }

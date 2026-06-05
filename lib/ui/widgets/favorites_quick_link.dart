@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../screens/favorites/favorites_screen.dart';
+import '../../providers/mobile_nav_provider.dart';
+import '../../providers/service_provider.dart';
 import '../theme/mobile_spa_theme.dart';
 
 /// Kratki link prema ekranu favorita (mobile).
@@ -31,12 +33,10 @@ class FavoritesQuickLink extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () {
-            Navigator.push<void>(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => const FavoritesScreen(),
-              ),
-            );
+            context
+                .read<ServiceProvider>()
+                .setCatalogTab(ServiceCatalogTab.favorites);
+            context.read<MobileNavProvider>().setTab(1);
           },
           child: Padding(
             padding: EdgeInsets.symmetric(

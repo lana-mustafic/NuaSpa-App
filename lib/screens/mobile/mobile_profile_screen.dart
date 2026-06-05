@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../reservations/reservation_list_screen.dart';
-import '../favorites/favorites_screen.dart';
+import '../../providers/mobile_nav_provider.dart';
+import '../../providers/service_provider.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 
 class MobileProfileScreen extends StatelessWidget {
@@ -42,12 +43,10 @@ class MobileProfileScreen extends StatelessWidget {
           icon: Icons.favorite_outline,
           label: 'Favorites',
           onTap: () {
-            Navigator.push<void>(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => const FavoritesScreen(),
-              ),
-            );
+            context
+                .read<ServiceProvider>()
+                .setCatalogTab(ServiceCatalogTab.favorites);
+            context.read<MobileNavProvider>().setTab(1);
           },
           visible: !auth.isZaposlenik,
         ),

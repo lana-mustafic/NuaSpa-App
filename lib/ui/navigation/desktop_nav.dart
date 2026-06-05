@@ -45,6 +45,7 @@ class DesktopNav extends ChangeNotifier {
   String _clientSearchQuery = '';
   String _therapistSearchQuery = '';
   String _catalogSearchQuery = '';
+  bool _pendingCatalogFavoritesTab = false;
   String? _therapistPageSummary;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -139,12 +140,27 @@ class DesktopNav extends ChangeNotifier {
   }
 
   void goTo(DesktopRouteKey r) {
+    if (r == DesktopRouteKey.favorites) {
+      goToCatalogFavorites();
+      return;
+    }
     if (_route == r) return;
     if (_route == DesktopRouteKey.adminCalendar &&
         r != DesktopRouteKey.adminCalendar) {
       _calendarSearchCtrl?.clear();
     }
     _route = r;
+    notifyListeners();
+  }
+
+  void goToCatalogFavorites() {
+    _pendingCatalogFavoritesTab = true;
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
+    if (_route != DesktopRouteKey.catalog) {
+      _route = DesktopRouteKey.catalog;
+    }
     notifyListeners();
   }
 
@@ -321,5 +337,11 @@ class DesktopNav extends ChangeNotifier {
     final q = _pendingCatalogSearch;
     _pendingCatalogSearch = null;
     return q;
+  }
+
+  bool takePendingCatalogFavoritesTab() {
+    final pending = _pendingCatalogFavoritesTab;
+    _pendingCatalogFavoritesTab = false;
+    return pending;
   }
 }

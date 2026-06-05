@@ -16,7 +16,6 @@ import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/desktop/luxury_placeholder_screen.dart';
 import '../../screens/desktop/luxury_reviews_dashboard_screen.dart';
 import '../../screens/desktop/luxury_settings_screen.dart';
-import '../../screens/favorites/favorites_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_appointments_screen.dart';
 import '../../screens/therapist/therapist_dashboard_screen.dart';
@@ -128,11 +127,6 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.diamond_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.favorites,
-        label: 'Favorites',
-        icon: Icons.favorite_border,
-      ),
-      LuxurySideItem(
         route: DesktopRouteKey.reviews,
         label: 'Reviews',
         icon: Icons.reviews_outlined,
@@ -206,11 +200,6 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.event_note_outlined,
       ),
       LuxurySideItem(
-        route: DesktopRouteKey.favorites,
-        label: 'Favorites',
-        icon: Icons.favorite_border,
-      ),
-      LuxurySideItem(
         route: DesktopRouteKey.settings,
         label: 'Settings',
         icon: Icons.tune_rounded,
@@ -265,7 +254,7 @@ class _DesktopShellState extends State<DesktopShell> {
         case DesktopRouteKey.adminCalendar:
           return auth.isAdmin ? const AdminCalendarScreen() : widget.home;
         case DesktopRouteKey.favorites:
-          return const FavoritesScreen();
+          return const ServiceCatalogScreen();
         case DesktopRouteKey.schedule:
           return auth.isZaposlenik
               ? const TherapistScheduleScreen()
