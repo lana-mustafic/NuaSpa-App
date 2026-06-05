@@ -213,6 +213,13 @@ class DesktopNav extends ChangeNotifier {
       'treatment',
       'usluga',
       'service',
+      'beauty',
+      'brow',
+      'lash',
+      'makeup',
+      'make-up',
+      'wellness',
+      'body',
     ];
     if (serviceHints.any((h) => lower.contains(h))) {
       goToCatalogWithSearch(t);

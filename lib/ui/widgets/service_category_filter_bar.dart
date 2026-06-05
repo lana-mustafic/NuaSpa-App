@@ -30,8 +30,16 @@ class ServiceCategoryFilterBar extends StatelessWidget {
     if (lower.contains('facial') || lower.contains('skincare')) return 1;
     if (lower.contains('body')) return 2;
     if (lower.contains('wellness')) return 3;
-    if (lower.contains('beauty')) return 4;
+    if (_isBeautyCategory(lower)) return 4;
     return 10;
+  }
+
+  static bool _isBeautyCategory(String lower) {
+    return lower.contains('beauty') ||
+        lower.contains('brow') ||
+        lower.contains('lash') ||
+        lower.contains('makeup') ||
+        lower.contains('make-up');
   }
 
   static String displayLabel(String naziv) {
@@ -42,10 +50,39 @@ class ServiceCategoryFilterBar extends StatelessWidget {
     }
     if (lower.contains('body')) return 'Body';
     if (lower.contains('wellness')) return 'Wellness';
-    if (lower.contains('beauty')) return 'Beauty';
+    if (_isBeautyCategory(lower)) return 'Beauty';
     final trimmed = naziv.trim();
     if (trimmed.length <= 16) return trimmed;
     return '${trimmed.substring(0, 14).trim()}…';
+  }
+
+  static Map<int, String> displayLabelsFor(List<KategorijaUsluga> categories) {
+    final normalized = <int, String>{
+      for (final c in categories) c.id: displayLabel(c.naziv),
+    };
+    final counts = <String, int>{};
+    for (final label in normalized.values) {
+      counts[label] = (counts[label] ?? 0) + 1;
+    }
+    return {
+      for (final c in categories)
+        c.id: counts[normalized[c.id]!]! > 1
+            ? _disambiguatedLabel(c.naziv)
+            : normalized[c.id]!,
+    };
+  }
+
+  static String _disambiguatedLabel(String naziv) {
+    final trimmed = naziv.trim();
+    if (trimmed.length <= 18) return trimmed;
+    return '${trimmed.substring(0, 16).trim()}…';
+  }
+
+  static String labelFor(
+    KategorijaUsluga category,
+    List<KategorijaUsluga> categories,
+  ) {
+    return displayLabelsFor(categories)[category.id] ?? displayLabel(category.naziv);
   }
 
   @override
@@ -61,6 +98,7 @@ class ServiceCategoryFilterBar extends StatelessWidget {
         if (pa != pb) return pa.compareTo(pb);
         return a.naziv.compareTo(b.naziv);
       });
+    final labels = displayLabelsFor(sorted);
 
     final visibleCap = maxVisible <= 1 ? 1 : maxVisible - 1;
     final visible = sorted.take(visibleCap).toList();
@@ -87,7 +125,7 @@ class ServiceCategoryFilterBar extends StatelessWidget {
             }
             final cat = sorted[index - 1];
             return _MobilePill(
-              label: displayLabel(cat.naziv),
+              label: labels[cat.id]!,
               selected: selectedCategoryId == cat.id,
               onTap: () => onSelected(cat.id),
             );
@@ -116,6 +154,7 @@ class ServiceCategoryFilterBar extends StatelessWidget {
           if (overflow.isNotEmpty && index == overflowIndex) {
             return _MoreCategoriesChip(
               overflow: overflow,
+              labels: labels,
               selectedCategoryId: selectedCategoryId,
               overflowSelected: overflowSelected,
               onSelected: onSelected,
@@ -124,7 +163,7 @@ class ServiceCategoryFilterBar extends StatelessWidget {
 
           final cat = visible[index - 1];
           return _LuxuryChip(
-            label: displayLabel(cat.naziv),
+            label: labels[cat.id]!,
             selected: selectedCategoryId == cat.id,
             onTap: () => onSelected(cat.id),
           );
@@ -198,12 +237,14 @@ class _LuxuryChip extends StatelessWidget {
 class _MoreCategoriesChip extends StatelessWidget {
   const _MoreCategoriesChip({
     required this.overflow,
+    required this.labels,
     required this.selectedCategoryId,
     required this.overflowSelected,
     required this.onSelected,
   });
 
   final List<KategorijaUsluga> overflow;
+  final Map<int, String> labels;
   final int? selectedCategoryId;
   final bool overflowSelected;
   final ValueChanged<int?> onSelected;
@@ -226,7 +267,7 @@ class _MoreCategoriesChip extends StatelessWidget {
             (c) => PopupMenuItem<int>(
               value: c.id,
               child: Text(
-                ServiceCategoryFilterBar.displayLabel(c.naziv),
+                labels[c.id]!,
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: selectedCategoryId == c.id
@@ -242,9 +283,7 @@ class _MoreCategoriesChip extends StatelessWidget {
           .toList(),
       child: _LuxuryChip(
         label: overflowSelected
-            ? ServiceCategoryFilterBar.displayLabel(
-                overflow.firstWhere((c) => c.id == selectedCategoryId).naziv,
-              )
+            ? labels[overflow.firstWhere((c) => c.id == selectedCategoryId).id]!
             : 'More',
         selected: overflowSelected,
         onTap: () {},
