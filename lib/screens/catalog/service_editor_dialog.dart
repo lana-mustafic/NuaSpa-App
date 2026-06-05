@@ -491,24 +491,20 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                             label: 'Description',
                             helper:
                                 'Explain the treatment, benefits, and what the client can expect.',
-                            child: SizedBox(
-                              height: 120,
-                              child: LuxuryModalTextField(
-                                controller: _opisCtrl,
-                                hint:
-                                    'A relaxing full-body massage focused on muscle tension relief...',
-                                maxLines: null,
-                                expands: true,
-                                minHeight: 120,
-                                textAlignVertical: TextAlignVertical.top,
-                                contentPadding: const EdgeInsets.fromLTRB(
-                                  18,
-                                  16,
-                                  18,
-                                  16,
-                                ),
-                                validator: _ServiceEditorValidators.description,
+                            child: LuxuryModalTextField(
+                              controller: _opisCtrl,
+                              hint:
+                                  'A relaxing full-body massage focused on muscle tension relief...',
+                              maxLines: 5,
+                              minHeight: 120,
+                              textAlignVertical: TextAlignVertical.top,
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                18,
+                                16,
+                                18,
+                                16,
                               ),
+                              validator: _ServiceEditorValidators.description,
                             ),
                           ),
                           const SizedBox(height: 18),
