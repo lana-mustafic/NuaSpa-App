@@ -65,7 +65,7 @@ class _AdminCategoriesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ServiceCategoryManagerPanel();
+    return const ServiceCategoryManagerPanel(showInlineHeader: true);
   }
 }
 
