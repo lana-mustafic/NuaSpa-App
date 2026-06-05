@@ -8,6 +8,10 @@ import '../../core/payments/stripe_payment_service.dart';
 import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/primary_button.dart';
+import '../catalog/service_details_screen.dart';
+
+bool _isCompletedReservation(Rezervacija r) =>
+    !r.isOtkazana && r.status.toLowerCase() == 'completed';
 
 class ReservationListScreen extends StatefulWidget {
   const ReservationListScreen({super.key});
@@ -221,9 +225,11 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                     label: Text(
                                       r.isOtkazana
                                           ? 'Otkazana'
-                                          : (r.isPotvrdjena
-                                              ? 'Potvrđena'
-                                              : 'Na čekanju'),
+                                          : (_isCompletedReservation(r)
+                                              ? 'Završena'
+                                              : (r.isPotvrdjena
+                                                  ? 'Potvrđena'
+                                                  : 'Na čekanju')),
                                     ),
                                   ),
                                 ),
@@ -285,14 +291,38 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      if (!hideFab && _isCompletedReservation(r))
+                                        Tooltip(
+                                          message:
+                                              'Ocijeni uslugu nakon završenog termina',
+                                          child: IconButton(
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      ServiceDetailsScreen(
+                                                    serviceId: r.uslugaId,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            icon: const Icon(
+                                              Icons.rate_review_outlined,
+                                            ),
+                                          ),
+                                        ),
                                       Tooltip(
                                         message: r.isOtkazana
                                             ? 'Već otkazana'
-                                            : (r.isPlacena
-                                                ? 'Otkaži i refundiraj plaćenu rezervaciju'
-                                                : 'Otkaži rezervaciju'),
+                                            : (_isCompletedReservation(r)
+                                                ? 'Završene rezervacije se ne mogu otkazati'
+                                                : (r.isPlacena
+                                                    ? 'Otkaži i refundiraj plaćenu rezervaciju'
+                                                    : 'Otkaži rezervaciju')),
                                         child: IconButton(
-                                          onPressed: r.isOtkazana
+                                          onPressed: r.isOtkazana ||
+                                                  _isCompletedReservation(r)
                                               ? null
                                               : () => _cancelReservation(r),
                                           icon: const Icon(Icons.cancel_outlined),

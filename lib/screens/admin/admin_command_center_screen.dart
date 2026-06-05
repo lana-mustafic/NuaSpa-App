@@ -127,28 +127,35 @@ class _ActivityEvent {
     required this.text,
     required this.icon,
     required this.color,
+    this.route,
   });
 
   final DateTime time;
   final String text;
   final IconData icon;
   final Color color;
+  final DesktopRouteKey? route;
 }
 
 List<_ActivityEvent> _activityFromApi(List<ActivityFeedItem> items) {
   return items.map((item) {
     late final IconData icon;
     late final Color color;
+    DesktopRouteKey? route;
     switch (item.tip) {
       case 'payment':
         icon = Icons.payments_outlined;
         color = _DashUi.green;
+        break;
       case 'review':
         icon = Icons.star_rounded;
         color = _DashUi.orange;
+        route = DesktopRouteKey.reviews;
+        break;
       case 'client':
         icon = Icons.person_add_alt_1_outlined;
         color = _DashUi.purple;
+        break;
       default:
         icon = Icons.event_available_outlined;
         color = _DashUi.blue;
@@ -162,6 +169,7 @@ List<_ActivityEvent> _activityFromApi(List<ActivityFeedItem> items) {
       text: text,
       icon: icon,
       color: color,
+      route: route,
     );
   }).toList();
 }
@@ -211,6 +219,7 @@ List<_ActivityEvent> _buildActivityFeedFallback(
       icon: Icons.star_rounded,
       color: _DashUi.orange,
       text: 'New review received (${rv.ocjena}★) · ${rv.korisnikPunoIme}',
+      route: DesktopRouteKey.reviews,
     ));
   }
 
@@ -1298,6 +1307,53 @@ class _PrimaryActionButtonState extends State<_PrimaryActionButton> {
   }
 }
 
+class _ActivityRow extends StatelessWidget {
+  const _ActivityRow({required this.event});
+
+  final _ActivityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(event.icon, size: 16, color: event.color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            event.text,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: _DashUi.textPrimary,
+            ),
+          ),
+        ),
+        if (event.route != null)
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 16,
+            color: Colors.white.withValues(alpha: 0.35),
+          ),
+      ],
+    );
+
+    if (event.route == null) return row;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.read<DesktopNav>().goTo(event.route!),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: row,
+        ),
+      ),
+    );
+  }
+}
+
 class _RecentActivityCard extends StatelessWidget {
   const _RecentActivityCard({required this.events});
 
@@ -1331,23 +1387,7 @@ class _RecentActivityCard extends StatelessWidget {
             ...events.map(
               (e) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(e.icon, size: 16, color: e.color),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        e.text,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          color: _DashUi.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: _ActivityRow(event: e),
               ),
             ),
         ],

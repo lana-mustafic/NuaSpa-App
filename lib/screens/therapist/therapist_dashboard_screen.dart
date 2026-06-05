@@ -640,6 +640,8 @@ class _PerformanceOverviewCard extends StatelessWidget {
         value: '$reviewCount',
         icon: Icons.rate_review_outlined,
         accent: _TdUi.lavender,
+        onTap: (context) =>
+            context.read<DesktopNav>().goTo(DesktopRouteKey.therapistReviews),
       ),
       _PerfMetricSpec(
         label: 'Repeat Clients',
@@ -714,12 +716,14 @@ class _PerfMetricSpec {
     required this.value,
     required this.icon,
     required this.accent,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color accent;
+  final void Function(BuildContext context)? onTap;
 }
 
 class _PerfMetricTile extends StatelessWidget {
@@ -729,7 +733,7 @@ class _PerfMetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -782,6 +786,17 @@ class _PerfMetricTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    if (spec.onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => spec.onTap!(context),
+        borderRadius: BorderRadius.circular(12),
+        child: content,
       ),
     );
   }
