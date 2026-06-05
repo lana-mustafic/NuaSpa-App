@@ -41,25 +41,22 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         if (!mounted) return;
         final nav = Provider.of<DesktopNav>(context, listen: false);
         final pending = nav.takePendingCatalogSearch();
-        final q = pending ?? nav.catalogSearchQuery;
+        final q = (pending ?? nav.catalogSearchQuery).trim();
         if (q.isNotEmpty) {
-          _applyCatalogSearch(q);
+          _syncCatalogSearchFromNav(q);
         }
       });
     });
   }
 
-  void _applyCatalogSearch(String query) {
+  void _syncCatalogSearchFromNav(String query) {
     final trimmed = query.trim();
+    if (trimmed == _syncedCatalogQuery) return;
     _syncedCatalogQuery = trimmed;
     context.read<ServiceProvider>().searchServices(
           trimmed,
           trackForRecommender: trimmed.isNotEmpty,
         );
-    final nav = context.read<DesktopNav>();
-    if (nav.catalogSearchQuery != trimmed) {
-      nav.setCatalogSearchQuery(trimmed);
-    }
   }
 
   void _clearFilters() {
@@ -145,7 +142,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     if (catalogQuery != _syncedCatalogQuery) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _applyCatalogSearch(catalogQuery);
+        _syncCatalogSearchFromNav(catalogQuery);
       });
     }
 
@@ -379,7 +376,7 @@ class _CatalogSummaryRow extends StatelessWidget {
 
         if (compact) {
           return SizedBox(
-            height: 100,
+            height: 96,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: cards.length,
@@ -389,13 +386,16 @@ class _CatalogSummaryRow extends StatelessWidget {
           );
         }
 
-        return Row(
-          children: [
-            for (var i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: 12),
-              Expanded(child: cards[i]),
+        return SizedBox(
+          height: 96,
+          child: Row(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                Expanded(child: cards[i]),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
@@ -422,8 +422,8 @@ class _SummaryMetricCard extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
-          height: 100,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          height: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.045),
             borderRadius: BorderRadius.circular(18),
@@ -433,31 +433,35 @@ class _SummaryMetricCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 28,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: accent.withValues(alpha: 0.28)),
                 ),
-                child: Icon(icon, size: 15, color: accent),
+                child: Icon(icon, size: 14, color: accent),
               ),
               const Spacer(),
               Text(
                 value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFFF5F3FA),
                   height: 1,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 11.5,
+                  fontSize: 11,
                   color: Colors.white.withValues(alpha: 0.55),
                   fontWeight: FontWeight.w500,
                 ),
@@ -771,9 +775,13 @@ class _ServiceCardMenu extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         ),
-        child: PopupMenuButton<String>(
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: PopupMenuButton<String>(
           tooltip: 'Service actions',
           padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
           icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Colors.white),
           color: const Color(0xFF1A1228),
           shape: RoundedRectangleBorder(
@@ -810,6 +818,7 @@ class _ServiceCardMenu extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

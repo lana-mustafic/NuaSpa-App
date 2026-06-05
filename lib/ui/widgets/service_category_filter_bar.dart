@@ -213,6 +213,8 @@ class _MoreCategoriesChip extends StatelessWidget {
     return PopupMenuButton<int>(
       tooltip: 'More categories',
       offset: const Offset(0, 44),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
       color: const Color(0xFF1A1228),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
@@ -238,18 +240,14 @@ class _MoreCategoriesChip extends StatelessWidget {
             ),
           )
           .toList(),
-      child: IgnorePointer(
-        child: _LuxuryChip(
-          label: overflowSelected
-              ? ServiceCategoryFilterBar.displayLabel(
-                  overflow
-                      .firstWhere((c) => c.id == selectedCategoryId)
-                      .naziv,
-                )
-              : 'More',
-          selected: overflowSelected,
-          onTap: () {},
-        ),
+      child: _LuxuryChip(
+        label: overflowSelected
+            ? ServiceCategoryFilterBar.displayLabel(
+                overflow.firstWhere((c) => c.id == selectedCategoryId).naziv,
+              )
+            : 'More',
+        selected: overflowSelected,
+        onTap: () {},
       ),
     );
   }
