@@ -50,7 +50,7 @@ Future<bool> showServiceEditorDialog(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Nema kategorija. Dodajte barem jednu kategoriju usluga.',
+          'No categories found. Add at least one service category first.',
         ),
       ),
     );
@@ -180,9 +180,9 @@ Future<bool> showServiceEditorDialog(
       content: Text(
         ok
             ? (existing == null
-                ? 'Usluga je uspješno dodana.'
-                : 'Usluga je uspješno ažurirana.')
-            : 'Spremanje usluge nije uspjelo. Provjerite unos.',
+                ? 'Service added successfully.'
+                : 'Service updated successfully.')
+            : 'Could not save service. Check the form and try again.',
       ),
     ),
   );

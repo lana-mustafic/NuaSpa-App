@@ -101,7 +101,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
       builder: (ctx) => AlertDialog(
         backgroundColor: _CategoryModalStyle.bgMid,
         title: Text(
-          existing == null ? 'Nova kategorija' : 'Uredi kategoriju',
+          existing == null ? 'New category' : 'Edit category',
           style: _CategoryModalStyle.titleStyle(ctx).copyWith(fontSize: 18),
         ),
         content: Form(
@@ -111,7 +111,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
             autofocus: true,
             style: const TextStyle(color: _CategoryModalStyle.textPrimary),
             decoration: InputDecoration(
-              labelText: 'Naziv kategorije',
+              labelText: 'Category name',
               labelStyle: const TextStyle(color: _CategoryModalStyle.textMuted),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -132,7 +132,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Odustani'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
@@ -140,7 +140,7 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
                 Navigator.pop(ctx, true);
               }
             },
-            child: const Text('Spremi'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -164,9 +164,9 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
         content: Text(
           ok
               ? (existing == null
-                  ? 'Kategorija je uspješno dodana.'
-                  : 'Kategorija je uspješno ažurirana.')
-              : 'Spremanje kategorije nije uspjelo.',
+                  ? 'Category added successfully.'
+                  : 'Category updated successfully.')
+              : 'Could not save category.',
         ),
       ),
     );

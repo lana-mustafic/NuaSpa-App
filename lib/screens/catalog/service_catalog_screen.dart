@@ -31,6 +31,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
   final ScrollController _scrollController = ScrollController();
   int _handledServiceAddRequest = 0;
   String _syncedCatalogQuery = '';
+  DesktopNav? _nav;
 
   @override
   void initState() {
@@ -48,6 +49,23 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         }
       });
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<DesktopNav>();
+    if (_nav != nav) {
+      _nav?.removeListener(_onNavSearchChanged);
+      _nav = nav;
+      _nav!.addListener(_onNavSearchChanged);
+      _onNavSearchChanged();
+    }
+  }
+
+  void _onNavSearchChanged() {
+    if (!mounted || _nav == null) return;
+    _syncCatalogSearchFromNav(_nav!.catalogSearchQuery);
   }
 
   void _syncCatalogSearchFromNav(String query) {
@@ -79,8 +97,15 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
 
   @override
   void dispose() {
+    _nav?.removeListener(_onNavSearchChanged);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openCategoryManager() async {
+    await showServiceCategoryManagerDialog(context);
+    if (!mounted) return;
+    await context.read<ServiceProvider>().fetchServices();
   }
 
   Future<void> _openServiceEditor(Usluga? existing) async {
@@ -138,19 +163,10 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     final auth = context.watch<AuthProvider>();
     final isAdmin = auth.isAdmin;
     final canFavorite = !auth.isZaposlenik;
-    final catalogQuery = nav.catalogSearchQuery;
-
-    if (catalogQuery != _syncedCatalogQuery) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _syncCatalogSearchFromNav(catalogQuery);
-      });
-    }
-
-    final visibleCategories = _categoriesWithServices(serviceProvider);
+    final filterCategories = _filterCategories(serviceProvider, isAdmin);
     final selectedId = serviceProvider.selectedCategoryId;
     if (selectedId != null &&
-        !visibleCategories.any((c) => c.id == selectedId)) {
+        !filterCategories.any((c) => c.id == selectedId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         serviceProvider.setCategoryFilter(null);
@@ -174,20 +190,21 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               _CatalogSummaryRow(
                 totalServices: serviceProvider.allServices.length,
-                categoryCount: visibleCategories.length,
+                categoryCount: isAdmin
+                    ? serviceProvider.categories.length
+                    : _categoriesWithServices(serviceProvider).length,
                 favoriteCount: serviceProvider.favoriteIds.length,
                 averagePrice: _averagePrice(serviceProvider.allServices),
               ),
             if (!serviceProvider.isLoading && !serviceProvider.loadFailed)
               const SizedBox(height: 16),
-            if (visibleCategories.isNotEmpty || isAdmin) ...[
+            if (filterCategories.isNotEmpty || isAdmin) ...[
               _CatalogFiltersRow(
-                categories: visibleCategories,
+                categories: filterCategories,
                 selectedCategoryId: serviceProvider.selectedCategoryId,
                 onCategorySelected: serviceProvider.setCategoryFilter,
                 showAdminActions: isAdmin,
-                onManageCategories: () =>
-                    showServiceCategoryManagerDialog(context),
+                onManageCategories: _openCategoryManager,
                 onAddService: () => _openServiceEditor(null),
               ),
               const SizedBox(height: 16),
@@ -212,6 +229,14 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         .where((id) => id > 0)
         .toSet();
     return provider.categories.where((c) => usedIds.contains(c.id)).toList();
+  }
+
+  List<KategorijaUsluga> _filterCategories(
+    ServiceProvider provider,
+    bool isAdmin,
+  ) {
+    if (isAdmin) return provider.categories;
+    return _categoriesWithServices(provider);
   }
 
   String? _averagePrice(List<Usluga> services) {
@@ -252,11 +277,12 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
             ? 5
             : (w >= 1100 ? 4 : (w >= 760 ? 3 : (w >= 480 ? 2 : 1)));
 
-        return Scrollbar(
-          controller: _scrollController,
-          child: GridView.builder(
+        final grid = GridView.builder(
             controller: _scrollController,
             primary: false,
+            physics: isAdmin
+                ? const AlwaysScrollableScrollPhysics()
+                : null,
             padding: EdgeInsets.zero,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
@@ -271,6 +297,7 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
 
               return _ServiceCatalogCard(
                 usluga: usluga,
+                categories: serviceProvider.categories,
                 isAdmin: isAdmin,
                 canFavorite: canFavorite,
                 isFavorite: isFav,
@@ -299,6 +326,20 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                 },
               );
             },
+          );
+
+        if (!isAdmin) {
+          return Scrollbar(
+            controller: _scrollController,
+            child: grid,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => serviceProvider.fetchServices(),
+          child: Scrollbar(
+            controller: _scrollController,
+            child: grid,
           ),
         );
       },
@@ -517,6 +558,7 @@ class _SummaryMetricCard extends StatelessWidget {
 class _ServiceCatalogCard extends StatefulWidget {
   const _ServiceCatalogCard({
     required this.usluga,
+    required this.categories,
     required this.isAdmin,
     required this.canFavorite,
     required this.isFavorite,
@@ -527,6 +569,7 @@ class _ServiceCatalogCard extends StatefulWidget {
   });
 
   final Usluga usluga;
+  final List<KategorijaUsluga> categories;
   final bool isAdmin;
   final bool canFavorite;
   final bool isFavorite;
@@ -545,8 +588,10 @@ class _ServiceCatalogCardState extends State<_ServiceCatalogCard> {
   @override
   Widget build(BuildContext context) {
     final u = widget.usluga;
-    final categoryLabel =
-        ServiceCategoryFilterBar.displayLabel(u.kategorija);
+    final categoryLabel = ServiceCategoryFilterBar.labelFor(
+      KategorijaUsluga(id: u.kategorijaUslugaId, naziv: u.kategorija),
+      widget.categories,
+    );
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
