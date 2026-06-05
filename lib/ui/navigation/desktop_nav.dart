@@ -44,6 +44,7 @@ class DesktopNav extends ChangeNotifier {
   String? _pendingClientSearch;
   String _clientSearchQuery = '';
   String _therapistSearchQuery = '';
+  String _catalogSearchQuery = '';
   String? _therapistPageSummary;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -91,6 +92,8 @@ class DesktopNav extends ChangeNotifier {
   AdminSuiteRoute get adminSuiteTarget => _adminSuiteTarget;
 
   String get therapistSearchQuery => _therapistSearchQuery;
+
+  String get catalogSearchQuery => _catalogSearchQuery;
 
   /// One-line roster stats shown under the Therapists page subtitle.
   String? get therapistPageSummary => _therapistPageSummary;
@@ -157,10 +160,21 @@ class DesktopNav extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCatalogSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_catalogSearchQuery == value && _route == DesktopRouteKey.catalog) {
+      return;
+    }
+    _catalogSearchQuery = value;
+    _pendingCatalogSearch = value.isEmpty ? null : value;
+    if (_route != DesktopRouteKey.catalog) {
+      _route = DesktopRouteKey.catalog;
+    }
+    notifyListeners();
+  }
+
   void goToCatalogWithSearch(String raw) {
-    final t = raw.trim();
-    _pendingCatalogSearch = t.isEmpty ? null : t;
-    goTo(DesktopRouteKey.catalog);
+    setCatalogSearchQuery(raw);
   }
 
   void goToClientsWithSearch(String raw) {

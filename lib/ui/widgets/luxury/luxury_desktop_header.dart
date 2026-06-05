@@ -428,9 +428,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Services',
-          subtitle: 'Manage treatments, pricing, and service categories.',
-          searchHint: 'Search services & treatments (Enter → Services)…',
-          onSearchSubmitted: nav.performAdminGlobalSearch,
+          subtitle: 'Manage treatments, pricing and categories.',
+          searchHint: 'Search services & treatments…',
+          initialSearchQuery: nav.catalogSearchQuery,
+          onSearchSubmitted: nav.setCatalogSearchQuery,
+          onSearchChanged: nav.setCatalogSearchQuery,
         );
       }
     }
