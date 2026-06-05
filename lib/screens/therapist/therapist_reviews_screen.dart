@@ -164,12 +164,16 @@ List<TherapistReviewRow> _filterReviews(
   switch (pill) {
     case '5 Stars':
       list = list.where((r) => r.ocjena >= 5).toList();
+      break;
     case '4 Stars':
       list = list.where((r) => r.ocjena == 4).toList();
+      break;
     case 'Positive':
       list = list.where((r) => r.ocjena >= 4).toList();
+      break;
     case 'Critical':
       list = list.where((r) => r.ocjena <= 2).toList();
+      break;
     default:
       break;
   }
@@ -195,10 +199,13 @@ List<TherapistReviewRow> _sortReviews(
   switch (mode) {
     case 'Oldest First':
       copy.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      break;
     case 'Highest Rating':
       copy.sort((a, b) => b.ocjena.compareTo(a.ocjena));
+      break;
     case 'Lowest Rating':
       copy.sort((a, b) => a.ocjena.compareTo(b.ocjena));
+      break;
     default:
       copy.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
@@ -215,7 +222,7 @@ class TherapistReviewsScreen extends StatefulWidget {
 class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
-  Future<List<TherapistReviewRow>>? _future;
+  Future<(List<TherapistReviewRow> items, String? error)>? _future;
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   String _filterPill = 'All Reviews';
@@ -261,7 +268,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
       child: RefreshIndicator(
         color: _RevUi.lavender,
         onRefresh: _reload,
-        child: FutureBuilder<List<TherapistReviewRow>>(
+        child: FutureBuilder<(List<TherapistReviewRow> items, String? error)>(
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
@@ -280,7 +287,23 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
               );
             }
 
-            final all = snap.data ?? [];
+            final loadError = snap.data?.$2;
+            if (loadError != null) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(32),
+                children: [
+                  Text(
+                    loadError,
+                    style: GoogleFonts.inter(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(onPressed: _reload, child: const Text('Retry')),
+                ],
+              );
+            }
+
+            final all = snap.data?.$1 ?? [];
             final stats = _computeStats(all);
             final filtered = _sortReviews(
               _filterReviews(
@@ -1077,7 +1100,33 @@ class _ReviewCardState extends State<_ReviewCard> {
                       child: Text('View details'),
                     ),
                   ],
-                  onSelected: (_) {},
+                  onSelected: (v) {
+                    if (v != 'view') return;
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: _RevUi.bgBottom,
+                        title: Text(
+                          widget.review.korisnikIme,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        content: SingleChildScrollView(
+                          child: Text(
+                            widget.review.komentar,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             );
