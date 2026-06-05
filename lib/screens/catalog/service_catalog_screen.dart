@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/catalog/catalog_admin_messages.dart';
 import '../../core/format/km_format.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/usluga.dart';
@@ -145,7 +146,19 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
     final err = await ApiService().deleteUsluga(u.id);
     if (!mounted) return;
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Couldn\'t delete service'),
+          content: Text(CatalogAdminMessages.serviceDeleteError(err)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Service deleted.')),

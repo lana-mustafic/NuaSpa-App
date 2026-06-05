@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/catalog/catalog_admin_messages.dart';
 import '../../core/validation/nua_validators.dart';
 import '../../models/kategorija_usluga.dart';
 
@@ -203,7 +204,26 @@ class _ServiceCategoryManagerPanelState extends State<ServiceCategoryManagerPane
     final err = await _api.deleteKategorijaUsluga(k.id);
     if (!mounted) return;
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _CategoryModalStyle.bgMid,
+          title: Text(
+            'Couldn\'t delete category',
+            style: _CategoryModalStyle.titleStyle(ctx).copyWith(fontSize: 18),
+          ),
+          content: Text(
+            CatalogAdminMessages.categoryDeleteError(err),
+            style: _CategoryModalStyle.subtitleStyle(ctx),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Category deleted.')),
