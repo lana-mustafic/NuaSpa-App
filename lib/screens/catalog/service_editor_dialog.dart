@@ -438,7 +438,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                 'The name clients see in the catalog and when booking.',
                             child: LuxuryModalTextField(
                               controller: _nazivCtrl,
-                              hint: 'e.g. Swedish Massage 60',
+                              hint: 'e.g. Swedish Massage',
                               validator: _ServiceEditorValidators.name,
                             ),
                           ),
@@ -455,11 +455,13 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                           ),
                           const SizedBox(height: 18),
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: _LuxuryField(
                                   label: 'Price (KM)',
                                   helper: 'Treatment price shown to clients.',
+                                  helperLines: 2,
                                   child: LuxuryModalTextField(
                                     controller: _cijenaCtrl,
                                     hint: '80.00',
@@ -476,6 +478,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                 child: _LuxuryField(
                                   label: 'Duration (minutes)',
                                   helper: 'Used for scheduling and calendar slots.',
+                                  helperLines: 2,
                                   child: LuxuryModalTextField(
                                     controller: _trajanjeCtrl,
                                     hint: '60',
@@ -606,21 +609,34 @@ class _LuxuryField extends StatelessWidget {
     required this.label,
     required this.child,
     this.helper,
+    this.helperLines = 1,
   });
 
   final String label;
   final Widget child;
   final String? helper;
+  final int helperLines;
 
   @override
   Widget build(BuildContext context) {
+    final helperStyle = LuxuryModalStyle.subtitleStyle(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: LuxuryModalStyle.labelStyle(context)),
         if (helper != null) ...[
           const SizedBox(height: 4),
-          Text(helper!, style: LuxuryModalStyle.subtitleStyle(context)),
+          SizedBox(
+            height: helperLines * (helperStyle.fontSize! * (helperStyle.height ?? 1.35)),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                helper!,
+                style: helperStyle,
+                maxLines: helperLines,
+              ),
+            ),
+          ),
         ],
         const SizedBox(height: 8),
         child,
