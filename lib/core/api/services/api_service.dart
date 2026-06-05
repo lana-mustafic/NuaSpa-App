@@ -49,29 +49,64 @@ class ApiService {
   /// Opcionalni filteri mapiraju na [UslugaSearchObject] na backendu.
   Future<List<Usluga>> getUsluge({String? naziv, double? maxCijena}) async {
     try {
-      final query = <String, dynamic>{
-        'pageSize': 100,
-      };
-      if (naziv != null && naziv.trim().isNotEmpty) {
-        query['Naziv'] = naziv.trim();
-      }
-      if (maxCijena != null) {
-        query['MaxCijena'] = maxCijena;
-      }
-
-      final response = await _dio.get<dynamic>(
-        'Usluga',
-        queryParameters: query,
-      );
-
-      return parsePagedItems(
-        response.data,
-        (json) => Usluga.fromJson(json),
+      return await getUslugePage(
+        page: 1,
+        naziv: naziv,
+        maxCijena: maxCijena,
       );
     } catch (e) {
       debugPrint('Greška u ApiService.getUsluge: $e');
       return [];
     }
+  }
+
+  Future<List<Usluga>> getUslugePage({
+    required int page,
+    int pageSize = 100,
+    String? naziv,
+    double? maxCijena,
+  }) async {
+    final query = <String, dynamic>{
+      'page': page,
+      'pageSize': pageSize,
+    };
+    if (naziv != null && naziv.trim().isNotEmpty) {
+      query['Naziv'] = naziv.trim();
+    }
+    if (maxCijena != null) {
+      query['MaxCijena'] = maxCijena;
+    }
+
+    final response = await _dio.get<dynamic>(
+      'Usluga',
+      queryParameters: query,
+    );
+
+    return parsePagedItems(
+      response.data,
+      (json) => Usluga.fromJson(json),
+    );
+  }
+
+  /// Service catalog: all pages (backend max pageSize = 100).
+  Future<List<Usluga>> getUslugeAll({
+    String? naziv,
+    double? maxCijena,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final all = <Usluga>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final items = await getUslugePage(
+        page: page,
+        pageSize: pageSize,
+        naziv: naziv,
+        maxCijena: maxCijena,
+      );
+      all.addAll(items);
+      if (items.length < pageSize) break;
+    }
+    return all;
   }
 
   /// Content-based preporuke s objašnjenjem (razlogTekst).
@@ -1217,18 +1252,39 @@ class ApiService {
 
   Future<List<KategorijaUsluga>> getKategorijeUsluga() async {
     try {
-      final response = await _dio.get<dynamic>(
-        'KategorijaUsluga',
-        queryParameters: {'pageSize': 100},
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => KategorijaUsluga.fromJson(json),
-      );
+      return await getKategorijeUslugaPage(page: 1);
     } catch (e) {
       debugPrint('Greška u ApiService.getKategorijeUsluga: $e');
       return [];
     }
+  }
+
+  Future<List<KategorijaUsluga>> getKategorijeUslugaPage({
+    required int page,
+    int pageSize = 100,
+  }) async {
+    final response = await _dio.get<dynamic>(
+      'KategorijaUsluga',
+      queryParameters: {'page': page, 'pageSize': pageSize},
+    );
+    return parsePagedItems(
+      response.data,
+      (json) => KategorijaUsluga.fromJson(json),
+    );
+  }
+
+  /// Service catalog: all category pages.
+  Future<List<KategorijaUsluga>> getKategorijeUslugaAll({
+    int pageSize = 100,
+    int maxPages = 20,
+  }) async {
+    final all = <KategorijaUsluga>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final items = await getKategorijeUslugaPage(page: page, pageSize: pageSize);
+      all.addAll(items);
+      if (items.length < pageSize) break;
+    }
+    return all;
   }
 
   Future<KategorijaUsluga?> createKategorijaUsluga(String naziv) async {

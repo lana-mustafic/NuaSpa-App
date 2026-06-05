@@ -75,14 +75,23 @@ class ServiceProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final results = await Future.wait([
-        _apiService.getUsluge(),
-        _apiService.getKategorijeUsluga(),
-        _apiService.getMyFavorites(),
+      final servicesAndCategories = await Future.wait([
+        _apiService.getUslugeAll(),
+        _apiService.getKategorijeUslugaAll(),
       ]);
-      _allServices = results[0] as List<Usluga>;
-      _categories = results[1] as List<KategorijaUsluga>;
-      _applyFavoriteList(results[2] as List<Usluga>);
+      _allServices = servicesAndCategories[0] as List<Usluga>;
+      _categories = servicesAndCategories[1] as List<KategorijaUsluga>;
+
+      var favoriteIds = <int>{};
+      try {
+        favoriteIds = await _apiService.getMyFavoriteIds();
+      } catch (e, st) {
+        debugPrint('Greška pri dohvatu favorita: $e\n$st');
+      }
+      _favoriteIds = favoriteIds;
+      _favoriteServices = _allServices
+          .where((u) => _favoriteIds.contains(u.id))
+          .toList();
       if (_selectedCategoryId != null &&
           !_categories.any((c) => c.id == _selectedCategoryId)) {
         _selectedCategoryId = null;
@@ -194,7 +203,12 @@ class ServiceProvider with ChangeNotifier {
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       list = list
-          .where((u) => u.naziv.toLowerCase().contains(q))
+          .where(
+            (u) =>
+                u.naziv.toLowerCase().contains(q) ||
+                u.kategorija.toLowerCase().contains(q) ||
+                u.opis.toLowerCase().contains(q),
+          )
           .toList();
     }
     _filteredServices = list;
