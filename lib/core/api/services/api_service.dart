@@ -258,7 +258,7 @@ class ApiService {
     }
   }
 
-  Future<List<TherapistReviewRow>> getTherapistMyReviews({
+  Future<(List<TherapistReviewRow> items, String? error)> getTherapistMyReviews({
     int maxReviews = 30,
   }) async {
     try {
@@ -267,15 +267,18 @@ class ApiService {
         queryParameters: {'maxReviews': maxReviews},
       );
       final data = response.data;
-      if (data is! List) return <TherapistReviewRow>[];
-      return data
+      if (data is! List) {
+        return (<TherapistReviewRow>[], 'Unexpected server response.');
+      }
+      final items = data
           .map<TherapistReviewRow>(
             (e) => TherapistReviewRow.fromJson(e as Map<String, dynamic>),
           )
           .toList();
+      return (items, null);
     } catch (e) {
       debugPrint('Greška u ApiService.getTherapistMyReviews: $e');
-      return <TherapistReviewRow>[];
+      return (<TherapistReviewRow>[], 'Could not load reviews.');
     }
   }
 
@@ -1152,19 +1155,37 @@ class ApiService {
     }
   }
 
-  Future<List<Recenzija>> getRecenzijeByUsluga(int uslugaId) async {
+  Future<RecenzijeLoadResult> getRecenzijeByUsluga(int uslugaId) async {
     try {
-      final response = await _dio.get<dynamic>(
-        'Recenzija',
-        queryParameters: {'uslugaId': uslugaId, 'pageSize': 50},
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => Recenzija.fromJson(json),
-      );
+      final all = <Recenzija>[];
+      var page = 1;
+      const pageSize = 50;
+
+      while (page <= 20) {
+        final response = await _dio.get<dynamic>(
+          'Recenzija',
+          queryParameters: {
+            'uslugaId': uslugaId,
+            'page': page,
+            'pageSize': pageSize,
+          },
+        );
+        final batch = parsePagedItems(
+          response.data,
+          (json) => Recenzija.fromJson(json),
+        );
+        all.addAll(batch);
+        final total = parsePagedTotal(response.data);
+        if (batch.isEmpty || total == null || all.length >= total) break;
+        page++;
+      }
+
+      return RecenzijeLoadResult(items: all);
     } catch (e) {
       debugPrint('Greška u ApiService.getRecenzijeByUsluga: $e');
-      return [];
+      return const RecenzijeLoadResult(
+        error: 'Could not load reviews. Check your connection.',
+      );
     }
   }
 
