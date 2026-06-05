@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
-import '../../core/validation/nua_validators.dart';
 import '../../widgets/forms/luxury_modal_text_field.dart';
 import '../../models/kategorija_usluga.dart';
 import '../../models/usluga.dart';
@@ -16,6 +15,54 @@ String _fileNameFromPath(String path) {
   final normalized = path.replaceAll(r'\', '/');
   final i = normalized.lastIndexOf('/');
   return i >= 0 ? normalized.substring(i + 1) : normalized;
+}
+
+/// English validation copy for the admin service editor only.
+abstract final class _ServiceEditorValidators {
+  static String? name(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Service name is required.';
+    }
+    if (value.trim().length > 200) {
+      return 'Service name must be 200 characters or fewer.';
+    }
+    return null;
+  }
+
+  static String? price(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Price is required.';
+    }
+    final n = double.tryParse(value.trim().replaceAll(',', '.'));
+    if (n == null || n <= 0) {
+      return 'Enter a valid price in KM (e.g. 80.00).';
+    }
+    return null;
+  }
+
+  static String? duration(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Duration is required.';
+    }
+    final n = int.tryParse(value.trim());
+    if (n == null) {
+      return 'Enter duration as whole minutes (e.g. 60).';
+    }
+    if (n < 15 || n > 480) {
+      return 'Duration must be between 15 and 480 minutes.';
+    }
+    return null;
+  }
+
+  static String? description(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Description is required.';
+    }
+    if (value.trim().length > 1000) {
+      return 'Description must be 1000 characters or fewer.';
+    }
+    return null;
+  }
 }
 
 class _ServiceEditorFormData {
@@ -386,11 +433,24 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _LuxuryField(
-                            label: 'Naziv usluge',
+                            label: 'Service name',
+                            helper:
+                                'The name clients see in the catalog and when booking.',
                             child: LuxuryModalTextField(
                               controller: _nazivCtrl,
-                              hint: 'npr. Švedska masaža',
-                              validator: NuaValidators.serviceName,
+                              hint: 'e.g. Swedish Massage 60',
+                              validator: _ServiceEditorValidators.name,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _LuxuryField(
+                            label: 'Category',
+                            helper:
+                                'Choose the catalog group used for filters and reporting.',
+                            child: _LuxuryCategoryDropdown(
+                              categories: widget.categories,
+                              selectedId: _categoryId,
+                              onSelected: (id) => setState(() => _categoryId = id),
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -398,26 +458,29 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                             children: [
                               Expanded(
                                 child: _LuxuryField(
-                                  label: 'Cijena (KM)',
+                                  label: 'Price (KM)',
+                                  helper: 'Treatment price shown to clients.',
                                   child: LuxuryModalTextField(
                                     controller: _cijenaCtrl,
                                     hint: '80.00',
-                                    keyboardType: const TextInputType.numberWithOptions(
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
                                       decimal: true,
                                     ),
-                                    validator: NuaValidators.positivePrice,
+                                    validator: _ServiceEditorValidators.price,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: _LuxuryField(
-                                  label: 'Trajanje (min)',
+                                  label: 'Duration (minutes)',
+                                  helper: 'Used for scheduling and calendar slots.',
                                   child: LuxuryModalTextField(
                                     controller: _trajanjeCtrl,
                                     hint: '60',
                                     keyboardType: TextInputType.number,
-                                    validator: NuaValidators.durationMinutes,
+                                    validator: _ServiceEditorValidators.duration,
                                   ),
                                 ),
                               ),
@@ -425,13 +488,15 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                           ),
                           const SizedBox(height: 18),
                           _LuxuryField(
-                            label: 'Opis',
+                            label: 'Description',
+                            helper:
+                                'Explain the treatment, benefits, and what the client can expect.',
                             child: SizedBox(
                               height: 120,
                               child: LuxuryModalTextField(
                                 controller: _opisCtrl,
                                 hint:
-                                    'Opišite tretman, benefite i iskustvo...',
+                                    'A relaxing full-body massage focused on muscle tension relief...',
                                 maxLines: null,
                                 expands: true,
                                 minHeight: 120,
@@ -442,22 +507,15 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
                                   18,
                                   16,
                                 ),
-                                validator: NuaValidators.serviceDescription,
+                                validator: _ServiceEditorValidators.description,
                               ),
                             ),
                           ),
                           const SizedBox(height: 18),
                           _LuxuryField(
-                            label: 'Category',
-                            child: _LuxuryCategoryDropdown(
-                              categories: widget.categories,
-                              selectedId: _categoryId,
-                              onSelected: (id) => setState(() => _categoryId = id),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          _LuxuryField(
-                            label: 'Service image',
+                            label: 'Cover image',
+                            helper:
+                                'Optional. JPG or PNG, max 8 MB. Shown on the service card.',
                             child: _LuxuryImageUploadBox(
                               fileName: _selectedImageLabel,
                               onTap: _pickImage,
@@ -491,14 +549,14 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.isNew ? 'Add New Service' : 'Edit Service',
+                  widget.isNew ? 'Add service' : 'Edit service',
                   style: LuxuryModalStyle.titleStyle(context),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   widget.isNew
-                      ? 'Create and organize premium spa treatments for your clients.'
-                      : 'Update treatment details, pricing and catalog presentation.',
+                      ? 'Add a treatment to your catalog with pricing, duration, category, and an optional cover image.'
+                      : 'Update how this treatment appears in the catalog, including pricing and booking duration.',
                   style: LuxuryModalStyle.subtitleStyle(context),
                 ),
               ],
@@ -538,7 +596,7 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
           ),
           const SizedBox(width: 12),
           _LuxuryPrimaryButton(
-            label: widget.isNew ? 'Save Service' : 'Save Changes',
+            label: widget.isNew ? 'Add service' : 'Save changes',
             onPressed: _submit,
           ),
         ],
@@ -548,10 +606,15 @@ class _LuxuryServiceEditorShellState extends State<_LuxuryServiceEditorShell> {
 }
 
 class _LuxuryField extends StatelessWidget {
-  const _LuxuryField({required this.label, required this.child});
+  const _LuxuryField({
+    required this.label,
+    required this.child,
+    this.helper,
+  });
 
   final String label;
   final Widget child;
+  final String? helper;
 
   @override
   Widget build(BuildContext context) {
@@ -559,6 +622,10 @@ class _LuxuryField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: LuxuryModalStyle.labelStyle(context)),
+        if (helper != null) ...[
+          const SizedBox(height: 4),
+          Text(helper!, style: LuxuryModalStyle.subtitleStyle(context)),
+        ],
         const SizedBox(height: 8),
         child,
       ],
@@ -792,14 +859,14 @@ class _LuxuryImageUploadBoxState extends State<_LuxuryImageUploadBox> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'Drag & drop image here',
+                          'Click to upload cover image',
                           style: LuxuryModalStyle.fieldStyle(context).copyWith(
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'or browse files',
+                          'JPG or PNG · max 8 MB',
                           style: LuxuryModalStyle.subtitleStyle(context)
                               .copyWith(fontSize: 12.5),
                         ),
