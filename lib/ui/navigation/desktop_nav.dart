@@ -45,6 +45,7 @@ class DesktopNav extends ChangeNotifier {
   String _clientSearchQuery = '';
   String _therapistSearchQuery = '';
   String _catalogSearchQuery = '';
+  String _reviewsSearchQuery = '';
   bool _pendingCatalogFavoritesTab = false;
   String? _therapistPageSummary;
   String _appointmentSearchQuery = '';
@@ -95,6 +96,8 @@ class DesktopNav extends ChangeNotifier {
   String get therapistSearchQuery => _therapistSearchQuery;
 
   String get catalogSearchQuery => _catalogSearchQuery;
+
+  String get reviewsSearchQuery => _reviewsSearchQuery;
 
   /// One-line roster stats shown under the Therapists page subtitle.
   String? get therapistPageSummary => _therapistPageSummary;
@@ -172,6 +175,18 @@ class DesktopNav extends ChangeNotifier {
     _adminSuiteMount++;
     if (_route != DesktopRouteKey.admin) {
       _route = DesktopRouteKey.admin;
+    }
+    notifyListeners();
+  }
+
+  void setReviewsSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_reviewsSearchQuery == value && _route == DesktopRouteKey.reviews) {
+      return;
+    }
+    _reviewsSearchQuery = value;
+    if (_route != DesktopRouteKey.reviews) {
+      _route = DesktopRouteKey.reviews;
     }
     notifyListeners();
   }

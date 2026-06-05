@@ -9,7 +9,6 @@ import '../../models/admin/admin_reviews_dashboard.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
-import 'widgets/add_review_sheet.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
 /// Premium dark-mode Reviews & Feedback dashboard (desktop), backed by
@@ -43,11 +42,14 @@ class _LuxuryReviewsDashboardScreenState
   int? _minOcjena;
   int? _maxOcjena;
   int? _filterUslugaId;
+  int? _filterZaposlenikId;
 
   List<Usluga> _usluge = [];
   List<Zaposlenik> _therapists = [];
 
   Timer? _searchDebounce;
+  DesktopNav? _nav;
+  String _syncedReviewsQuery = '';
 
   final ScrollController _mainScrollController = ScrollController();
   final ScrollController _rightScrollController = ScrollController();
@@ -62,9 +64,33 @@ class _LuxuryReviewsDashboardScreenState
     _bootstrap();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<DesktopNav>();
+    if (_nav != nav) {
+      _nav?.removeListener(_onNavSearchChanged);
+      _nav = nav;
+      _nav!.addListener(_onNavSearchChanged);
+      _onNavSearchChanged();
+    }
+  }
+
+  void _onNavSearchChanged() {
+    if (!mounted || _nav == null) return;
+    final q = _nav!.reviewsSearchQuery;
+    if (q == _syncedReviewsQuery) return;
+    _syncedReviewsQuery = q;
+    if (_tableSearch.text != q) {
+      _tableSearch.text = q;
+    }
+    _page = 1;
+    _load();
+  }
+
   Future<void> _bootstrap() async {
     final results = await Future.wait([
-      _api.getUsluge(),
+      _api.getUslugeAll(),
       _api.getZaposlenici(),
     ]);
     if (!mounted) return;
@@ -97,12 +123,13 @@ class _LuxuryReviewsDashboardScreenState
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
+      zaposlenikId: _filterZaposlenikId,
     );
     if (!mounted) return;
     setState(() {
       _loading = false;
       if (dash == null) {
-        _error = 'Nije moguće učitati recenzije. Provjerite vezu i admin ulogu.';
+        _error = 'Could not load reviews. Check your connection and admin role.';
         _data = null;
       } else {
         _data = dash;
@@ -158,42 +185,18 @@ class _LuxuryReviewsDashboardScreenState
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
+      zaposlenikId: _filterZaposlenikId,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          ok ? 'CSV izvještaj je spremljen i otvoren.' : 'Izvoz CSV nije uspio.',
+          ok ? 'CSV report saved and opened.' : 'CSV export failed.',
         ),
         behavior: SnackBarBehavior.floating,
         width: 380,
       ),
     );
-  }
-
-  Future<void> _openAddReview() async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => AddReviewSheet(
-        therapists: _therapists,
-        usluge: _usluge,
-        api: _api,
-      ),
-    );
-    if (!mounted) return;
-    if (saved == true) {
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Recenzija je dodana.'),
-          behavior: SnackBarBehavior.floating,
-          width: 380,
-        ),
-      );
-    }
   }
 
   Future<void> _openReviewDetail(AdminReviewRow r) async {
@@ -227,6 +230,7 @@ class _LuxuryReviewsDashboardScreenState
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _nav?.removeListener(_onNavSearchChanged);
     _tableSearch.removeListener(_onSearchChanged);
     _tableSearch.dispose();
     _mainScrollController.dispose();
@@ -319,7 +323,6 @@ class _LuxuryReviewsDashboardScreenState
                             rangeLabel: _rangeLabel(),
                             onPickRange: _pickRange,
                             onExport: _exportCsv,
-                            onAddReview: _openAddReview,
                           ),
                           SizedBox(height: gap),
                           _KpiRow(
@@ -331,7 +334,9 @@ class _LuxuryReviewsDashboardScreenState
                             controller: _tableSearch,
                             compact: tightHeight,
                             usluge: _usluge,
+                            therapists: _therapists,
                             filterUslugaId: _filterUslugaId,
+                            filterZaposlenikId: _filterZaposlenikId,
                             minOcjena: _minOcjena,
                             maxOcjena: _maxOcjena,
                             onRatingChanged: (min, max) {
@@ -345,6 +350,13 @@ class _LuxuryReviewsDashboardScreenState
                             onServiceChanged: (id) {
                               setState(() {
                                 _filterUslugaId = id;
+                                _page = 1;
+                              });
+                              _load();
+                            },
+                            onTherapistChanged: (id) {
+                              setState(() {
+                                _filterZaposlenikId = id;
                                 _page = 1;
                               });
                               _load();
@@ -457,7 +469,6 @@ class _HeaderGlassCard extends StatelessWidget {
     required this.rangeLabel,
     required this.onPickRange,
     required this.onExport,
-    required this.onAddReview,
   });
 
   final ThemeData theme;
@@ -465,7 +476,6 @@ class _HeaderGlassCard extends StatelessWidget {
   final String rangeLabel;
   final VoidCallback onPickRange;
   final VoidCallback onExport;
-  final VoidCallback onAddReview;
 
   @override
   Widget build(BuildContext context) {
@@ -578,11 +588,6 @@ class _HeaderGlassCard extends StatelessWidget {
                         compact: compact,
                         onTap: onPickRange,
                       ),
-                    ),
-                    const SizedBox(width: 18),
-                    _HeaderAddReviewButton(
-                      size: controlHeight,
-                      onTap: onAddReview,
                     ),
                     const SizedBox(width: 18),
                     _HeaderExportButton(
@@ -1144,26 +1149,39 @@ String _lookupServiceName(List<Usluga> list, int id) {
   return 'Service';
 }
 
+String _lookupTherapistName(List<Zaposlenik> list, int id) {
+  for (final z in list) {
+    if (z.id == id) return '${z.ime} ${z.prezime}'.trim();
+  }
+  return 'Therapist';
+}
+
 class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.controller,
     required this.compact,
     required this.usluge,
+    required this.therapists,
     required this.filterUslugaId,
+    required this.filterZaposlenikId,
     required this.minOcjena,
     required this.maxOcjena,
     required this.onRatingChanged,
     required this.onServiceChanged,
+    required this.onTherapistChanged,
   });
 
   final TextEditingController controller;
   final bool compact;
   final List<Usluga> usluge;
+  final List<Zaposlenik> therapists;
   final int? filterUslugaId;
+  final int? filterZaposlenikId;
   final int? minOcjena;
   final int? maxOcjena;
   final void Function(int? min, int? max) onRatingChanged;
   final void Function(int?) onServiceChanged;
+  final void Function(int?) onTherapistChanged;
 
   String _ratingLabel() {
     if (minOcjena == null && maxOcjena == null) return 'All ratings';
@@ -1224,6 +1242,24 @@ class _FilterBar extends StatelessWidget {
           ),
         );
 
+        final therapistMenu = PopupMenuButton<int?>(
+          onSelected: onTherapistChanged,
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: null, child: Text('All therapists')),
+            ...therapists.map(
+              (z) => PopupMenuItem(
+                value: z.id,
+                child: Text('${z.ime} ${z.prezime}'.trim()),
+              ),
+            ),
+          ],
+          child: _FilterDropdownPill(
+            label: filterZaposlenikId == null
+                ? 'All therapists'
+                : _lookupTherapistName(therapists, filterZaposlenikId!),
+          ),
+        );
+
         if (wide) {
           return Row(
             children: [
@@ -1235,6 +1271,8 @@ class _FilterBar extends StatelessWidget {
               Expanded(child: ratingMenu),
               SizedBox(width: compact ? 8 : 10),
               Expanded(child: serviceMenu),
+              SizedBox(width: compact ? 8 : 10),
+              Expanded(child: therapistMenu),
             ],
           );
         }
@@ -1249,6 +1287,7 @@ class _FilterBar extends StatelessWidget {
               children: [
                 ratingMenu,
                 serviceMenu,
+                therapistMenu,
               ],
             ),
           ],

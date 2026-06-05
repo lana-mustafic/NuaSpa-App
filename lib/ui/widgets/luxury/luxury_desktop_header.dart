@@ -558,7 +558,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
                         ? (q) => context
                             .read<DesktopNav>()
                             .setAppointmentSearchQuery(q)
-                        : null,
+                        : isReviews
+                            ? (q) => context
+                                .read<DesktopNav>()
+                                .setReviewsSearchQuery(q)
+                            : null,
                 onSubmitted: isTherapists
                     ? (q) =>
                         context.read<DesktopNav>().setTherapistSearchQuery(q)
@@ -566,9 +570,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
                         ? (q) => context
                             .read<DesktopNav>()
                             .setAppointmentSearchQuery(q)
-                        : isCalendar
-                            ? (_) {}
-                            : null,
+                        : isReviews
+                            ? (q) => context
+                                .read<DesktopNav>()
+                                .setReviewsSearchQuery(q)
+                            : isCalendar
+                                ? (_) {}
+                                : null,
               ),
             ),
             SizedBox(width: compact ? 10 : 14),
