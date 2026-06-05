@@ -2,8 +2,10 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../core/preporuka/preporuka_tracker.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../models/recenzija.dart';
@@ -78,7 +80,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   final ScrollController _rightScrollController = ScrollController();
 
   late final Future<Usluga?> _serviceFuture;
-  late Future<List<Recenzija>> _recenzijeFuture;
+  late Future<RecenzijeLoadResult> _recenzijeFuture;
 
   final TextEditingController _komentarController = TextEditingController();
   int _ocjena = 5;
@@ -87,7 +89,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   bool _therapistsLoading = false;
   int? _therapistsLoadedForUslugaId;
 
-  static const int _maxCommentLength = 500;
+  static const int _maxCommentLength = 1000;
 
   @override
   void initState() {
@@ -143,13 +145,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     final komentar = _komentarController.text.trim();
     if (_selectedZaposlenikId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Odaberite terapeuta.')),
+        const SnackBar(content: Text('Select a therapist.')),
       );
       return;
     }
     if (komentar.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unesite komentar.')),
+        const SnackBar(content: Text('Enter a comment.')),
       );
       return;
     }
@@ -204,6 +206,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   Widget _buildMobileSpaDetails(BuildContext context, Usluga service) {
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final canSubmitReview = !context.watch<AuthProvider>().isZaposlenik;
 
     return Scaffold(
       backgroundColor: MobileSpaColors.softWhite,
@@ -290,6 +293,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   const SizedBox(height: 26),
                   _MobileReviewsBlock(
                     recenzijeFuture: _recenzijeFuture,
+                    canSubmitReview: canSubmitReview,
+                    maxCommentLength: _maxCommentLength,
                     ocjena: _ocjena,
                     onRatingChanged: (v) => setState(() => _ocjena = v),
                     komentarController: _komentarController,
@@ -311,6 +316,8 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   }
 
   Widget _buildDesktopDetails(BuildContext context, Usluga service) {
+    final canSubmitReview = !context.watch<AuthProvider>().isZaposlenik;
+
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -338,6 +345,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 service: service,
                 scrollController: _rightScrollController,
                 recenzijeFuture: _recenzijeFuture,
+                canSubmitReview: canSubmitReview,
                 ocjena: _ocjena,
                 onRatingChanged: (v) => setState(() => _ocjena = v),
                 komentarController: _komentarController,
@@ -539,6 +547,7 @@ class _RightDetailsPanel extends StatelessWidget {
     required this.service,
     required this.scrollController,
     required this.recenzijeFuture,
+    required this.canSubmitReview,
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
@@ -554,7 +563,8 @@ class _RightDetailsPanel extends StatelessWidget {
 
   final Usluga service;
   final ScrollController scrollController;
-  final Future<List<Recenzija>> recenzijeFuture;
+  final Future<RecenzijeLoadResult> recenzijeFuture;
+  final bool canSubmitReview;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
@@ -629,12 +639,14 @@ class _RightDetailsPanel extends StatelessWidget {
                           muted: description.isEmpty,
                         ),
                         const SizedBox(height: 24),
-                        FutureBuilder<List<Recenzija>>(
+                        FutureBuilder<RecenzijeLoadResult>(
                           future: recenzijeFuture,
                           builder: (context, snapshot) {
                             final loading =
                                 snapshot.connectionState == ConnectionState.waiting;
-                            final reviews = snapshot.data ?? [];
+                            final result = snapshot.data;
+                            final reviews = result?.items ?? [];
+                            final loadError = result?.error;
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -673,6 +685,21 @@ class _RightDetailsPanel extends StatelessWidget {
                                       ),
                                     ),
                                   )
+                                else if (loadError != null)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        loadError,
+                                        style: _DetailsStyle.body(context),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextButton(
+                                        onPressed: onRefresh,
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  )
                                 else if (reviews.isEmpty)
                                   Text(
                                     'Be the first to review this service.',
@@ -685,49 +712,56 @@ class _RightDetailsPanel extends StatelessWidget {
                                       child: _ReviewCard(review: r),
                                     ),
                                   ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'Add a review',
-                                  style: _DetailsStyle.sectionTitle(context)
-                                      .copyWith(fontSize: 18),
-                                ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  'Therapist',
-                                  style: _DetailsStyle.label(context),
-                                ),
-                                const SizedBox(height: 8),
-                                _TherapistPicker(
-                                  therapists: therapists,
-                                  loading: therapistsLoading,
-                                  selectedId: selectedZaposlenikId,
-                                  onChanged: onTherapistChanged,
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  'Your rating',
-                                  style: _DetailsStyle.label(context),
-                                ),
-                                const SizedBox(height: 10),
-                                _GoldStarRating(
-                                  value: ocjena,
-                                  onChanged: onRatingChanged,
-                                ),
-                                const SizedBox(height: 18),
-                                Text(
-                                  'Comment',
-                                  style: _DetailsStyle.label(context),
-                                ),
-                                const SizedBox(height: 8),
-                                _CommentField(
-                                  controller: komentarController,
-                                  maxLength: maxCommentLength,
-                                ),
-                                const SizedBox(height: 18),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: _SubmitReviewButton(onPressed: onSubmit),
-                                ),
+                                if (canSubmitReview) ...[
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    'Add a review',
+                                    style: _DetailsStyle.sectionTitle(context)
+                                        .copyWith(fontSize: 18),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'You can leave a review after a completed appointment with the selected therapist.',
+                                    style: _DetailsStyle.body(context),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    'Therapist',
+                                    style: _DetailsStyle.label(context),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _TherapistPicker(
+                                    therapists: therapists,
+                                    loading: therapistsLoading,
+                                    selectedId: selectedZaposlenikId,
+                                    onChanged: onTherapistChanged,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    'Your rating',
+                                    style: _DetailsStyle.label(context),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _GoldStarRating(
+                                    value: ocjena,
+                                    onChanged: onRatingChanged,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    'Comment',
+                                    style: _DetailsStyle.label(context),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _CommentField(
+                                    controller: komentarController,
+                                    maxLength: maxCommentLength,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: _SubmitReviewButton(onPressed: onSubmit),
+                                  ),
+                                ],
                               ],
                             );
                           },
@@ -986,14 +1020,64 @@ class _ReviewCard extends StatelessWidget {
               _StarRow(value: review.ocjena, size: 16),
             ],
           ),
+          if (review.createdAt != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _formatReviewDate(review.createdAt!),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ),
+          ],
           if (review.komentar.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(review.komentar, style: _DetailsStyle.body(context)),
+          ],
+          if (review.adminOdgovor != null &&
+              review.adminOdgovor!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _DetailsStyle.accentPurple.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _DetailsStyle.accentPurple.withValues(alpha: 0.22),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Salon response',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _DetailsStyle.accentPurple,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    review.adminOdgovor!.trim(),
+                    style: _DetailsStyle.body(context),
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+String _formatReviewDate(DateTime date) {
+  final local = date.toLocal();
+  return '${local.day.toString().padLeft(2, '0')}.'
+      '${local.month.toString().padLeft(2, '0')}.'
+      '${local.year}';
 }
 
 class _StarRow extends StatelessWidget {
@@ -1296,6 +1380,8 @@ class _TherapistPicker extends StatelessWidget {
 class _MobileReviewsBlock extends StatelessWidget {
   const _MobileReviewsBlock({
     required this.recenzijeFuture,
+    required this.canSubmitReview,
+    required this.maxCommentLength,
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
@@ -1307,7 +1393,9 @@ class _MobileReviewsBlock extends StatelessWidget {
     required this.onSubmit,
   });
 
-  final Future<List<Recenzija>> recenzijeFuture;
+  final Future<RecenzijeLoadResult> recenzijeFuture;
+  final bool canSubmitReview;
+  final int maxCommentLength;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
@@ -1320,10 +1408,14 @@ class _MobileReviewsBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Recenzija>>(
+    return FutureBuilder<RecenzijeLoadResult>(
       future: recenzijeFuture,
       builder: (context, snapshot) {
-        final reviews = snapshot.data ?? [];
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final result = snapshot.data;
+        final reviews = result?.items ?? [];
+        final loadError = result?.error;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1334,33 +1426,49 @@ class _MobileReviewsBlock extends StatelessWidget {
                 IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
               ],
             ),
-            if (reviews.isEmpty)
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (loadError != null) ...[
+              Text(loadError),
+              TextButton(onPressed: onRefresh, child: const Text('Retry')),
+            ] else if (reviews.isEmpty)
               const Text('No reviews for this service yet.')
             else
               ...reviews.map(
-                (r) => ListTile(
-                  title: Text(r.korisnikIme.isEmpty ? 'User' : r.korisnikIme),
-                  subtitle: Text(r.komentar),
+                (r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReviewCard(review: r),
                 ),
               ),
-            const SizedBox(height: 16),
-            _TherapistPicker(
-              therapists: therapists,
-              loading: therapistsLoading,
-              selectedId: selectedZaposlenikId,
-              onChanged: onTherapistChanged,
-            ),
-            const SizedBox(height: 12),
-            _GoldStarRating(value: ocjena, onChanged: onRatingChanged),
-            const SizedBox(height: 8),
-            TextField(
-              controller: komentarController,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(labelText: 'Comment'),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onSubmit, child: const Text('Submit')),
+            if (canSubmitReview) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Leave a review after a completed appointment with your therapist.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              _TherapistPicker(
+                therapists: therapists,
+                loading: therapistsLoading,
+                selectedId: selectedZaposlenikId,
+                onChanged: onTherapistChanged,
+              ),
+              const SizedBox(height: 12),
+              _GoldStarRating(value: ocjena, onChanged: onRatingChanged),
+              const SizedBox(height: 8),
+              TextField(
+                controller: komentarController,
+                minLines: 3,
+                maxLines: 5,
+                maxLength: maxCommentLength,
+                decoration: const InputDecoration(labelText: 'Comment'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: onSubmit, child: const Text('Submit review')),
+            ],
           ],
         );
       },
