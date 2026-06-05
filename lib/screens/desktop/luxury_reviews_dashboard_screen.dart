@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -52,7 +52,6 @@ class _LuxuryReviewsDashboardScreenState
   String _syncedReviewsQuery = '';
 
   final ScrollController _mainScrollController = ScrollController();
-  final ScrollController _rightScrollController = ScrollController();
 
   @override
   void initState() {
@@ -215,7 +214,7 @@ class _LuxuryReviewsDashboardScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Odgovor salona je spremljen.'),
+          content: Text('Salon response saved.'),
           behavior: SnackBarBehavior.floating,
           width: 380,
         ),
@@ -234,7 +233,6 @@ class _LuxuryReviewsDashboardScreenState
     _tableSearch.removeListener(_onSearchChanged);
     _tableSearch.dispose();
     _mainScrollController.dispose();
-    _rightScrollController.dispose();
     super.dispose();
   }
 
@@ -247,17 +245,16 @@ class _LuxuryReviewsDashboardScreenState
       return '${m[d.month - 1]} ${d.day}, ${d.year}';
     }
 
-    return '${f(_rangeFrom)} – ${f(_rangeTo)}';
+    return '${f(_rangeFrom)} â€“ ${f(_rangeTo)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mq = MediaQuery.sizeOf(context);
-    final showRight = mq.width >= 1300;
     final tightHeight = mq.height < 720;
-    final pad = tightHeight ? 14.0 : 20.0;
-    final gap = tightHeight ? 10.0 : 14.0;
+    final pad = tightHeight ? 16.0 : 24.0;
+    final gap = tightHeight ? 12.0 : 16.0;
 
     if (_error != null && _data == null && !_loading) {
       return Center(
@@ -283,7 +280,7 @@ class _LuxuryReviewsDashboardScreenState
                   FilledButton.icon(
                     onPressed: _load,
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Pokušaj ponovno'),
+                    label: const Text('Try again'),
                   ),
                 ],
               ),
@@ -300,116 +297,91 @@ class _LuxuryReviewsDashboardScreenState
       children: [
         Positioned.fill(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 8 : 12, pad, pad),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Scrollbar(
-                    controller: _mainScrollController,
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
-                      controller: _mainScrollController,
-                      primary: false,
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: ClampingScrollPhysics(),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _HeaderGlassCard(
-                            theme: theme,
-                            compact: tightHeight,
-                            rangeLabel: _rangeLabel(),
-                            onPickRange: _pickRange,
-                            onExport: _exportCsv,
-                          ),
-                          SizedBox(height: gap),
-                          _KpiRow(
-                            dash: dash,
-                            compact: tightHeight,
-                          ),
-                          SizedBox(height: gap),
-                          _FilterBar(
-                            controller: _tableSearch,
-                            compact: tightHeight,
-                            usluge: _usluge,
-                            therapists: _therapists,
-                            filterUslugaId: _filterUslugaId,
-                            filterZaposlenikId: _filterZaposlenikId,
-                            minOcjena: _minOcjena,
-                            maxOcjena: _maxOcjena,
-                            onRatingChanged: (min, max) {
-                              setState(() {
-                                _minOcjena = min;
-                                _maxOcjena = max;
-                                _page = 1;
-                              });
-                              _load();
-                            },
-                            onServiceChanged: (id) {
-                              setState(() {
-                                _filterUslugaId = id;
-                                _page = 1;
-                              });
-                              _load();
-                            },
-                            onTherapistChanged: (id) {
-                              setState(() {
-                                _filterZaposlenikId = id;
-                                _page = 1;
-                              });
-                              _load();
-                            },
-                          ),
-                          SizedBox(height: gap),
-                          _ReviewsTable(
-                            rows: dash?.redovi ?? const [],
-                            compact: tightHeight,
-                            onViewReview: _openReviewDetail,
-                            page: _page,
-                            pageSize: _pageSize,
-                            total: dash?.ukupno ?? 0,
-                            onPage: (p) {
-                              setState(() => _page = p);
-                              _load();
-                            },
-                            onPageSize: (s) {
-                              setState(() {
-                                _pageSize = s;
-                                _page = 1;
-                              });
-                              _load();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 10 : 14, pad, pad),
+            child: Scrollbar(
+              controller: _mainScrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _mainScrollController,
+                primary: false,
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: ClampingScrollPhysics(),
                 ),
-                if (showRight) ...[
-                  SizedBox(width: tightHeight ? 14 : 18),
-                  SizedBox(
-                    width: 300,
-                    child: Scrollbar(
-                      controller: _rightScrollController,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: _rightScrollController,
-                        primary: false,
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: ClampingScrollPhysics(),
-                        ),
-                        child: _RightInsightsColumn(
-                          dash: dash,
-                          compact: tightHeight,
-                          onViewAllServices: _goToServicesCatalog,
-                        ),
-                      ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _PageHeader(
+                      theme: theme,
+                      rangeLabel: _rangeLabel(),
+                      onPickRange: _pickRange,
+                      onExport: _exportCsv,
                     ),
-                  ),
-                ],
-              ],
+                    SizedBox(height: gap),
+                    _KpiRow(dash: dash, compact: tightHeight),
+                    SizedBox(height: gap),
+                    _InsightsRow(
+                      dash: dash,
+                      theme: theme,
+                      compact: tightHeight,
+                      onViewAllServices: _goToServicesCatalog,
+                    ),
+                    SizedBox(height: gap),
+                    _FilterBar(
+                      controller: _tableSearch,
+                      compact: tightHeight,
+                      usluge: _usluge,
+                      therapists: _therapists,
+                      filterUslugaId: _filterUslugaId,
+                      filterZaposlenikId: _filterZaposlenikId,
+                      minOcjena: _minOcjena,
+                      maxOcjena: _maxOcjena,
+                      onRatingChanged: (min, max) {
+                        setState(() {
+                          _minOcjena = min;
+                          _maxOcjena = max;
+                          _page = 1;
+                        });
+                        _load();
+                      },
+                      onServiceChanged: (id) {
+                        setState(() {
+                          _filterUslugaId = id;
+                          _page = 1;
+                        });
+                        _load();
+                      },
+                      onTherapistChanged: (id) {
+                        setState(() {
+                          _filterZaposlenikId = id;
+                          _page = 1;
+                        });
+                        _load();
+                      },
+                    ),
+                    SizedBox(height: gap),
+                    _RecentReviewsSection(
+                      rows: dash?.redovi ?? const [],
+                      compact: tightHeight,
+                      onViewReview: _openReviewDetail,
+                      onViewServices: _goToServicesCatalog,
+                      page: _page,
+                      pageSize: _pageSize,
+                      total: dash?.ukupno ?? 0,
+                      onPage: (p) {
+                        setState(() => _page = p);
+                        _load();
+                      },
+                      onPageSize: (s) {
+                        setState(() {
+                          _pageSize = s;
+                          _page = 1;
+                        });
+                        _load();
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -462,172 +434,137 @@ Widget _glassCard({
   );
 }
 
-class _HeaderGlassCard extends StatelessWidget {
-  const _HeaderGlassCard({
+class _PageHeader extends StatelessWidget {
+  const _PageHeader({
     required this.theme,
-    required this.compact,
     required this.rangeLabel,
     required this.onPickRange,
     required this.onExport,
   });
 
   final ThemeData theme;
-  final bool compact;
   final String rangeLabel;
   final VoidCallback onPickRange;
   final VoidCallback onExport;
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = compact ? 56.0 : 84.0;
-    final iconRadius = compact ? 16.0 : 22.0;
-    final titleSize = compact ? 26.0 : 40.0;
-    final controlHeight = compact ? 52.0 : 64.0;
-    final dividerHeight = compact ? 88.0 : 120.0;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.035),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF7B4DFF).withValues(alpha: 0.18),
-                blurRadius: 48,
-                offset: const Offset(0, 18),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 720;
+        final title = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Reviews',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.4,
+                color: LuxuryReviewsDashboardScreen.textPrimary,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Monitor ratings and guest feedback.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.58),
+                height: 1.4,
+              ),
+            ),
+          ],
+        );
+
+        final controls = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: _HeaderDateRangeButton(
+                label: rangeLabel,
+                height: 40,
+                compact: true,
+                onTap: onPickRange,
+              ),
+            ),
+            const SizedBox(width: 10),
+            _HeaderExportButton(height: 40, compact: true, onTap: onExport),
+          ],
+        );
+
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 14),
+              controls,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: title),
+            controls,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _InsightsRow extends StatelessWidget {
+  const _InsightsRow({
+    required this.dash,
+    required this.theme,
+    required this.compact,
+    required this.onViewAllServices,
+  });
+
+  final AdminReviewsDashboard? dash;
+  final ThemeData theme;
+  final bool compact;
+  final VoidCallback onViewAllServices;
+
+  @override
+  Widget build(BuildContext context) {
+    final gap = compact ? 12.0 : 16.0;
+    final distCard = _RatingDistributionCard(
+      dash: dash,
+      theme: theme,
+      compact: compact,
+    );
+    final topCard = _TopServicesCard(
+      dash: dash,
+      theme: theme,
+      compact: compact,
+      onViewAll: onViewAllServices,
+    );
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        if (c.maxWidth < 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              distCard,
+              SizedBox(height: gap),
+              topCard,
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: distCard),
+              SizedBox(width: gap),
+              Expanded(child: topCard),
             ],
           ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 20 : 32,
-              vertical: compact ? 20 : 28,
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 960;
-
-                final infoBlock = Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: iconSize,
-                      height: iconSize,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(iconRadius),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF7B4DFF),
-                            LuxuryReviewsDashboardScreen.secondaryPurple,
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                              alpha: 0.45,
-                            ),
-                            blurRadius: 28,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.reviews_rounded,
-                        color: Colors.white.withValues(alpha: 0.96),
-                        size: compact ? 28 : 38,
-                      ),
-                    ),
-                    SizedBox(width: compact ? 16 : 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Reviews & Feedback',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontSize: titleSize,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.6,
-                              height: 1.1,
-                              color: LuxuryReviewsDashboardScreen.textPrimary,
-                            ),
-                          ),
-                          SizedBox(height: compact ? 6 : 10),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            child: Text(
-                              'Track reviews, guest sentiment and service reputation.',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontSize: compact ? 13 : 15,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white.withValues(alpha: 0.65),
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-
-                final controls = Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: _HeaderDateRangeButton(
-                        label: rangeLabel,
-                        height: controlHeight,
-                        compact: compact,
-                        onTap: onPickRange,
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    _HeaderExportButton(
-                      height: controlHeight,
-                      compact: compact,
-                      onTap: onExport,
-                    ),
-                  ],
-                );
-
-                if (stacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      infoBlock,
-                      SizedBox(height: compact ? 16 : 24),
-                      controls,
-                    ],
-                  );
-                }
-
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(flex: 5, child: infoBlock),
-                    const SizedBox(width: 28),
-                    Container(
-                      width: 1,
-                      height: dividerHeight,
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                    const SizedBox(width: 28),
-                    Expanded(flex: 5, child: controls),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -665,27 +602,19 @@ class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
           height: widget.height,
           padding: EdgeInsets.symmetric(horizontal: widget.compact ? 16 : 24),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.03),
-            borderRadius: BorderRadius.circular(20),
+            color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.03),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _hover
-                  ? const Color(0xFF7B4DFF).withValues(alpha: 0.55)
+                  ? const Color(0xFF7B4DFF).withValues(alpha: 0.4)
                   : Colors.white.withValues(alpha: 0.08),
             ),
-            boxShadow: _hover
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF7B4DFF).withValues(alpha: 0.2),
-                      blurRadius: 18,
-                    ),
-                  ]
-                : null,
           ),
           child: Row(
             children: [
               Icon(
                 Icons.calendar_today_outlined,
-                size: widget.compact ? 18 : 20,
+                size: widget.compact ? 16 : 18,
                 color: LuxuryReviewsDashboardScreen.secondaryPurple
                     .withValues(alpha: 0.95),
               ),
@@ -707,73 +636,6 @@ class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
                 color: Colors.white.withValues(alpha: 0.5),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderAddReviewButton extends StatefulWidget {
-  const _HeaderAddReviewButton({
-    required this.size,
-    required this.onTap,
-  });
-
-  final double size;
-  final VoidCallback onTap;
-
-  @override
-  State<_HeaderAddReviewButton> createState() => _HeaderAddReviewButtonState();
-}
-
-class _HeaderAddReviewButtonState extends State<_HeaderAddReviewButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Add review',
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedScale(
-            scale: _hover ? 1.03 : 1,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: widget.size,
-              height: widget.size,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _hover
-                    ? const Color(0xFF7B4DFF).withValues(alpha: 0.38)
-                    : const Color(0xFF7B4DFF).withValues(alpha: 0.24),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: const Color(0xFF9D6BFF).withValues(
-                    alpha: _hover ? 0.7 : 0.4,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF7B4DFF).withValues(
-                      alpha: _hover ? 0.45 : 0.28,
-                    ),
-                    blurRadius: _hover ? 22 : 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.add_rounded,
-                size: widget.size * 0.42,
-                color: Colors.white.withValues(alpha: 0.96),
-              ),
-            ),
           ),
         ),
       ),
@@ -810,43 +672,31 @@ class _HeaderExportButtonState extends State<_HeaderExportButton> {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
           height: widget.height,
-          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 18 : 28),
-          transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
+          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 14 : 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF7B4DFF),
-                LuxuryReviewsDashboardScreen.secondaryPurple,
-              ],
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white.withValues(alpha: _hover ? 0.06 : 0.03),
+            border: Border.all(
+              color: _hover
+                  ? Colors.white.withValues(alpha: 0.16)
+                  : Colors.white.withValues(alpha: 0.08),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF7B4DFF).withValues(
-                  alpha: _hover ? 0.55 : 0.38,
-                ),
-                blurRadius: _hover ? 28 : 18,
-                offset: Offset(0, _hover ? 10 : 6),
-              ),
-            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.download_rounded,
-                size: widget.compact ? 18 : 20,
-                color: Colors.white.withValues(alpha: 0.96),
+                Icons.download_outlined,
+                size: widget.compact ? 16 : 18,
+                color: Colors.white.withValues(alpha: _hover ? 0.9 : 0.7),
               ),
-              SizedBox(width: widget.compact ? 8 : 10),
+              SizedBox(width: widget.compact ? 6 : 8),
               Text(
-                'Export Report',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      fontSize: widget.compact ? 13 : 15,
+                'Export',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: _hover ? 0.92 : 0.75),
+                      fontSize: widget.compact ? 13 : 14,
                     ),
               ),
             ],
@@ -865,7 +715,7 @@ class _KpiTrend {
   /// `true` = up (green), `false` = down, `null` = neutral / no prior period.
   final bool? positive;
 
-  static const none = _KpiTrend(label: '—');
+  static const none = _KpiTrend(label: 'â€”');
 
   static _KpiTrend ratingDelta(double current, double? previous) {
     if (previous == null) return none;
@@ -972,7 +822,7 @@ class _KpiRow extends StatelessWidget {
           Expanded(
             child: _KpiCard(
               title: 'Response Rate',
-              value: resp == null ? '—' : '${resp.toStringAsFixed(0)}%',
+              value: resp == null ? 'â€”' : '${resp.toStringAsFixed(0)}%',
               trend: resp == null
                   ? _KpiTrend.none
                   : _KpiTrend.percentPoints(
@@ -1043,99 +893,80 @@ class _KpiCard extends StatelessWidget {
       null => Colors.white.withValues(alpha: 0.38),
     };
 
-    return _glassCard(
-      radius: 20,
-      extraShadow: [
-        BoxShadow(
-          color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.08),
-          blurRadius: 20,
-        ),
-      ],
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (leading != null) ...[leading!, const SizedBox(width: 8)],
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      fontWeight: FontWeight.w600,
+    return SizedBox(
+      height: compact ? 100 : 112,
+      child: _glassCard(
+        radius: 18,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 14 : 16,
+            vertical: compact ? 12 : 14,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (leading != null) ...[leading!, const SizedBox(width: 6)],
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
                     ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: growthColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: growthColor.withValues(alpha: 0.35),
+                  if (trend.label != 'â€”')
+                    Text(
+                      trend.label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: growthColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: Text(
+                      value,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                        color: LuxuryReviewsDashboardScreen.textPrimary,
+                        fontSize: compact ? 22 : 26,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    trend.label,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: growthColor,
-                      fontWeight: FontWeight.w800,
+                  if (suffix != null)
+                    Text(
+                      suffix!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.38),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: compact ? 8 : 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Flexible(
-                  child: Text(
-                    value,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.8,
-                      color: LuxuryReviewsDashboardScreen.textPrimary,
-                      fontSize: compact ? 26 : 30,
-                    ),
-                  ),
-                ),
-                if (suffix != null)
-                  Text(
-                    suffix!,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white.withValues(alpha: 0.45),
-                    ),
-                  ),
-              ],
-            ),
-            if (progress != null) ...[
-              SizedBox(height: compact ? 8 : 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 5,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  color: NuaLuxuryTokens.softPurpleGlow,
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.38),
+                  fontSize: 10,
                 ),
               ),
             ],
-            SizedBox(height: compact ? 6 : 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.45),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1184,280 +1015,216 @@ class _FilterBar extends StatelessWidget {
   final void Function(int?) onTherapistChanged;
 
   String _ratingLabel() {
-    if (minOcjena == null && maxOcjena == null) return 'All ratings';
+    if (minOcjena == null && maxOcjena == null) return 'Rating';
     if (minOcjena == 5 && maxOcjena == 5) return '5 stars';
     if (minOcjena == 4 && maxOcjena == null) return '4+ stars';
     if (minOcjena == 3 && maxOcjena == null) return '3+ stars';
-    if (minOcjena == 1 && maxOcjena == 2) return '1–2 stars';
+    if (minOcjena == 1 && maxOcjena == 2) return '1â€“2 stars';
     return 'Filter';
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final wide = c.maxWidth > 920;
-        final ratingMenu = PopupMenuButton<String>(
-          onSelected: (v) {
-            switch (v) {
-              case 'all':
-                onRatingChanged(null, null);
-                break;
-              case '5':
-                onRatingChanged(5, 5);
-                break;
-              case '4':
-                onRatingChanged(4, null);
-                break;
-              case '3':
-                onRatingChanged(3, null);
-                break;
-              case '12':
-                onRatingChanged(1, 2);
-                break;
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'all', child: Text('All ratings')),
-            PopupMenuItem(value: '5', child: Text('5 stars')),
-            PopupMenuItem(value: '4', child: Text('4+ stars')),
-            PopupMenuItem(value: '3', child: Text('3+ stars')),
-            PopupMenuItem(value: '12', child: Text('1–2 stars')),
-          ],
-          child: _FilterDropdownPill(label: _ratingLabel()),
-        );
-
-        final serviceMenu = PopupMenuButton<int?>(
-          onSelected: onServiceChanged,
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: null, child: Text('All services')),
-            ...usluge.map(
-              (u) => PopupMenuItem(value: u.id, child: Text(u.naziv)),
-            ),
-          ],
-          child: _FilterDropdownPill(
-            label: filterUslugaId == null
-                ? 'All services'
-                : _lookupServiceName(usluge, filterUslugaId!),
-          ),
-        );
-
-        final therapistMenu = PopupMenuButton<int?>(
-          onSelected: onTherapistChanged,
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: null, child: Text('All therapists')),
-            ...therapists.map(
-              (z) => PopupMenuItem(
-                value: z.id,
-                child: Text('${z.ime} ${z.prezime}'.trim()),
-              ),
-            ),
-          ],
-          child: _FilterDropdownPill(
-            label: filterZaposlenikId == null
-                ? 'All therapists'
-                : _lookupTherapistName(therapists, filterZaposlenikId!),
-          ),
-        );
-
-        if (wide) {
-          return Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _FilterSearchField(controller: controller),
-              ),
-              SizedBox(width: compact ? 8 : 10),
-              Expanded(child: ratingMenu),
-              SizedBox(width: compact ? 8 : 10),
-              Expanded(child: serviceMenu),
-              SizedBox(width: compact ? 8 : 10),
-              Expanded(child: therapistMenu),
-            ],
-          );
+    final ratingMenu = PopupMenuButton<String>(
+      onSelected: (v) {
+        switch (v) {
+          case 'all':
+            onRatingChanged(null, null);
+            break;
+          case '5':
+            onRatingChanged(5, 5);
+            break;
+          case '4':
+            onRatingChanged(4, null);
+            break;
+          case '3':
+            onRatingChanged(3, null);
+            break;
+          case '12':
+            onRatingChanged(1, 2);
+            break;
         }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _FilterSearchField(controller: controller),
-            SizedBox(height: compact ? 8 : 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ratingMenu,
-                serviceMenu,
-                therapistMenu,
-              ],
-            ),
-          ],
-        );
       },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'all', child: Text('All ratings')),
+        PopupMenuItem(value: '5', child: Text('5 stars')),
+        PopupMenuItem(value: '4', child: Text('4+ stars')),
+        PopupMenuItem(value: '3', child: Text('3+ stars')),
+        PopupMenuItem(value: '12', child: Text('1â€“2 stars')),
+      ],
+      child: _FilterDropdownPill(label: _ratingLabel(), compact: true),
+    );
+
+    final serviceMenu = PopupMenuButton<int?>(
+      onSelected: onServiceChanged,
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: null, child: Text('All services')),
+        ...usluge.map(
+          (u) => PopupMenuItem(value: u.id, child: Text(u.naziv)),
+        ),
+      ],
+      child: _FilterDropdownPill(
+        label: filterUslugaId == null
+            ? 'Service'
+            : _lookupServiceName(usluge, filterUslugaId!),
+        compact: true,
+      ),
+    );
+
+    final therapistMenu = PopupMenuButton<int?>(
+      onSelected: onTherapistChanged,
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: null, child: Text('All therapists')),
+        ...therapists.map(
+          (z) => PopupMenuItem(
+            value: z.id,
+            child: Text('${z.ime} ${z.prezime}'.trim()),
+          ),
+        ),
+      ],
+      child: _FilterDropdownPill(
+        label: filterZaposlenikId == null
+            ? 'Therapist'
+            : _lookupTherapistName(therapists, filterZaposlenikId!),
+        compact: true,
+      ),
+    );
+
+    return _glassCard(
+      radius: 16,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: compact ? 8 : 10,
+        ),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 760;
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _FilterSearchField(controller: controller, inline: true),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: ratingMenu),
+                      const SizedBox(width: 8),
+                      Expanded(child: serviceMenu),
+                      const SizedBox(width: 8),
+                      Expanded(child: therapistMenu),
+                    ],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _FilterSearchField(controller: controller, inline: true),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(width: 130, child: ratingMenu),
+                const SizedBox(width: 8),
+                SizedBox(width: 150, child: serviceMenu),
+                const SizedBox(width: 8),
+                SizedBox(width: 150, child: therapistMenu),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }
 
 class _FilterDropdownPill extends StatelessWidget {
-  const _FilterDropdownPill({required this.label});
+  const _FilterDropdownPill({required this.label, this.compact = false});
 
   final String label;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return _glassCard(
-      radius: 14,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white.withValues(alpha: 0.88),
-                ),
+    return Container(
+      height: compact ? 36 : 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.82),
+                fontSize: 13,
               ),
             ),
-            Icon(
-              Icons.expand_more_rounded,
-              color: Colors.white.withValues(alpha: 0.45),
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            Icons.expand_more_rounded,
+            size: 18,
+            color: Colors.white.withValues(alpha: 0.4),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _FilterSearchField extends StatelessWidget {
-  const _FilterSearchField({required this.controller});
+  const _FilterSearchField({required this.controller, this.inline = false});
 
   final TextEditingController controller;
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return _glassCard(
-      radius: 14,
-      child: TextField(
-        controller: controller,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: LuxuryReviewsDashboardScreen.textPrimary,
+    final field = TextField(
+      controller: controller,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: LuxuryReviewsDashboardScreen.textPrimary,
+        fontSize: 14,
+      ),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Search reviewsâ€¦',
+        hintStyle: TextStyle(
+          color: Colors.white.withValues(alpha: 0.38),
+          fontSize: 14,
         ),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: 'Search reviews…',
-          hintStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: Colors.white.withValues(alpha: 0.45),
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 12,
-          ),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          size: 18,
+          color: Colors.white.withValues(alpha: 0.4),
         ),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(vertical: 10),
       ),
     );
+
+    if (inline) {
+      return SizedBox(height: 40, child: field);
+    }
+
+    return _glassCard(radius: 14, child: field);
   }
 }
 
 abstract final class _ReviewsTableStyle {
   static const gold = Color(0xFFF5B942);
-  static const primaryPurple = Color(0xFF7B4DFF);
-  static const horizontalPadding = 24.0;
-  static const reviewMinWidth = 72.0;
 }
 
-/// Responsive column widths — scales down on narrow viewports (no overflow).
-class _ReviewColWidths {
-  const _ReviewColWidths({
-    required this.guest,
-    required this.service,
-    required this.rating,
-    required this.date,
-    required this.actions,
-    required this.avatarSize,
-    required this.actionButtonSize,
-    required this.tight,
-  });
-
-  final double guest;
-  final double service;
-  final double rating;
-  final double date;
-  final double actions;
-  final double avatarSize;
-  final double actionButtonSize;
-  final bool tight;
-
-  static _ReviewColWidths fromMaxWidth(double maxWidth, bool compact) {
-    var guest = compact ? 190.0 : 220.0;
-    var service = compact ? 220.0 : 260.0;
-    var rating = compact ? 160.0 : 190.0;
-    var date = compact ? 150.0 : 180.0;
-    var actions = compact ? 100.0 : 120.0;
-
-    final inner = maxWidth - _ReviewsTableStyle.horizontalPadding * 2;
-    var fixed = guest + service + rating + date + actions;
-    final needed = fixed + _ReviewsTableStyle.reviewMinWidth;
-
-    if (inner < needed && fixed > 0) {
-      final scale = (inner - _ReviewsTableStyle.reviewMinWidth) / fixed;
-      final s = scale.clamp(0.55, 1.0);
-      guest *= s;
-      service *= s;
-      rating *= s;
-      date *= s;
-      actions *= s;
-    }
-
-    final tight = inner < 920;
-    final avatarSize = tight ? 42.0 : 54.0;
-    final actionButtonSize = actions < 96 ? 38.0 : 44.0;
-
-    return _ReviewColWidths(
-      guest: guest,
-      service: service,
-      rating: rating,
-      date: date,
-      actions: actions,
-      avatarSize: avatarSize,
-      actionButtonSize: actionButtonSize,
-      tight: tight,
-    );
-  }
-}
-
-class _ReviewsTableRowShell extends StatelessWidget {
-  const _ReviewsTableRowShell({
-    required this.compact,
-    required this.child,
-  });
-
-  final bool compact;
-  final Widget Function(_ReviewColWidths widths) child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final widths = _ReviewColWidths.fromMaxWidth(
-          constraints.maxWidth,
-          compact,
-        );
-        return child(widths);
-      },
-    );
-  }
-}
 
 String _formatReviewDateLine(DateTime utc) {
   final d = utc.toLocal();
@@ -1468,29 +1235,12 @@ String _formatReviewDateLine(DateTime utc) {
   return '${m[d.month - 1]} ${d.day}, ${d.year}';
 }
 
-String _formatReviewTimeLine(DateTime utc) {
-  final d = utc.toLocal();
-  final h = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
-  final am = d.hour >= 12 ? 'PM' : 'AM';
-  final mm = d.minute.toString().padLeft(2, '0');
-  return '$h:$mm $am';
-}
-
-String _ratingLabel(int ocjena) {
-  return switch (ocjena.clamp(1, 5)) {
-    5 => 'Excellent',
-    4 => 'Great',
-    3 => 'Good',
-    2 => 'Fair',
-    _ => 'Poor',
-  };
-}
-
-class _ReviewsTable extends StatelessWidget {
-  const _ReviewsTable({
+class _RecentReviewsSection extends StatelessWidget {
+  const _RecentReviewsSection({
     required this.rows,
     required this.compact,
     required this.onViewReview,
+    required this.onViewServices,
     required this.page,
     required this.pageSize,
     required this.total,
@@ -1501,6 +1251,7 @@ class _ReviewsTable extends StatelessWidget {
   final List<AdminReviewRow> rows;
   final bool compact;
   final void Function(AdminReviewRow) onViewReview;
+  final VoidCallback onViewServices;
   final int page;
   final int pageSize;
   final int total;
@@ -1511,37 +1262,44 @@ class _ReviewsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    if (rows.isEmpty) {
-      return DecoratedBox(
-        decoration: _reviewsTableDecoration(),
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Center(
+    return _glassCard(
+      radius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 16 : 20,
+              compact ? 14 : 18,
+              compact ? 16 : 20,
+              compact ? 10 : 12,
+            ),
             child: Text(
-              'Nema recenzija za odabrane filtere i razdoblje.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.65),
+              'Recent Reviews',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: LuxuryReviewsDashboardScreen.textPrimary,
               ),
             ),
           ),
-        ),
-      );
-    }
-
-    return DecoratedBox(
-      decoration: _reviewsTableDecoration(),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _TableHeaderRow(compact: compact, theme: theme),
-            for (final row in rows)
-              _TableDataRow(
-                row: row,
+          if (rows.isEmpty)
+            _ReviewsEmptyState(onViewServices: onViewServices)
+          else ...[
+            for (var i = 0; i < rows.length; i++) ...[
+              _ReviewListCard(
+                row: rows[i],
                 compact: compact,
-                onViewReview: () => onViewReview(row),
+                onTap: () => onViewReview(rows[i]),
               ),
+              if (i < rows.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: compact ? 16 : 20,
+                  endIndent: compact ? 16 : 20,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+            ],
             Divider(
               height: 1,
               thickness: 1,
@@ -1555,310 +1313,69 @@ class _ReviewsTable extends StatelessWidget {
               onPageSize: onPageSize,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  BoxDecoration _reviewsTableDecoration() => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.14),
-            blurRadius: 36,
-            offset: const Offset(0, 14),
-          ),
         ],
-      );
-}
-
-class _TableHeaderRow extends StatelessWidget {
-  const _TableHeaderRow({required this.compact, required this.theme});
-
-  final bool compact;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 64,
-      color: Colors.white.withValues(alpha: 0.04),
-      padding: const EdgeInsets.symmetric(
-        horizontal: _ReviewsTableStyle.horizontalPadding,
-      ),
-      child: _ReviewsTableRowShell(
-        compact: compact,
-        child: (w) => Row(
-          children: [
-            SizedBox(width: w.guest, child: _headerLabel('Guest')),
-            SizedBox(width: w.service, child: _headerLabel('Service')),
-            SizedBox(width: w.rating, child: _headerLabel('Rating')),
-            Expanded(child: _headerLabel('Review')),
-            SizedBox(width: w.date, child: _headerLabel('Date')),
-            SizedBox(
-              width: w.actions,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: _headerLabel('Actions'),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
-
-  Widget _headerLabel(String text) => Text(
-        text,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Colors.white.withValues(alpha: 0.62),
-        ),
-      );
 }
 
-class _TableDataRow extends StatefulWidget {
-  const _TableDataRow({
-    required this.row,
-    required this.compact,
-    required this.onViewReview,
-  });
+class _ReviewsEmptyState extends StatelessWidget {
+  const _ReviewsEmptyState({required this.onViewServices});
 
-  final AdminReviewRow row;
-  final bool compact;
-  final VoidCallback onViewReview;
-
-  @override
-  State<_TableDataRow> createState() => _TableDataRowState();
-}
-
-class _TableDataRowState extends State<_TableDataRow> {
-  bool _hover = false;
+  final VoidCallback onViewServices;
 
   @override
   Widget build(BuildContext context) {
-    final r = widget.row;
     final theme = Theme.of(context);
-    final therapist = (r.terapeutIme ?? '').trim();
-    final initials = r.korisnikPunoIme.trim().isNotEmpty
-        ? r.korisnikPunoIme.trim()[0].toUpperCase()
-        : '?';
-    final showReadMore = r.komentar.trim().length > 90;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        constraints: const BoxConstraints(minHeight: 120),
-        decoration: BoxDecoration(
-          color: _hover
-              ? const Color(0xFF7B4DFF).withValues(alpha: 0.07)
-              : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(
-          _ReviewsTableStyle.horizontalPadding,
-          22,
-          _ReviewsTableStyle.horizontalPadding,
-          22,
-        ),
-        child: _ReviewsTableRowShell(
-          compact: widget.compact,
-          child: (w) => Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 36),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: w.guest,
-                child: Row(
-                  children: [
-                    Container(
-                      width: w.avatarSize,
-                      height: w.avatarSize,
-                      alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF7B4DFF),
-                            LuxuryReviewsDashboardScreen.secondaryPurple,
-                          ],
-                        ),
-                      ),
-                      child: Text(
-                        initials,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          fontSize: w.tight ? 16 : null,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: w.tight ? 10 : 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            r.korisnikPunoIme,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: LuxuryReviewsDashboardScreen.textPrimary,
-                              fontSize: w.tight ? 13 : null,
-                            ),
-                          ),
-                          if (!w.tight) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.person_outline_rounded,
-                                  size: 14,
-                                  color: LuxuryReviewsDashboardScreen
-                                      .secondaryPurple
-                                      .withValues(alpha: 0.9),
-                                ),
-                                const SizedBox(width: 5),
-                                Flexible(
-                                  child: Text(
-                                    '${r.brojPosjeta} visits',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.white.withValues(alpha: 0.65),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
+              Icon(
+                Icons.rate_review_outlined,
+                size: 36,
+                color: Colors.white.withValues(alpha: 0.22),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'No reviews yet',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: LuxuryReviewsDashboardScreen.textPrimary,
                 ),
               ),
-              SizedBox(
-                width: w.service,
-                child: Padding(
-                  padding: EdgeInsets.only(right: w.tight ? 8 : 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.uslugaNaziv,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: LuxuryReviewsDashboardScreen.textPrimary,
-                          height: 1.25,
-                          fontSize: w.tight ? 13 : null,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        therapist.isEmpty ? '—' : therapist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: LuxuryReviewsDashboardScreen.secondaryPurple
-                              .withValues(alpha: 0.85),
-                          fontSize: w.tight ? 11 : null,
-                        ),
-                      ),
-                    ],
+              const SizedBox(height: 6),
+              Text(
+                'Customer reviews will appear here once appointments are completed.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.52),
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: onViewServices,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white.withValues(alpha: 0.82),
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.14),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: w.rating,
-                child: _PremiumRatingCell(
-                  ocjena: r.ocjena,
-                  theme: theme,
-                  compact: w.tight,
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: w.tight ? 8 : 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.komentar,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: w.tight ? 13 : 15,
-                          height: 1.45,
-                          color: Colors.white.withValues(alpha: 0.82),
-                        ),
-                      ),
-                      if (showReadMore) ...[
-                        const SizedBox(height: 8),
-                        InkWell(
-                          onTap: widget.onViewReview,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Read more',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: _ReviewsTableStyle.primaryPurple,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: w.tight ? 12 : null,
-                                ),
-                              ),
-                              Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 18,
-                                color: _ReviewsTableStyle.primaryPurple,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: w.date,
-                child: _ReviewDateCell(
-                  createdAt: r.createdAt,
-                  theme: theme,
-                  compact: w.tight,
-                ),
-              ),
-              SizedBox(
-                width: w.actions,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _ReviewActionButton(
-                      icon: Icons.visibility_outlined,
-                      tooltip: 'Detalji i odgovor',
-                      onPressed: widget.onViewReview,
-                      size: w.actionButtonSize,
-                    ),
-                    SizedBox(width: w.tight ? 4 : 8),
-                    _ReviewActionMenuButton(
-                      onReply: widget.onViewReview,
-                      size: w.actionButtonSize,
-                    ),
-                  ],
+                child: const Text(
+                  'View services',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ),
             ],
@@ -1869,247 +1386,183 @@ class _TableDataRowState extends State<_TableDataRow> {
   }
 }
 
-class _PremiumRatingCell extends StatelessWidget {
-  const _PremiumRatingCell({
-    required this.ocjena,
-    required this.theme,
-    this.compact = false,
+class _ReviewListCard extends StatefulWidget {
+  const _ReviewListCard({
+    required this.row,
+    required this.compact,
+    required this.onTap,
   });
 
-  final int ocjena;
-  final ThemeData theme;
+  final AdminReviewRow row;
   final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  State<_ReviewListCard> createState() => _ReviewListCardState();
+}
+
+class _ReviewListCardState extends State<_ReviewListCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.row;
+    final theme = Theme.of(context);
+    final comment = r.komentar.trim();
+    final initials = r.korisnikPunoIme.trim().isNotEmpty
+        ? r.korisnikPunoIme.trim()[0].toUpperCase()
+        : '?';
+    final verified = r.brojPosjeta > 0;
+    final pad = widget.compact ? 16.0 : 20.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: _hover
+            ? const Color(0xFF7B4DFF).withValues(alpha: 0.05)
+            : Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(pad, 14, pad, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF7B4DFF).withValues(alpha: 0.18),
+                    border: Border.all(
+                      color: const Color(0xFF9D6BFF).withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Text(
+                    initials,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _StarRatingRow(ocjena: r.ocjena, size: 14),
+                          const SizedBox(width: 10),
+                          if (verified)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                ),
+                              ),
+                              child: Text(
+                                'Verified visit',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withValues(alpha: 0.62),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          const Spacer(),
+                          Text(
+                            _formatReviewDateLine(r.createdAt),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.42),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        r.uslugaNaziv,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: LuxuryReviewsDashboardScreen.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        r.korisnikPunoIme,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        comment.isEmpty ? 'Rating only' : comment,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: comment.isEmpty
+                              ? Colors.white.withValues(alpha: 0.38)
+                              : Colors.white.withValues(alpha: 0.78),
+                          fontStyle:
+                              comment.isEmpty ? FontStyle.italic : FontStyle.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: Colors.white.withValues(alpha: _hover ? 0.45 : 0.22),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StarRatingRow extends StatelessWidget {
+  const _StarRatingRow({required this.ocjena, this.size = 16});
+
+  final int ocjena;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final v = ocjena.clamp(0, 5);
-    final starSize = compact ? 14.0 : 18.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            for (var i = 0; i < 5; i++)
-              Icon(
-                i < v ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: starSize,
-                color: _ReviewsTableStyle.gold,
-              ),
-          ],
-        ),
-        SizedBox(height: compact ? 4 : 8),
-        Text(
-          v.toDouble().toStringAsFixed(1),
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: LuxuryReviewsDashboardScreen.textPrimary,
-            fontSize: compact ? 13 : null,
+        for (var i = 0; i < 5; i++)
+          Icon(
+            i < v ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: size,
+            color: i < v
+                ? _ReviewsTableStyle.gold
+                : Colors.white.withValues(alpha: 0.22),
           ),
-        ),
-        if (!compact) ...[
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: LuxuryReviewsDashboardScreen.secondaryPurple
-                    .withValues(alpha: 0.35),
-              ),
-            ),
-            child: Text(
-              _ratingLabel(v),
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: LuxuryReviewsDashboardScreen.secondaryPurple,
-              ),
-            ),
-          ),
-        ],
       ],
-    );
-  }
-}
-
-class _ReviewDateCell extends StatelessWidget {
-  const _ReviewDateCell({
-    required this.createdAt,
-    required this.theme,
-    this.compact = false,
-  });
-
-  final DateTime createdAt;
-  final ThemeData theme;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final dateLine = _formatReviewDateLine(createdAt);
-    final timeLine = _formatReviewTimeLine(createdAt);
-    final iconColor =
-        LuxuryReviewsDashboardScreen.secondaryPurple.withValues(alpha: 0.9);
-    final textStyle = theme.textTheme.bodySmall?.copyWith(
-      color: Colors.white.withValues(alpha: 0.65),
-      height: 1.35,
-      fontSize: compact ? 11 : null,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.calendar_today_outlined, size: 14, color: iconColor),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(dateLine, style: textStyle),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Icon(Icons.schedule_rounded, size: 14, color: iconColor),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(timeLine, style: textStyle),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ReviewActionButton extends StatefulWidget {
-  const _ReviewActionButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    this.size = 44,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-  final double size;
-
-  @override
-  State<_ReviewActionButton> createState() => _ReviewActionButtonState();
-}
-
-class _ReviewActionButtonState extends State<_ReviewActionButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: widget.size,
-            height: widget.size,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: _hover
-                    ? _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.65)
-                    : Colors.white.withValues(alpha: 0.08),
-              ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _ReviewsTableStyle.primaryPurple
-                            .withValues(alpha: 0.28),
-                        blurRadius: 14,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Icon(
-              widget.icon,
-              size: widget.size * 0.45,
-              color: Colors.white.withValues(alpha: 0.85),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReviewActionMenuButton extends StatefulWidget {
-  const _ReviewActionMenuButton({
-    required this.onReply,
-    this.size = 44,
-  });
-
-  final VoidCallback onReply;
-  final double size;
-
-  @override
-  State<_ReviewActionMenuButton> createState() => _ReviewActionMenuButtonState();
-}
-
-class _ReviewActionMenuButtonState extends State<_ReviewActionMenuButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: PopupMenuButton<String>(
-        tooltip: 'Više',
-        color: NuaLuxuryTokens.voidViolet,
-        offset: const Offset(0, 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        onSelected: (v) {
-          if (v == 'reply') widget.onReply();
-        },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 'reply', child: Text('Odgovor salona')),
-        ],
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: widget.size,
-          height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.05),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _hover
-                  ? _ReviewsTableStyle.primaryPurple.withValues(alpha: 0.65)
-                  : Colors.white.withValues(alpha: 0.08),
-            ),
-            boxShadow: _hover
-                ? [
-                    BoxShadow(
-                      color: _ReviewsTableStyle.primaryPurple
-                          .withValues(alpha: 0.28),
-                      blurRadius: 14,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Icon(
-            Icons.more_horiz_rounded,
-            size: widget.size * 0.45,
-            color: Colors.white.withValues(alpha: 0.85),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2195,7 +1648,7 @@ class _ReviewsTableFooter extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            total == 0 ? '0 reviews' : '$fromIdx–$toIdx of $total reviews',
+            total == 0 ? '0 reviews' : '$fromIdxâ€“$toIdx of $total reviews',
             style: theme.textTheme.bodySmall?.copyWith(
               color: Colors.white.withValues(alpha: 0.65),
             ),
@@ -2306,39 +1759,6 @@ class _FooterPageChip extends StatelessWidget {
   }
 }
 
-class _RightInsightsColumn extends StatelessWidget {
-  const _RightInsightsColumn({
-    required this.dash,
-    required this.compact,
-    required this.onViewAllServices,
-  });
-
-  final AdminReviewsDashboard? dash;
-  final bool compact;
-  final VoidCallback onViewAllServices;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final gap = compact ? 12.0 : 14.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RatingDistributionCard(dash: dash, theme: theme, compact: compact),
-        SizedBox(height: gap),
-        _TopServicesCard(
-          dash: dash,
-          theme: theme,
-          compact: compact,
-          onViewAll: onViewAllServices,
-        ),
-        SizedBox(height: gap),
-        _RecentFeedbackCard(dash: dash, theme: theme, compact: compact),
-      ],
-    );
-  }
-}
-
 class _RatingDistributionCard extends StatelessWidget {
   const _RatingDistributionCard({
     required this.dash,
@@ -2357,12 +1777,11 @@ class _RatingDistributionCard extends StatelessWidget {
 
     double pct(int stars) {
       if (total <= 0) return 0;
-      final c = dist[stars] ?? 0;
-      return c / total;
+      return (dist[stars] ?? 0) / total;
     }
 
     return _glassCard(
-      radius: 20,
+      radius: 18,
       child: Padding(
         padding: EdgeInsets.all(compact ? 14 : 16),
         child: Column(
@@ -2371,59 +1790,61 @@ class _RatingDistributionCard extends StatelessWidget {
             Text(
               'Rating Distribution',
               style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: LuxuryReviewsDashboardScreen.textPrimary,
               ),
             ),
-            SizedBox(height: compact ? 12 : 14),
-            for (var stars = 5; stars >= 1; stars--) ...[
-              Row(
-                children: [
-                  SizedBox(
-                    width: 56,
-                    child: Text(
-                      '$stars stars',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontWeight: FontWeight.w600,
+            SizedBox(height: compact ? 10 : 12),
+            if (total == 0)
+              Text(
+                'No ratings in this period.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.48),
+                ),
+              )
+            else ...[
+              for (var stars = 5; stars >= 1; stars--) ...[
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        '$stars stars',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        value: pct(stars) <= 0 ? 0.0 : pct(stars),
-                        minHeight: 6,
-                        backgroundColor: Colors.white.withValues(alpha: 0.08),
-                        color: NuaLuxuryTokens.softPurpleGlow,
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: pct(stars) <= 0 ? 0.0 : pct(stars),
+                          minHeight: 5,
+                          backgroundColor: Colors.white.withValues(alpha: 0.08),
+                          color: NuaLuxuryTokens.softPurpleGlow,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 36,
-                    child: Text(
-                      '${(pct(stars) * 100).round()}%',
-                      textAlign: TextAlign.end,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white.withValues(alpha: 0.85),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        '${(pct(stars) * 100).round()}%',
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: compact ? 8 : 10),
+                  ],
+                ),
+                SizedBox(height: compact ? 6 : 8),
+              ],
             ],
-            Text(
-              total == 0
-                  ? 'No reviews in range'
-                  : 'Based on $total reviews',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.45),
-              ),
-            ),
           ],
         ),
       ),
@@ -2448,24 +1869,45 @@ class _TopServicesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = dash?.topUsluge ?? [];
     return _glassCard(
-      radius: 20,
+      radius: 18,
       child: Padding(
         padding: EdgeInsets.all(compact ? 14 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Top Services by Rating',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Top Rated Services',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: LuxuryReviewsDashboardScreen.textPrimary,
+                    ),
+                  ),
+                ),
+                if (items.isNotEmpty)
+                  TextButton(
+                    onPressed: onViewAll,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white.withValues(alpha: 0.55),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'View all',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
             ),
             SizedBox(height: compact ? 10 : 12),
             if (items.isEmpty)
               Text(
-                'Nema podataka.',
+                'No rated services in this period.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: Colors.white.withValues(alpha: 0.48),
                 ),
               )
             else
@@ -2475,8 +1917,9 @@ class _TopServicesCard extends StatelessWidget {
                     Text(
                       '${i + 1}.',
                       style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: NuaLuxuryTokens.softPurpleGlow,
+                        fontSize: 12,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -2485,8 +1928,9 @@ class _TopServicesCard extends StatelessWidget {
                         items[i].naziv,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -2494,116 +1938,23 @@ class _TopServicesCard extends StatelessWidget {
                       items[i].prosjek.toStringAsFixed(1),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w800,
+                        fontSize: 13,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Icon(
                       Icons.star_rounded,
-                      size: 16,
+                      size: 14,
                       color: NuaLuxuryTokens.champagneGold,
                     ),
                   ],
                 ),
                 if (i < items.length - 1)
                   Divider(
-                    height: compact ? 14 : 16,
+                    height: compact ? 12 : 14,
                     color: Colors.white.withValues(alpha: 0.06),
                   ),
               ],
-            SizedBox(height: compact ? 12 : 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: onViewAll,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: LuxuryReviewsDashboardScreen.textPrimary,
-                  side: BorderSide(
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.55,
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'View all services',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentFeedbackCard extends StatelessWidget {
-  const _RecentFeedbackCard({
-    required this.dash,
-    required this.theme,
-    required this.compact,
-  });
-
-  final AdminReviewsDashboard? dash;
-  final ThemeData theme;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final q = dash?.istaknutaRecenzija;
-    return _glassCard(
-      radius: 20,
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recent Feedback',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            SizedBox(height: compact ? 12 : 14),
-            Icon(
-              Icons.format_quote_rounded,
-              size: 28,
-              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.75),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              q == null || q.tekst.trim().isEmpty
-                  ? 'Još nema istaknutih recenzija s tekstom.'
-                  : q.tekst,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                height: 1.45,
-                color: Colors.white.withValues(alpha: 0.88),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            SizedBox(height: compact ? 12 : 14),
-            Text(
-              q?.autor ?? '—',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: List.generate(
-                5,
-                (i) => Icon(
-                  i < (q?.ocjena ?? 0)
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  size: 18,
-                  color: NuaLuxuryTokens.champagneGold,
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -2680,7 +2031,7 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Komentar gosta',
+                      'Guest comment',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: Colors.white54,
                         fontWeight: FontWeight.w700,
@@ -2688,12 +2039,14 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      widget.row.komentar.isEmpty ? '—' : widget.row.komentar,
+                      widget.row.komentar.isEmpty
+                          ? 'Rating only'
+                          : widget.row.komentar,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Odgovor salona (javno)',
+                      'Salon response (public)',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: Colors.white54,
                         fontWeight: FontWeight.w700,
@@ -2716,7 +2069,7 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                             color: Colors.white.withValues(alpha: 0.12),
                           ),
                         ),
-                        hintText: 'Zahvala, pojašnjenje ili dodatne informacije…',
+                        hintText: 'Thank you note, clarification, or follow-up…',
                         hintStyle: TextStyle(
                           color: Colors.white.withValues(alpha: 0.35),
                         ),
@@ -2728,7 +2081,7 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                         TextButton(
                           onPressed:
                               _busy ? null : () => Navigator.pop(context, false),
-                          child: const Text('Odustani'),
+                          child: const Text('Cancel'),
                         ),
                         const Spacer(),
                         TextButton(
@@ -2744,12 +2097,12 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                                   } else {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Brisanje odgovora nije uspjelo.'),
+                                        content: Text('Could not remove response.'),
                                       ),
                                     );
                                   }
                                 },
-                          child: const Text('Obriši odgovor'),
+                          child: const Text('Remove response'),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
@@ -2768,7 +2121,7 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                                   } else {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Spremanje nije uspjelo.'),
+                                        content: Text('Could not save response.'),
                                       ),
                                     );
                                   }
@@ -2785,7 +2138,7 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text('Spremi'),
+                              : const Text('Save'),
                         ),
                       ],
                     ),
