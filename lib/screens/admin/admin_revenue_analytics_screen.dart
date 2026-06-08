@@ -139,7 +139,7 @@ class _AdminRevenueAnalyticsScreenState
     setState(() {
       _future = () async {
         final results = await Future.wait([
-          _api.getAdminKpis(date: rangeTo),
+          _api.getAdminKpis(date: _dayOnly(DateTime.now())),
           _api.getRevenueSeries(from: rangeFrom, to: rangeTo),
           _api.getServicePopularity(from: rangeFrom, to: rangeTo, take: 8),
           _api.getTopSpenders(from: rangeFrom, to: rangeTo, take: 8),
@@ -234,7 +234,7 @@ class _AdminRevenueAnalyticsScreenState
 
         final rev = data.revenue;
         final totalRevenue = rev.fold<double>(0, (s, p) => s + p.prihod);
-        final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojRezervacija);
+        final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojPlacanja);
         final avgTicket = totalPayments > 0
             ? totalRevenue / totalPayments
             : 0.0;
@@ -259,11 +259,13 @@ class _AdminRevenueAnalyticsScreenState
             ? ((secondHalf - firstHalf) / firstHalf * 100)
             : 0.0;
 
-        final periodLabel = switch (_period) {
-          _ReportPeriod.days7 => '7 days',
-          _ReportPeriod.days30 => '30 days',
-          _ReportPeriod.days90 => '90 days',
-        };
+        final periodLabel = _usingPeriodChips
+            ? switch (_period) {
+                _ReportPeriod.days7 => '7 days',
+                _ReportPeriod.days30 => '30 days',
+                _ReportPeriod.days90 => '90 days',
+              }
+            : '${_fmtDate(data.from)} — ${_fmtDate(data.to)}';
 
         return Stack(
           children: [
@@ -307,20 +309,20 @@ class _AdminRevenueAnalyticsScreenState
                             _KpiSpec(
                               title: 'Payments',
                               value: '$totalPayments',
-                              subtitle: 'Payments in selected period',
+                              subtitle: 'Completed payments in period',
                               icon: Icons.payments_outlined,
                               values: rev
-                                  .map((p) => p.brojRezervacija.toDouble())
+                                  .map((p) => p.brojPlacanja.toDouble())
                                   .toList(),
                             ),
                             _KpiSpec(
                               title: 'Average Amount',
                               value: _fmtKm(avgTicket),
-                              subtitle: 'Per payment in period',
+                              subtitle: 'Per completed payment',
                               icon: Icons.account_balance_wallet_outlined,
                               values: rev
-                                  .map((p) => p.brojRezervacija > 0
-                                      ? p.prihod / p.brojRezervacija
+                                  .map((p) => p.brojPlacanja > 0
+                                      ? p.prihod / p.brojPlacanja
                                       : 0.0)
                                   .toList(),
                             ),
