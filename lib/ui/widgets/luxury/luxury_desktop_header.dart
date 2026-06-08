@@ -504,7 +504,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 SizedBox(height: compact ? 2 : 4),
                 Text(
                   isRevenue
-                      ? 'Revenue, service popularity, and top clients — live data from the NuaSpa backend.'
+                      ? 'Revenue, service popularity and client insights.'
                       : isCommandCenter
                       ? 'Overview of bookings, revenue and business performance.'
                       : isAppointments
@@ -639,6 +639,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
               label: 'Filters',
               onTap: () => _onFiltersTap(context, nav),
             ),
+            if (isRevenue) ...[
+              const SizedBox(width: 10),
+              _ReportsPdfExportButton(
+                exporting: nav.reportsPdfExporting,
+                onExport: nav.reportsPdfExport,
+              ),
+            ],
             const SizedBox(width: 14),
           ],
           Builder(
@@ -1290,6 +1297,44 @@ class _ProfileMenuRow extends StatelessWidget {
         const SizedBox(width: 12),
         Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+class _ReportsPdfExportButton extends StatelessWidget {
+  const _ReportsPdfExportButton({
+    required this.exporting,
+    required this.onExport,
+  });
+
+  final bool exporting;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: exporting || onExport == null ? null : onExport,
+      icon: exporting
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            )
+          : Icon(
+              Icons.picture_as_pdf_outlined,
+              size: 17,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
+      label: Text(exporting ? 'Exporting...' : 'PDF Report'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white.withValues(alpha: 0.82),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
     );
   }
 }

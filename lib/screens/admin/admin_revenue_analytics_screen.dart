@@ -84,7 +84,10 @@ class _AdminRevenueAnalyticsScreenState
     final nav = context.read<DesktopNav>();
     if (_nav != nav) {
       _nav?.removeListener(_onHeaderRangeChanged);
+      _nav?.setReportsPdfExport(null);
       _nav = nav;
+      _nav!.setReportsPdfExport(_exportPdf);
+      _nav!.setReportsPdfExporting(_exporting);
       _nav!.addListener(_onHeaderRangeChanged);
       _onHeaderRangeChanged();
     }
@@ -123,6 +126,8 @@ class _AdminRevenueAnalyticsScreenState
   @override
   void dispose() {
     _nav?.removeListener(_onHeaderRangeChanged);
+    _nav?.setReportsPdfExport(null);
+    _nav?.setReportsPdfExporting(false);
     super.dispose();
   }
 
@@ -187,43 +192,6 @@ class _AdminRevenueAnalyticsScreenState
     _reload(from: from, to: to);
   }
 
-  Future<void> _pickRange() async {
-    final initial = _activeFrom != null && _activeTo != null
-        ? DateTimeRange(start: _activeFrom!, end: _activeTo!)
-        : DateTimeRange(
-            start: _rangeFor(_period).$1,
-            end: _rangeFor(_period).$2,
-          );
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: initial,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: NuaLuxuryTokens.softPurpleGlow,
-              surface: NuaLuxuryTokens.voidViolet,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-    final from = _dayOnly(picked.start);
-    final to = _dayOnly(picked.end);
-    final range = DateTimeRange(start: from, end: to);
-    setState(() {
-      _usingPeriodChips = false;
-      _syncedHeaderRange = range;
-    });
-    _nav?.setHeaderDateRange(range);
-    await _reload(from: from, to: to);
-  }
-
   Future<void> _exportPdf() async {
     if (_exporting) return;
     final from = _activeFrom;
@@ -256,7 +224,7 @@ class _AdminRevenueAnalyticsScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Tip: use 7 / 30 / 90 day period chips below, or change the header date range.',
+              'Use the header date range and period toggles below the chart to refine analytics.',
             ),
             behavior: SnackBarBehavior.floating,
             width: 420,
@@ -290,161 +258,66 @@ class _AdminRevenueAnalyticsScreenState
     final avgTicket =
         totalPayments > 0 ? totalRevenue / totalPayments : 0.0;
 
-    final chartValues = rev.map((p) => p.prihod).toList();
-    final spark = chartValues.length <= 14
-        ? chartValues
-        : chartValues.sublist(chartValues.length - 14);
-
-    RevenuePoint? bestDay;
-    RevenuePoint? worstDay;
-    for (final p in rev) {
-      if (p.prihod <= 0) continue;
-      if (bestDay == null || p.prihod > bestDay.prihod) bestDay = p;
-      if (worstDay == null || p.prihod < worstDay.prihod) worstDay = p;
-    }
-
-    final mid = rev.length ~/ 2;
-    final firstHalf = rev.take(mid).fold<double>(0, (s, p) => s + p.prihod);
-    final secondHalf = rev.skip(mid).fold<double>(0, (s, p) => s + p.prihod);
-    final changePct = firstHalf > 0
-        ? ((secondHalf - firstHalf) / firstHalf * 100)
-        : 0.0;
-
     final periodLabel = _usingPeriodChips
         ? switch (_period) {
-            _ReportPeriod.days7 => '7 days',
-            _ReportPeriod.days30 => '30 days',
-            _ReportPeriod.days90 => '90 days',
+            _ReportPeriod.days7 => 'Last 7 days',
+            _ReportPeriod.days30 => 'Last 30 days',
+            _ReportPeriod.days90 => 'Last 90 days',
           }
-        : '${_fmtDate(data.from)} — ${_fmtDate(data.to)}';
+        : 'Selected period';
+    final hasRevenueData = rev.any((p) => p.prihod > 0);
 
     return Stack(
       children: [
-        const Positioned(
-          top: 18,
-          right: 120,
-          child: _AmbientGlow(size: 310, color: Color(0x267B4DFF)),
-        ),
-        const Positioned(
-          left: 120,
-          bottom: 30,
-          child: _AmbientGlow(size: 260, color: Color(0x14D4AF7A)),
-        ),
-        Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: LuxuryPageChrome.bodyPadding.copyWith(
-                      right: 22,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ReportsActionsBar(
-                          rangeText:
-                              '${_fmtDate(data.from)} — ${_fmtDate(data.to)}',
-                          exporting: _exporting,
-                          onPickRange: _pickRange,
-                          onExport: _exportPdf,
-                        ),
-                        if (data.warnings.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _ReportsWarningBanner(messages: data.warnings),
-                        ],
-                        const SizedBox(height: 16),
-                        _KpiGrid(
-                          cards: [
-                            _KpiSpec(
-                              title: 'Total Revenue',
-                              value: _fmtKm(totalRevenue),
-                              subtitle: 'Period: $periodLabel',
-                              icon: Icons.attach_money_rounded,
-                              values: spark.isEmpty ? [totalRevenue] : spark,
-                            ),
-                            _KpiSpec(
-                              title: 'Payments',
-                              value: '$totalPayments',
-                              subtitle: 'Completed payments in period',
-                              icon: Icons.payments_outlined,
-                              values: rev
-                                  .map((p) => p.brojPlacanja.toDouble())
-                                  .toList(),
-                            ),
-                            _KpiSpec(
-                              title: 'Average Amount',
-                              value: _fmtKm(avgTicket),
-                              subtitle: 'Per completed payment',
-                              icon: Icons.account_balance_wallet_outlined,
-                              values: rev
-                                  .map((p) => p.brojPlacanja > 0
-                                      ? p.prihod / p.brojPlacanja
-                                      : 0.0)
-                                  .toList(),
-                            ),
-                            _KpiSpec(
-                              title: 'Revenue Today',
-                              value: _fmtKm(data.kpi?.prihodDanas ?? 0),
-                              subtitle:
-                                  '${data.kpi?.rezervacijeDanas ?? 0} bookings today',
-                              icon: Icons.today_outlined,
-                              values: rev.length >= 7
-                                  ? rev
-                                      .sublist(rev.length - 7)
-                                      .map((p) => p.prihod)
-                                      .toList()
-                                  : spark,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        _RevenueChartCard(
-                          points: rev,
-                          period: _period,
-                          onPeriod: _setPeriod,
-                          metrics: [
-                            ('This period', _fmtKm(totalRevenue)),
-                            (
-                              'Trend (2nd half)',
-                              '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(1)}%',
-                            ),
-                            (
-                              'Best day',
-                              bestDay == null
-                                  ? '—'
-                                  : '${_fmtDate(bestDay.datum)}\n${_fmtKm(bestDay.prihod)}',
-                            ),
-                            (
-                              'Worst day',
-                              worstDay == null
-                                  ? '—'
-                                  : '${_fmtDate(worstDay.datum)}\n${_fmtKm(worstDay.prihod)}',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        _RevenueBreakdownTable(services: data.popularity),
-                        const SizedBox(height: 80),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 356,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(0, 12, 28, 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _RevenueByServiceCard(services: data.popularity),
-                        const SizedBox(height: 18),
-                        _TopSpendersCard(spenders: data.spenders),
-                      ],
-                    ),
-                  ),
-                ),
+        SingleChildScrollView(
+          padding: LuxuryPageChrome.bodyPadding.copyWith(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (data.warnings.isNotEmpty) ...[
+                _ReportsWarningBanner(messages: data.warnings),
+                const SizedBox(height: 12),
               ],
-            ),
+              _KpiGrid(
+                cards: [
+                  _KpiSpec(
+                    title: 'Total Revenue',
+                    value: _fmtKm(totalRevenue),
+                    subtitle: periodLabel,
+                  ),
+                  _KpiSpec(
+                    title: 'Completed Payments',
+                    value: '$totalPayments',
+                    subtitle: 'In selected period',
+                  ),
+                  _KpiSpec(
+                    title: 'Average Transaction Value',
+                    value: _fmtKm(avgTicket),
+                    subtitle: 'Per completed payment',
+                  ),
+                  _KpiSpec(
+                    title: 'Revenue Today',
+                    value: _fmtKm(data.kpi?.prihodDanas ?? 0),
+                    subtitle:
+                        '${data.kpi?.rezervacijeDanas ?? 0} bookings today',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              _RevenueChartCard(
+                points: rev,
+                period: _period,
+                onPeriod: _setPeriod,
+                hasData: hasRevenueData,
+              ),
+              const SizedBox(height: 28),
+              _RevenueByServiceSection(services: data.popularity),
+              const SizedBox(height: 28),
+              _TopClientsSection(spenders: data.spenders),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
         if (_loading)
           const Positioned(
             top: 0,
@@ -530,90 +403,49 @@ class _ReportsError extends StatelessWidget {
   }
 }
 
-class _ReportsActionsBar extends StatelessWidget {
-  const _ReportsActionsBar({
-    required this.rangeText,
-    required this.exporting,
-    required this.onPickRange,
-    required this.onExport,
+class _AnalyticsEmptyState extends StatelessWidget {
+  const _AnalyticsEmptyState({
+    required this.title,
+    required this.subtitle,
+    this.height = 160,
   });
 
-  final String rangeText;
-  final bool exporting;
-  final VoidCallback onPickRange;
-  final VoidCallback onExport;
+  final String title;
+  final String subtitle;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPickRange,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: Colors.white.withValues(alpha: 0.04),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.date_range_rounded,
-                    size: 17,
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    rangeText,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.88),
-                    ),
-                  ),
-                  Icon(
-                    Icons.expand_more_rounded,
-                    size: 18,
-                    color: Colors.white.withValues(alpha: 0.45),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const Spacer(),
-        OutlinedButton.icon(
-          onPressed: exporting ? null : onExport,
-          icon: exporting
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white.withValues(alpha: 0.7),
-                  ),
-                )
-              : Icon(
-                  Icons.download_outlined,
-                  size: 17,
-                  color: Colors.white.withValues(alpha: 0.75),
+    return SizedBox(
+      height: height,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFF5F3FA),
                 ),
-          label: Text(exporting ? 'Exporting...' : 'Export'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white.withValues(alpha: 0.88),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  height: 1.45,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -632,10 +464,10 @@ class _KpiGrid extends StatelessWidget {
             : c.maxWidth >= 700
             ? 2
             : 1;
-        final width = (c.maxWidth - 18 * (cols - 1)) / cols;
+        final width = (c.maxWidth - 12 * (cols - 1)) / cols;
         return Wrap(
-          spacing: 18,
-          runSpacing: 18,
+          spacing: 12,
+          runSpacing: 12,
           children: [
             for (final card in cards)
               SizedBox(
@@ -657,78 +489,47 @@ class _RevenueKpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final spark = spec.values.isEmpty
-        ? const [0.0, 0.0]
-        : (spec.values.length <= 14
-              ? spec.values
-              : spec.values.sublist(spec.values.length - 14));
-
     return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.38,
-      borderOpacity: 0.12,
-      padding: const EdgeInsets.fromLTRB(20, 18, 18, 16),
+      borderRadius: 18,
+      blurSigma: 22,
+      opacity: 0.34,
+      borderOpacity: 0.08,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: SizedBox(
-        height: 176,
+        height: 108,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                      alpha: 0.14,
-                    ),
-                    border: Border.all(
-                      color: NuaLuxuryTokens.softPurpleGlow.withValues(
-                        alpha: 0.26,
-                      ),
-                    ),
-                  ),
-                  child: Icon(
-                    spec.icon,
-                    color: NuaLuxuryTokens.champagneGold,
-                    size: 21,
-                  ),
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 88,
-                  height: 42,
-                  child: _MiniLine(values: spark),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             Text(
               spec.title,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.62),
-                fontWeight: FontWeight.w800,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
               ),
             ),
-            const SizedBox(height: 8),
+            const Spacer(),
             Text(
               spec.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: const Color(0xFFF5F3FA),
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.55,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                fontSize: 24,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
               spec.subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.38),
+                fontSize: 11,
               ),
             ),
           ],
@@ -743,13 +544,13 @@ class _RevenueChartCard extends StatelessWidget {
     required this.points,
     required this.period,
     required this.onPeriod,
-    required this.metrics,
+    required this.hasData,
   });
 
   final List<RevenuePoint> points;
   final _ReportPeriod period;
   final void Function(_ReportPeriod) onPeriod;
-  final List<(String, String)> metrics;
+  final bool hasData;
 
   @override
   Widget build(BuildContext context) {
@@ -764,13 +565,13 @@ class _RevenueChartCard extends StatelessWidget {
     ];
 
     return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 28,
-      opacity: 0.38,
-      borderOpacity: 0.12,
-      padding: const EdgeInsets.all(22),
+      borderRadius: 18,
+      blurSigma: 24,
+      opacity: 0.34,
+      borderOpacity: 0.08,
+      padding: const EdgeInsets.all(20),
       child: SizedBox(
-        height: 440,
+        height: hasData ? 380 : 300,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -779,8 +580,8 @@ class _RevenueChartCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Revenue Over Time',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                       color: const Color(0xFFF5F3FA),
                     ),
                   ),
@@ -804,16 +605,14 @@ class _RevenueChartCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Expanded(
-              child: values.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No payments in the selected period.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.55),
-                        ),
-                      ),
+              child: !hasData
+                  ? const _AnalyticsEmptyState(
+                      title: 'No revenue data available',
+                      subtitle:
+                          'Revenue analytics will appear once payments are recorded.',
+                      height: 220,
                     )
                   : LineChart(
                       LineChartData(
@@ -937,8 +736,6 @@ class _RevenueChartCard extends StatelessWidget {
                       ),
                     ),
             ),
-            const SizedBox(height: 18),
-            _ChartMetrics(metrics: metrics),
           ],
         ),
       ),
@@ -946,145 +743,52 @@ class _RevenueChartCard extends StatelessWidget {
   }
 }
 
-class _ChartMetrics extends StatelessWidget {
-  const _ChartMetrics({required this.metrics});
-
-  final List<(String, String)> metrics;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < metrics.length; i++) ...[
-          Expanded(
-            child: _MetricText(
-              label: metrics[i].$1,
-              value: metrics[i].$2,
-            ),
-          ),
-          if (i != metrics.length - 1)
-            Container(
-              width: 1,
-              height: 36,
-              color: Colors.white.withValues(alpha: 0.07),
-            ),
-        ],
-      ],
-    );
-  }
-}
-
-class _MetricText extends StatelessWidget {
-  const _MetricText({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.52),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFFF5F3FA),
-              fontWeight: FontWeight.w900,
-              height: 1.25,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RevenueByServiceCard extends StatelessWidget {
-  const _RevenueByServiceCard({required this.services});
-
-  static const _colors = [
-    Color(0xFF7B4DFF),
-    Color(0xFF9D6BFF),
-    Color(0xFFC8B6E8),
-    Color(0xFFD4AF7A),
-    Color(0xFF4ADE80),
-    Color(0xFF5EEAD4),
-    Color(0xFFFF8A80),
-    Color(0xFF60A5FA),
-  ];
+class _RevenueByServiceSection extends StatelessWidget {
+  const _RevenueByServiceSection({required this.services});
 
   final List<ServicePopularity> services;
 
   @override
   Widget build(BuildContext context) {
     final total = services.fold<double>(0, (s, x) => s + x.prihod);
-    final items = [
-      for (var i = 0; i < services.length; i++)
-        _ServiceRevenue(
-          services[i].naziv,
-          total > 0
-              ? '${(services[i].prihod / total * 100).round()}%'
-              : '0%',
-          _fmtKm(services[i].prihod),
-          _colors[i % _colors.length],
-          total > 0 ? services[i].prihod / total * 100 : 0,
-        ),
-    ];
+    final hasData = services.isNotEmpty && total > 0;
 
     return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 26,
-      opacity: 0.38,
+      borderRadius: 18,
+      blurSigma: 22,
+      opacity: 0.34,
+      borderOpacity: 0.08,
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Revenue by Service',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: const Color(0xFFF5F3FA),
             ),
           ),
-          const SizedBox(height: 18),
-          if (items.isEmpty)
-            Text(
-              'No data for the selected period.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
+          const SizedBox(height: 16),
+          if (!hasData)
+            const _AnalyticsEmptyState(
+              title: 'No service revenue yet',
+              subtitle:
+                  'Revenue by service will appear once paid bookings exist.',
+              height: 140,
             )
           else ...[
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  centerSpaceRadius: 58,
-                  sectionsSpace: 3,
-                  sections: [
-                    for (final item in items)
-                      PieChartSectionData(
-                        value: item.chartValue,
-                        color: item.color,
-                        radius: 34,
-                        showTitle: false,
-                      ),
-                  ],
+            const _BreakdownHeader(),
+            const SizedBox(height: 8),
+            for (final s in services)
+              _BreakdownRow(
+                row: _Breakdown(
+                  s.naziv,
+                  _fmtKm(s.prihod),
+                  total > 0 ? s.prihod / total : 0,
+                  '${s.brojRezervacija} payments',
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            for (final item in items) _ServiceRevenueRow(item: item),
           ],
         ],
       ),
@@ -1092,99 +796,129 @@ class _RevenueByServiceCard extends StatelessWidget {
   }
 }
 
-class _TopSpendersCard extends StatelessWidget {
-  const _TopSpendersCard({required this.spenders});
+class _TopClientsSection extends StatelessWidget {
+  const _TopClientsSection({required this.spenders});
 
   final List<TopSpender> spenders;
 
   @override
   Widget build(BuildContext context) {
     return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 26,
-      opacity: 0.38,
+      borderRadius: 18,
+      blurSigma: 22,
+      opacity: 0.34,
+      borderOpacity: 0.08,
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Top Clients',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: const Color(0xFFF5F3FA),
             ),
           ),
           const SizedBox(height: 16),
           if (spenders.isEmpty)
-            Text(
-              'No client payments in the selected period.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
+            const _AnalyticsEmptyState(
+              title: 'No client payments yet',
+              subtitle:
+                  'Top clients will appear once payments are recorded.',
+              height: 140,
             )
-          else
-            for (var i = 0; i < spenders.length; i++)
-              _SpenderRow(
-                rank: i + 1,
-                spender: _Spender(
-                  spenders[i].imePrezime,
-                  '${spenders[i].brojPosjeta} visits',
-                  _fmtKm(spenders[i].ukupnoPotroseno),
-                ),
-              ),
+          else ...[
+            const _TopClientsHeader(),
+            const SizedBox(height: 8),
+            for (final s in spenders) _TopClientRow(spender: s),
+          ],
         ],
       ),
     );
   }
 }
 
-class _RevenueBreakdownTable extends StatelessWidget {
-  const _RevenueBreakdownTable({required this.services});
-
-  final List<ServicePopularity> services;
+class _TopClientsHeader extends StatelessWidget {
+  const _TopClientsHeader();
 
   @override
   Widget build(BuildContext context) {
-    final total = services.fold<double>(0, (s, x) => s + x.prihod);
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: Colors.white.withValues(alpha: 0.45),
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.4,
+    );
+    return Row(
+      children: [
+        Expanded(flex: 3, child: Text('CLIENT', style: style)),
+        Expanded(flex: 2, child: Text('TOTAL SPENT', style: style)),
+        Expanded(child: Text('APPOINTMENTS', style: style)),
+        Expanded(flex: 2, child: Text('LAST VISIT', textAlign: TextAlign.right, style: style)),
+      ],
+    );
+  }
+}
 
-    return LuxuryGlassPanel(
-      borderRadius: 24,
-      blurSigma: 24,
-      opacity: 0.36,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+class _TopClientRow extends StatelessWidget {
+  const _TopClientRow({required this.spender});
+
+  final TopSpender spender;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lastVisit = spender.zadnjaPosjeta == null
+        ? '—'
+        : _fmtDate(spender.zadnjaPosjeta!.toLocal());
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+      ),
+      child: Row(
         children: [
-          Text(
-            'Revenue Breakdown by Service',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFFF5F3FA),
+          Expanded(
+            flex: 3,
+            child: Text(
+              spender.imePrezime,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFF5F3FA),
+              ),
             ),
           ),
-          const SizedBox(height: 18),
-          const _BreakdownHeader(),
-          const SizedBox(height: 8),
-          if (services.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Text(
-                'No data for the table.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.55),
-                ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              _fmtKm(spender.ukupnoPotroseno),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-            )
-          else
-            for (final s in services)
-              _BreakdownRow(
-                row: _Breakdown(
-                  s.naziv,
-                  s.prihod.toStringAsFixed(0),
-                  total > 0 ? s.prihod / total : 0,
-                  '${s.brojRezervacija} payments',
-                ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              '${spender.brojPosjeta}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.65),
               ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              lastVisit,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1204,7 +938,7 @@ class _BreakdownHeader extends StatelessWidget {
     return Row(
       children: [
         Expanded(flex: 2, child: Text('SERVICE', style: style)),
-        Expanded(child: Text('REVENUE (KM)', style: style)),
+        Expanded(child: Text('REVENUE', style: style)),
         Expanded(flex: 2, child: Text('% OF TOTAL', style: style)),
         Expanded(
           child: Text('PAYMENTS', textAlign: TextAlign.right, style: style),
@@ -1295,46 +1029,6 @@ class _BreakdownRow extends StatelessWidget {
   }
 }
 
-class _MiniLine extends StatelessWidget {
-  const _MiniLine({required this.values});
-
-  final List<double> values;
-
-  @override
-  Widget build(BuildContext context) {
-    if (values.isEmpty) return const SizedBox.shrink();
-    final minY = values.reduce(math.min);
-    final maxY = values.reduce(math.max);
-    final pad = maxY == minY ? 1.0 : 0.0;
-    return LineChart(
-      LineChartData(
-        minY: minY - pad,
-        maxY: maxY + pad,
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        borderData: FlBorderData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: [
-              for (var i = 0; i < values.length; i++)
-                FlSpot(i.toDouble(), values[i]),
-            ],
-            isCurved: true,
-            barWidth: 2.4,
-            dotData: const FlDotData(show: false),
-            color: NuaLuxuryTokens.softPurpleGlow,
-            belowBarData: BarAreaData(
-              show: true,
-              color: NuaLuxuryTokens.softPurpleGlow.withValues(alpha: 0.12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _RangePill extends StatelessWidget {
   const _RangePill({
     required this.label,
@@ -1379,221 +1073,16 @@ class _RangePill extends StatelessWidget {
   }
 }
 
-class _ServiceRevenueRow extends StatelessWidget {
-  const _ServiceRevenueRow({required this.item});
-
-  final _ServiceRevenue item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 11),
-      child: Row(
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(
-              color: item.color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              item.label,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          Text(
-            item.percent,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.64),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 80,
-            child: Text(
-              item.revenue,
-              textAlign: TextAlign.right,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: const Color(0xFFF5F3FA),
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SpenderRow extends StatelessWidget {
-  const _SpenderRow({required this.rank, required this.spender});
-
-  final int rank;
-  final _Spender spender;
-
-  @override
-  Widget build(BuildContext context) {
-    final initials = spender.name
-        .split(' ')
-        .where((p) => p.isNotEmpty)
-        .map((p) => p[0])
-        .take(2)
-        .join()
-        .toUpperCase();
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.055)),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: rank <= 3
-                  ? NuaLuxuryTokens.champagneGold.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.05),
-            ),
-            child: Text(
-              '$rank',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: rank <= 3
-                    ? NuaLuxuryTokens.champagneGold
-                    : Colors.white.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          CircleAvatar(
-            radius: 17,
-            backgroundColor: NuaLuxuryTokens.softPurpleGlow.withValues(
-              alpha: 0.34,
-            ),
-            child: Text(
-              initials,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  spender.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  spender.appointments,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: NuaLuxuryTokens.lavenderWhisper.withValues(
-                      alpha: 0.52,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (rank <= 3)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(
-                Icons.workspace_premium_rounded,
-                size: 16,
-                color: NuaLuxuryTokens.champagneGold,
-              ),
-            ),
-          Text(
-            spender.revenue,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: const Color(0xFFF5F3FA),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AmbientGlow extends StatelessWidget {
-  const _AmbientGlow({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-          boxShadow: [BoxShadow(color: color, blurRadius: size * 0.45)],
-        ),
-      ),
-    );
-  }
-}
-
 class _KpiSpec {
   const _KpiSpec({
     required this.title,
     required this.value,
     required this.subtitle,
-    required this.icon,
-    required this.values,
   });
 
   final String title;
   final String value;
   final String subtitle;
-  final IconData icon;
-  final List<double> values;
-}
-
-class _ServiceRevenue {
-  const _ServiceRevenue(
-    this.label,
-    this.percent,
-    this.revenue,
-    this.color,
-    this.chartValue,
-  );
-
-  final String label;
-  final String percent;
-  final String revenue;
-  final Color color;
-  final double chartValue;
-}
-
-class _Spender {
-  const _Spender(this.name, this.appointments, this.revenue);
-
-  final String name;
-  final String appointments;
-  final String revenue;
 }
 
 class _Breakdown {

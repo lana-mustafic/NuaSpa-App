@@ -71,6 +71,23 @@ class DesktopNav extends ChangeNotifier {
 
   int get headerFiltersPulse => _headerFiltersPulse;
 
+  VoidCallback? _reportsPdfExport;
+  bool _reportsPdfExporting = false;
+
+  VoidCallback? get reportsPdfExport => _reportsPdfExport;
+
+  bool get reportsPdfExporting => _reportsPdfExporting;
+
+  void setReportsPdfExport(VoidCallback? handler) {
+    _reportsPdfExport = handler;
+  }
+
+  void setReportsPdfExporting(bool exporting) {
+    if (_reportsPdfExporting == exporting) return;
+    _reportsPdfExporting = exporting;
+    notifyListeners();
+  }
+
   void setHeaderDateRange(DateTimeRange range) {
     final start = DateTime(range.start.year, range.start.month, range.start.day);
     final end = DateTime(range.end.year, range.end.month, range.end.day);
