@@ -34,7 +34,6 @@ class _ReportsData {
     required this.spenders,
     required this.from,
     required this.to,
-    this.error,
     this.warnings = const [],
   });
 
@@ -44,7 +43,6 @@ class _ReportsData {
   final List<TopSpender> spenders;
   final DateTime from;
   final DateTime to;
-  final String? error;
   final List<String> warnings;
 }
 
@@ -61,7 +59,9 @@ class _AdminRevenueAnalyticsScreenState
     extends State<AdminRevenueAnalyticsScreen> {
   final ApiService _api = ApiService();
   _ReportPeriod _period = _ReportPeriod.days30;
-  Future<_ReportsData>? _future;
+  _ReportsData? _data;
+  bool _loading = true;
+  String? _error;
   bool _exporting = false;
   DateTime? _activeFrom;
   DateTime? _activeTo;
@@ -138,29 +138,39 @@ class _AdminRevenueAnalyticsScreenState
     return (to.subtract(Duration(days: days)), to);
   }
 
-  void _reload({DateTime? from, DateTime? to}) {
+  Future<void> _reload({DateTime? from, DateTime? to}) async {
     final (rangeFrom, rangeTo) = from != null && to != null
         ? (from, to)
         : _rangeFor(_period);
     setState(() {
+      _loading = true;
+      _error = null;
       _activeFrom = rangeFrom;
       _activeTo = rangeTo;
-      _future = () async {
-        final result = await _api.getAdminReportsDataResult(
-          from: rangeFrom,
-          to: rangeTo,
-        );
-        return _ReportsData(
-          kpi: result.kpi,
-          revenue: result.revenue,
-          popularity: result.popularity,
-          spenders: result.spenders,
-          from: rangeFrom,
-          to: rangeTo,
-          error: result.error,
-          warnings: result.warnings,
-        );
-      }();
+    });
+
+    final result = await _api.getAdminReportsDataResult(
+      from: rangeFrom,
+      to: rangeTo,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _loading = false;
+      if (result.error != null) {
+        _error = result.error;
+        return;
+      }
+      _error = null;
+      _data = _ReportsData(
+        kpi: result.kpi,
+        revenue: result.revenue,
+        popularity: result.popularity,
+        spenders: result.spenders,
+        from: rangeFrom,
+        to: rangeTo,
+        warnings: result.warnings,
+      );
     });
   }
 
@@ -218,83 +228,72 @@ class _AdminRevenueAnalyticsScreenState
       });
     }
 
-    return FutureBuilder<_ReportsData>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
-        }
+    if (_error != null && _data == null && !_loading) {
+      return _ReportsError(message: _error!, onRetry: () => _reload());
+    }
 
-        if (snap.hasError) {
-          return _ReportsError(
-            message: 'Unable to load reports.',
-            onRetry: _reload,
-          );
-        }
+    if (_data == null && _loading) {
+      return const Center(
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
 
-        final data = snap.data;
-        if (data == null) {
-          return _ReportsError(message: 'No data available.', onRetry: _reload);
-        }
+    final data = _data;
+    if (data == null) {
+      return _ReportsError(message: 'No data available.', onRetry: () => _reload());
+    }
 
-        if (data.error != null) {
-          return _ReportsError(message: data.error!, onRetry: _reload);
-        }
+    final rev = data.revenue;
+    final totalRevenue = rev.fold<double>(0, (s, p) => s + p.prihod);
+    final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojPlacanja);
+    final avgTicket =
+        totalPayments > 0 ? totalRevenue / totalPayments : 0.0;
 
-        final rev = data.revenue;
-        final totalRevenue = rev.fold<double>(0, (s, p) => s + p.prihod);
-        final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojPlacanja);
-        final avgTicket = totalPayments > 0
-            ? totalRevenue / totalPayments
-            : 0.0;
+    final chartValues = rev.map((p) => p.prihod).toList();
+    final spark = chartValues.length <= 14
+        ? chartValues
+        : chartValues.sublist(chartValues.length - 14);
 
-        final chartValues = rev.map((p) => p.prihod).toList();
-        final spark = chartValues.length <= 14
-            ? chartValues
-            : chartValues.sublist(chartValues.length - 14);
+    RevenuePoint? bestDay;
+    RevenuePoint? worstDay;
+    for (final p in rev) {
+      if (p.prihod <= 0) continue;
+      if (bestDay == null || p.prihod > bestDay.prihod) bestDay = p;
+      if (worstDay == null || p.prihod < worstDay.prihod) worstDay = p;
+    }
 
-        RevenuePoint? bestDay;
-        RevenuePoint? worstDay;
-        for (final p in rev) {
-          if (p.prihod <= 0) continue;
-          if (bestDay == null || p.prihod > bestDay.prihod) bestDay = p;
-          if (worstDay == null || p.prihod < worstDay.prihod) worstDay = p;
-        }
+    final mid = rev.length ~/ 2;
+    final firstHalf = rev.take(mid).fold<double>(0, (s, p) => s + p.prihod);
+    final secondHalf = rev.skip(mid).fold<double>(0, (s, p) => s + p.prihod);
+    final changePct = firstHalf > 0
+        ? ((secondHalf - firstHalf) / firstHalf * 100)
+        : 0.0;
 
-        final mid = rev.length ~/ 2;
-        final firstHalf = rev.take(mid).fold<double>(0, (s, p) => s + p.prihod);
-        final secondHalf = rev.skip(mid).fold<double>(0, (s, p) => s + p.prihod);
-        final changePct = firstHalf > 0
-            ? ((secondHalf - firstHalf) / firstHalf * 100)
-            : 0.0;
+    final periodLabel = _usingPeriodChips
+        ? switch (_period) {
+            _ReportPeriod.days7 => '7 days',
+            _ReportPeriod.days30 => '30 days',
+            _ReportPeriod.days90 => '90 days',
+          }
+        : '${_fmtDate(data.from)} — ${_fmtDate(data.to)}';
 
-        final periodLabel = _usingPeriodChips
-            ? switch (_period) {
-                _ReportPeriod.days7 => '7 days',
-                _ReportPeriod.days30 => '30 days',
-                _ReportPeriod.days90 => '90 days',
-              }
-            : '${_fmtDate(data.from)} — ${_fmtDate(data.to)}';
-
-        return Stack(
-          children: [
-            const Positioned(
-              top: 18,
-              right: 120,
-              child: _AmbientGlow(size: 310, color: Color(0x267B4DFF)),
-            ),
-            const Positioned(
-              left: 120,
-              bottom: 30,
-              child: _AmbientGlow(size: 260, color: Color(0x14D4AF7A)),
-            ),
-            Row(
+    return Stack(
+      children: [
+        const Positioned(
+          top: 18,
+          right: 120,
+          child: _AmbientGlow(size: 310, color: Color(0x267B4DFF)),
+        ),
+        const Positioned(
+          left: 120,
+          bottom: 30,
+          child: _AmbientGlow(size: 260, color: Color(0x14D4AF7A)),
+        ),
+        Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
@@ -408,9 +407,18 @@ class _AdminRevenueAnalyticsScreenState
                 ),
               ],
             ),
-          ],
-        );
-      },
+        if (_loading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: NuaLuxuryTokens.softPurpleGlow,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+      ],
     );
   }
 }
