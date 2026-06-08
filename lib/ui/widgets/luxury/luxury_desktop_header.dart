@@ -437,6 +437,21 @@ class LuxuryDesktopHeader extends StatelessWidget {
           onSearchChanged: nav.setCatalogSearchQuery,
         );
       }
+      if (isReviews) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Reviews',
+          subtitle: 'Monitor ratings and guest feedback.',
+          searchHint: 'Search across NuaSpa...',
+          initialSearchQuery: nav.reviewsSearchQuery,
+          onSearchSubmitted: nav.setReviewsSearchQuery,
+          onSearchChanged: nav.setReviewsSearchQuery,
+        );
+      }
     }
 
     return Padding(

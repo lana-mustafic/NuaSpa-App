@@ -261,8 +261,8 @@ class _LuxuryReviewsDashboardScreenState
     final theme = Theme.of(context);
     final mq = MediaQuery.sizeOf(context);
     final tightHeight = mq.height < 720;
-    final pad = tightHeight ? 16.0 : 24.0;
-    final gap = tightHeight ? 12.0 : 16.0;
+    final pad = tightHeight ? 12.0 : 16.0;
+    final gap = tightHeight ? 8.0 : 10.0;
 
     if (_error != null && _data == null && !_loading) {
       return Center(
@@ -305,7 +305,7 @@ class _LuxuryReviewsDashboardScreenState
       children: [
         Positioned.fill(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 10 : 14, pad, pad),
+            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 6 : 8, pad, pad),
             child: Scrollbar(
               controller: _mainScrollController,
               thumbVisibility: true,
@@ -318,11 +318,19 @@ class _LuxuryReviewsDashboardScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _PageHeader(
-                      theme: theme,
-                      rangeLabel: _rangeLabel(),
-                      onPickRange: _pickRange,
-                      onExport: _exportCsv,
+                    LayoutBuilder(
+                      builder: (context, c) {
+                        final bar = _ReviewsActionsBar(
+                          rangeLabel: _rangeLabel(),
+                          onPickRange: _pickRange,
+                          onExport: _exportCsv,
+                        );
+                        if (c.maxWidth < 520) return bar;
+                        return Align(
+                          alignment: Alignment.centerRight,
+                          child: bar,
+                        );
+                      },
                     ),
                     SizedBox(height: gap),
                     _KpiRow(dash: dash, compact: tightHeight),
@@ -468,15 +476,13 @@ Widget _glassCard({
   );
 }
 
-class _PageHeader extends StatelessWidget {
-  const _PageHeader({
-    required this.theme,
+class _ReviewsActionsBar extends StatelessWidget {
+  const _ReviewsActionsBar({
     required this.rangeLabel,
     required this.onPickRange,
     required this.onExport,
   });
 
-  final ThemeData theme;
   final String rangeLabel;
   final VoidCallback onPickRange;
   final VoidCallback onExport;
@@ -485,79 +491,32 @@ class _PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stacked = constraints.maxWidth < 720;
-        final title = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Reviews',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.4,
-                color: LuxuryReviewsDashboardScreen.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Monitor ratings and guest feedback.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.58),
-                height: 1.4,
-              ),
-            ),
-          ],
+        final stacked = constraints.maxWidth < 520;
+        final dateButton = _HeaderDateRangeButton(
+          label: rangeLabel,
+          height: 40,
+          compact: true,
+          onTap: onPickRange,
         );
-
         final exportButton =
             _HeaderExportButton(height: 40, compact: true, onTap: onExport);
 
         if (stacked) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          return Row(
             children: [
-              title,
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _HeaderDateRangeButton(
-                      label: rangeLabel,
-                      height: 40,
-                      compact: true,
-                      onTap: onPickRange,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  exportButton,
-                ],
-              ),
+              Expanded(child: dateButton),
+              const SizedBox(width: 10),
+              exportButton,
             ],
           );
         }
 
-        final controls = Row(
+        return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300),
-              child: _HeaderDateRangeButton(
-                label: rangeLabel,
-                height: 40,
-                compact: true,
-                onTap: onPickRange,
-              ),
-            ),
+            dateButton,
             const SizedBox(width: 10),
             exportButton,
-          ],
-        );
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: title),
-            controls,
           ],
         );
       },
@@ -887,6 +846,7 @@ class _KpiRow extends StatelessWidget {
     final total = d?.ukupno ?? 0;
     final pos = d?.postotakPozitivnih ?? 0;
     final resp = d?.postotakOdgovora;
+    final hasReviews = total > 0;
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -895,10 +855,13 @@ class _KpiRow extends StatelessWidget {
           Expanded(
             child: _KpiCard(
               title: 'Average Rating',
-              value: avg.toStringAsFixed(1),
-              suffix: ' / 5.0',
-              trend: _KpiTrend.ratingDelta(avg, d?.prosjecnaOcjenaPrethodno),
-              subtitle: 'vs previous period',
+              value: hasReviews ? avg.toStringAsFixed(1) : 'No ratings yet',
+              suffix: hasReviews ? ' / 5.0' : null,
+              valueMuted: !hasReviews,
+              trend: hasReviews
+                  ? _KpiTrend.ratingDelta(avg, d?.prosjecnaOcjenaPrethodno)
+                  : _KpiTrend.none,
+              subtitle: hasReviews ? 'vs previous period' : 'Awaiting first review',
               compact: compact,
               leading: Icon(
                 Icons.star_rounded,
@@ -911,9 +874,12 @@ class _KpiRow extends StatelessWidget {
           Expanded(
             child: _KpiCard(
               title: 'Total Reviews',
-              value: '$total',
-              trend: _KpiTrend.countPercent(total, d?.ukupnoPrethodno ?? 0),
-              subtitle: 'vs previous period',
+              value: hasReviews ? '$total' : '0 Reviews',
+              valueMuted: !hasReviews,
+              trend: hasReviews
+                  ? _KpiTrend.countPercent(total, d?.ukupnoPrethodno ?? 0)
+                  : _KpiTrend.none,
+              subtitle: hasReviews ? 'vs previous period' : 'In selected period',
               compact: compact,
             ),
           ),
@@ -922,29 +888,34 @@ class _KpiRow extends StatelessWidget {
             child: _KpiCard(
               title: 'Positive Reviews',
               value: '${pos.toStringAsFixed(0)}%',
-              trend: _KpiTrend.percentPoints(
-                pos,
-                d?.postotakPozitivnihPrethodno,
-              ),
-              subtitle: 'vs previous period',
+              trend: hasReviews
+                  ? _KpiTrend.percentPoints(
+                      pos,
+                      d?.postotakPozitivnihPrethodno,
+                    )
+                  : _KpiTrend.none,
+              subtitle: hasReviews ? 'vs previous period' : '4★ and above',
               compact: compact,
-              progress: pos / 100,
+              progress: hasReviews ? pos / 100 : null,
             ),
           ),
           SizedBox(width: gap),
           Expanded(
             child: _KpiCard(
               title: 'Response Rate',
-              value: resp == null ? '—' : '${resp.toStringAsFixed(0)}%',
-              trend: resp == null
+              value: !hasReviews || resp == null
+                  ? 'No responses yet'
+                  : '${resp.toStringAsFixed(0)}%',
+              valueMuted: !hasReviews || resp == null,
+              trend: !hasReviews || resp == null
                   ? _KpiTrend.none
                   : _KpiTrend.percentPoints(
                       resp,
                       d?.postotakOdgovoraPrethodno,
                     ),
-              subtitle: 'vs previous period',
+              subtitle: hasReviews ? 'vs previous period' : 'Salon replies',
               compact: compact,
-              progress: resp == null ? null : resp / 100,
+              progress: hasReviews && resp != null ? resp / 100 : null,
             ),
           ),
         ];
@@ -986,6 +957,7 @@ class _KpiCard extends StatelessWidget {
     this.suffix,
     this.leading,
     this.progress,
+    this.valueMuted = false,
   });
 
   final String title;
@@ -996,6 +968,7 @@ class _KpiCard extends StatelessWidget {
   final bool compact;
   final Widget? leading;
   final double? progress;
+  final bool valueMuted;
 
   @override
   Widget build(BuildContext context) {
@@ -1052,11 +1025,17 @@ class _KpiCard extends StatelessWidget {
                   Flexible(
                     child: Text(
                       value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.6,
-                        color: LuxuryReviewsDashboardScreen.textPrimary,
-                        fontSize: compact ? 22 : 26,
+                        fontWeight: valueMuted ? FontWeight.w600 : FontWeight.w800,
+                        letterSpacing: valueMuted ? -0.2 : -0.6,
+                        color: valueMuted
+                            ? Colors.white.withValues(alpha: 0.55)
+                            : LuxuryReviewsDashboardScreen.textPrimary,
+                        fontSize: valueMuted
+                            ? (compact ? 14 : 15)
+                            : (compact ? 22 : 26),
                       ),
                     ),
                   ),
@@ -1203,51 +1182,51 @@ class _FilterBar extends StatelessWidget {
       ),
     );
 
-    return _glassCard(
-      radius: 16,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 12,
-          vertical: compact ? 8 : 10,
-        ),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final narrow = c.maxWidth < 760;
-            if (narrow) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    final toolbarHeight = compact ? 48.0 : 50.0;
+    final toolbarGap = compact ? 12.0 : 14.0;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final narrow = c.maxWidth < 760;
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _FilterSearchField(
+                controller: controller,
+                height: toolbarHeight,
+              ),
+              SizedBox(height: toolbarGap),
+              Row(
                 children: [
-                  _FilterSearchField(controller: controller, inline: true),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(child: ratingMenu),
-                      const SizedBox(width: 8),
-                      Expanded(child: serviceMenu),
-                      const SizedBox(width: 8),
-                      Expanded(child: therapistMenu),
-                    ],
-                  ),
+                  Expanded(child: ratingMenu),
+                  SizedBox(width: toolbarGap),
+                  Expanded(child: serviceMenu),
+                  SizedBox(width: toolbarGap),
+                  Expanded(child: therapistMenu),
                 ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: _FilterSearchField(controller: controller, inline: true),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(width: 130, child: ratingMenu),
-                const SizedBox(width: 8),
-                SizedBox(width: 150, child: serviceMenu),
-                const SizedBox(width: 8),
-                SizedBox(width: 150, child: therapistMenu),
-              ],
-            );
-          },
-        ),
-      ),
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: _FilterSearchField(
+                controller: controller,
+                height: toolbarHeight,
+              ),
+            ),
+            SizedBox(width: toolbarGap),
+            SizedBox(width: 128, child: ratingMenu),
+            SizedBox(width: toolbarGap),
+            SizedBox(width: 148, child: serviceMenu),
+            SizedBox(width: toolbarGap),
+            SizedBox(width: 148, child: therapistMenu),
+          ],
+        );
+      },
     );
   }
 }
@@ -1262,7 +1241,7 @@ class _FilterDropdownPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      height: compact ? 36 : 40,
+      height: compact ? 48 : 50,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
@@ -1295,42 +1274,45 @@ class _FilterDropdownPill extends StatelessWidget {
 }
 
 class _FilterSearchField extends StatelessWidget {
-  const _FilterSearchField({required this.controller, this.inline = false});
+  const _FilterSearchField({
+    required this.controller,
+    this.height = 50,
+  });
 
   final TextEditingController controller;
-  final bool inline;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final field = TextField(
-      controller: controller,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: LuxuryReviewsDashboardScreen.textPrimary,
-        fontSize: 14,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: 'Search reviews…',
-        hintStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.38),
-          fontSize: 14,
+    return SizedBox(
+      height: height,
+      child: _glassCard(
+        radius: 14,
+        child: TextField(
+          controller: controller,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: LuxuryReviewsDashboardScreen.textPrimary,
+            fontSize: 14,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Search reviews...',
+            hintStyle: TextStyle(
+              color: Colors.white.withValues(alpha: 0.38),
+              fontSize: 14,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.4),
+            ),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
         ),
-        prefixIcon: Icon(
-          Icons.search_rounded,
-          size: 18,
-          color: Colors.white.withValues(alpha: 0.4),
-        ),
-        border: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(vertical: 10),
       ),
     );
-
-    if (inline) {
-      return SizedBox(height: 40, child: field);
-    }
-
-    return _glassCard(radius: 14, child: field);
   }
 }
 
@@ -1441,7 +1423,7 @@ class _ReviewsEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 36),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
@@ -1450,10 +1432,10 @@ class _ReviewsEmptyState extends StatelessWidget {
             children: [
               Icon(
                 Icons.rate_review_outlined,
-                size: 36,
+                size: 28,
                 color: Colors.white.withValues(alpha: 0.22),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               Text(
                 'No reviews yet',
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -1461,7 +1443,7 @@ class _ReviewsEmptyState extends StatelessWidget {
                   color: LuxuryReviewsDashboardScreen.textPrimary,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 'Customer reviews will appear here once appointments are completed.',
                 textAlign: TextAlign.center,
@@ -1470,7 +1452,7 @@ class _ReviewsEmptyState extends StatelessWidget {
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: onViewServices,
                 style: OutlinedButton.styleFrom(
@@ -1901,6 +1883,49 @@ class _FooterPageChip extends StatelessWidget {
   }
 }
 
+class _InsightEmptyState extends StatelessWidget {
+  const _InsightEmptyState({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: LuxuryReviewsDashboardScreen.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.48),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RatingDistributionCard extends StatelessWidget {
   const _RatingDistributionCard({
     required this.dash,
@@ -1922,72 +1947,84 @@ class _RatingDistributionCard extends StatelessWidget {
       return (dist[stars] ?? 0) / total;
     }
 
-    return _glassCard(
-      radius: 18,
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Rating Distribution',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: LuxuryReviewsDashboardScreen.textPrimary,
-              ),
-            ),
-            SizedBox(height: compact ? 10 : 12),
-            if (total == 0)
+    final cardHeight = compact ? 168.0 : 180.0;
+
+    return SizedBox(
+      height: cardHeight,
+      child: _glassCard(
+        radius: 18,
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 14 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                'No ratings in this period.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.48),
+                'Rating Distribution',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: LuxuryReviewsDashboardScreen.textPrimary,
                 ),
-              )
-            else ...[
-              for (var stars = 5; stars >= 1; stars--) ...[
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 52,
-                      child: Text(
-                        '$stars stars',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.55),
-                          fontWeight: FontWeight.w600,
+              ),
+              SizedBox(height: compact ? 8 : 10),
+              if (total == 0)
+                Expanded(
+                  child: _InsightEmptyState(
+                    title: 'No ratings available',
+                    subtitle:
+                        'Ratings will appear after clients complete appointments.',
+                  ),
+                )
+              else
+                Expanded(
+                  child: Column(
+                    children: [
+                      for (var stars = 5; stars >= 1; stars--) ...[
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 52,
+                              child: Text(
+                                '$stars stars',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: LinearProgressIndicator(
+                                  value: pct(stars) <= 0 ? 0.0 : pct(stars),
+                                  minHeight: 5,
+                                  backgroundColor:
+                                      Colors.white.withValues(alpha: 0.08),
+                                  color: NuaLuxuryTokens.softPurpleGlow,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 32,
+                              child: Text(
+                                '${(pct(stars) * 100).round()}%',
+                                textAlign: TextAlign.end,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: pct(stars) <= 0 ? 0.0 : pct(stars),
-                          minHeight: 5,
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          color: NuaLuxuryTokens.softPurpleGlow,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        '${(pct(stars) * 100).round()}%',
-                        textAlign: TextAlign.end,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
+                        SizedBox(height: compact ? 6 : 8),
+                      ],
+                    ],
+                  ),
                 ),
-                SizedBox(height: compact ? 6 : 8),
-              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -2010,94 +2047,107 @@ class _TopServicesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = dash?.topUsluge ?? [];
-    return _glassCard(
-      radius: 18,
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Top Rated Services',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: LuxuryReviewsDashboardScreen.textPrimary,
-                    ),
-                  ),
-                ),
-                if (items.isNotEmpty)
-                  TextButton(
-                    onPressed: onViewAll,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white.withValues(alpha: 0.55),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'View all',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(height: compact ? 10 : 12),
-            if (items.isEmpty)
-              Text(
-                'No rated services in this period.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.48),
-                ),
-              )
-            else
-              for (var i = 0; i < items.length; i++) ...[
-                Row(
-                  children: [
-                    Text(
-                      '${i + 1}.',
-                      style: theme.textTheme.labelMedium?.copyWith(
+    final cardHeight = compact ? 168.0 : 180.0;
+
+    return SizedBox(
+      height: cardHeight,
+      child: _glassCard(
+        radius: 18,
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 14 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Top Rated Services',
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: NuaLuxuryTokens.softPurpleGlow,
-                        fontSize: 12,
+                        color: LuxuryReviewsDashboardScreen.textPrimary,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        items[i].naziv,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      items[i].prosjek.toStringAsFixed(1),
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.star_rounded,
-                      size: 14,
-                      color: NuaLuxuryTokens.champagneGold,
-                    ),
-                  ],
-                ),
-                if (i < items.length - 1)
-                  Divider(
-                    height: compact ? 12 : 14,
-                    color: Colors.white.withValues(alpha: 0.06),
                   ),
-              ],
-          ],
+                  if (items.isNotEmpty)
+                    TextButton(
+                      onPressed: onViewAll,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white.withValues(alpha: 0.55),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'View all',
+                        style:
+                            TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(height: compact ? 8 : 10),
+              if (items.isEmpty)
+                Expanded(
+                  child: _InsightEmptyState(
+                    title: 'No rated services yet',
+                    subtitle:
+                        'Top services will appear once reviews are submitted.',
+                  ),
+                )
+              else
+                Expanded(
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < items.length; i++) ...[
+                        Row(
+                          children: [
+                            Text(
+                              '${i + 1}.',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: NuaLuxuryTokens.softPurpleGlow,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                items[i].naziv,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              items[i].prosjek.toStringAsFixed(1),
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: NuaLuxuryTokens.champagneGold,
+                            ),
+                          ],
+                        ),
+                        if (i < items.length - 1)
+                          Divider(
+                            height: compact ? 12 : 14,
+                            color: Colors.white.withValues(alpha: 0.06),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
