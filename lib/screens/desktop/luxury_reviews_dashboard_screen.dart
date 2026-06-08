@@ -503,7 +503,7 @@ class _ReviewsActionsBar extends StatelessWidget {
         }
 
         return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 300),
