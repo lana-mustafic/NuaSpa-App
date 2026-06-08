@@ -1859,11 +1859,21 @@ class ApiService {
     }
   }
 
-  Future<bool> downloadReport() async {
+  Future<bool> downloadReport({
+    required DateTime from,
+    required DateTime to,
+  }) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
       final filePath = '${directory.path}/izvjestaj_top_usluge.pdf';
-      await _dio.download('Izvjestaj/top-usluge', filePath);
+      await _dio.download(
+        'Izvjestaj/top-usluge',
+        filePath,
+        queryParameters: {
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
+        },
+      );
       await OpenFile.open(filePath);
       return true;
     } catch (e) {

@@ -687,10 +687,19 @@ class _AdminReportPage extends StatelessWidget {
             message: 'Preuzmi PDF izvještaj (top usluge)',
             child: FilledButton.icon(
               onPressed: () async {
-                await api.downloadReport();
+                final now = DateTime.now();
+                final end = DateTime(now.year, now.month, now.day);
+                final start = end.subtract(const Duration(days: 29));
+                final ok = await api.downloadReport(from: start, to: end);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Završeno preuzimanje.')),
+                    SnackBar(
+                      content: Text(
+                        ok
+                            ? 'PDF report downloaded.'
+                            : 'PDF export failed.',
+                      ),
+                    ),
                   );
                 }
               },

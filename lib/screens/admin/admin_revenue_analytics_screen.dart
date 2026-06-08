@@ -63,6 +63,8 @@ class _AdminRevenueAnalyticsScreenState
   _ReportPeriod _period = _ReportPeriod.days30;
   Future<_ReportsData>? _future;
   bool _exporting = false;
+  DateTime? _activeFrom;
+  DateTime? _activeTo;
   bool _usingPeriodChips = true;
   DateTimeRange? _syncedHeaderRange;
   int _lastFiltersPulse = 0;
@@ -141,6 +143,8 @@ class _AdminRevenueAnalyticsScreenState
         ? (from, to)
         : _rangeFor(_period);
     setState(() {
+      _activeFrom = rangeFrom;
+      _activeTo = rangeTo;
       _future = () async {
         final result = await _api.getAdminReportsDataResult(
           from: rangeFrom,
@@ -175,8 +179,11 @@ class _AdminRevenueAnalyticsScreenState
 
   Future<void> _exportPdf() async {
     if (_exporting) return;
+    final from = _activeFrom;
+    final to = _activeTo;
+    if (from == null || to == null) return;
     setState(() => _exporting = true);
-    final ok = await _api.downloadReport();
+    final ok = await _api.downloadReport(from: from, to: to);
     if (!mounted) return;
     setState(() => _exporting = false);
     ScaffoldMessenger.of(context).showSnackBar(
