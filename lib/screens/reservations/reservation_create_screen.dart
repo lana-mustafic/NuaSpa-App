@@ -14,7 +14,10 @@ class _ReservationBootstrap {
 }
 
 class ReservationCreateScreen extends StatefulWidget {
-  const ReservationCreateScreen({super.key});
+  const ReservationCreateScreen({super.key, this.initialServiceId});
+
+  /// Preselect service when opened from service details.
+  final int? initialServiceId;
 
   @override
   State<ReservationCreateScreen> createState() =>
@@ -86,7 +89,8 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       _loadingTherapists = true;
       _selectedSlot = null;
     });
-    final list = await _apiService.getZaposleniciForService(serviceId);
+    final result = await _apiService.getZaposleniciForService(serviceId);
+    final list = result.items;
     if (!mounted) return;
     setState(() {
       _therapists = list;
@@ -444,9 +448,13 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                 final freshAll =
                     context.read<ServiceProvider>().allServices;
                 if (freshAll.isEmpty) return;
-                final firstId = freshAll.first.id;
-                setState(() => _selectedServiceId = firstId);
-                await _loadTherapistsForService(firstId);
+                final preferred = widget.initialServiceId;
+                final ids = freshAll.map((s) => s.id).toSet();
+                final targetId = preferred != null && ids.contains(preferred)
+                    ? preferred
+                    : freshAll.first.id;
+                setState(() => _selectedServiceId = targetId);
+                await _loadTherapistsForService(targetId);
               });
             }
 
