@@ -10,6 +10,7 @@ class TherapistReviewRow {
     required this.ocjena,
     required this.komentar,
     required this.uslugaNaziv,
+    this.adminOdgovor,
   });
 
   final DateTime createdAt;
@@ -17,14 +18,21 @@ class TherapistReviewRow {
   final int ocjena;
   final String komentar;
   final String uslugaNaziv;
+  final String? adminOdgovor;
 
   factory TherapistReviewRow.fromJson(Map<String, dynamic> json) {
+    final rawCreated = json['createdAt'];
+    final created = rawCreated is String
+        ? DateTime.tryParse(rawCreated) ?? DateTime.fromMillisecondsSinceEpoch(0)
+        : DateTime.fromMillisecondsSinceEpoch(0);
+
     return TherapistReviewRow(
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: created,
       korisnikIme: json['korisnikIme'] as String? ?? '',
       ocjena: (json['ocjena'] as num?)?.toInt() ?? 0,
       komentar: json['komentar'] as String? ?? '',
       uslugaNaziv: json['uslugaNaziv'] as String? ?? '',
+      adminOdgovor: json['adminOdgovor'] as String?,
     );
   }
 }

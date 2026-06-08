@@ -1,8 +1,13 @@
 class RecenzijeLoadResult {
-  const RecenzijeLoadResult({this.items = const [], this.error});
+  const RecenzijeLoadResult({
+    this.items = const [],
+    this.error,
+    this.truncated = false,
+  });
 
   final List<Recenzija> items;
   final String? error;
+  final bool truncated;
 }
 
 class Recenzija {

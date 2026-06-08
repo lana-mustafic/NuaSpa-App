@@ -13,6 +13,7 @@ import '../../../models/rezervacija.dart';
 import '../../../models/desktop_home_overview.dart';
 import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
+import '../../../models/reviewable_visit.dart';
 import '../../../models/service_load_result.dart';
 import '../../../models/zaposlenici_load_result.dart';
 import '../../../models/payment_intent_response.dart';
@@ -1186,8 +1187,10 @@ class ApiService {
       final all = <Recenzija>[];
       var page = 1;
       const pageSize = 50;
+      const maxPages = 20;
+      int? total;
 
-      while (page <= 20) {
+      while (page <= maxPages) {
         final response = await _dio.get<dynamic>(
           'Recenzija',
           queryParameters: {
@@ -1201,12 +1204,13 @@ class ApiService {
           (json) => Recenzija.fromJson(json),
         );
         all.addAll(batch);
-        final total = parsePagedTotal(response.data);
+        total = parsePagedTotal(response.data);
         if (batch.isEmpty || total == null || all.length >= total) break;
         page++;
       }
 
-      return RecenzijeLoadResult(items: all);
+      final truncated = total != null && all.length < total;
+      return RecenzijeLoadResult(items: all, truncated: truncated);
     } catch (e) {
       debugPrint('Greška u ApiService.getRecenzijeByUsluga: $e');
       return const RecenzijeLoadResult(
@@ -1215,7 +1219,39 @@ class ApiService {
     }
   }
 
+  Future<ReviewableVisitsLoadResult> getReviewableVisits(int uslugaId) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Recenzija/reviewable-visits',
+        queryParameters: {'uslugaId': uslugaId},
+      );
+      final data = response.data;
+      if (data is! List) {
+        return const ReviewableVisitsLoadResult(
+          error: 'Could not load reviewable visits.',
+        );
+      }
+      final items = data
+          .whereType<Map<String, dynamic>>()
+          .map(ReviewableVisit.fromJson)
+          .toList();
+      return ReviewableVisitsLoadResult(items: items);
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getReviewableVisits: $e');
+      return ReviewableVisitsLoadResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load reviewable visits.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getReviewableVisits: $e');
+      return const ReviewableVisitsLoadResult(
+        error: 'Could not load reviewable visits.',
+      );
+    }
+  }
+
   Future<(Recenzija?, String?)> createRecenzija({
+    required int rezervacijaId,
     required int uslugaId,
     required int zaposlenikId,
     required int ocjena,
@@ -1225,6 +1261,7 @@ class ApiService {
       final response = await _dio.post<dynamic>(
         'Recenzija',
         data: {
+          'rezervacijaId': rezervacijaId,
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
           'ocjena': ocjena,
@@ -1538,7 +1575,8 @@ class ApiService {
     }
   }
 
-  Future<AdminReviewsDashboard?> getAdminReviewsDashboard({
+  Future<({AdminReviewsDashboard? data, String? error})>
+      getAdminReviewsDashboardResult({
     required DateTime from,
     required DateTime toInclusive,
     int page = 1,
@@ -1569,12 +1607,49 @@ class ApiService {
         queryParameters: query,
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return AdminReviewsDashboard.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return (data: null, error: 'Unexpected server response.');
+      }
+      return (data: AdminReviewsDashboard.fromJson(data), error: null);
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getAdminReviewsDashboard: $e');
+      final status = e.response?.statusCode;
+      if (status == 403) {
+        return (data: null, error: 'Admin access required to view reviews.');
+      }
+      return (
+        data: null,
+        error: ApiErrorMessages.fromDio(e) ?? 'Could not load reviews dashboard.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getAdminReviewsDashboard: $e');
-      return null;
+      return (data: null, error: 'Could not load reviews dashboard.');
     }
+  }
+
+  Future<AdminReviewsDashboard?> getAdminReviewsDashboard({
+    required DateTime from,
+    required DateTime toInclusive,
+    int page = 1,
+    int pageSize = 10,
+    String? search,
+    int? minOcjena,
+    int? maxOcjena,
+    int? uslugaId,
+    int? zaposlenikId,
+  }) async {
+    final result = await getAdminReviewsDashboardResult(
+      from: from,
+      toInclusive: toInclusive,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      minOcjena: minOcjena,
+      maxOcjena: maxOcjena,
+      uslugaId: uslugaId,
+      zaposlenikId: zaposlenikId,
+    );
+    return result.data;
   }
 
   String _dateOnly(DateTime d) {
@@ -1584,7 +1659,7 @@ class ApiService {
         '${x.day.toString().padLeft(2, '0')}';
   }
 
-  Future<bool> downloadAdminReviewsCsv({
+  Future<({bool ok, bool truncated})> downloadAdminReviewsCsvResult({
     required DateTime from,
     required DateTime toInclusive,
     String? search,
@@ -1608,15 +1683,52 @@ class ApiService {
 
       final directory = await getApplicationDocumentsDirectory();
       final filePath = '${directory.path}/recenzije_export.csv';
-      await _dio.download(
+      final response = await _dio.download(
         'Recenzija/admin-dashboard/csv',
         filePath,
         queryParameters: query,
       );
       await OpenFile.open(filePath);
-      return true;
+      final truncated =
+          response.headers.value('x-export-truncated')?.toLowerCase() == 'true';
+      return (ok: true, truncated: truncated);
     } catch (e) {
       debugPrint('Greška u ApiService.downloadAdminReviewsCsv: $e');
+      return (ok: false, truncated: false);
+    }
+  }
+
+  Future<bool> downloadAdminReviewsCsv({
+    required DateTime from,
+    required DateTime toInclusive,
+    String? search,
+    int? minOcjena,
+    int? maxOcjena,
+    int? uslugaId,
+    int? zaposlenikId,
+  }) async {
+    final result = await downloadAdminReviewsCsvResult(
+      from: from,
+      toInclusive: toInclusive,
+      search: search,
+      minOcjena: minOcjena,
+      maxOcjena: maxOcjena,
+      uslugaId: uslugaId,
+      zaposlenikId: zaposlenikId,
+    );
+    return result.ok;
+  }
+
+  Future<bool> deleteRecenzija(int recenzijaId) async {
+    try {
+      await _dio.delete<dynamic>('Recenzija/$recenzijaId');
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return false;
+      debugPrint('Greška u ApiService.deleteRecenzija: $e');
+      return false;
+    } catch (e) {
+      debugPrint('Greška u ApiService.deleteRecenzija: $e');
       return false;
     }
   }

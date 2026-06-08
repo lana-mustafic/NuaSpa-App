@@ -1002,24 +1002,6 @@ class _AdminReviewCard extends StatelessWidget {
                   'Therapist: ${review.zaposlenikIme!.trim()}',
                   style: _AdminStyle.label(context),
                 ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5CE0A0).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: const Color(0xFF5CE0A0).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Text(
-                  'Verified visit',
-                  style: GoogleFonts.inter(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF5CE0A0),
-                  ),
-                ),
-              ),
             ],
           ),
           if (review.komentar.trim().isNotEmpty) ...[

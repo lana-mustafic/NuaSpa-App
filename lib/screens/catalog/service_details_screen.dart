@@ -16,6 +16,7 @@ import 'admin_service_details_panel.dart';
 import 'assign_therapist_dialog.dart';
 import 'service_editor_dialog.dart';
 import '../../models/recenzija.dart';
+import '../../models/reviewable_visit.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
@@ -79,10 +80,14 @@ class ServiceDetailsScreen extends StatefulWidget {
   /// When true, renders the admin management layout (catalog / therapist admin).
   final bool adminPanelView;
 
+  /// Preselect a completed visit when opening from bookings ("Rate service").
+  final int? initialRezervacijaId;
+
   const ServiceDetailsScreen({
     super.key,
     required this.serviceId,
     this.adminPanelView = false,
+    this.initialRezervacijaId,
   });
 
   @override
@@ -106,8 +111,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   String? _serviceLoadError;
   bool _serviceNotFound = false;
   bool _submittingReview = false;
+  List<ReviewableVisit> _reviewableVisits = [];
+  bool _reviewableVisitsLoading = false;
+  String? _reviewableVisitsError;
+  int? _selectedRezervacijaId;
 
   static const int _maxCommentLength = 1000;
+
+  bool _clientCanReview(AuthProvider auth) =>
+      auth.status == AuthStatus.authenticated &&
+      !auth.isZaposlenik &&
+      !auth.isAdmin;
 
   @override
   void initState() {
@@ -127,6 +141,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     if (result.service != null) {
       PreporukaTracker.instance.trackServiceView(result.service!.id);
       await _loadTherapistsForService(result.service!);
+      await _loadReviewableVisits();
       return result.service;
     }
 
@@ -194,11 +209,51 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     );
   }
 
+  Future<void> _loadReviewableVisits() async {
+    final auth = context.read<AuthProvider>();
+    if (!_clientCanReview(auth)) return;
+
+    setState(() {
+      _reviewableVisitsLoading = true;
+      _reviewableVisitsError = null;
+    });
+
+    final result = await _apiService.getReviewableVisits(widget.serviceId);
+    if (!mounted) return;
+
+    ReviewableVisit? initialVisit;
+    if (widget.initialRezervacijaId != null) {
+      for (final visit in result.items) {
+        if (visit.rezervacijaId == widget.initialRezervacijaId) {
+          initialVisit = visit;
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      _reviewableVisits = result.items;
+      _reviewableVisitsLoading = false;
+      _reviewableVisitsError = result.error;
+      if (initialVisit != null) {
+        _selectedRezervacijaId = initialVisit.rezervacijaId;
+        _selectedZaposlenikId = initialVisit.zaposlenikId;
+      } else if (result.items.length == 1) {
+        _selectedRezervacijaId = result.items.first.rezervacijaId;
+        _selectedZaposlenikId = result.items.first.zaposlenikId;
+      } else if (_selectedRezervacijaId != null &&
+          !result.items.any((v) => v.rezervacijaId == _selectedRezervacijaId)) {
+        _selectedRezervacijaId = null;
+        _selectedZaposlenikId = null;
+      }
+    });
+  }
+
   bool _canShowReviewForm(bool canSubmitReview) =>
       canSubmitReview &&
-      !_therapistsLoading &&
-      _therapistsError == null &&
-      _therapists.isNotEmpty;
+      !_reviewableVisitsLoading &&
+      _reviewableVisitsError == null &&
+      _reviewableVisits.isNotEmpty;
 
   Future<void> _openEditService(Usluga service) async {
     final ok = await showServiceEditorDialog(context, existing: service);
@@ -295,9 +350,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     if (_submittingReview) return;
 
     final komentar = _komentarController.text.trim();
-    if (_selectedZaposlenikId == null) {
+    final visit = _reviewableVisits.cast<ReviewableVisit?>().firstWhere(
+          (v) => v?.rezervacijaId == _selectedRezervacijaId,
+          orElse: () => null,
+        );
+    if (visit == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a therapist.')),
+        const SnackBar(content: Text('Select a completed visit to review.')),
       );
       return;
     }
@@ -312,8 +371,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     setState(() => _submittingReview = true);
     try {
       final (_, error) = await _apiService.createRecenzija(
+        rezervacijaId: visit.rezervacijaId,
         uslugaId: widget.serviceId,
-        zaposlenikId: _selectedZaposlenikId!,
+        zaposlenikId: visit.zaposlenikId,
         ocjena: _ocjena,
         komentar: komentar,
       );
@@ -327,6 +387,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
       _komentarController.clear();
       await _refreshRecenzije();
+      await _loadReviewableVisits();
       messenger.showSnackBar(
         const SnackBar(content: Text('Review added.')),
       );
@@ -366,9 +427,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final auth = context.watch<AuthProvider>();
-    final canSubmitReview = !auth.isZaposlenik;
+    final canSubmitReview = _clientCanReview(auth);
     final canBook = AppPermissions.of(auth).has(AppPermission.bookAppointments);
-    final canFavorite = !auth.isZaposlenik;
+    final canFavorite = _clientCanReview(auth);
     final isFavorite =
         context.watch<ServiceProvider>().isFavorite(service.id);
     final showReviewForm = _canShowReviewForm(canSubmitReview);
@@ -486,17 +547,28 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     recenzijeFuture: _recenzijeFuture,
                     canSubmitReview: canSubmitReview,
                     showReviewForm: showReviewForm,
-                    therapistsError: _therapistsError,
+                    reviewableVisitsError: _reviewableVisitsError,
                     submittingReview: _submittingReview,
                     maxCommentLength: _maxCommentLength,
                     ocjena: _ocjena,
                     onRatingChanged: (v) => setState(() => _ocjena = v),
                     komentarController: _komentarController,
-                    therapists: _therapists,
-                    therapistsLoading: _therapistsLoading,
-                    selectedZaposlenikId: _selectedZaposlenikId,
-                    onTherapistChanged: (id) =>
-                        setState(() => _selectedZaposlenikId = id),
+                    reviewableVisits: _reviewableVisits,
+                    reviewableVisitsLoading: _reviewableVisitsLoading,
+                    selectedRezervacijaId: _selectedRezervacijaId,
+                    onVisitChanged: (id) {
+                      ReviewableVisit? visit;
+                      for (final v in _reviewableVisits) {
+                        if (v.rezervacijaId == id) {
+                          visit = v;
+                          break;
+                        }
+                      }
+                      setState(() {
+                        _selectedRezervacijaId = id;
+                        _selectedZaposlenikId = visit?.zaposlenikId;
+                      });
+                    },
                     onRefresh: _refreshRecenzije,
                     onSubmit: _submitReview,
                   ),
@@ -511,9 +583,9 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
   Widget _buildDesktopDetails(BuildContext context, Usluga service) {
     final auth = context.watch<AuthProvider>();
-    final canSubmitReview = !auth.isZaposlenik;
+    final canSubmitReview = _clientCanReview(auth);
     final canBook = AppPermissions.of(auth).has(AppPermission.bookAppointments);
-    final canFavorite = !auth.isZaposlenik;
+    final canFavorite = _clientCanReview(auth);
     final isFavorite =
         context.watch<ServiceProvider>().isFavorite(service.id);
     final showReviewForm = _canShowReviewForm(canSubmitReview);
@@ -552,17 +624,28 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 isFavorite: isFavorite,
                 onToggleFavorite: () => _toggleFavorite(service.id),
                 onBook: () => _openBooking(service),
-                therapistsError: _therapistsError,
+                reviewableVisitsError: _reviewableVisitsError,
                 submittingReview: _submittingReview,
                 ocjena: _ocjena,
                 onRatingChanged: (v) => setState(() => _ocjena = v),
                 komentarController: _komentarController,
                 maxCommentLength: _maxCommentLength,
-                therapists: _therapists,
-                therapistsLoading: _therapistsLoading,
-                selectedZaposlenikId: _selectedZaposlenikId,
-                onTherapistChanged: (id) =>
-                    setState(() => _selectedZaposlenikId = id),
+                reviewableVisits: _reviewableVisits,
+                reviewableVisitsLoading: _reviewableVisitsLoading,
+                selectedRezervacijaId: _selectedRezervacijaId,
+                onVisitChanged: (id) {
+                  ReviewableVisit? visit;
+                  for (final v in _reviewableVisits) {
+                    if (v.rezervacijaId == id) {
+                      visit = v;
+                      break;
+                    }
+                  }
+                  setState(() {
+                    _selectedRezervacijaId = id;
+                    _selectedZaposlenikId = visit?.zaposlenikId;
+                  });
+                },
                 onRefresh: _refreshRecenzije,
                 onSubmit: _submitReview,
                 onBack: () => Navigator.pop(context),
@@ -788,16 +871,16 @@ class _RightDetailsPanel extends StatelessWidget {
     required this.isFavorite,
     required this.onToggleFavorite,
     required this.onBook,
-    required this.therapistsError,
+    required this.reviewableVisitsError,
     required this.submittingReview,
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
     required this.maxCommentLength,
-    required this.therapists,
-    required this.therapistsLoading,
-    required this.selectedZaposlenikId,
-    required this.onTherapistChanged,
+    required this.reviewableVisits,
+    required this.reviewableVisitsLoading,
+    required this.selectedRezervacijaId,
+    required this.onVisitChanged,
     required this.onRefresh,
     required this.onSubmit,
     required this.onBack,
@@ -813,16 +896,16 @@ class _RightDetailsPanel extends StatelessWidget {
   final bool isFavorite;
   final VoidCallback onToggleFavorite;
   final VoidCallback onBook;
-  final String? therapistsError;
+  final String? reviewableVisitsError;
   final bool submittingReview;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
   final int maxCommentLength;
-  final List<Zaposlenik> therapists;
-  final bool therapistsLoading;
-  final int? selectedZaposlenikId;
-  final ValueChanged<int?> onTherapistChanged;
+  final List<ReviewableVisit> reviewableVisits;
+  final bool reviewableVisitsLoading;
+  final int? selectedRezervacijaId;
+  final ValueChanged<int?> onVisitChanged;
   final VoidCallback onRefresh;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
@@ -914,10 +997,13 @@ class _RightDetailsPanel extends StatelessWidget {
                           future: recenzijeFuture,
                           builder: (context, snapshot) {
                             final loading =
-                                snapshot.connectionState == ConnectionState.waiting;
+                                snapshot.connectionState ==
+                                        ConnectionState.waiting &&
+                                    !snapshot.hasData;
                             final result = snapshot.data;
                             final reviews = result?.items ?? [];
                             final loadError = result?.error;
+                            final truncated = result?.truncated ?? false;
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -976,7 +1062,15 @@ class _RightDetailsPanel extends StatelessWidget {
                                     'Be the first to review this service.',
                                     style: _DetailsStyle.body(context),
                                   )
-                                else
+                                else ...[
+                                  if (truncated)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 10),
+                                      child: Text(
+                                        'Showing the most recent reviews.',
+                                        style: _DetailsStyle.label(context),
+                                      ),
+                                    ),
                                   ...reviews.map(
                                     (r) => Padding(
                                       padding: const EdgeInsets.only(bottom: 10),
@@ -986,28 +1080,30 @@ class _RightDetailsPanel extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                if (canSubmitReview && therapistsLoading)
+                                ],
+                                if (canSubmitReview && reviewableVisitsLoading)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 16),
                                     child: Text(
-                                      'Loading therapists…',
+                                      'Loading your completed visits…',
                                       style: _DetailsStyle.body(context),
                                     ),
                                   )
                                 else if (canSubmitReview &&
-                                    therapistsError != null)
+                                    reviewableVisitsError != null)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 16),
                                     child: Text(
-                                      therapistsError!,
+                                      reviewableVisitsError!,
                                       style: _DetailsStyle.body(context),
                                     ),
                                   )
-                                else if (canSubmitReview && therapists.isEmpty)
+                                else if (canSubmitReview &&
+                                    reviewableVisits.isEmpty)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 16),
                                     child: Text(
-                                      'No therapists are available for this service yet.',
+                                      'No completed visits are available to review for this service.',
                                       style: _DetailsStyle.body(context),
                                     ),
                                   )
@@ -1020,20 +1116,20 @@ class _RightDetailsPanel extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Reviews are available after a completed appointment with the selected therapist.',
+                                    'Choose a completed visit, then share your experience.',
                                     style: _DetailsStyle.body(context),
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
-                                    'Therapist',
+                                    'Visit',
                                     style: _DetailsStyle.label(context),
                                   ),
                                   const SizedBox(height: 8),
-                                  _TherapistPicker(
-                                    therapists: therapists,
-                                    loading: therapistsLoading,
-                                    selectedId: selectedZaposlenikId,
-                                    onChanged: onTherapistChanged,
+                                  _VisitPicker(
+                                    visits: reviewableVisits,
+                                    loading: reviewableVisitsLoading,
+                                    selectedId: selectedRezervacijaId,
+                                    onChanged: onVisitChanged,
                                     lightSurface: false,
                                   ),
                                   const SizedBox(height: 18),
@@ -1680,20 +1776,27 @@ class _SubmitReviewButtonState extends State<_SubmitReviewButton> {
   }
 }
 
-class _TherapistPicker extends StatelessWidget {
-  const _TherapistPicker({
-    required this.therapists,
+class _VisitPicker extends StatelessWidget {
+  const _VisitPicker({
+    required this.visits,
     required this.loading,
     required this.selectedId,
     required this.onChanged,
     this.lightSurface = false,
   });
 
-  final List<Zaposlenik> therapists;
+  final List<ReviewableVisit> visits;
   final bool loading;
   final int? selectedId;
   final ValueChanged<int?> onChanged;
   final bool lightSurface;
+
+  String _formatVisitLabel(ReviewableVisit visit) {
+    final d = visit.datumRezervacije.toLocal();
+    final date =
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return '$date · ${visit.zaposlenikIme}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1703,77 +1806,75 @@ class _TherapistPicker extends StatelessWidget {
         child: LinearProgressIndicator(minHeight: 2),
       );
     }
-    if (therapists.isEmpty) {
-      return Text(
-        'No therapists are available for this service.',
-        style: lightSurface
-            ? Theme.of(context).textTheme.bodyMedium
-            : _DetailsStyle.body(context),
-      );
-    }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: lightSurface
-            ? Colors.white
-            : Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: lightSurface
-              ? MobileSpaColors.lavender.withValues(alpha: 0.45)
-              : Colors.white.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            isExpanded: true,
-            value: selectedId,
-            hint: Text(
-              'Select a therapist',
-              style: lightSurface
-                  ? Theme.of(context).textTheme.bodyMedium
-                  : _DetailsStyle.label(context),
-            ),
-            dropdownColor:
-                lightSurface ? MobileSpaColors.softWhite : _DetailsStyle.bgMid,
-            style: GoogleFonts.inter(
-              color: lightSurface
-                  ? MobileSpaColors.royalPurple
-                  : _DetailsStyle.textPrimary,
-            ),
-            items: therapists
-                .map(
-                  (z) => DropdownMenuItem(
-                    value: z.id,
-                    child: Text('${z.ime} ${z.prezime}'),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
-          ),
+
+    return _TherapistPickerShell(
+      lightSurface: lightSurface,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          isExpanded: true,
+          value: selectedId,
+          hint: const Text('Select a completed visit'),
+          items: visits
+              .map(
+                (v) => DropdownMenuItem(
+                  value: v.rezervacijaId,
+                  child: Text(_formatVisitLabel(v)),
+                ),
+              )
+              .toList(),
+          onChanged: onChanged,
         ),
       ),
     );
   }
 }
 
-/// Simplified mobile reviews block (keeps backend wiring).
+class _TherapistPickerShell extends StatelessWidget {
+  const _TherapistPickerShell({
+    required this.child,
+    required this.lightSurface,
+  });
+
+  final Widget child;
+  final bool lightSurface;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: lightSurface
+            ? Colors.white
+            : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: lightSurface
+              ? MobileSpaColors.lavender.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: child,
+      ),
+    );
+  }
+}
+
 class _MobileReviewsBlock extends StatelessWidget {
   const _MobileReviewsBlock({
     required this.recenzijeFuture,
     required this.canSubmitReview,
     required this.showReviewForm,
-    required this.therapistsError,
+    required this.reviewableVisitsError,
     required this.submittingReview,
     required this.maxCommentLength,
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
-    required this.therapists,
-    required this.therapistsLoading,
-    required this.selectedZaposlenikId,
-    required this.onTherapistChanged,
+    required this.reviewableVisits,
+    required this.reviewableVisitsLoading,
+    required this.selectedRezervacijaId,
+    required this.onVisitChanged,
     required this.onRefresh,
     required this.onSubmit,
   });
@@ -1781,16 +1882,16 @@ class _MobileReviewsBlock extends StatelessWidget {
   final Future<RecenzijeLoadResult> recenzijeFuture;
   final bool canSubmitReview;
   final bool showReviewForm;
-  final String? therapistsError;
+  final String? reviewableVisitsError;
   final bool submittingReview;
   final int maxCommentLength;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
-  final List<Zaposlenik> therapists;
-  final bool therapistsLoading;
-  final int? selectedZaposlenikId;
-  final ValueChanged<int?> onTherapistChanged;
+  final List<ReviewableVisit> reviewableVisits;
+  final bool reviewableVisitsLoading;
+  final int? selectedRezervacijaId;
+  final ValueChanged<int?> onVisitChanged;
   final VoidCallback onRefresh;
   final VoidCallback onSubmit;
 
@@ -1799,10 +1900,12 @@ class _MobileReviewsBlock extends StatelessWidget {
     return FutureBuilder<RecenzijeLoadResult>(
       future: recenzijeFuture,
       builder: (context, snapshot) {
-        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final loading = snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData;
         final result = snapshot.data;
         final reviews = result?.items ?? [];
         final loadError = result?.error;
+        final truncated = result?.truncated ?? false;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1822,48 +1925,57 @@ class _MobileReviewsBlock extends StatelessWidget {
             else if (loadError != null) ...[
               Text(loadError),
               TextButton(onPressed: onRefresh, child: const Text('Retry')),
-            ]             else if (reviews.isEmpty)
+            ] else if (reviews.isEmpty)
               const Text('No reviews for this service yet.')
-            else
+            else ...[
+              if (truncated)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Showing the most recent reviews.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               ...reviews.map(
                 (r) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _ReviewCard(review: r, lightSurface: true),
                 ),
               ),
-            if (canSubmitReview && therapistsLoading)
+            ],
+            if (canSubmitReview && reviewableVisitsLoading)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: Text(
-                  'Loading therapists…',
+                  'Loading your completed visits…',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               )
-            else if (canSubmitReview && therapistsError != null)
+            else if (canSubmitReview && reviewableVisitsError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(therapistsError!),
+                child: Text(reviewableVisitsError!),
               )
-            else if (canSubmitReview && therapists.isEmpty)
+            else if (canSubmitReview && reviewableVisits.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: Text(
-                  'No therapists are available for this service yet.',
+                  'No completed visits are available to review for this service.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               )
             else if (showReviewForm) ...[
               const SizedBox(height: 16),
               Text(
-                'Reviews are available after a completed appointment with the selected therapist.',
+                'Choose a completed visit, then share your experience.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              _TherapistPicker(
-                therapists: therapists,
-                loading: therapistsLoading,
-                selectedId: selectedZaposlenikId,
-                onChanged: onTherapistChanged,
+              _VisitPicker(
+                visits: reviewableVisits,
+                loading: reviewableVisitsLoading,
+                selectedId: selectedRezervacijaId,
+                onChanged: onVisitChanged,
                 lightSurface: true,
               ),
               const SizedBox(height: 12),

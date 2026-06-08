@@ -103,6 +103,9 @@ class _LuxuryReviewsDashboardScreenState
   void _onSearchChanged() {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      final q = _tableSearch.text.trim();
+      _syncedReviewsQuery = q;
+      _nav?.setReviewsSearchQuery(q);
       _page = 1;
       _load();
     });
@@ -113,7 +116,7 @@ class _LuxuryReviewsDashboardScreenState
       _loading = true;
       _error = null;
     });
-    final dash = await _api.getAdminReviewsDashboard(
+    final result = await _api.getAdminReviewsDashboardResult(
       from: _rangeFrom,
       toInclusive: _rangeTo,
       page: _page,
@@ -127,13 +130,14 @@ class _LuxuryReviewsDashboardScreenState
     if (!mounted) return;
     setState(() {
       _loading = false;
-      if (dash == null) {
-        _error = 'Could not load reviews. Check your connection and admin role.';
+      if (result.data == null) {
+        _error = result.error ??
+            'Could not load reviews. Check your connection and admin role.';
         _data = null;
       } else {
-        _data = dash;
-        _page = dash.stranica;
-        _pageSize = dash.velicinaStranice;
+        _data = result.data;
+        _page = result.data!.stranica;
+        _pageSize = result.data!.velicinaStranice;
       }
     });
   }
@@ -177,7 +181,7 @@ class _LuxuryReviewsDashboardScreenState
   }
 
   Future<void> _exportCsv() async {
-    final ok = await _api.downloadAdminReviewsCsv(
+    final result = await _api.downloadAdminReviewsCsvResult(
       from: _rangeFrom,
       toInclusive: _rangeTo,
       search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text,
@@ -187,11 +191,14 @@ class _LuxuryReviewsDashboardScreenState
       zaposlenikId: _filterZaposlenikId,
     );
     if (!mounted) return;
+    final message = !result.ok
+        ? 'CSV export failed.'
+        : result.truncated
+            ? 'CSV saved (first 1000 rows). Refine filters for a smaller export.'
+            : 'CSV report saved and opened.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          ok ? 'CSV report saved and opened.' : 'CSV export failed.',
-        ),
+        content: Text(message),
         behavior: SnackBarBehavior.floating,
         width: 380,
       ),
@@ -206,6 +213,7 @@ class _LuxuryReviewsDashboardScreenState
       builder: (ctx) => _AdminReviewReplySheet(
         row: r,
         onSave: (tekst) => _api.patchRecenzijaAdminOdgovor(r.id, tekst),
+        onDelete: () => _api.deleteRecenzija(r.id),
       ),
     );
     if (!context.mounted) return;
@@ -245,7 +253,7 @@ class _LuxuryReviewsDashboardScreenState
       return '${m[d.month - 1]} ${d.day}, ${d.year}';
     }
 
-    return '${f(_rangeFrom)} â€“ ${f(_rangeTo)}';
+    return '${f(_rangeFrom)} – ${f(_rangeTo)}';
   }
 
   @override
@@ -318,6 +326,14 @@ class _LuxuryReviewsDashboardScreenState
                     ),
                     SizedBox(height: gap),
                     _KpiRow(dash: dash, compact: tightHeight),
+                    if (dash?.istaknutaRecenzija != null) ...[
+                      SizedBox(height: gap),
+                      _FeaturedQuoteCard(
+                        quote: dash!.istaknutaRecenzija!,
+                        theme: theme,
+                        compact: tightHeight,
+                      ),
+                    ],
                     SizedBox(height: gap),
                     _InsightsRow(
                       dash: dash,
@@ -392,6 +408,24 @@ class _LuxuryReviewsDashboardScreenState
               child: const Center(
                 child: CircularProgressIndicator(
                   color: NuaLuxuryTokens.softPurpleGlow,
+                ),
+              ),
+            ),
+          )
+        else if (_loading)
+          Positioned(
+            top: 12,
+            right: 24,
+            child: _glassCard(
+              child: const Padding(
+                padding: EdgeInsets.all(10),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: NuaLuxuryTokens.softPurpleGlow,
+                  ),
                 ),
               ),
             ),
@@ -527,6 +561,67 @@ class _PageHeader extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _FeaturedQuoteCard extends StatelessWidget {
+  const _FeaturedQuoteCard({
+    required this.quote,
+    required this.theme,
+    required this.compact,
+  });
+
+  final AdminReviewQuote quote;
+  final ThemeData theme;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return _glassCard(
+      radius: 18,
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 16 : 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Latest guest comment',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: LuxuryReviewsDashboardScreen.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _StarRatingRow(ocjena: quote.ocjena, size: 14),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    quote.autor,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.58),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              quote.tekst,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.45,
+                color: Colors.white.withValues(alpha: 0.78),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -733,7 +828,7 @@ class _KpiTrend {
   /// `true` = up (green), `false` = down, `null` = neutral / no prior period.
   final bool? positive;
 
-  static const none = _KpiTrend(label: 'â€”');
+  static const none = _KpiTrend(label: '—');
 
   static _KpiTrend ratingDelta(double current, double? previous) {
     if (previous == null) return none;
@@ -840,7 +935,7 @@ class _KpiRow extends StatelessWidget {
           Expanded(
             child: _KpiCard(
               title: 'Response Rate',
-              value: resp == null ? 'â€”' : '${resp.toStringAsFixed(0)}%',
+              value: resp == null ? '—' : '${resp.toStringAsFixed(0)}%',
               trend: resp == null
                   ? _KpiTrend.none
                   : _KpiTrend.percentPoints(
@@ -938,7 +1033,7 @@ class _KpiCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (trend.label != 'â€”')
+                  if (trend.label != '—')
                     Text(
                       trend.label,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -1037,7 +1132,7 @@ class _FilterBar extends StatelessWidget {
     if (minOcjena == 5 && maxOcjena == 5) return '5 stars';
     if (minOcjena == 4 && maxOcjena == null) return '4+ stars';
     if (minOcjena == 3 && maxOcjena == null) return '3+ stars';
-    if (minOcjena == 1 && maxOcjena == 2) return '1â€“2 stars';
+    if (minOcjena == 1 && maxOcjena == 2) return '1–2 stars';
     return 'Filter';
   }
 
@@ -1068,7 +1163,7 @@ class _FilterBar extends StatelessWidget {
         PopupMenuItem(value: '5', child: Text('5 stars')),
         PopupMenuItem(value: '4', child: Text('4+ stars')),
         PopupMenuItem(value: '3', child: Text('3+ stars')),
-        PopupMenuItem(value: '12', child: Text('1â€“2 stars')),
+        PopupMenuItem(value: '12', child: Text('1–2 stars')),
       ],
       child: _FilterDropdownPill(label: _ratingLabel(), compact: true),
     );
@@ -1216,7 +1311,7 @@ class _FilterSearchField extends StatelessWidget {
       ),
       decoration: InputDecoration(
         isDense: true,
-        hintText: 'Search reviewsâ€¦',
+        hintText: 'Search reviews…',
         hintStyle: TextStyle(
           color: Colors.white.withValues(alpha: 0.38),
           fontSize: 14,
@@ -1527,6 +1622,19 @@ class _ReviewListCardState extends State<_ReviewListCard> {
                           color: Colors.white.withValues(alpha: 0.55),
                         ),
                       ),
+                      if (r.terapeutIme != null &&
+                          r.terapeutIme!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Therapist: ${r.terapeutIme!.trim()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.42),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         comment.isEmpty ? 'Rating only' : comment,
@@ -1607,6 +1715,14 @@ class _ReviewsTableFooter extends StatelessWidget {
         total <= 0 ? 1 : ((total + pageSize - 1) / pageSize).ceil();
     final fromIdx = total == 0 ? 0 : (page - 1) * pageSize + 1;
     final toIdx = ((page - 1) * pageSize + pageSize).clamp(0, total);
+    final visiblePages = <int>{
+      page,
+      if (page > 1) page - 1,
+      if (page < totalPages) page + 1,
+      if (page > 2) page - 2,
+      if (page < totalPages - 1) page + 2,
+    }.toList()
+      ..sort();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
@@ -1620,8 +1736,16 @@ class _ReviewsTableFooter extends StatelessWidget {
             },
           ),
           const SizedBox(width: 8),
-          _FooterPageChip(page: page, active: true, onTap: () {}),
-          const SizedBox(width: 8),
+          for (final p in visiblePages) ...[
+            _FooterPageChip(
+              page: p,
+              active: p == page,
+              onTap: () {
+                if (p != page) onPage(p);
+              },
+            ),
+            const SizedBox(width: 6),
+          ],
           _FooterPageArrow(
             icon: Icons.chevron_right_rounded,
             enabled: page < totalPages,
@@ -1666,7 +1790,7 @@ class _ReviewsTableFooter extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Text(
-            total == 0 ? '0 reviews' : '$fromIdxâ€“$toIdx of $total reviews',
+            total == 0 ? '0 reviews' : '$fromIdx–$toIdx of $total reviews',
             style: theme.textTheme.bodySmall?.copyWith(
               color: Colors.white.withValues(alpha: 0.65),
             ),
@@ -1984,10 +2108,12 @@ class _AdminReviewReplySheet extends StatefulWidget {
   const _AdminReviewReplySheet({
     required this.row,
     required this.onSave,
+    required this.onDelete,
   });
 
   final AdminReviewRow row;
   final Future<bool> Function(String? tekst) onSave;
+  final Future<bool> Function() onDelete;
 
   @override
   State<_AdminReviewReplySheet> createState() => _AdminReviewReplySheetState();
@@ -2002,6 +2128,45 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmHideReview(BuildContext context) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hide review?'),
+        content: const Text(
+          'The review will be removed from the catalog and dashboards. '
+          'This cannot be undone from the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hide review'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !context.mounted) return;
+
+    setState(() => _busy = true);
+    final ok = await widget.onDelete();
+    if (!context.mounted) return;
+    setState(() => _busy = false);
+    if (ok) {
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not hide review.')),
+      );
+    }
   }
 
   @override
@@ -2093,7 +2258,23 @@ class _AdminReviewReplySheetState extends State<_AdminReviewReplySheet> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _busy ? null : () => _confirmHideReview(context),
+                        icon: Icon(
+                          Icons.visibility_off_outlined,
+                          size: 18,
+                          color: Colors.red.shade300,
+                        ),
+                        label: Text(
+                          'Hide review',
+                          style: TextStyle(color: Colors.red.shade300),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         TextButton(

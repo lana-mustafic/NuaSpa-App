@@ -303,6 +303,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                                   builder: (_) =>
                                                       ServiceDetailsScreen(
                                                     serviceId: r.uslugaId,
+                                                    initialRezervacijaId: r.id,
                                                   ),
                                                 ),
                                               );
