@@ -475,10 +475,38 @@ class _PageHeader extends StatelessWidget {
           ],
         );
 
+        final exportButton =
+            _HeaderExportButton(height: 40, compact: true, onTap: onExport);
+
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              title,
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HeaderDateRangeButton(
+                      label: rangeLabel,
+                      height: 40,
+                      compact: true,
+                      onTap: onPickRange,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  exportButton,
+                ],
+              ),
+            ],
+          );
+        }
+
         final controls = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
               child: _HeaderDateRangeButton(
                 label: rangeLabel,
                 height: 40,
@@ -487,20 +515,9 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            _HeaderExportButton(height: 40, compact: true, onTap: onExport),
+            exportButton,
           ],
         );
-
-        if (stacked) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              title,
-              const SizedBox(height: 14),
-              controls,
-            ],
-          );
-        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -619,7 +636,8 @@ class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
                     .withValues(alpha: 0.95),
               ),
               SizedBox(width: widget.compact ? 10 : 14),
-              Expanded(
+              Flexible(
+                fit: FlexFit.loose,
                 child: Text(
                   widget.label,
                   maxLines: 1,
