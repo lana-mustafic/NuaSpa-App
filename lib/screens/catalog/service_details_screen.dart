@@ -13,6 +13,7 @@ import '../reservations/reservation_create_screen.dart';
 import '../../core/catalog/catalog_admin_messages.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import 'admin_service_details_panel.dart';
+import 'assign_therapist_dialog.dart';
 import 'service_editor_dialog.dart';
 import '../../models/recenzija.dart';
 import '../../models/usluga.dart';
@@ -263,14 +264,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     Navigator.pop(context);
   }
 
-  void _showAssignTherapistHint() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Link therapists by updating their specialization to include this service name in Admin > Therapists.',
-        ),
-      ),
+  Future<void> _assignTherapistToService(Usluga service) async {
+    final ok = await showAssignTherapistToServiceDialog(
+      context,
+      service: service,
+      alreadyLinkedIds: _therapists.map((t) => t.id).toSet(),
     );
+    if (!mounted || !ok) return;
+    setState(() => _therapistsLoadedForUslugaId = null);
+    await _loadTherapistsForService(service);
   }
 
   Widget _buildAdminPanelDetails(BuildContext context, Usluga service) {
@@ -285,7 +287,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       onEdit: () => _openEditService(service),
       onDelete: () => _confirmDeleteService(service),
       onBack: () => Navigator.pop(context),
-      onAssignTherapistHint: _showAssignTherapistHint,
+      onAssignTherapist: () => _assignTherapistToService(service),
     );
   }
 

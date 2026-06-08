@@ -64,7 +64,7 @@ class AdminServiceDetailsPanel extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onBack,
-    required this.onAssignTherapistHint,
+    required this.onAssignTherapist,
   });
 
   final Usluga service;
@@ -77,7 +77,7 @@ class AdminServiceDetailsPanel extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onBack;
-  final VoidCallback onAssignTherapistHint;
+  final VoidCallback onAssignTherapist;
 
   @override
   State<AdminServiceDetailsPanel> createState() =>
@@ -179,7 +179,7 @@ class _AdminServiceDetailsPanelState extends State<AdminServiceDetailsPanel>
                   therapists: widget.therapists,
                   loading: widget.therapistsLoading,
                   error: widget.therapistsError,
-                  onAssign: widget.onAssignTherapistHint,
+                  onAssign: widget.onAssignTherapist,
                 ),
                 _ReviewsTab(
                   recenzijeFuture: widget.recenzijeFuture,
@@ -556,9 +556,24 @@ class _TherapistsTab extends StatelessWidget {
         child: _SectionCard(
           title: 'Linked Therapists',
           trailing: therapists.isNotEmpty
-              ? Text(
-                  '${therapists.length} linked',
-                  style: _AdminStyle.label(context),
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${therapists.length} linked',
+                      style: _AdminStyle.label(context),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: onAssign,
+                      icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
+                      label: const Text('Assign'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _AdminStyle.accentPurple,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
+                  ],
                 )
               : null,
           child: _buildBody(context),
