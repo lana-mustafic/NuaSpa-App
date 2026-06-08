@@ -59,13 +59,65 @@ class _AdminRevenueAnalyticsScreenState
   _ReportPeriod _period = _ReportPeriod.days30;
   Future<_ReportsData>? _future;
   bool _exporting = false;
-  DateTimeRange? _appliedHeaderRange;
+  bool _usingPeriodChips = true;
+  DateTimeRange? _syncedHeaderRange;
   int _lastFiltersPulse = 0;
+  DesktopNav? _nav;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    final (from, to) = _rangeFor(_period);
+    _syncedHeaderRange = DateTimeRange(start: from, end: to);
+    _reload(from: from, to: to);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<DesktopNav>();
+    if (_nav != nav) {
+      _nav?.removeListener(_onHeaderRangeChanged);
+      _nav = nav;
+      _nav!.addListener(_onHeaderRangeChanged);
+      _onHeaderRangeChanged();
+    }
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool _matchesPeriodRange(DateTimeRange range, _ReportPeriod period) {
+    final (from, to) = _rangeFor(period);
+    return _sameDay(range.start, from) && _sameDay(range.end, to);
+  }
+
+  void _onHeaderRangeChanged() {
+    if (!mounted || _nav == null) return;
+    final headerRange = _nav!.headerDateRange;
+    if (_syncedHeaderRange != null &&
+        _sameDay(_syncedHeaderRange!.start, headerRange.start) &&
+        _sameDay(_syncedHeaderRange!.end, headerRange.end)) {
+      return;
+    }
+
+    if (_usingPeriodChips && _matchesPeriodRange(headerRange, _period)) {
+      _syncedHeaderRange = headerRange;
+      return;
+    }
+
+    setState(() => _usingPeriodChips = false);
+    _syncedHeaderRange = headerRange;
+    _reload(
+      from: _dayOnly(headerRange.start),
+      to: _dayOnly(headerRange.end),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nav?.removeListener(_onHeaderRangeChanged);
+    super.dispose();
   }
 
   DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -106,17 +158,14 @@ class _AdminRevenueAnalyticsScreenState
 
   void _setPeriod(_ReportPeriod p) {
     if (_period == p) return;
+    final (from, to) = _rangeFor(p);
+    final range = DateTimeRange(start: from, end: to);
     setState(() {
       _period = p;
-      _appliedHeaderRange = null;
+      _usingPeriodChips = true;
+      _syncedHeaderRange = range;
     });
-    _reload();
-  }
-
-  void _applyHeaderRange(DateTimeRange range) {
-    final from = _dayOnly(range.start);
-    final to = _dayOnly(range.end);
-    setState(() => _appliedHeaderRange = range);
+    _nav?.setHeaderDateRange(range);
     _reload(from: from, to: to);
   }
 
@@ -142,13 +191,6 @@ class _AdminRevenueAnalyticsScreenState
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<DesktopNav>();
-    final headerRange = nav.headerDateRange;
-    if (_appliedHeaderRange != headerRange) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _appliedHeaderRange == headerRange) return;
-        _applyHeaderRange(headerRange);
-      });
-    }
     if (nav.headerFiltersPulse != _lastFiltersPulse) {
       _lastFiltersPulse = nav.headerFiltersPulse;
       WidgetsBinding.instance.addPostFrameCallback((_) {
