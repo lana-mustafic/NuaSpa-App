@@ -5,8 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/auth/app_permissions.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/service_provider.dart';
 import '../../core/preporuka/preporuka_tracker.dart';
+import '../reservations/reservation_create_screen.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../models/recenzija.dart';
 import '../../models/usluga.dart';
@@ -79,7 +82,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   final ApiService _apiService = ApiService();
   final ScrollController _rightScrollController = ScrollController();
 
-  late final Future<Usluga?> _serviceFuture;
+  late Future<Usluga?> _serviceFuture;
   late Future<RecenzijeLoadResult> _recenzijeFuture;
 
   final TextEditingController _komentarController = TextEditingController();
@@ -88,6 +91,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   int? _selectedZaposlenikId;
   bool _therapistsLoading = false;
   int? _therapistsLoadedForUslugaId;
+  String? _therapistsError;
+  String? _serviceLoadError;
+  bool _serviceNotFound = false;
+  bool _submittingReview = false;
 
   static const int _maxCommentLength = 1000;
 
@@ -96,15 +103,27 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     super.initState();
     _recenzijeFuture = _apiService.getRecenzijeByUsluga(widget.serviceId);
     _serviceFuture = _loadServiceAndTherapists();
+    Future.microtask(() {
+      if (!mounted) return;
+      context.read<ServiceProvider>().fetchFavorites();
+    });
   }
 
   Future<Usluga?> _loadServiceAndTherapists() async {
-    final service = await _apiService.getUslugaById(widget.serviceId);
-    if (service != null && mounted) {
-      PreporukaTracker.instance.trackServiceView(service.id);
-      await _loadTherapistsForService(service);
+    final result = await _apiService.getUslugaById(widget.serviceId);
+    if (!mounted) return null;
+
+    if (result.service != null) {
+      PreporukaTracker.instance.trackServiceView(result.service!.id);
+      await _loadTherapistsForService(result.service!);
+      return result.service;
     }
-    return service;
+
+    setState(() {
+      _serviceNotFound = result.notFound;
+      _serviceLoadError = result.error;
+    });
+    return null;
   }
 
   @override
@@ -124,13 +143,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     if (_therapistsLoading || _therapistsLoadedForUslugaId == service.id) {
       return;
     }
-    setState(() => _therapistsLoading = true);
-    final therapists =
-        await _apiService.getZaposleniciForService(service.id);
+    setState(() {
+      _therapistsLoading = true;
+      _therapistsError = null;
+    });
+    final result = await _apiService.getZaposleniciForService(service.id);
     if (!mounted) return;
+    final therapists = result.items;
     setState(() {
       _therapists = therapists;
       _therapistsLoading = false;
+      _therapistsError = result.error;
       _therapistsLoadedForUslugaId = service.id;
       if (therapists.length == 1) {
         _selectedZaposlenikId = therapists.first.id;
@@ -141,7 +164,34 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     });
   }
 
+  Future<void> _openBooking(Usluga service) async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => ReservationCreateScreen(initialServiceId: service.id),
+      ),
+    );
+  }
+
+  Future<void> _toggleFavorite(int serviceId) async {
+    final ok = await context.read<ServiceProvider>().toggleFavorite(serviceId);
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not save favorite. Sign in as a client or admin.'),
+      ),
+    );
+  }
+
+  bool _canShowReviewForm(bool canSubmitReview) =>
+      canSubmitReview &&
+      !_therapistsLoading &&
+      _therapistsError == null &&
+      _therapists.isNotEmpty;
+
   Future<void> _submitReview() async {
+    if (_submittingReview) return;
+
     final komentar = _komentarController.text.trim();
     if (_selectedZaposlenikId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,25 +207,32 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    final (_, error) = await _apiService.createRecenzija(
-      uslugaId: widget.serviceId,
-      zaposlenikId: _selectedZaposlenikId!,
-      ocjena: _ocjena,
-      komentar: komentar,
-    );
+    setState(() => _submittingReview = true);
+    try {
+      final (_, error) = await _apiService.createRecenzija(
+        uslugaId: widget.serviceId,
+        zaposlenikId: _selectedZaposlenikId!,
+        ocjena: _ocjena,
+        komentar: komentar,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (error != null) {
-      messenger.showSnackBar(SnackBar(content: Text(error)));
-      return;
+      if (error != null) {
+        messenger.showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
+
+      _komentarController.clear();
+      await _refreshRecenzije();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Review added.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submittingReview = false);
+      }
     }
-
-    _komentarController.clear();
-    await _refreshRecenzije();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Review added.')),
-    );
   }
 
   List<String> _benefitTags(Usluga service) {
@@ -206,7 +263,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   Widget _buildMobileSpaDetails(BuildContext context, Usluga service) {
     final tt = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final canSubmitReview = !context.watch<AuthProvider>().isZaposlenik;
+    final auth = context.watch<AuthProvider>();
+    final canSubmitReview = !auth.isZaposlenik;
+    final canBook = AppPermissions.of(auth).has(AppPermission.bookAppointments);
+    final canFavorite = !auth.isZaposlenik;
+    final isFavorite =
+        context.watch<ServiceProvider>().isFavorite(service.id);
+    final showReviewForm = _canShowReviewForm(canSubmitReview);
 
     return Scaffold(
       backgroundColor: MobileSpaColors.softWhite,
@@ -242,6 +305,21 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 ),
               ),
             ),
+            actions: [
+              if (canFavorite)
+                IconButton(
+                  tooltip: isFavorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites',
+                  onPressed: () => _toggleFavorite(service.id),
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite
+                        ? MobileSpaColors.royalPurple
+                        : MobileSpaColors.royalPurple.withValues(alpha: 0.72),
+                  ),
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.parallax,
               background: Stack(
@@ -290,10 +368,24 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   const SizedBox(height: 22),
                   if (service.opis.trim().isNotEmpty)
                     Text(service.opis, style: tt.bodyMedium),
+                  if (canBook) ...[
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _openBooking(service),
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: const Text('Book this service'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 26),
                   _MobileReviewsBlock(
                     recenzijeFuture: _recenzijeFuture,
                     canSubmitReview: canSubmitReview,
+                    showReviewForm: showReviewForm,
+                    therapistsError: _therapistsError,
+                    submittingReview: _submittingReview,
                     maxCommentLength: _maxCommentLength,
                     ocjena: _ocjena,
                     onRatingChanged: (v) => setState(() => _ocjena = v),
@@ -316,7 +408,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   }
 
   Widget _buildDesktopDetails(BuildContext context, Usluga service) {
-    final canSubmitReview = !context.watch<AuthProvider>().isZaposlenik;
+    final auth = context.watch<AuthProvider>();
+    final canSubmitReview = !auth.isZaposlenik;
+    final canBook = AppPermissions.of(auth).has(AppPermission.bookAppointments);
+    final canFavorite = !auth.isZaposlenik;
+    final isFavorite =
+        context.watch<ServiceProvider>().isFavorite(service.id);
+    final showReviewForm = _canShowReviewForm(canSubmitReview);
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -346,6 +444,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 scrollController: _rightScrollController,
                 recenzijeFuture: _recenzijeFuture,
                 canSubmitReview: canSubmitReview,
+                showReviewForm: showReviewForm,
+                canBook: canBook,
+                canFavorite: canFavorite,
+                isFavorite: isFavorite,
+                onToggleFavorite: () => _toggleFavorite(service.id),
+                onBook: () => _openBooking(service),
+                therapistsError: _therapistsError,
+                submittingReview: _submittingReview,
                 ocjena: _ocjena,
                 onRatingChanged: (v) => setState(() => _ocjena = v),
                 komentarController: _komentarController,
@@ -405,10 +511,32 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
           final service = snapshot.data;
           if (service == null) {
+            final message = _serviceNotFound
+                ? 'Service not found.'
+                : (_serviceLoadError ??
+                    'Could not load service. Check your connection.');
             return Center(
-              child: Text(
-                'Service not found.',
-                style: _DetailsStyle.body(context),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(message, style: _DetailsStyle.body(context)),
+                    if (!_serviceNotFound) ...[
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _serviceNotFound = false;
+                            _serviceLoadError = null;
+                            _serviceFuture = _loadServiceAndTherapists();
+                          });
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             );
           }
@@ -548,6 +676,14 @@ class _RightDetailsPanel extends StatelessWidget {
     required this.scrollController,
     required this.recenzijeFuture,
     required this.canSubmitReview,
+    required this.showReviewForm,
+    required this.canBook,
+    required this.canFavorite,
+    required this.isFavorite,
+    required this.onToggleFavorite,
+    required this.onBook,
+    required this.therapistsError,
+    required this.submittingReview,
     required this.ocjena,
     required this.onRatingChanged,
     required this.komentarController,
@@ -565,6 +701,14 @@ class _RightDetailsPanel extends StatelessWidget {
   final ScrollController scrollController;
   final Future<RecenzijeLoadResult> recenzijeFuture;
   final bool canSubmitReview;
+  final bool showReviewForm;
+  final bool canBook;
+  final bool canFavorite;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onBook;
+  final String? therapistsError;
+  final bool submittingReview;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
   final TextEditingController komentarController;
@@ -613,6 +757,16 @@ class _RightDetailsPanel extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (canFavorite)
+                      _GlassIconButton(
+                        icon: isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        tooltip: isFavorite
+                            ? 'Remove from favorites'
+                            : 'Add to favorites',
+                        onPressed: onToggleFavorite,
+                      ),
                     _GlassIconButton(
                       icon: Icons.arrow_back_rounded,
                       tooltip: 'Back',
@@ -638,6 +792,17 @@ class _RightDetailsPanel extends StatelessWidget {
                               : description,
                           muted: description.isEmpty,
                         ),
+                        if (canBook) ...[
+                          const SizedBox(height: 20),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: _SubmitReviewButton(
+                              label: 'Book this service',
+                              icon: Icons.calendar_month_outlined,
+                              onPressed: onBook,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 24),
                         FutureBuilder<RecenzijeLoadResult>(
                           future: recenzijeFuture,
@@ -709,10 +874,38 @@ class _RightDetailsPanel extends StatelessWidget {
                                   ...reviews.map(
                                     (r) => Padding(
                                       padding: const EdgeInsets.only(bottom: 10),
-                                      child: _ReviewCard(review: r),
+                                      child: _ReviewCard(
+                                        review: r,
+                                        lightSurface: false,
+                                      ),
                                     ),
                                   ),
-                                if (canSubmitReview) ...[
+                                if (canSubmitReview && therapistsLoading)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
+                                    child: Text(
+                                      'Loading therapists…',
+                                      style: _DetailsStyle.body(context),
+                                    ),
+                                  )
+                                else if (canSubmitReview &&
+                                    therapistsError != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
+                                    child: Text(
+                                      therapistsError!,
+                                      style: _DetailsStyle.body(context),
+                                    ),
+                                  )
+                                else if (canSubmitReview && therapists.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
+                                    child: Text(
+                                      'No therapists are available for this service yet.',
+                                      style: _DetailsStyle.body(context),
+                                    ),
+                                  )
+                                else if (showReviewForm) ...[
                                   const SizedBox(height: 24),
                                   Text(
                                     'Add a review',
@@ -721,7 +914,7 @@ class _RightDetailsPanel extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'You can leave a review after a completed appointment with the selected therapist.',
+                                    'Reviews are available after a completed appointment with the selected therapist.',
                                     style: _DetailsStyle.body(context),
                                   ),
                                   const SizedBox(height: 14),
@@ -735,6 +928,7 @@ class _RightDetailsPanel extends StatelessWidget {
                                     loading: therapistsLoading,
                                     selectedId: selectedZaposlenikId,
                                     onChanged: onTherapistChanged,
+                                    lightSurface: false,
                                   ),
                                   const SizedBox(height: 18),
                                   Text(
@@ -759,7 +953,10 @@ class _RightDetailsPanel extends StatelessWidget {
                                   const SizedBox(height: 18),
                                   Align(
                                     alignment: Alignment.centerRight,
-                                    child: _SubmitReviewButton(onPressed: onSubmit),
+                                    child: _SubmitReviewButton(
+                                      onPressed: onSubmit,
+                                      isSubmitting: submittingReview,
+                                    ),
                                   ),
                                 ],
                               ],
@@ -925,7 +1122,7 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final button = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
@@ -959,6 +1156,10 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
           ),
         ),
     );
+
+    final tooltip = widget.tooltip;
+    if (tooltip == null || tooltip.isEmpty) return button;
+    return Tooltip(message: tooltip, child: button);
   }
 }
 
@@ -989,18 +1190,47 @@ class _ReviewCountBadge extends StatelessWidget {
 }
 
 class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({required this.review});
+  const _ReviewCard({
+    required this.review,
+    this.lightSurface = false,
+  });
 
   final Recenzija review;
+  final bool lightSurface;
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final titleColor =
+        lightSurface ? MobileSpaColors.royalPurple : _DetailsStyle.textPrimary;
+    final bodyStyle = lightSurface
+        ? tt.bodyMedium!
+        : _DetailsStyle.body(context);
+    final mutedColor = lightSurface
+        ? MobileSpaColors.royalPurple.withValues(alpha: 0.55)
+        : Colors.white.withValues(alpha: 0.45);
+    final cardColor = lightSurface
+        ? Colors.white
+        : Colors.white.withValues(alpha: 0.04);
+    final borderColor = lightSurface
+        ? MobileSpaColors.lavender.withValues(alpha: 0.45)
+        : Colors.white.withValues(alpha: 0.08);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: borderColor),
+        boxShadow: lightSurface
+            ? [
+                BoxShadow(
+                  color: MobileSpaColors.lavender.withValues(alpha: 0.18),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1012,7 +1242,7 @@ class _ReviewCard extends StatelessWidget {
                   review.korisnikIme.isEmpty ? 'Guest' : review.korisnikIme,
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
-                    color: _DetailsStyle.textPrimary,
+                    color: titleColor,
                     fontSize: 14,
                   ),
                 ),
@@ -1020,19 +1250,30 @@ class _ReviewCard extends StatelessWidget {
               _StarRow(value: review.ocjena, size: 16),
             ],
           ),
+          if (review.zaposlenikIme != null &&
+              review.zaposlenikIme!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Therapist: ${review.zaposlenikIme!.trim()}',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: mutedColor,
+              ),
+            ),
+          ],
           if (review.createdAt != null) ...[
             const SizedBox(height: 4),
             Text(
               _formatReviewDate(review.createdAt!),
               style: GoogleFonts.inter(
                 fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.45),
+                color: mutedColor,
               ),
             ),
           ],
           if (review.komentar.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(review.komentar, style: _DetailsStyle.body(context)),
+            Text(review.komentar, style: bodyStyle),
           ],
           if (review.adminOdgovor != null &&
               review.adminOdgovor!.trim().isNotEmpty) ...[
@@ -1061,7 +1302,7 @@ class _ReviewCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     review.adminOdgovor!.trim(),
-                    style: _DetailsStyle.body(context),
+                    style: bodyStyle,
                   ),
                 ],
               ),
@@ -1248,9 +1489,17 @@ class _CommentFieldState extends State<_CommentField> {
 }
 
 class _SubmitReviewButton extends StatefulWidget {
-  const _SubmitReviewButton({required this.onPressed});
+  const _SubmitReviewButton({
+    required this.onPressed,
+    this.isSubmitting = false,
+    this.label = 'Submit Review',
+    this.icon = Icons.send_rounded,
+  });
 
   final VoidCallback onPressed;
+  final bool isSubmitting;
+  final String label;
+  final IconData icon;
 
   @override
   State<_SubmitReviewButton> createState() => _SubmitReviewButtonState();
@@ -1265,12 +1514,12 @@ class _SubmitReviewButtonState extends State<_SubmitReviewButton> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
-        onTap: widget.onPressed,
+        onTap: widget.isSubmitting ? null : widget.onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
           transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
-          width: 180,
+          width: 200,
           height: 48,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -1297,10 +1546,20 @@ class _SubmitReviewButtonState extends State<_SubmitReviewButton> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+              if (widget.isSubmitting)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              else
+                Icon(widget.icon, color: Colors.white, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Submit Review',
+                widget.isSubmitting ? 'Submitting…' : widget.label,
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -1321,12 +1580,14 @@ class _TherapistPicker extends StatelessWidget {
     required this.loading,
     required this.selectedId,
     required this.onChanged,
+    this.lightSurface = false,
   });
 
   final List<Zaposlenik> therapists;
   final bool loading;
   final int? selectedId;
   final ValueChanged<int?> onChanged;
+  final bool lightSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -1338,15 +1599,23 @@ class _TherapistPicker extends StatelessWidget {
     }
     if (therapists.isEmpty) {
       return Text(
-        'Nema terapeuta za ovu kategoriju usluge.',
-        style: _DetailsStyle.body(context),
+        'No therapists are available for this service.',
+        style: lightSurface
+            ? Theme.of(context).textTheme.bodyMedium
+            : _DetailsStyle.body(context),
       );
     }
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: lightSurface
+            ? Colors.white
+            : Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: lightSurface
+              ? MobileSpaColors.lavender.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1355,11 +1624,18 @@ class _TherapistPicker extends StatelessWidget {
             isExpanded: true,
             value: selectedId,
             hint: Text(
-              'Odaberite terapeuta',
-              style: _DetailsStyle.label(context),
+              'Select a therapist',
+              style: lightSurface
+                  ? Theme.of(context).textTheme.bodyMedium
+                  : _DetailsStyle.label(context),
             ),
-            dropdownColor: _DetailsStyle.bgMid,
-            style: GoogleFonts.inter(color: _DetailsStyle.textPrimary),
+            dropdownColor:
+                lightSurface ? MobileSpaColors.softWhite : _DetailsStyle.bgMid,
+            style: GoogleFonts.inter(
+              color: lightSurface
+                  ? MobileSpaColors.royalPurple
+                  : _DetailsStyle.textPrimary,
+            ),
             items: therapists
                 .map(
                   (z) => DropdownMenuItem(
@@ -1381,6 +1657,9 @@ class _MobileReviewsBlock extends StatelessWidget {
   const _MobileReviewsBlock({
     required this.recenzijeFuture,
     required this.canSubmitReview,
+    required this.showReviewForm,
+    required this.therapistsError,
+    required this.submittingReview,
     required this.maxCommentLength,
     required this.ocjena,
     required this.onRatingChanged,
@@ -1395,6 +1674,9 @@ class _MobileReviewsBlock extends StatelessWidget {
 
   final Future<RecenzijeLoadResult> recenzijeFuture;
   final bool canSubmitReview;
+  final bool showReviewForm;
+  final String? therapistsError;
+  final bool submittingReview;
   final int maxCommentLength;
   final int ocjena;
   final ValueChanged<int> onRatingChanged;
@@ -1434,19 +1716,40 @@ class _MobileReviewsBlock extends StatelessWidget {
             else if (loadError != null) ...[
               Text(loadError),
               TextButton(onPressed: onRefresh, child: const Text('Retry')),
-            ] else if (reviews.isEmpty)
+            ]             else if (reviews.isEmpty)
               const Text('No reviews for this service yet.')
             else
               ...reviews.map(
                 (r) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _ReviewCard(review: r),
+                  child: _ReviewCard(review: r, lightSurface: true),
                 ),
               ),
-            if (canSubmitReview) ...[
+            if (canSubmitReview && therapistsLoading)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  'Loading therapists…',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else if (canSubmitReview && therapistsError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(therapistsError!),
+              )
+            else if (canSubmitReview && therapists.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  'No therapists are available for this service yet.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else if (showReviewForm) ...[
               const SizedBox(height: 16),
               Text(
-                'Leave a review after a completed appointment with your therapist.',
+                'Reviews are available after a completed appointment with the selected therapist.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -1455,6 +1758,7 @@ class _MobileReviewsBlock extends StatelessWidget {
                 loading: therapistsLoading,
                 selectedId: selectedZaposlenikId,
                 onChanged: onTherapistChanged,
+                lightSurface: true,
               ),
               const SizedBox(height: 12),
               _GoldStarRating(value: ocjena, onChanged: onRatingChanged),
@@ -1467,7 +1771,16 @@ class _MobileReviewsBlock extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Comment'),
               ),
               const SizedBox(height: 12),
-              FilledButton(onPressed: onSubmit, child: const Text('Submit review')),
+              FilledButton(
+                onPressed: submittingReview ? null : onSubmit,
+                child: submittingReview
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Submit review'),
+              ),
             ],
           ],
         );
