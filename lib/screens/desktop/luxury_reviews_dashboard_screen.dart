@@ -318,19 +318,10 @@ class _LuxuryReviewsDashboardScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    LayoutBuilder(
-                      builder: (context, c) {
-                        final bar = _ReviewsActionsBar(
-                          rangeLabel: _rangeLabel(),
-                          onPickRange: _pickRange,
-                          onExport: _exportCsv,
-                        );
-                        if (c.maxWidth < 520) return bar;
-                        return Align(
-                          alignment: Alignment.centerRight,
-                          child: bar,
-                        );
-                      },
+                    _ReviewsActionsBar(
+                      rangeLabel: _rangeLabel(),
+                      onPickRange: _pickRange,
+                      onExport: _exportCsv,
                     ),
                     SizedBox(height: gap),
                     _KpiRow(dash: dash, compact: tightHeight),
@@ -512,9 +503,12 @@ class _ReviewsActionsBar extends StatelessWidget {
         }
 
         return Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            dateButton,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
+              child: dateButton,
+            ),
             const SizedBox(width: 10),
             exportButton,
           ],
@@ -690,8 +684,7 @@ class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
                     .withValues(alpha: 0.95),
               ),
               SizedBox(width: widget.compact ? 10 : 14),
-              Flexible(
-                fit: FlexFit.loose,
+              Expanded(
                 child: Text(
                   widget.label,
                   maxLines: 1,
