@@ -187,6 +187,43 @@ class _AdminRevenueAnalyticsScreenState
     _reload(from: from, to: to);
   }
 
+  Future<void> _pickRange() async {
+    final initial = _activeFrom != null && _activeTo != null
+        ? DateTimeRange(start: _activeFrom!, end: _activeTo!)
+        : DateTimeRange(
+            start: _rangeFor(_period).$1,
+            end: _rangeFor(_period).$2,
+          );
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: initial,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: NuaLuxuryTokens.softPurpleGlow,
+              surface: NuaLuxuryTokens.voidViolet,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    final from = _dayOnly(picked.start);
+    final to = _dayOnly(picked.end);
+    final range = DateTimeRange(start: from, end: to);
+    setState(() {
+      _usingPeriodChips = false;
+      _syncedHeaderRange = range;
+    });
+    _nav?.setHeaderDateRange(range);
+    await _reload(from: from, to: to);
+  }
+
   Future<void> _exportPdf() async {
     if (_exporting) return;
     final from = _activeFrom;
@@ -308,6 +345,7 @@ class _AdminRevenueAnalyticsScreenState
                           rangeText:
                               '${_fmtDate(data.from)} — ${_fmtDate(data.to)}',
                           exporting: _exporting,
+                          onPickRange: _pickRange,
                           onExport: _exportPdf,
                         ),
                         if (data.warnings.isNotEmpty) ...[
@@ -496,11 +534,13 @@ class _ReportsActionsBar extends StatelessWidget {
   const _ReportsActionsBar({
     required this.rangeText,
     required this.exporting,
+    required this.onPickRange,
     required this.onExport,
   });
 
   final String rangeText;
   final bool exporting;
+  final VoidCallback onPickRange;
   final VoidCallback onExport;
 
   @override
@@ -508,32 +548,69 @@ class _ReportsActionsBar extends StatelessWidget {
     final theme = Theme.of(context);
     return Row(
       children: [
-        Icon(
-          Icons.date_range_outlined,
-          size: 18,
-          color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.9),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          rangeText,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.9),
-            fontWeight: FontWeight.w800,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPickRange,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.white.withValues(alpha: 0.04),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.date_range_rounded,
+                    size: 17,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    rangeText,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.88),
+                    ),
+                  ),
+                  Icon(
+                    Icons.expand_more_rounded,
+                    size: 18,
+                    color: Colors.white.withValues(alpha: 0.45),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         const Spacer(),
-        Tooltip(
-          message: 'Download PDF — Top 5 services',
-          child: FilledButton.icon(
-            onPressed: exporting ? null : onExport,
-            icon: exporting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.picture_as_pdf_outlined),
-            label: Text(exporting ? 'Exporting…' : 'PDF Report'),
+        OutlinedButton.icon(
+          onPressed: exporting ? null : onExport,
+          icon: exporting
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                )
+              : Icon(
+                  Icons.download_outlined,
+                  size: 17,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+          label: Text(exporting ? 'Exporting...' : 'Export'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white.withValues(alpha: 0.88),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
       ],
