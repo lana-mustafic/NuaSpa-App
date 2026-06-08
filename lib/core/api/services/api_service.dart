@@ -1946,8 +1946,8 @@ class ApiService {
       final response = await _dio.get<dynamic>(
         'Izvjestaj/service-popularity',
         queryParameters: {
-          'from': from.toIso8601String(),
-          'to': to.toIso8601String(),
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
           'take': take,
         },
       );
@@ -1972,8 +1972,8 @@ class ApiService {
       final response = await _dio.get<dynamic>(
         'Izvjestaj/top-spenders',
         queryParameters: {
-          'from': from.toIso8601String(),
-          'to': to.toIso8601String(),
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
           'take': take,
         },
       );
