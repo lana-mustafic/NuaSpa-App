@@ -10,7 +10,10 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../core/preporuka/preporuka_tracker.dart';
 import '../reservations/reservation_create_screen.dart';
+import '../../core/catalog/catalog_admin_messages.dart';
 import '../../core/platform/nua_spa_platform.dart';
+import 'admin_service_details_panel.dart';
+import 'service_editor_dialog.dart';
 import '../../models/recenzija.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
@@ -72,7 +75,14 @@ abstract final class _DetailsStyle {
 class ServiceDetailsScreen extends StatefulWidget {
   final int serviceId;
 
-  const ServiceDetailsScreen({super.key, required this.serviceId});
+  /// When true, renders the admin management layout (catalog / therapist admin).
+  final bool adminPanelView;
+
+  const ServiceDetailsScreen({
+    super.key,
+    required this.serviceId,
+    this.adminPanelView = false,
+  });
 
   @override
   State<ServiceDetailsScreen> createState() => _ServiceDetailsScreenState();
@@ -188,6 +198,96 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       !_therapistsLoading &&
       _therapistsError == null &&
       _therapists.isNotEmpty;
+
+  Future<void> _openEditService(Usluga service) async {
+    final ok = await showServiceEditorDialog(context, existing: service);
+    if (!mounted || !ok) return;
+    setState(() {
+      _therapistsLoadedForUslugaId = null;
+      _serviceFuture = _loadServiceAndTherapists();
+      _recenzijeFuture = _apiService.getRecenzijeByUsluga(widget.serviceId);
+    });
+    await context.read<ServiceProvider>().fetchServices();
+  }
+
+  Future<void> _confirmDeleteService(Usluga service) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete service'),
+        content: Text(
+          'Delete "${service.naziv}"? If the service has bookings or payments, '
+          'deletion may be refused.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    final err = await _apiService.deleteUsluga(service.id);
+    if (!mounted) return;
+    if (err != null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Couldn\'t delete service'),
+          content: Text(CatalogAdminMessages.serviceDeleteError(err)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Service deleted.')),
+    );
+    await context.read<ServiceProvider>().fetchServices();
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  void _showAssignTherapistHint() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Link therapists by updating their specialization to include this service name in Admin > Therapists.',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdminPanelDetails(BuildContext context, Usluga service) {
+    return AdminServiceDetailsPanel(
+      service: service,
+      benefits: _benefitTags(service),
+      therapists: _therapists,
+      therapistsLoading: _therapistsLoading,
+      therapistsError: _therapistsError,
+      recenzijeFuture: _recenzijeFuture,
+      onRefreshReviews: _refreshRecenzije,
+      onEdit: () => _openEditService(service),
+      onDelete: () => _confirmDeleteService(service),
+      onBack: () => Navigator.pop(context),
+      onAssignTherapistHint: _showAssignTherapistHint,
+    );
+  }
 
   Future<void> _submitReview() async {
     if (_submittingReview) return;
@@ -539,6 +639,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 ),
               ),
             );
+          }
+
+          if (widget.adminPanelView) {
+            return _buildAdminPanelDetails(context, service);
           }
 
           if (nuaspaUseMobileShell()) {

@@ -2913,6 +2913,7 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
                               MaterialPageRoute<void>(
                                 builder: (_) => ServiceDetailsScreen(
                                   serviceId: service.id,
+                                  adminPanelView: true,
                                 ),
                               ),
                             );

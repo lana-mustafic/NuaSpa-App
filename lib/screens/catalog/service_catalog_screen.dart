@@ -347,8 +347,10 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          ServiceDetailsScreen(serviceId: usluga.id),
+                      builder: (context) => ServiceDetailsScreen(
+                        serviceId: usluga.id,
+                        adminPanelView: isAdmin,
+                      ),
                     ),
                   );
                 },
