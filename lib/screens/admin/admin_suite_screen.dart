@@ -574,9 +574,11 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   void initState() {
     super.initState();
     _syncTherapistsViewFromRoute();
-    _reloadOverview();
-    _reloadTherapists();
-    _reloadCalendar();
+    if (widget.initialRoute != AdminSuiteRoute.finance) {
+      _reloadOverview();
+      _reloadTherapists();
+      _reloadCalendar();
+    }
     _startCalendarTimerIfNeeded();
   }
 
@@ -704,6 +706,12 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.initialRoute == AdminSuiteRoute.finance) {
+      return const Material(
+        color: Colors.transparent,
+        child: AdminPaymentsOverviewScreen(),
+      );
+    }
     return Material(
       color: Colors.transparent,
       child: Padding(

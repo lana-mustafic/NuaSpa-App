@@ -4,10 +4,12 @@ import 'dart:ui';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/admin_finance_dashboard.dart';
 import '../../models/usluga.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
@@ -66,24 +68,30 @@ class _AdminPaymentsOverviewScreenState
   AdminFinanceDashboard? _dash;
   List<Usluga> _usluge = [];
   bool _loading = true;
+  bool _exporting = false;
   String? _error;
   Timer? _searchDebounce;
+  String? _lastNavSearch;
 
   @override
   void initState() {
     super.initState();
-    final end = DateTime.now();
-    final start = end.subtract(const Duration(days: 30));
-    _range = DateTimeRange(
-      start: DateTime(start.year, start.month, start.day),
-      end: DateTime(end.year, end.month, end.day),
-    );
+    _range = DesktopNav.defaultHeaderDateRange();
     _tableSearch.addListener(_onSearchChanged);
-    _bootstrap();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final nav = Provider.of<DesktopNav>(context, listen: false);
+      setState(() => _range = nav.headerDateRange);
+      final q = nav.takePendingPaymentSearch();
+      if (q != null && q.isNotEmpty) {
+        _tableSearch.text = q;
+      }
+      await _bootstrap();
+    });
   }
 
   Future<void> _bootstrap() async {
-    final usluge = await _api.getUsluge();
+    final usluge = await _api.getUslugeAll();
     if (!mounted) return;
     setState(() => _usluge = usluge);
     await _load();
@@ -114,17 +122,28 @@ class _AdminPaymentsOverviewScreenState
       uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
     );
     if (!mounted) return;
+    final hadData = _dash != null;
     setState(() {
       _loading = false;
       if (dash == null) {
         _error = 'Could not load payment data.';
-        _dash = null;
+        if (!hadData) _dash = null;
       } else {
         _dash = dash;
+        _error = null;
         _page = dash.stranica;
         _pageSize = dash.velicinaStranice;
       }
     });
+    if (dash == null && hadData && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not refresh payments. Showing previous data.'),
+          behavior: SnackBarBehavior.floating,
+          width: 400,
+        ),
+      );
+    }
   }
 
   @override
@@ -171,7 +190,23 @@ class _AdminPaymentsOverviewScreenState
         );
         _page = 1;
       });
+      Provider.of<DesktopNav>(context, listen: false).setHeaderDateRange(_range);
       await _load();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = Provider.of<DesktopNav>(context);
+    final q = nav.paymentSearchQuery;
+    if (q != _lastNavSearch) {
+      _lastNavSearch = q;
+      if (_tableSearch.text != q) {
+        _tableSearch.text = q;
+        _page = 1;
+        unawaited(_load());
+      }
     }
   }
 
@@ -187,6 +222,29 @@ class _AdminPaymentsOverviewScreenState
   }
 
   Future<void> _openTransactionDetail(AdminFinanceTransactionRow row) async {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    if (wide) {
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Close',
+        barrierColor: Colors.black.withValues(alpha: 0.45),
+        pageBuilder: (ctx, a1, a2) {
+          return Align(
+            alignment: Alignment.centerRight,
+            child: Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                width: math.min(440, MediaQuery.sizeOf(ctx).width * 0.38),
+                height: MediaQuery.sizeOf(ctx).height,
+                child: _TransactionDetailSheet(row: row, asSidePanel: true),
+              ),
+            ),
+          );
+        },
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -196,7 +254,9 @@ class _AdminPaymentsOverviewScreenState
   }
 
   Future<void> _exportReport() async {
-    final ok = await _api.downloadAdminFinanceCsv(
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final result = await _api.downloadAdminFinanceCsv(
       from: _range.start,
       toInclusive: _range.end,
       search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text.trim(),
@@ -205,13 +265,19 @@ class _AdminPaymentsOverviewScreenState
       uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
     );
     if (!mounted) return;
+    setState(() => _exporting = false);
+    var msg = result.ok
+        ? 'CSV report saved and opened.'
+        : (result.errorMessage ?? 'CSV export failed.');
+    if (result.ok && result.truncated) {
+      msg =
+          'CSV saved (${result.exportedRows} of ${result.totalRows} rows). Export was truncated — narrow your filters.';
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          ok ? 'CSV report saved and opened.' : 'CSV export failed.',
-        ),
+        content: Text(msg),
         behavior: SnackBarBehavior.floating,
-        width: 380,
+        width: 420,
       ),
     );
   }
@@ -303,18 +369,38 @@ class _AdminPaymentsOverviewScreenState
                           theme: theme,
                           compact: tight,
                           rangeLabel: _fmtRange(),
+                          exporting: _exporting,
                           onPickRange: _pickRange,
                           onExport: _exportReport,
                         ),
                       ),
+                      if (_loading && _dash != null) ...[
+                        const SizedBox(height: 6),
+                        const LinearProgressIndicator(
+                          minHeight: 2,
+                          color: NuaLuxuryTokens.softPurpleGlow,
+                          backgroundColor: Colors.transparent,
+                        ),
+                      ],
                       SizedBox(height: gap),
                       _KpiStrip(compact: tight, width: w, kpi: _dash?.kpi),
                       SizedBox(height: gap),
                       _RevenueTrendCard(
                         theme: theme,
-                        compact: true,
+                        compact: tight,
                         points: _dash?.prihodDnevno ?? const [],
                       ),
+                      if (_dash != null &&
+                          (_dash!.metodePostotak.isNotEmpty ||
+                              _dash!.nedavnaAktivnost.isNotEmpty)) ...[
+                        SizedBox(height: gap - 2),
+                        _FinanceInsightsRow(
+                          theme: theme,
+                          compact: tight,
+                          methods: _dash!.metodePostotak,
+                          activity: _dash!.nedavnaAktivnost,
+                        ),
+                      ],
                       SizedBox(height: gap - 2),
                       _FilterStrip(
                         theme: theme,
@@ -345,6 +431,7 @@ class _AdminPaymentsOverviewScreenState
                           });
                           await _load();
                         },
+                        onClearFilters: _clearFilters,
                       ),
                       SizedBox(height: gap - 2),
                       _PaymentsTableBlock(
@@ -360,6 +447,13 @@ class _AdminPaymentsOverviewScreenState
                         },
                         onViewRow: _openTransactionDetail,
                         onClearFilters: _clearFilters,
+                        onPageSize: (s) async {
+                          setState(() {
+                            _pageSize = s;
+                            _page = 1;
+                          });
+                          await _load();
+                        },
                       ),
                     ],
                   ),
@@ -424,6 +518,7 @@ class _PaymentsActionsBar extends StatelessWidget {
     required this.theme,
     required this.compact,
     required this.rangeLabel,
+    required this.exporting,
     required this.onPickRange,
     required this.onExport,
   });
@@ -431,6 +526,7 @@ class _PaymentsActionsBar extends StatelessWidget {
   final ThemeData theme;
   final bool compact;
   final String rangeLabel;
+  final bool exporting;
   final VoidCallback onPickRange;
   final VoidCallback onExport;
 
@@ -442,13 +538,22 @@ class _PaymentsActionsBar extends StatelessWidget {
         _rangePill(theme, rangeLabel, onPickRange),
         const SizedBox(width: 10),
         OutlinedButton.icon(
-          onPressed: onExport,
-          icon: Icon(
-            Icons.ios_share_rounded,
-            size: 17,
-            color: Colors.white.withValues(alpha: 0.75),
-          ),
-          label: const Text('Export'),
+          onPressed: exporting ? null : onExport,
+          icon: exporting
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                )
+              : Icon(
+                  Icons.ios_share_rounded,
+                  size: 17,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+          label: Text(exporting ? 'Exporting...' : 'Export'),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white.withValues(alpha: 0.88),
             side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
@@ -679,6 +784,7 @@ class _FilterStrip extends StatelessWidget {
     required this.onMethod,
     required this.onStatus,
     required this.onService,
+    required this.onClearFilters,
   });
 
   final ThemeData theme;
@@ -691,6 +797,7 @@ class _FilterStrip extends StatelessWidget {
   final Future<void> Function(String) onMethod;
   final Future<void> Function(String) onStatus;
   final Future<void> Function(String) onService;
+  final Future<void> Function() onClearFilters;
 
   List<MapEntry<String, String>> _serviceItems() {
     final items = <MapEntry<String, String>>[
@@ -786,7 +893,8 @@ class _FilterStrip extends StatelessWidget {
               items: const [
                 MapEntry('all', 'All status'),
                 MapEntry('paid', 'Paid'),
-                MapEntry('unpaid', 'Unpaid'),
+                MapEntry('unpaid', 'Pending'),
+                MapEntry('failed', 'Failed'),
                 MapEntry('refunded', 'Refunded'),
               ],
               onChanged: onStatus,
@@ -807,16 +915,19 @@ class _FilterStrip extends StatelessWidget {
         ),
         SizedBox(
           height: h,
-          child: _ToolbarFilterButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Additional filters coming soon.'),
-                  behavior: SnackBarBehavior.floating,
-                  width: 360,
-                ),
-              );
-            },
+          child: PopupMenuButton<String>(
+            tooltip: 'Filters',
+            color: NuaLuxuryTokens.voidViolet,
+            onSelected: (_) => unawaited(onClearFilters()),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'clear',
+                child: Text('Clear all filters'),
+              ),
+            ],
+            child: const IgnorePointer(
+              child: _ToolbarFilterButton(onPressed: null),
+            ),
           ),
         ),
       ];
@@ -860,9 +971,9 @@ class _FilterStrip extends StatelessWidget {
 }
 
 class _ToolbarFilterButton extends StatelessWidget {
-  const _ToolbarFilterButton({required this.onPressed});
+  const _ToolbarFilterButton({this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -979,6 +1090,7 @@ class _PaymentsTableBlock extends StatelessWidget {
     required this.onPage,
     required this.onViewRow,
     required this.onClearFilters,
+    required this.onPageSize,
   });
 
   final ThemeData theme;
@@ -990,6 +1102,7 @@ class _PaymentsTableBlock extends StatelessWidget {
   final Future<void> Function(int) onPage;
   final Future<void> Function(AdminFinanceTransactionRow) onViewRow;
   final Future<void> Function() onClearFilters;
+  final Future<void> Function(int) onPageSize;
 
   String _fmtWhen(DateTime d) {
     const m = [
@@ -1025,7 +1138,6 @@ class _PaymentsTableBlock extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          _TableHeader(theme: theme, compact: compact),
           if (rows.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -1070,70 +1182,106 @@ class _PaymentsTableBlock extends StatelessWidget {
               ),
             )
           else
-            for (final r in rows)
-              _TableDataRow(
-                theme: theme,
-                compact: compact,
-                row: r,
-                fmt: _fmtWhen,
-                onView: () => unawaited(onViewRow(r)),
-              ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 12, compact ? 12 : 16, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+            LayoutBuilder(
+              builder: (context, c) {
+                final narrow = c.maxWidth < 980;
+                if (narrow) {
+                  return Column(
                     children: [
-                      _pageBtn(theme, Icons.chevron_left, page > 1, () {
-                        unawaited(onPage(page - 1));
-                      }),
-                      for (final n in _pageNums(page, totalPages))
-                        if (n == -1)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Text('…', style: theme.textTheme.bodySmall),
-                          )
-                        else
-                          _pageNum(theme, n, n == page, () {
-                            unawaited(onPage(n));
-                          }),
-                      _pageBtn(
-                        theme,
-                        Icons.chevron_right,
-                        page < totalPages,
-                        () {
-                          unawaited(onPage(page + 1));
-                        },
+                      for (final r in rows)
+                        _TransactionCard(
+                          theme: theme,
+                          row: r,
+                          fmt: _fmtWhen,
+                          onView: () => unawaited(onViewRow(r)),
+                        ),
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    _TableHeader(theme: theme, compact: compact),
+                    for (final r in rows)
+                      _TableDataRow(
+                        theme: theme,
+                        compact: compact,
+                        row: r,
+                        fmt: _fmtWhen,
+                        onView: () => unawaited(onViewRow(r)),
+                      ),
+                  ],
+                );
+              },
+            ),
+          if (total > 0)
+            Padding(
+              padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 12, compact ? 12 : 16, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 4,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _pageBtn(theme, Icons.chevron_left, page > 1, () {
+                          unawaited(onPage(page - 1));
+                        }),
+                        for (final n in _pageNums(page, totalPages))
+                          if (n == -1)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Text('…', style: theme.textTheme.bodySmall),
+                            )
+                          else
+                            _pageNum(theme, n, n == page, () {
+                              unawaited(onPage(n));
+                            }),
+                        _pageBtn(
+                          theme,
+                          Icons.chevron_right,
+                          page < totalPages,
+                          () {
+                            unawaited(onPage(page + 1));
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: pageSize,
+                          isDense: true,
+                          dropdownColor: NuaLuxuryTokens.voidViolet,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w700,
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 10, child: Text('Show 10')),
+                            DropdownMenuItem(value: 25, child: Text('Show 25')),
+                            DropdownMenuItem(value: 50, child: Text('Show 50')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) unawaited(onPageSize(v));
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$fromIdx–$toIdx of $total transactions',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Show $pageSize',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.55),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$fromIdx–$toIdx of $total transactions',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.45),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -1397,9 +1545,13 @@ class _MethodChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCard = method.contains('VISA') ||
-        method.contains('Mastercard') ||
+    final lower = method.toLowerCase();
+    final isCard = lower.contains('card') ||
+        lower.contains('stripe') ||
+        lower.contains('visa') ||
+        lower.contains('master') ||
         method.contains('••');
+    final isCash = lower.contains('cash') || lower.contains('gotovin') || lower.contains('spa');
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -1413,7 +1565,11 @@ class _MethodChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isCard ? Icons.credit_card_rounded : Icons.payments_outlined,
+              isCard
+                  ? Icons.credit_card_rounded
+                  : isCash
+                      ? Icons.payments_outlined
+                      : Icons.account_balance_wallet_outlined,
               size: compact ? 13 : 14,
               color: NuaLuxuryTokens.champagneGold.withValues(alpha: 0.85),
             ),
@@ -1715,10 +1871,244 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
 
 // --- Transaction detail ------------------------------------------------------
 
+class _TransactionCard extends StatelessWidget {
+  const _TransactionCard({
+    required this.theme,
+    required this.row,
+    required this.fmt,
+    required this.onView,
+  });
+
+  final ThemeData theme;
+  final AdminFinanceTransactionRow row;
+  final String Function(DateTime) fmt;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onView,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        row.klijentPunoIme,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AdminPaymentsOverviewScreen.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _formatKm(row.iznos),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  row.uslugaTekst,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _StatusPill(apiStatus: row.status),
+                    Text(
+                      row.metodaLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    Text(
+                      fmt(row.datumVrijeme),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.42),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceInsightsRow extends StatelessWidget {
+  const _FinanceInsightsRow({
+    required this.theme,
+    required this.compact,
+    required this.methods,
+    required this.activity,
+  });
+
+  final ThemeData theme;
+  final bool compact;
+  final List<AdminFinanceMethodShare> methods;
+  final List<AdminFinanceActivity> activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final stacked = c.maxWidth < 900;
+        final methodCard = _pgGlass(
+          radius: 18,
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 14 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Payment methods',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AdminPaymentsOverviewScreen.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (methods.isEmpty)
+                  Text(
+                    'No method data for this period.',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                  )
+                else
+                  for (final m in methods)
+                    if (m.postotak > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                m.label,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.62),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${m.postotak.toStringAsFixed(0)}%',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AdminPaymentsOverviewScreen.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ],
+            ),
+          ),
+        );
+        final activityCard = _pgGlass(
+          radius: 18,
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 14 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recent activity',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AdminPaymentsOverviewScreen.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (activity.isEmpty)
+                  Text(
+                    'No recent transactions in the selected period.',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                  )
+                else
+                  for (final a in activity.take(6))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${a.opis} · ${a.klijent}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.72),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            _formatKm(a.iznos),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        );
+
+        if (stacked) {
+          return Column(
+            children: [
+              methodCard,
+              const SizedBox(height: 10),
+              activityCard,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: methodCard),
+            const SizedBox(width: 12),
+            Expanded(child: activityCard),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _TransactionDetailSheet extends StatelessWidget {
-  const _TransactionDetailSheet({required this.row});
+  const _TransactionDetailSheet({
+    required this.row,
+    this.asSidePanel = false,
+  });
 
   final AdminFinanceTransactionRow row;
+  final bool asSidePanel;
 
   String _fmtDetailDate(DateTime d) {
     const m = [
@@ -1736,6 +2126,114 @@ class _TransactionDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
+
+    final content = ListView(
+      padding: EdgeInsets.fromLTRB(22, asSidePanel ? 22 : 12, 22, 28),
+      children: [
+        if (!asSidePanel)
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+        if (!asSidePanel) const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Transaction details',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: AdminPaymentsOverviewScreen.textPrimary,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: Icon(
+                Icons.close_rounded,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _detailRow(theme, 'Transaction ID', row.transakcijskiId),
+        if (row.stripePaymentIntentId != null &&
+            row.stripePaymentIntentId!.isNotEmpty)
+          _detailRow(theme, 'Stripe payment', row.stripePaymentIntentId!),
+        _detailRow(theme, 'Client', row.klijentPunoIme),
+        _detailRow(theme, 'Service', row.uslugaTekst),
+        _detailRow(theme, 'Amount', _formatKm(row.iznos)),
+        if (row.naplaceniIznos != null)
+          _detailRow(theme, 'Charged amount', _formatKm(row.naplaceniIznos!)),
+        _detailRow(
+          theme,
+          'Status',
+          null,
+          trailing: _StatusPill(apiStatus: row.status),
+        ),
+        _detailRow(theme, 'Payment method', row.metodaLabel),
+        _detailRow(theme, 'Date & time', _fmtDetailDate(row.datumVrijeme)),
+        if (row.datumZavrsetka != null)
+          _detailRow(
+            theme,
+            'Completed at',
+            _fmtDetailDate(row.datumZavrsetka!),
+          ),
+        if (row.rezervacijaId != null && row.rezervacijaId! > 0)
+          _detailRow(
+            theme,
+            'Booking reference',
+            '#${row.rezervacijaId}',
+          ),
+        if (row.stripeRefundId != null && row.stripeRefundId!.isNotEmpty)
+          _detailRow(theme, 'Refund reference', row.stripeRefundId!),
+        if (row.status == 'refunded') ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.08),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Text(
+              'This transaction has been refunded. The amount was returned to the client.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.62),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    if (asSidePanel) {
+      return ClipRRect(
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(22)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF120A22).withValues(alpha: 0.98),
+              border: Border(
+                left: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+            ),
+            child: content,
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
@@ -1756,82 +2254,7 @@ class _TransactionDetailSheet extends StatelessWidget {
                     top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                 ),
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Transaction details',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: AdminPaymentsOverviewScreen.textPrimary,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: Colors.white.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _detailRow(theme, 'Transaction ID', row.transakcijskiId),
-                    _detailRow(theme, 'Client', row.klijentPunoIme),
-                    _detailRow(theme, 'Service', row.uslugaTekst),
-                    _detailRow(theme, 'Amount', _formatKm(row.iznos)),
-                    _detailRow(
-                      theme,
-                      'Status',
-                      null,
-                      trailing: _StatusPill(apiStatus: row.status),
-                    ),
-                    _detailRow(theme, 'Payment method', row.metodaLabel),
-                    _detailRow(theme, 'Date & time', _fmtDetailDate(row.datumVrijeme)),
-                    if (row.placanjeId > 0)
-                      _detailRow(
-                        theme,
-                        'Booking reference',
-                        '#${row.placanjeId}',
-                      ),
-                    if (row.status == 'refunded') ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.08),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Text(
-                          'This transaction has been refunded. The amount was returned to the client.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.62),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                child: content,
               ),
             ),
           );

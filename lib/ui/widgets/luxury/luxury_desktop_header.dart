@@ -417,7 +417,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
           title: 'Payments',
           subtitle: 'Track revenue, refunds, and payment activity.',
           searchHint: 'Search across NuaSpa...',
-          onSearchSubmitted: nav.performAdminGlobalSearch,
+          initialSearchQuery: nav.paymentSearchQuery,
+          onSearchSubmitted: nav.setPaymentSearchQuery,
+          onSearchChanged: nav.setPaymentSearchQuery,
         );
       }
       if (isCatalog) {

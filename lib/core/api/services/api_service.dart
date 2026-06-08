@@ -1768,13 +1768,16 @@ class ApiService {
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
       return AdminFinanceDashboard.fromJson(data);
+    } on DioException catch (e) {
+      debugPrint('ApiService.getAdminFinanceDashboard failed: $e');
+      return null;
     } catch (e) {
-      debugPrint('Greška u ApiService.getAdminFinanceDashboard: $e');
+      debugPrint('ApiService.getAdminFinanceDashboard failed: $e');
       return null;
     }
   }
 
-  Future<bool> downloadAdminFinanceCsv({
+  Future<FinanceCsvExportResult> downloadAdminFinanceCsv({
     required DateTime from,
     required DateTime toInclusive,
     String? search,
@@ -1799,17 +1802,42 @@ class ApiService {
       if (uslugaId != null) query['uslugaId'] = uslugaId;
 
       final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/placanja_export.csv';
-      await _dio.download(
+      final fromLabel = _dateOnly(from);
+      final toLabel = _dateOnly(toInclusive);
+      final filePath = '${directory.path}/payments_${fromLabel}_$toLabel.csv';
+      final response = await _dio.download(
         'AdminFinance/dashboard/csv',
         filePath,
         queryParameters: query,
       );
-      await OpenFile.open(filePath);
-      return true;
+      final headers = response.headers;
+      final truncated = headers.value('x-export-truncated') == 'true';
+      final exported = int.tryParse(headers.value('x-export-rows') ?? '') ?? 0;
+      final total = int.tryParse(headers.value('x-export-total') ?? '') ?? 0;
+      final disposition = headers.value('content-disposition');
+      String openPath = filePath;
+      if (disposition != null && disposition.contains('filename=')) {
+        final match = RegExp(r'filename="?([^";]+)"?').firstMatch(disposition);
+        if (match != null) {
+          openPath = '${directory.path}/${match.group(1)}';
+        }
+      }
+      await OpenFile.open(openPath);
+      return FinanceCsvExportResult(
+        ok: true,
+        truncated: truncated,
+        exportedRows: exported,
+        totalRows: total,
+      );
+    } on DioException catch (e) {
+      final msg = e.response?.statusCode == 401
+          ? 'Session expired. Sign in again.'
+          : 'CSV export failed (${e.response?.statusCode ?? 'network'}).';
+      debugPrint('ApiService.downloadAdminFinanceCsv failed: $e');
+      return FinanceCsvExportResult(ok: false, errorMessage: msg);
     } catch (e) {
-      debugPrint('Greška u ApiService.downloadAdminFinanceCsv: $e');
-      return false;
+      debugPrint('ApiService.downloadAdminFinanceCsv failed: $e');
+      return FinanceCsvExportResult(ok: false, errorMessage: 'CSV export failed.');
     }
   }
 

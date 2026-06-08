@@ -90,38 +90,69 @@ class AdminFinanceKpi {
 class AdminFinanceTransactionRow {
   AdminFinanceTransactionRow({
     required this.placanjeId,
+    this.rezervacijaId,
     required this.transakcijskiId,
+    this.stripePaymentIntentId,
     required this.klijentPunoIme,
     required this.uslugaTekst,
     required this.datumVrijeme,
+    this.datumZavrsetka,
     required this.iznos,
+    this.naplaceniIznos,
     required this.metodaLabel,
+    this.stripeRefundId,
     required this.status,
   });
 
   final int placanjeId;
+  final int? rezervacijaId;
   final String transakcijskiId;
+  final String? stripePaymentIntentId;
   final String klijentPunoIme;
   final String uslugaTekst;
   final DateTime datumVrijeme;
+  final DateTime? datumZavrsetka;
   final double iznos;
+  final double? naplaceniIznos;
   final String metodaLabel;
-  /// paid | unpaid | refunded
+  final String? stripeRefundId;
+  /// paid | unpaid | failed | refunded
   final String status;
 
   factory AdminFinanceTransactionRow.fromJson(Map<String, dynamic> json) {
     return AdminFinanceTransactionRow(
       placanjeId: (json['placanjeId'] as num?)?.toInt() ?? 0,
+      rezervacijaId: (json['rezervacijaId'] as num?)?.toInt(),
       transakcijskiId: json['transakcijskiId'] as String? ?? '',
+      stripePaymentIntentId: json['stripePaymentIntentId'] as String?,
       klijentPunoIme: json['klijentPunoIme'] as String? ?? '',
       uslugaTekst: json['uslugaTekst'] as String? ?? '',
       datumVrijeme: DateTime.tryParse(json['datumVrijeme'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      datumZavrsetka: DateTime.tryParse(json['datumZavrsetka'] as String? ?? ''),
       iznos: (json['iznos'] as num?)?.toDouble() ?? 0,
+      naplaceniIznos: (json['naplaceniIznos'] as num?)?.toDouble(),
       metodaLabel: json['metodaLabel'] as String? ?? '',
+      stripeRefundId: json['stripeRefundId'] as String?,
       status: (json['status'] as String? ?? 'paid').toLowerCase(),
     );
   }
+}
+
+class FinanceCsvExportResult {
+  const FinanceCsvExportResult({
+    required this.ok,
+    this.truncated = false,
+    this.exportedRows = 0,
+    this.totalRows = 0,
+    this.errorMessage,
+  });
+
+  final bool ok;
+  final bool truncated;
+  final int exportedRows;
+  final int totalRows;
+  final String? errorMessage;
 }
 
 class AdminFinanceMethodShare {

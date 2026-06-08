@@ -347,7 +347,7 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
         _WorkspaceLink(
           icon: Icons.payments_outlined,
           label: 'Payments',
-          subtitle: 'Invoices and transactions',
+          subtitle: 'Payments, revenue and transactions',
           onTap: () => nav.goToAdminSuite(AdminSuiteRoute.finance),
         ),
         _WorkspaceLink(

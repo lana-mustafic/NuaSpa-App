@@ -42,7 +42,9 @@ class DesktopNav extends ChangeNotifier {
   /// Jednokratni upit za [ServiceCatalogScreen] nakon navigacije iz globalne tračice.
   String? _pendingCatalogSearch;
   String? _pendingClientSearch;
+  String? _pendingPaymentSearch;
   String _clientSearchQuery = '';
+  String _paymentSearchQuery = '';
   String _therapistSearchQuery = '';
   String _catalogSearchQuery = '';
   String _reviewsSearchQuery = '';
@@ -109,6 +111,8 @@ class DesktopNav extends ChangeNotifier {
   }
 
   String get clientSearchQuery => _clientSearchQuery;
+
+  String get paymentSearchQuery => _paymentSearchQuery;
 
   String get appointmentSearchQuery => _appointmentSearchQuery;
 
@@ -225,10 +229,52 @@ class DesktopNav extends ChangeNotifier {
     return q;
   }
 
+  void setPaymentSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_paymentSearchQuery == value &&
+        _route == DesktopRouteKey.admin &&
+        _adminSuiteTarget == AdminSuiteRoute.finance) {
+      return;
+    }
+    _paymentSearchQuery = value;
+    _pendingPaymentSearch = value.isEmpty ? null : value;
+    if (_route != DesktopRouteKey.admin ||
+        _adminSuiteTarget != AdminSuiteRoute.finance) {
+      goToAdminSuite(AdminSuiteRoute.finance);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  String? takePendingPaymentSearch() {
+    final q = _pendingPaymentSearch;
+    _pendingPaymentSearch = null;
+    return q;
+  }
+
+  static bool _looksLikePaymentQuery(String t) {
+    final lower = t.toLowerCase();
+    if (lower.contains('#pay') || lower.contains('pay-')) return true;
+    if (RegExp(r'^\d{1,8}$').hasMatch(t)) return true;
+    const hints = ['payment', 'invoice', 'refund', 'transaction', 'placanj'];
+    return hints.any((h) => lower.contains(h));
+  }
+
   /// Dashboard global search — routes to the best admin screen for the query.
   void performAdminGlobalSearch(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return;
+
+    if (_route == DesktopRouteKey.admin &&
+        _adminSuiteTarget == AdminSuiteRoute.finance) {
+      setPaymentSearchQuery(t);
+      return;
+    }
+
+    if (_looksLikePaymentQuery(t)) {
+      setPaymentSearchQuery(t);
+      return;
+    }
 
     if (t.contains('@')) {
       goToClientsWithSearch(t);
