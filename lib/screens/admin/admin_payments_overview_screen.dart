@@ -363,16 +363,13 @@ class _AdminPaymentsOverviewScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _PaymentsActionsBar(
-                          theme: theme,
-                          compact: tight,
-                          rangeLabel: _fmtRange(),
-                          exporting: _exporting,
-                          onPickRange: _pickRange,
-                          onExport: _exportReport,
-                        ),
+                      _PaymentsActionsBar(
+                        theme: theme,
+                        compact: tight,
+                        rangeLabel: _fmtRange(),
+                        exporting: _exporting,
+                        onPickRange: _pickRange,
+                        onExport: _exportReport,
                       ),
                       if (_loading && _dash != null) ...[
                         const SizedBox(height: 6),
