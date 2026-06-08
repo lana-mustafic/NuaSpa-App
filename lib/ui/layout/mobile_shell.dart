@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../screens/admin/admin_dashboard_screen.dart';
+import '../../screens/admin/admin_payments_overview_screen.dart';
 import '../../screens/catalog/mobile_service_catalog_screen.dart';
 import '../../screens/mobile/mobile_home_screen.dart';
 import '../../screens/mobile/mobile_packages_placeholder_screen.dart';
@@ -329,7 +330,20 @@ class _MobileDrawer extends StatelessWidget {
                   );
                 },
               ),
-            if (auth.isAdmin)
+            if (auth.isAdmin) ...[
+              ListTile(
+                leading: const Icon(Icons.payments_outlined),
+                title: const Text('Payments'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AdminPaymentsOverviewScreen(),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings_outlined),
                 title: const Text('Admin'),
@@ -343,6 +357,7 @@ class _MobileDrawer extends StatelessWidget {
                   );
                 },
               ),
+            ],
             const Spacer(),
             ListTile(
               leading: Icon(Icons.logout, color: MobileSpaColors.royalPurple.withValues(alpha: 0.75)),
