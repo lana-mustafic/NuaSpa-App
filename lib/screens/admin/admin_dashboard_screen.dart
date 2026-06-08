@@ -321,8 +321,10 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
 
     var eligibleTherapists = <Zaposlenik>[];
     if (serviceCtrl.value != null) {
-      eligibleTherapists =
-          await _api.getZaposleniciForService(serviceCtrl.value!);
+      eligibleTherapists = (await _api.getZaposleniciForService(
+        serviceCtrl.value!,
+      ))
+          .items;
     }
     if (!mounted) return;
 
@@ -421,8 +423,9 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                           serviceCtrl.value = v;
                           therapistCtrl.value = null;
                           if (v != null) {
-                            eligibleTherapists =
-                                await _api.getZaposleniciForService(v);
+                            eligibleTherapists = (await _api
+                                    .getZaposleniciForService(v))
+                                .items;
                             if (eligibleTherapists.length == 1) {
                               therapistCtrl.value =
                                   eligibleTherapists.first.id;

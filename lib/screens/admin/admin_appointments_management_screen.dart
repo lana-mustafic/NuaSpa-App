@@ -3120,7 +3120,7 @@ class _AdminAppointmentCreateDialogState
     }
 
     setState(() => _loadingTherapists = true);
-    final list = await _api.getZaposleniciForService(serviceId);
+    final list = (await _api.getZaposleniciForService(serviceId)).items;
     if (!mounted) return;
 
     int? nextTherapist = preserveTherapistId;
