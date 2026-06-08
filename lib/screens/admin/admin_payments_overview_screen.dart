@@ -222,7 +222,7 @@ class _AdminPaymentsOverviewScreenState
     final mq = MediaQuery.sizeOf(context);
     final w = mq.width;
     final tight = mq.height < 760 || w < 1200;
-    final gap = tight ? 10.0 : 14.0;
+    final gap = tight ? 8.0 : 10.0;
     final pad = tight ? 12.0 : 16.0;
 
     if (_error != null && _dash == null && !_loading) {
@@ -291,17 +291,21 @@ class _AdminPaymentsOverviewScreenState
                   padding: LuxuryPageChrome.bodyPadding.copyWith(
                     left: pad,
                     right: pad,
+                    top: 8,
                     bottom: pad + 8,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _PaymentsPageHeader(
-                        theme: theme,
-                        compact: tight,
-                        rangeLabel: _fmtRange(),
-                        onPickRange: _pickRange,
-                        onExport: _exportReport,
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _PaymentsActionsBar(
+                          theme: theme,
+                          compact: tight,
+                          rangeLabel: _fmtRange(),
+                          onPickRange: _pickRange,
+                          onExport: _exportReport,
+                        ),
                       ),
                       SizedBox(height: gap),
                       _KpiStrip(compact: tight, width: w, kpi: _dash?.kpi),
@@ -311,7 +315,7 @@ class _AdminPaymentsOverviewScreenState
                         compact: true,
                         points: _dash?.prihodDnevno ?? const [],
                       ),
-                      SizedBox(height: gap),
+                      SizedBox(height: gap - 2),
                       _FilterStrip(
                         theme: theme,
                         compact: tight,
@@ -342,7 +346,7 @@ class _AdminPaymentsOverviewScreenState
                           await _load();
                         },
                       ),
-                      SizedBox(height: gap),
+                      SizedBox(height: gap - 2),
                       _PaymentsTableBlock(
                         theme: theme,
                         compact: tight,
@@ -413,10 +417,10 @@ Widget _pgGlass({
   );
 }
 
-// --- Page header -------------------------------------------------------------
+// --- Page actions (date range + export; title lives in app chrome) -----------
 
-class _PaymentsPageHeader extends StatelessWidget {
-  const _PaymentsPageHeader({
+class _PaymentsActionsBar extends StatelessWidget {
+  const _PaymentsActionsBar({
     required this.theme,
     required this.compact,
     required this.rangeLabel,
@@ -432,82 +436,29 @@ class _PaymentsPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final narrow = c.maxWidth < 720;
-        final actions = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _rangePill(theme, rangeLabel, onPickRange),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: onExport,
-              icon: Icon(
-                Icons.ios_share_rounded,
-                size: 17,
-                color: Colors.white.withValues(alpha: 0.75),
-              ),
-              label: const Text('Export'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white.withValues(alpha: 0.88),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                padding: EdgeInsets.symmetric(
-                  horizontal: compact ? 14 : 16,
-                  vertical: compact ? 10 : 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ],
-        );
-
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _titleBlock(theme, compact),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                alignment: WrapAlignment.end,
-                children: [actions],
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _titleBlock(theme, compact)),
-            actions,
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _titleBlock(ThemeData theme, bool compact) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Payments',
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.45,
-            color: AdminPaymentsOverviewScreen.textPrimary,
+        _rangePill(theme, rangeLabel, onPickRange),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: onExport,
+          icon: Icon(
+            Icons.ios_share_rounded,
+            size: 17,
+            color: Colors.white.withValues(alpha: 0.75),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Track revenue, refunds and transactions.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.58),
-            height: 1.35,
+          label: const Text('Export'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white.withValues(alpha: 0.88),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 14 : 16,
+              vertical: compact ? 10 : 11,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
       ],
@@ -856,25 +807,16 @@ class _FilterStrip extends StatelessWidget {
         ),
         SizedBox(
           height: h,
-          child: OutlinedButton(
+          child: _ToolbarFilterButton(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('More filters coming soon.'),
+                  content: Text('Additional filters coming soon.'),
                   behavior: SnackBarBehavior.floating,
                   width: 360,
                 ),
               );
             },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white.withValues(alpha: 0.72),
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
-            child: const Text('More Filters'),
           ),
         ),
       ];
@@ -913,6 +855,51 @@ class _FilterStrip extends StatelessWidget {
         final scrollable = c.maxWidth < 980;
         return toolbarRow(scrollable: scrollable, maxW: c.maxWidth);
       },
+    );
+  }
+}
+
+class _ToolbarFilterButton extends StatelessWidget {
+  const _ToolbarFilterButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 16,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Filters',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AdminPaymentsOverviewScreen.textPrimary,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1521,18 +1508,25 @@ class _RevenueTrendCard extends StatefulWidget {
 }
 
 class _RevenueTrendCardState extends State<_RevenueTrendCard> {
+  bool _hasRevenueData(List<AdminFinanceTrendPoint> pts) {
+    return pts.isNotEmpty && pts.any((p) => p.iznos > 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pts = widget.points;
-    if (pts.isEmpty) {
+    if (!_hasRevenueData(pts)) {
       return _pgGlass(
         radius: 18,
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact ? 14 : 16,
-            vertical: widget.compact ? 14 : 16,
+          padding: EdgeInsets.fromLTRB(
+            widget.compact ? 14 : 16,
+            widget.compact ? 12 : 14,
+            widget.compact ? 14 : 16,
+            widget.compact ? 18 : 22,
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'Revenue Trend',
@@ -1541,13 +1535,34 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
                   color: AdminPaymentsOverviewScreen.textPrimary,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'No revenue data for this period.',
-                  style: widget.theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.42),
-                  ),
+              const SizedBox(height: 18),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.show_chart_rounded,
+                      size: 32,
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No revenue data available',
+                      style: widget.theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Revenue trends will appear once payments are recorded.',
+                      textAlign: TextAlign.center,
+                      style: widget.theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.42),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -416,7 +416,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           notificationCount: badgeCount,
           title: 'Payments',
           subtitle: 'Track revenue, refunds, and payment activity.',
-          searchHint: 'Search payments, invoices, clients…',
+          searchHint: 'Search across NuaSpa...',
           onSearchSubmitted: nav.performAdminGlobalSearch,
         );
       }
@@ -549,7 +549,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                                 : isReviews
                                     ? 'Search reviews, clients, services…'
                                     : isAdminPayments
-                                        ? 'Search payments, invoices, clients…'
+                                        ? 'Search across NuaSpa...'
                                         : 'Search services & treatments (Enter → Services)…',
                 onChanged: isTherapists
                     ? (q) =>
