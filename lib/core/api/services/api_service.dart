@@ -13,6 +13,8 @@ import '../../../models/rezervacija.dart';
 import '../../../models/desktop_home_overview.dart';
 import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
+import '../../../models/service_load_result.dart';
+import '../../../models/zaposlenici_load_result.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/cancel_rezervacija_result.dart';
 import '../../../models/sistemska_notifikacija.dart';
@@ -155,31 +157,55 @@ class ApiService {
     }
   }
 
-  Future<Usluga?> getUslugaById(int id) async {
+  Future<ServiceLoadResult> getUslugaById(int id) async {
     try {
       final response = await _dio.get<dynamic>('Usluga/$id');
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Usluga.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return const ServiceLoadResult(notFound: true);
+      }
+      return ServiceLoadResult(service: Usluga.fromJson(data));
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return const ServiceLoadResult(notFound: true);
+      }
+      debugPrint('Greška u ApiService.getUslugaById: $e');
+      return ServiceLoadResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load service. Check your connection.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getUslugaById: $e');
-      return null;
+      return const ServiceLoadResult(
+        error: 'Could not load service. Check your connection.',
+      );
     }
   }
 
-  Future<List<Zaposlenik>> getZaposleniciForService(int uslugaId) async {
+  Future<ZaposleniciLoadResult> getZaposleniciForService(int uslugaId) async {
     try {
       final response = await _dio.get<dynamic>(
         'Zaposlenik/for-service/$uslugaId',
       );
       final data = response.data;
-      if (data is! List) return [];
-      return data
+      if (data is! List) {
+        return const ZaposleniciLoadResult();
+      }
+      final items = data
           .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
           .toList();
+      return ZaposleniciLoadResult(items: items);
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getZaposleniciForService: $e');
+      return ZaposleniciLoadResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load therapists for this service.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getZaposleniciForService: $e');
-      return [];
+      return const ZaposleniciLoadResult(
+        error: 'Could not load therapists for this service.',
+      );
     }
   }
 
@@ -1211,15 +1237,14 @@ class ApiService {
       }
       return (Recenzija.fromJson(data), null);
     } on DioException catch (e) {
-      final body = e.response?.data;
-      if (body is Map && body['message'] != null) {
-        return (null, body['message'].toString());
-      }
       debugPrint('Greška u ApiService.createRecenzija: $e');
-      return (null, 'Slanje recenzije nije uspjelo.');
+      return (
+        null,
+        ApiErrorMessages.fromDio(e) ?? 'Could not submit your review.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.createRecenzija: $e');
-      return (null, 'Slanje recenzije nije uspjelo.');
+      return (null, 'Could not submit your review.');
     }
   }
 

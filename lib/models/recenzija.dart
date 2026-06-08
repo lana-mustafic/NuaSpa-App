@@ -11,6 +11,7 @@ class Recenzija {
   final String komentar;
   final String korisnikIme;
   final String? uslugaNaziv;
+  final String? zaposlenikIme;
   final DateTime? createdAt;
   final String? adminOdgovor;
 
@@ -20,6 +21,7 @@ class Recenzija {
     required this.komentar,
     required this.korisnikIme,
     this.uslugaNaziv,
+    this.zaposlenikIme,
     this.createdAt,
     this.adminOdgovor,
   });
@@ -32,11 +34,12 @@ class Recenzija {
     }
 
     return Recenzija(
-      id: json['id'] as int,
-      ocjena: json['ocjena'] as int,
+      id: (json['id'] as num).toInt(),
+      ocjena: (json['ocjena'] as num).toInt(),
       komentar: (json['komentar'] as String?) ?? '',
       korisnikIme: (json['korisnikIme'] as String?) ?? '',
       uslugaNaziv: json['uslugaNaziv'] as String?,
+      zaposlenikIme: json['zaposlenikIme'] as String?,
       createdAt: created,
       adminOdgovor: json['adminOdgovor'] as String?,
     );
