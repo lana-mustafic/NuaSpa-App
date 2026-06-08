@@ -1963,6 +1963,134 @@ class ApiService {
     }
   }
 
+  Future<({
+    AdminKpi? kpi,
+    List<RevenuePoint> revenue,
+    List<ServicePopularity> popularity,
+    List<TopSpender> spenders,
+    String? error,
+    List<String> warnings,
+  })> getAdminReportsDataResult({
+    required DateTime from,
+    required DateTime to,
+    int popularityTake = 8,
+    int spendersTake = 8,
+  }) async {
+    final warnings = <String>[];
+    AdminKpi? kpi;
+    List<RevenuePoint> revenue = const [];
+    List<ServicePopularity> popularity = const [];
+    List<TopSpender> spenders = const [];
+    String? fatalError;
+
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/kpi',
+        queryParameters: {'date': _apiDateOnly(DateTime.now())},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        kpi = AdminKpi.fromJson(data);
+      } else {
+        warnings.add('Today KPIs returned an unexpected response.');
+      }
+    } on DioException catch (e) {
+      warnings.add(
+        ApiErrorMessages.fromDio(e) ?? 'Today KPIs could not be loaded.',
+      );
+    } catch (_) {
+      warnings.add('Today KPIs could not be loaded.');
+    }
+
+    try {
+      final response = await _dio.get<dynamic>(
+        'Izvjestaj/revenue',
+        queryParameters: {
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
+        },
+      );
+      final data = response.data;
+      if (data is! List) {
+        fatalError = 'Revenue data returned an unexpected response.';
+      } else {
+        revenue = data
+            .whereType<Map>()
+            .map((e) => RevenuePoint.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+    } on DioException catch (e) {
+      fatalError = ApiErrorMessages.fromDio(e) ?? 'Could not load revenue data.';
+    } catch (_) {
+      fatalError = 'Could not load revenue data.';
+    }
+
+    if (fatalError == null) {
+      try {
+        final response = await _dio.get<dynamic>(
+          'Izvjestaj/service-popularity',
+          queryParameters: {
+            'from': _apiDateOnly(from),
+            'to': _apiDateOnly(to),
+            'take': popularityTake,
+          },
+        );
+        final data = response.data;
+        if (data is List) {
+          popularity = data
+              .whereType<Map>()
+              .map((e) =>
+                  ServicePopularity.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+        } else {
+          warnings.add('Service popularity returned an unexpected response.');
+        }
+      } on DioException catch (e) {
+        warnings.add(
+          ApiErrorMessages.fromDio(e) ??
+              'Service popularity could not be loaded.',
+        );
+      } catch (_) {
+        warnings.add('Service popularity could not be loaded.');
+      }
+
+      try {
+        final response = await _dio.get<dynamic>(
+          'Izvjestaj/top-spenders',
+          queryParameters: {
+            'from': _apiDateOnly(from),
+            'to': _apiDateOnly(to),
+            'take': spendersTake,
+          },
+        );
+        final data = response.data;
+        if (data is List) {
+          spenders = data
+              .whereType<Map>()
+              .map((e) => TopSpender.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+        } else {
+          warnings.add('Top clients returned an unexpected response.');
+        }
+      } on DioException catch (e) {
+        warnings.add(
+          ApiErrorMessages.fromDio(e) ?? 'Top clients could not be loaded.',
+        );
+      } catch (_) {
+        warnings.add('Top clients could not be loaded.');
+      }
+    }
+
+    return (
+      kpi: kpi,
+      revenue: revenue,
+      popularity: popularity,
+      spenders: spenders,
+      error: fatalError,
+      warnings: warnings,
+    );
+  }
+
   Future<List<TopSpender>> getTopSpenders({
     required DateTime from,
     required DateTime to,

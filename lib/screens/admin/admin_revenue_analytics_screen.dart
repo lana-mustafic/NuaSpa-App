@@ -34,6 +34,8 @@ class _ReportsData {
     required this.spenders,
     required this.from,
     required this.to,
+    this.error,
+    this.warnings = const [],
   });
 
   final AdminKpi? kpi;
@@ -42,6 +44,8 @@ class _ReportsData {
   final List<TopSpender> spenders;
   final DateTime from;
   final DateTime to;
+  final String? error;
+  final List<String> warnings;
 }
 
 /// Admin Reports hub — live data from `api/Izvjestaj/*`.
@@ -138,19 +142,19 @@ class _AdminRevenueAnalyticsScreenState
         : _rangeFor(_period);
     setState(() {
       _future = () async {
-        final results = await Future.wait([
-          _api.getAdminKpis(date: _dayOnly(DateTime.now())),
-          _api.getRevenueSeries(from: rangeFrom, to: rangeTo),
-          _api.getServicePopularity(from: rangeFrom, to: rangeTo, take: 8),
-          _api.getTopSpenders(from: rangeFrom, to: rangeTo, take: 8),
-        ]);
-        return _ReportsData(
-          kpi: results[0] as AdminKpi?,
-          revenue: results[1] as List<RevenuePoint>,
-          popularity: results[2] as List<ServicePopularity>,
-          spenders: results[3] as List<TopSpender>,
+        final result = await _api.getAdminReportsDataResult(
           from: rangeFrom,
           to: rangeTo,
+        );
+        return _ReportsData(
+          kpi: result.kpi,
+          revenue: result.revenue,
+          popularity: result.popularity,
+          spenders: result.spenders,
+          from: rangeFrom,
+          to: rangeTo,
+          error: result.error,
+          warnings: result.warnings,
         );
       }();
     });
@@ -232,6 +236,10 @@ class _AdminRevenueAnalyticsScreenState
           return _ReportsError(message: 'No data available.', onRetry: _reload);
         }
 
+        if (data.error != null) {
+          return _ReportsError(message: data.error!, onRetry: _reload);
+        }
+
         final rev = data.revenue;
         final totalRevenue = rev.fold<double>(0, (s, p) => s + p.prihod);
         final totalPayments = rev.fold<int>(0, (s, p) => s + p.brojPlacanja);
@@ -296,6 +304,10 @@ class _AdminRevenueAnalyticsScreenState
                           exporting: _exporting,
                           onExport: _exportPdf,
                         ),
+                        if (data.warnings.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _ReportsWarningBanner(messages: data.warnings),
+                        ],
                         const SizedBox(height: 16),
                         _KpiGrid(
                           cards: [
@@ -392,6 +404,41 @@ class _AdminRevenueAnalyticsScreenState
           ],
         );
       },
+    );
+  }
+}
+
+class _ReportsWarningBanner extends StatelessWidget {
+  const _ReportsWarningBanner({required this.messages});
+
+  final List<String> messages;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LuxuryGlassPanel(
+      borderRadius: 14,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 18,
+            color: Colors.white.withValues(alpha: 0.65),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              messages.join(' '),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.72),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
