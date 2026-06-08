@@ -51,6 +51,50 @@ abstract final class _AdminStyle {
       );
 }
 
+/// Scrollable tab body with an explicit controller (avoids PrimaryScrollController issues in TabBarView).
+class _AdminTabScroll extends StatefulWidget {
+  const _AdminTabScroll({
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(28, 8, 28, 28),
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  State<_AdminTabScroll> createState() => _AdminTabScrollState();
+}
+
+class _AdminTabScrollState extends State<_AdminTabScroll> {
+  late final ScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+      controller: _controller,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _controller,
+        primary: false,
+        padding: widget.padding,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class AdminServiceDetailsPanel extends StatefulWidget {
   const AdminServiceDetailsPanel({
     super.key,
@@ -362,7 +406,11 @@ class _OverviewTab extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stacked = constraints.maxWidth < 920;
+        final maxWidth = constraints.maxWidth;
+        final hasBoundedWidth = maxWidth.isFinite && maxWidth > 0;
+        final contentWidth = hasBoundedWidth ? maxWidth - 56 : null;
+        final stacked = !hasBoundedWidth || maxWidth < 920;
+
         final details = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -393,25 +441,24 @@ class _OverviewTab extends StatelessWidget {
                           .map(
                             (b) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '•  ',
-                                    style: _AdminStyle.body(context).copyWith(
-                                      color: _AdminStyle.accentPurple,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '•  ',
+                                      style: _AdminStyle.body(context).copyWith(
+                                        color: _AdminStyle.accentPurple,
+                                      ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      _formatBenefitLine(b),
+                                    TextSpan(
+                                      text: _formatBenefitLine(b),
                                       style: _AdminStyle.body(context).copyWith(
                                         color: _AdminStyle.textPrimary
                                             .withValues(alpha: 0.9),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           )
@@ -438,30 +485,39 @@ class _OverviewTab extends StatelessWidget {
           ],
         );
 
-        return Scrollbar(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
-            child: stacked
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _CompactServiceImage(service: service),
-                      const SizedBox(height: 18),
-                      details,
-                    ],
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: (constraints.maxWidth * 0.36).clamp(240.0, 320.0),
-                        child: _CompactServiceImage(service: service),
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(child: details),
-                    ],
-                  ),
-          ),
+        Widget body;
+        if (stacked) {
+          body = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CompactServiceImage(service: service),
+              const SizedBox(height: 18),
+              details,
+            ],
+          );
+        } else {
+          final imageWidth = (contentWidth! * 0.36).clamp(240.0, 320.0);
+          final detailsWidth = contentWidth - imageWidth - 24;
+          body = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: imageWidth,
+                child: _CompactServiceImage(service: service),
+              ),
+              const SizedBox(width: 24),
+              SizedBox(
+                width: detailsWidth,
+                child: details,
+              ),
+            ],
+          );
+        }
+
+        return _AdminTabScroll(
+          child: hasBoundedWidth
+              ? SizedBox(width: contentWidth, child: body)
+              : body,
         );
       },
     );
@@ -550,34 +606,31 @@ class _TherapistsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scrollbar(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
-        child: _SectionCard(
-          title: 'Linked Therapists',
-          trailing: therapists.isNotEmpty
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${therapists.length} linked',
-                      style: _AdminStyle.label(context),
+    return _AdminTabScroll(
+      child: _SectionCard(
+        title: 'Linked Therapists',
+        trailing: therapists.isNotEmpty
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${therapists.length} linked',
+                    style: _AdminStyle.label(context),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: onAssign,
+                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
+                    label: const Text('Assign'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _AdminStyle.accentPurple,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: onAssign,
-                      icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
-                      label: const Text('Assign'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: _AdminStyle.accentPurple,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                    ),
-                  ],
-                )
-              : null,
-          child: _buildBody(context),
-        ),
+                  ),
+                ],
+              )
+            : null,
+        child: _buildBody(context),
       ),
     );
   }
@@ -772,88 +825,84 @@ class _ReviewsTab extends StatelessWidget {
     return FutureBuilder<RecenzijeLoadResult>(
       future: recenzijeFuture,
       builder: (context, snapshot) {
-        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final loading =
+            snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData;
         final result = snapshot.data;
         final reviews = result?.items ?? [];
-        final loadError = result?.error;
+        final loadError = result?.error ??
+            (snapshot.hasError ? snapshot.error.toString() : null);
         final average = _averageRating(reviews);
 
-        return Scrollbar(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SectionCard(
-                  title: 'Customer Reviews',
-                  trailing: IconButton(
-                    tooltip: 'Refresh reviews',
-                    onPressed: onRefresh,
-                    icon: const Icon(Icons.refresh_rounded, size: 20),
-                    color: _AdminStyle.textSecondary,
-                  ),
-                  child: loading
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 28),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: _AdminStyle.accentPurple,
-                            ),
-                          ),
-                        )
-                      : loadError != null
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(loadError, style: _AdminStyle.body(context)),
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: onRefresh,
-                                  child: const Text('Retry'),
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                _RatingSummary(
-                                  average: average,
-                                  count: reviews.length,
-                                ),
-                              ],
-                            ),
+        return _AdminTabScroll(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SectionCard(
+                title: 'Customer Reviews',
+                trailing: IconButton(
+                  tooltip: 'Refresh reviews',
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  color: _AdminStyle.textSecondary,
                 ),
-                if (!loading && loadError == null) ...[
-                  const SizedBox(height: 14),
-                  if (reviews.isEmpty)
-                    _SectionCard(
-                      title: 'Review list',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'No reviews yet.',
-                            style: _AdminStyle.sectionTitle(context)
-                                .copyWith(fontSize: 15),
+                child: loading
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 28),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _AdminStyle.accentPurple,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Customer reviews will appear here after completed appointments.',
-                            style: _AdminStyle.body(context),
+                        ),
+                      )
+                    : loadError != null
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(loadError, style: _AdminStyle.body(context)),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: onRefresh,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          )
+                        : _RatingSummary(
+                            average: average,
+                            count: reviews.length,
                           ),
-                        ],
-                      ),
-                    )
-                  else
-                    ...reviews.map(
-                      (r) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _AdminReviewCard(review: r),
-                      ),
+              ),
+              if (!loading && loadError == null) ...[
+                const SizedBox(height: 14),
+                if (reviews.isEmpty)
+                  _SectionCard(
+                    title: 'Review list',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'No reviews yet.',
+                          style: _AdminStyle.sectionTitle(context)
+                              .copyWith(fontSize: 15),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Customer reviews will appear here after completed appointments.',
+                          style: _AdminStyle.body(context),
+                        ),
+                      ],
                     ),
-                ],
+                  )
+                else
+                  ...reviews.map(
+                    (r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _AdminReviewCard(review: r),
+                    ),
+                  ),
               ],
-            ),
+            ],
           ),
         );
       },
@@ -1076,7 +1125,7 @@ class _SectionCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(
+                    Flexible(
                       child: Text(title, style: _AdminStyle.sectionTitle(context)),
                     ),
                     if (trailing != null) trailing!,
