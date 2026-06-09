@@ -34,6 +34,7 @@ import '../../../models/admin/therapist_admin_roster.dart';
 import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/therapist/therapist_appointments_list.dart';
+import '../../../models/therapist/therapist_schedule.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
@@ -350,6 +351,36 @@ class ApiService {
     }
 
     return (merged, null);
+  }
+
+  Future<(TherapistSchedule?, String?)> getTherapistSchedule({
+    DateTime? day,
+    DateTime? calendarMonth,
+  }) async {
+    try {
+      final query = <String, dynamic>{};
+      if (day != null) {
+        final d = DateTime(day.year, day.month, day.day);
+        query['day'] = d.toIso8601String();
+      }
+      if (calendarMonth != null) {
+        final m = DateTime(calendarMonth.year, calendarMonth.month, 1);
+        query['calendarMonth'] = m.toIso8601String();
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/me/schedule',
+        queryParameters: query.isEmpty ? null : query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (null, 'Unexpected server response.');
+      }
+      return (TherapistSchedule.fromJson(data), null);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistSchedule: $e');
+      return (null, 'Could not load schedule. Please try again.');
+    }
   }
 
   Future<TherapistDashboard?> getTherapistDashboard({DateTime? day}) async {

@@ -267,7 +267,7 @@ class _DesktopShellState extends State<DesktopShell> {
           return const ServiceCatalogScreen();
         case DesktopRouteKey.schedule:
           return auth.isZaposlenik
-              ? const TherapistScheduleScreen()
+              ? TherapistScheduleScreen(filterDay: _filterDay)
               : widget.home;
         case DesktopRouteKey.therapistDashboard:
           return auth.isZaposlenik

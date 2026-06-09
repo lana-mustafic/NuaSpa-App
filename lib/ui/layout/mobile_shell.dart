@@ -68,7 +68,12 @@ class _MobileShellState extends State<MobileShell> {
                   Navigator.push<void>(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (_) => const TherapistScheduleScreen(),
+                      builder: (_) {
+                        final n = DateTime.now();
+                        return TherapistScheduleScreen(
+                          filterDay: DateTime(n.year, n.month, n.day),
+                        );
+                      },
                     ),
                   );
                 } else {
@@ -325,7 +330,12 @@ class _MobileDrawer extends StatelessWidget {
                   Navigator.push<void>(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (_) => const TherapistScheduleScreen(),
+                      builder: (_) {
+                        final n = DateTime.now();
+                        return TherapistScheduleScreen(
+                          filterDay: DateTime(n.year, n.month, n.day),
+                        );
+                      },
                     ),
                   );
                 },

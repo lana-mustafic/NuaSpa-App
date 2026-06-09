@@ -3,11 +3,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/auth/app_permissions.dart';
 import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
+import '../../models/therapist/therapist_schedule.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
+import 'therapist_appointment_detail_dialog.dart';
 
 abstract final class _SchedUi {
   static const bgTop = Color(0xFF07040F);
@@ -86,9 +89,11 @@ String _formatLongDate(DateTime d) {
   return '${weekdays[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}, ${d.year}';
 }
 
-/// Therapist daily planner — luxury layout, existing API + timeline.
+/// Therapist daily planner — single schedule API, client-side filters.
 class TherapistScheduleScreen extends StatefulWidget {
-  const TherapistScheduleScreen({super.key});
+  const TherapistScheduleScreen({super.key, required this.filterDay});
+
+  final DateTime filterDay;
 
   @override
   State<TherapistScheduleScreen> createState() =>
@@ -98,70 +103,95 @@ class TherapistScheduleScreen extends StatefulWidget {
 class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
     with SingleTickerProviderStateMixin {
   final ApiService _api = ApiService();
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late DateTime _day;
-  Future<_DayData>? _dayFuture;
-  bool _autoLoadScheduled = false;
+  TherapistSchedule? _data;
   String? _loadError;
-  bool? _filterPotvrdjena;
+  bool _loading = false;
+  bool _initialLoad = true;
   String _statusPill = 'All';
 
-  final TextEditingController _searchCtrl = TextEditingController();
-  Rezervacija? _detailBooking;
   final ScrollController _scrollController = ScrollController();
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
   int _lastAvailabilityHint = -1;
+  int _lastRefreshToken = -1;
+  String _lastSearch = '';
+  DateTime? _lastFilterDay;
   late DateTime _calendarMonth;
-  Set<int> _daysWithAppointments = {};
 
   @override
   void initState() {
     super.initState();
-    final n = DateTime.now();
-    _day = DateTime(n.year, n.month, n.day);
-    _calendarMonth = DateTime(n.year, n.month, 1);
+    _day = _onlyDate(widget.filterDay);
+    _calendarMonth = DateTime(_day.year, _day.month, 1);
+    _lastFilterDay = _day;
     _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _reload();
-      _loadMonthMarkers();
-    });
+    _reload();
   }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     _scrollController.dispose();
     _fadeCtrl.dispose();
     super.dispose();
   }
 
   @override
+  void didUpdateWidget(TherapistScheduleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameDay(oldWidget.filterDay, widget.filterDay)) {
+      _day = _onlyDate(widget.filterDay);
+      _calendarMonth = DateTime(_day.year, _day.month, 1);
+      _lastFilterDay = _day;
+      _reload();
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final hint = context.read<DesktopNav>().scheduleAvailabilityHint;
+    final nav = context.read<DesktopNav>();
+    var needReload = false;
+
+    final refresh = nav.therapistScheduleRefresh;
+    if (refresh != _lastRefreshToken) {
+      _lastRefreshToken = refresh;
+      if (refresh > 0) needReload = true;
+    }
+
+    final search = nav.therapistScheduleSearchQuery;
+    if (search != _lastSearch) {
+      _lastSearch = search;
+      setState(() {});
+    }
+
+    if (_lastFilterDay == null ||
+        !_sameDay(_lastFilterDay!, widget.filterDay)) {
+      _day = _onlyDate(widget.filterDay);
+      _calendarMonth = DateTime(_day.year, _day.month, 1);
+      _lastFilterDay = _day;
+      needReload = true;
+    }
+
+    if (needReload) _reload();
+
+    final hint = nav.scheduleAvailabilityHint;
     if (hint != _lastAvailabilityHint && hint > 0) {
       _lastAvailabilityHint = hint;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Availability is managed by your spa admin. '
-              'Use this schedule to view bookings and open slots.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            width: 460,
-          ),
-        );
+        _showAvailabilityInfo();
       });
     }
   }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -191,7 +221,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
         _calendarMonth = DateTime(d.year, d.month, 1);
       });
       await _reload();
-      await _loadMonthMarkers();
     }
   }
 
@@ -214,42 +243,67 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
         1,
       );
     });
-    _loadMonthMarkers();
-  }
-
-  Future<void> _loadMonthMarkers() async {
-    final auth = context.read<AuthProvider>();
-    final zid = auth.zaposlenikId;
-    if (!auth.isZaposlenik || zid == null) return;
-
-    try {
-      final list = await _api.getRezervacijeFiltered(includeOtkazane: true);
-      final monthStart = _calendarMonth;
-      final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 1);
-      final days = <int>{};
-      for (final r in list) {
-        final l = r.datumRezervacije.toLocal();
-        final d = DateTime(l.year, l.month, l.day);
-        if (!d.isBefore(monthStart) && d.isBefore(monthEnd)) {
-          days.add(d.day);
-        }
-      }
-      if (mounted) setState(() => _daysWithAppointments = days);
-    } catch (_) {
-      // Month dots are decorative; ignore marker load failures.
-    }
+    _reload();
   }
 
   Future<void> _reload() async {
     final auth = context.read<AuthProvider>();
-    final zid = auth.zaposlenikId;
-    if (!auth.isZaposlenik || zid == null) return;
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
+      setState(() {
+        _loadError = 'You do not have permission to view your schedule.';
+        _data = null;
+        _loading = false;
+        _initialLoad = false;
+      });
+      return;
+    }
 
-    final f = _loadDay(zid, _day);
+    if (!auth.isZaposlenik || auth.zaposlenikId == null) return;
+
     setState(() {
-      _dayFuture = f;
+      _loading = true;
       _loadError = null;
     });
+
+    final (data, error) = await _api.getTherapistSchedule(
+      day: _day,
+      calendarMonth: _calendarMonth,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _data = data;
+      _loadError = error;
+      _loading = false;
+      _initialLoad = false;
+    });
+  }
+
+  void _showAvailabilityInfo() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _SchedUi.bgBottom,
+        title: Text(
+          'Availability',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w800,
+            color: _SchedUi.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Your working hours and time off are managed by your spa admin. '
+          'Contact them to request schedule changes.',
+          style: GoogleFonts.inter(color: _SchedUi.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _shiftDay(int delta) {
@@ -262,29 +316,17 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
       }
     });
     _reload();
-    _loadMonthMarkers();
     _fadeCtrl.forward(from: 0);
   }
 
   void _selectStatusPill(String pill) {
     if (_statusPill == pill) return;
-    setState(() {
-      _statusPill = pill;
-      switch (pill) {
-        case 'Pending':
-          _filterPotvrdjena = false;
-        case 'Confirmed':
-          _filterPotvrdjena = true;
-        default:
-          _filterPotvrdjena = null;
-      }
-    });
-    _reload();
+    setState(() => _statusPill = pill);
     _fadeCtrl.forward(from: 0);
   }
 
   List<Rezervacija> _filterBookings(List<Rezervacija> all) {
-    final q = _searchCtrl.text.trim().toLowerCase();
+    final q = _lastSearch.trim().toLowerCase();
     final now = DateTime.now();
     final filtered = all.where((r) {
       switch (_statusPill) {
@@ -313,39 +355,55 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
     return filtered;
   }
 
-  _DayStats _dayStats(List<Rezervacija> dayAll) {
-    final active = dayAll.where((r) => !r.isOtkazana).toList();
+  _DayStats _dayStats(List<Rezervacija> filtered) {
+    final active = filtered.where((r) => !r.isOtkazana).toList();
     final confirmed = active.where((r) => r.isPotvrdjena).length;
     final pending = active.where((r) => !r.isPotvrdjena).length;
     final hoursBooked = active.fold<double>(
       0,
       (s, r) => s + r.uslugaTrajanjeMinuta / 60.0,
     );
-    final now = DateTime.now();
-    final upcoming = active
-        .where((r) => r.datumRezervacije.toLocal().isAfter(now))
-        .toList()
-      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
     return _DayStats(
       total: active.length,
       confirmed: confirmed,
       pending: pending,
       hoursBooked: hoursBooked,
-      nextAppointment: upcoming.isEmpty ? null : upcoming.first,
     );
   }
 
-  void _openBookingDetail(Rezervacija r) {
-    setState(() => _detailBooking = r);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scaffoldKey.currentState?.openEndDrawer();
-    });
+  Rezervacija? _globalNextAppointment(AuthProvider auth) {
+    final next = _data?.nextAppointment;
+    if (next == null) return null;
+    return next.toRezervacija(zaposlenikId: auth.zaposlenikId ?? 0);
+  }
+
+  Future<void> _openBookingDetail(Rezervacija r) async {
+    await showTherapistRezervacijaDetailDialog(
+      context,
+      r,
+      onConfirmChanged: (v) => _togglePotvrdaAndReload(r, v),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final zid = auth.zaposlenikId;
+
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
+      return const _ScheduleShell(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'You do not have permission to view your schedule.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _SchedUi.textSecondary),
+            ),
+          ),
+        ),
+      );
+    }
 
     if (!auth.isZaposlenik) {
       return const _ScheduleShell(
@@ -373,192 +431,148 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
       );
     }
 
-    if (_dayFuture == null && !_autoLoadScheduled) {
-      _autoLoadScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        _autoLoadScheduled = false;
-        await _reload();
-      });
+    if (_initialLoad && _loading) {
+      return const _ScheduleShell(
+        child: Center(
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
     }
 
-    final mq = MediaQuery.sizeOf(context);
-    final drawerW = mq.width >= 600 ? 420.0 : mq.width * .92;
-    final longDate = _formatLongDate(_day);
-
-    return Theme(
-      data: Theme.of(context).copyWith(
-        drawerTheme: DrawerThemeData(
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          width: drawerW,
-        ),
-      ),
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: Colors.transparent,
-        onEndDrawerChanged: (opened) {
-          if (!opened && mounted) setState(() => _detailBooking = null);
-        },
-        endDrawer: _detailBooking == null
-            ? null
-            : Drawer(
-                backgroundColor: _SchedUi.bgBottom,
-                child: _TherapistClientDrawerContent(
-                  api: _api,
-                  rezervacija: _detailBooking!,
-                  onClose: () => Navigator.maybePop(context),
-                  slotoviFuture: () async {
-                    final data = await _dayFuture;
-                    return data?.slotovi ?? [];
-                  },
-                  onPotvrdiToggled: _togglePotvrdaAndReload,
-                ),
-              ),
-        body: _ScheduleShell(
-          child: RefreshIndicator(
-            color: _SchedUi.lavender,
-            onRefresh: _reload,
-            child: FutureBuilder<_DayData>(
-              future: _dayFuture,
-              builder: (context, snap) {
-                if (_dayFuture == null ||
-                    snap.connectionState == ConnectionState.waiting) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      SizedBox(height: 200),
-                      Center(
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                if (snap.hasError) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(_SchedUi.contentPadding),
-                    children: [
-                      _SchedGlass(
-                        child: Column(
-                          children: [
-                            Text(
-                              'Could not load schedule.',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w800,
-                                color: _SchedUi.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _loadError ?? snap.error.toString(),
-                              style: TextStyle(color: Colors.red.shade300),
-                            ),
-                            const SizedBox(height: 16),
-                            _PrimaryGradientButton(
-                              label: 'Try again',
-                              icon: Icons.refresh_rounded,
-                              onTap: _reload,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                final data =
-                    snap.data ?? _DayData(rezervacije: [], slotovi: []);
-                final filtered = _filterBookings(data.rezervacije);
-                final stats = _dayStats(data.rezervacije);
-
-                if (_detailBooking != null &&
-                    !filtered.any((r) => r.id == _detailBooking!.id)) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted) return;
-                    setState(() => _detailBooking = null);
-                    Navigator.maybePop(context);
-                  });
-                }
-
-                return FadeTransition(
-                  opacity: _fadeAnim,
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
-                      _SchedUi.contentPadding,
-                      8,
-                      _SchedUi.contentPadding,
-                      40,
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, c) {
-                        final wide = c.maxWidth >= 1100;
-                        final main = _MainScheduleColumn(
-                          day: _day,
-                          longDate: longDate,
-                          statusPill: _statusPill,
-                          searchCtrl: _searchCtrl,
-                          filtered: filtered,
-                          onSearchChanged: () => setState(() {}),
-                          onPill: _selectStatusPill,
-                          onRefresh: _reload,
-                          onPrevDay: () => _shiftDay(-1),
-                          onNextDay: () => _shiftDay(1),
-                          onPickDate: _pickDate,
-                          onSelect: _openBookingDetail,
-                          onManageAvailability: () => context
-                              .read<DesktopNav>()
-                              .goToScheduleForAvailability(),
-                        );
-                        final sidebar = _ScheduleSidebar(
-                          stats: stats,
-                          calendarMonth: _calendarMonth,
-                          selectedDay: _day,
-                          daysWithAppointments: _daysWithAppointments,
-                          onPrevMonth: () => _shiftCalendarMonth(-1),
-                          onNextMonth: () => _shiftCalendarMonth(1),
-                          onDaySelected: _selectDay,
-                          onOpenDetails: _openBookingDetail,
-                          onManageAvailability: () => context
-                              .read<DesktopNav>()
-                              .goToScheduleForAvailability(),
-                        );
-
-                        if (wide) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 7, child: main),
-                              const SizedBox(width: _SchedUi.gap),
-                              SizedBox(
-                                width: _SchedUi.sidebarWidth,
-                                child: sidebar,
-                              ),
-                            ],
-                          );
-                        }
-                        return Column(
-                          children: [
-                            main,
-                            const SizedBox(height: _SchedUi.gap),
-                            sidebar,
-                          ],
-                        );
-                      },
+    if (_loadError != null && _data == null) {
+      return _ScheduleShell(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(_SchedUi.contentPadding),
+            child: _SchedGlass(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Could not load schedule.',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      color: _SchedUi.textPrimary,
                     ),
                   ),
-                );
-              },
+                  const SizedBox(height: 8),
+                  Text(
+                    _loadError!,
+                    style: TextStyle(color: Colors.red.shade300),
+                  ),
+                  const SizedBox(height: 16),
+                  _PrimaryGradientButton(
+                    label: 'Try again',
+                    icon: Icons.refresh_rounded,
+                    onTap: _reload,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      );
+    }
+
+    final schedule = _data;
+    final allItems = schedule?.items
+            .map((r) => r.toRezervacija(zaposlenikId: zid))
+            .toList() ??
+        <Rezervacija>[];
+    final filtered = _filterBookings(allItems);
+    final stats = _dayStats(filtered);
+    final nextGlobal = _globalNextAppointment(auth);
+    final markerDays = schedule?.monthMarkerDays.toSet() ?? <int>{};
+    final longDate = _formatLongDate(_day);
+
+    return _ScheduleShell(
+      child: Stack(
+        children: [
+          RefreshIndicator(
+            color: _SchedUi.lavender,
+            onRefresh: _reload,
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  _SchedUi.contentPadding,
+                  8,
+                  _SchedUi.contentPadding,
+                  40,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final wide = c.maxWidth >= 1100;
+                    final main = _MainScheduleColumn(
+                      day: _day,
+                      longDate: longDate,
+                      statusPill: _statusPill,
+                      filtered: filtered,
+                      onPill: _selectStatusPill,
+                      onRefresh: _reload,
+                      onPrevDay: () => _shiftDay(-1),
+                      onNextDay: () => _shiftDay(1),
+                      onPickDate: _pickDate,
+                      onSelect: _openBookingDetail,
+                      onManageAvailability: _showAvailabilityInfo,
+                      isRefreshing: _loading,
+                    );
+                    final sidebar = _ScheduleSidebar(
+                      stats: stats,
+                      calendarMonth: _calendarMonth,
+                      selectedDay: _day,
+                      daysWithAppointments: markerDays,
+                      nextAppointment: nextGlobal,
+                      availability: schedule?.availability,
+                      onPrevMonth: () => _shiftCalendarMonth(-1),
+                      onNextMonth: () => _shiftCalendarMonth(1),
+                      onDaySelected: _selectDay,
+                      onOpenDetails: _openBookingDetail,
+                      onManageAvailability: _showAvailabilityInfo,
+                    );
+
+                    if (wide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 7, child: main),
+                          const SizedBox(width: _SchedUi.gap),
+                          SizedBox(
+                            width: _SchedUi.sidebarWidth,
+                            child: sidebar,
+                          ),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        main,
+                        const SizedBox(height: _SchedUi.gap),
+                        sidebar,
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          if (_loading && !_initialLoad)
+            const Positioned(
+              top: 12,
+              right: 24,
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -573,35 +587,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
     }
     await _reload();
   }
-
-  Future<_DayData> _loadDay(int zaposlenikId, DateTime day) async {
-    try {
-      final includeCancelled =
-          _statusPill == 'Cancelled/Past' || _statusPill == 'All';
-      final results = await Future.wait([
-        _api.getRezervacijeFiltered(
-          datum: day,
-          isPotvrdjena: _filterPotvrdjena,
-          includeOtkazane: includeCancelled,
-        ),
-        _api.getDostupniTermini(zaposlenikId: zaposlenikId, datum: day),
-      ]).timeout(const Duration(seconds: 12));
-
-      final rez = results[0] as List<Rezervacija>;
-      final slotovi = results[1] as List<DateTime>;
-      return _DayData(rezervacije: rez, slotovi: slotovi);
-    } catch (e) {
-      if (mounted) setState(() => _loadError = e.toString());
-      rethrow;
-    }
-  }
-}
-
-class _DayData {
-  final List<Rezervacija> rezervacije;
-  final List<DateTime> slotovi;
-
-  _DayData({required this.rezervacije, required this.slotovi});
 }
 
 class _DayStats {
@@ -610,14 +595,12 @@ class _DayStats {
     required this.confirmed,
     required this.pending,
     required this.hoursBooked,
-    this.nextAppointment,
   });
 
   final int total;
   final int confirmed;
   final int pending;
   final double hoursBooked;
-  final Rezervacija? nextAppointment;
 }
 
 class _ScheduleShell extends StatelessWidget {
@@ -667,9 +650,7 @@ class _MainScheduleColumn extends StatelessWidget {
     required this.day,
     required this.longDate,
     required this.statusPill,
-    required this.searchCtrl,
     required this.filtered,
-    required this.onSearchChanged,
     required this.onPill,
     required this.onRefresh,
     required this.onPrevDay,
@@ -677,14 +658,13 @@ class _MainScheduleColumn extends StatelessWidget {
     required this.onPickDate,
     required this.onSelect,
     required this.onManageAvailability,
+    this.isRefreshing = false,
   });
 
   final DateTime day;
   final String longDate;
   final String statusPill;
-  final TextEditingController searchCtrl;
   final List<Rezervacija> filtered;
-  final VoidCallback onSearchChanged;
   final ValueChanged<String> onPill;
   final VoidCallback onRefresh;
   final VoidCallback onPrevDay;
@@ -692,6 +672,7 @@ class _MainScheduleColumn extends StatelessWidget {
   final VoidCallback onPickDate;
   final ValueChanged<Rezervacija> onSelect;
   final VoidCallback onManageAvailability;
+  final bool isRefreshing;
 
   bool get _isToday {
     final now = DateTime.now();
@@ -739,29 +720,6 @@ class _MainScheduleColumn extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        _SchedGlass(
-          radius: 14,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: TextField(
-            controller: searchCtrl,
-            onChanged: (_) => onSearchChanged(),
-            style: GoogleFonts.inter(color: _SchedUi.textPrimary, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'Search clients or services…',
-              hintStyle: GoogleFonts.inter(
-                color: _SchedUi.textSecondary,
-                fontSize: 14,
-              ),
-              border: InputBorder.none,
-              icon: Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: _SchedUi.lavender.withValues(alpha: 0.8),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -781,6 +739,15 @@ class _MainScheduleColumn extends StatelessWidget {
                 ),
               ),
             ),
+            if (isRefreshing)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             _GlassIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
           ],
         ),
@@ -903,16 +870,15 @@ class _MainScheduleCard extends StatelessWidget {
     if (filtered.isEmpty) {
       return _ScheduleEmptyState(onManageAvailability: onManageAvailability);
     }
-    return Column(
-      children: [
-        for (var i = 0; i < filtered.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
-          _ScheduleAppointmentCard(
-            r: filtered[i],
-            onTap: () => onSelect(filtered[i]),
-          ),
-        ],
-      ],
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: filtered.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => _ScheduleAppointmentCard(
+        r: filtered[i],
+        onTap: () => onSelect(filtered[i]),
+      ),
     );
   }
 }
@@ -1022,6 +988,25 @@ class _ScheduleAppointmentCard extends StatelessWidget {
                         ],
                       ),
                     ],
+                    if (r.isVip || r.premiumKlijent) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (r.isVip)
+                            _StatusBadge(
+                              label: 'VIP',
+                              color: _SchedUi.gold,
+                            ),
+                          if (r.isVip && r.premiumKlijent)
+                            const SizedBox(width: 6),
+                          if (r.premiumKlijent)
+                            _StatusBadge(
+                              label: 'Premium',
+                              color: _SchedUi.teal,
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1114,6 +1099,8 @@ class _ScheduleSidebar extends StatelessWidget {
     required this.calendarMonth,
     required this.selectedDay,
     required this.daysWithAppointments,
+    required this.nextAppointment,
+    this.availability,
     required this.onPrevMonth,
     required this.onNextMonth,
     required this.onDaySelected,
@@ -1125,6 +1112,8 @@ class _ScheduleSidebar extends StatelessWidget {
   final DateTime calendarMonth;
   final DateTime selectedDay;
   final Set<int> daysWithAppointments;
+  final Rezervacija? nextAppointment;
+  final TherapistScheduleAvailabilitySummary? availability;
   final VoidCallback onPrevMonth;
   final VoidCallback onNextMonth;
   final ValueChanged<DateTime> onDaySelected;
@@ -1152,9 +1141,14 @@ class _ScheduleSidebar extends StatelessWidget {
         ),
         const SizedBox(height: _SchedUi.gap),
         _NextAppointmentCard(
-          next: stats.nextAppointment,
+          next: nextAppointment,
           onOpenDetails: onOpenDetails,
         ),
+        if (availability != null &&
+            availability!.availableSlotCount > 0) ...[
+          const SizedBox(height: _SchedUi.gap),
+          _AvailabilitySummaryCard(availability: availability!),
+        ],
       ],
     );
   }
@@ -1402,6 +1396,52 @@ class _MiniCalendarCard extends StatelessWidget {
               );
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvailabilitySummaryCard extends StatelessWidget {
+  const _AvailabilitySummaryCard({required this.availability});
+
+  final TherapistScheduleAvailabilitySummary availability;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = availability.workingHoursLabel?.trim();
+    return _SchedGlass(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Open slots',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: _SchedUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${availability.availableSlotCount} available',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _SchedUi.teal,
+            ),
+          ),
+          if (label != null && label.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: _SchedUi.textSecondary,
+              ),
+            ),
+          ],
         ],
       ),
     );

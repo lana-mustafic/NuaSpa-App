@@ -54,7 +54,9 @@ class DesktopNav extends ChangeNotifier {
   String? _therapistDashboardSubtitle;
   int _therapistDashboardRefresh = 0;
   int _therapistAppointmentsRefresh = 0;
+  int _therapistScheduleRefresh = 0;
   String _therapistAppointmentSearchQuery = '';
+  String _therapistScheduleSearchQuery = '';
   int _scheduleAvailabilityHint = 0;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -154,8 +156,13 @@ class DesktopNav extends ChangeNotifier {
   /// Bumped when navigating back to therapist appointments (refresh data).
   int get therapistAppointmentsRefresh => _therapistAppointmentsRefresh;
 
+  /// Bumped when navigating back to therapist schedule (refresh data).
+  int get therapistScheduleRefresh => _therapistScheduleRefresh;
+
   String get therapistAppointmentSearchQuery =>
       _therapistAppointmentSearchQuery;
+
+  String get therapistScheduleSearchQuery => _therapistScheduleSearchQuery;
 
   /// Bumped when therapist opens schedule for availability info.
   int get scheduleAvailabilityHint => _scheduleAvailabilityHint;
@@ -212,12 +219,18 @@ class DesktopNav extends ChangeNotifier {
     final revisitingAppointments =
         r == DesktopRouteKey.therapistAppointments &&
         _route != DesktopRouteKey.therapistAppointments;
+    final revisitingSchedule =
+        r == DesktopRouteKey.schedule &&
+        _route != DesktopRouteKey.schedule;
     _route = r;
     if (revisitingDashboard) {
       _therapistDashboardRefresh++;
     }
     if (revisitingAppointments) {
       _therapistAppointmentsRefresh++;
+    }
+    if (revisitingSchedule) {
+      _therapistScheduleRefresh++;
     }
     notifyListeners();
   }
@@ -231,6 +244,19 @@ class DesktopNav extends ChangeNotifier {
     _therapistAppointmentSearchQuery = value;
     if (_route != DesktopRouteKey.therapistAppointments) {
       _route = DesktopRouteKey.therapistAppointments;
+    }
+    notifyListeners();
+  }
+
+  void setTherapistScheduleSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_therapistScheduleSearchQuery == value &&
+        _route == DesktopRouteKey.schedule) {
+      return;
+    }
+    _therapistScheduleSearchQuery = value;
+    if (_route != DesktopRouteKey.schedule) {
+      _route = DesktopRouteKey.schedule;
     }
     notifyListeners();
   }
