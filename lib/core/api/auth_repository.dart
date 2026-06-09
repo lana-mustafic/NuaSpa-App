@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart'; // Dodano za debugPrint
+import 'package:flutter/foundation.dart';
+
+import '../auth/login_messages.dart';
 import 'api_client.dart';
+import 'auth_login_failure.dart';
 
 class AuthRepository {
   final ApiClient _apiClient = ApiClient();
@@ -17,11 +20,12 @@ class AuthRepository {
         },
       );
     } on DioException catch (e) {
-      // POPRAVLJENO: Korištenje debugPrint umjesto print
-      debugPrint("DIO ERROR: ${e.response?.statusCode}");
-      debugPrint("DATA IZ BACKENDA: ${e.response?.data}");
-      
-      throw Exception(e.response?.data?.toString() ?? "Server Error");
+      debugPrint('AuthRepository.login DioException: ${e.response?.statusCode}');
+      debugPrint('AuthRepository.login response: ${e.response?.data}');
+      throw AuthLoginFailure(
+        LoginMessages.fromDio(e),
+        statusCode: e.response?.statusCode,
+      );
     }
   }
 }
