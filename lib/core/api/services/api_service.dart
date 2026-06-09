@@ -38,6 +38,7 @@ import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 import '../../../models/grad_lookup.dart';
+import '../../../models/account_profile.dart';
 
 class ApiService {
   final Dio _dio = ApiClient().dio;
@@ -706,8 +707,23 @@ class ApiService {
     }
   }
 
+  Future<AccountProfile?> getAccountProfile() async {
+    try {
+      final response = await _dio.get<dynamic>('Account/me');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      return AccountProfile.fromJson(data);
+    } on DioException catch (e) {
+      debugPrint('ApiService.getAccountProfile: ${ApiErrorMessages.fromDio(e)}');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.getAccountProfile: $e');
+      return null;
+    }
+  }
+
   /// Promjena vlastite lozinke (potrebna trenutna lozinka).
-  Future<({bool success, String message})> changePassword({
+  Future<({bool success, String message, String? token})> changePassword({
     required String staraLozinka,
     required String novaLozinka,
     required String potvrdaNoveLozinke,
@@ -722,21 +738,29 @@ class ApiService {
         },
       );
       final data = response.data;
-      final msg = data is Map
-          ? (data['message'] as String? ?? 'Lozinka je uspješno promijenjena.')
-          : 'Lozinka je uspješno promijenjena.';
-      return (success: true, message: msg);
+      if (data is Map) {
+        final msg = data['message'] as String? ?? 'Password changed successfully.';
+        final token = data['token'] as String?;
+        return (success: true, message: msg, token: token);
+      }
+      return (
+        success: true,
+        message: 'Password changed successfully.',
+        token: null,
+      );
     } on DioException catch (e) {
       return (
         success: false,
         message: ApiErrorMessages.fromDio(e) ??
-            'Lozinka nije promijenjena. Provjerite unos.',
+            'Password was not changed. Check your input.',
+        token: null,
       );
     } catch (e) {
       debugPrint('Greška u ApiService.changePassword: $e');
       return (
         success: false,
-        message: 'Mrežna greška. Pokušajte ponovo.',
+        message: 'Network error. Please try again.',
+        token: null,
       );
     }
   }
