@@ -7,6 +7,7 @@ import '../core/platform/nua_spa_platform.dart';
 import '../providers/auth_provider.dart';
 import '../ui/theme/nua_luxury_tokens.dart';
 import 'auth/accept_invite_screen.dart';
+import 'auth/forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -435,7 +436,23 @@ class _LoginFormCard extends StatelessWidget {
                   isLoading: isLoading,
                   onPressed: isLoading ? null : onSubmit,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            Navigator.of(context).push<void>(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ForgotPasswordScreen(),
+                              ),
+                            );
+                          },
+                    child: const Text('Forgot password?'),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 TextButton.icon(
                   onPressed: isLoading
                       ? null

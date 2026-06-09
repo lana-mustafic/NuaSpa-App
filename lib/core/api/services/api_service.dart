@@ -652,6 +652,7 @@ class ApiService {
     bool success,
     String message,
     String? token,
+    String? refreshToken,
     String? username,
   })> acceptTherapistInvite({
     required String token,
@@ -673,16 +674,19 @@ class ApiService {
           success: false,
           message: 'Unexpected server response. Please try again.',
           token: null,
+          refreshToken: null,
           username: null,
         );
       }
       final msg = data['message'] as String? ?? 'Account activated.';
       final jwt = data['token'] as String?;
+      final refresh = data['refreshToken'] as String?;
       final username = data['username'] as String?;
       return (
         success: true,
         message: msg,
         token: jwt,
+        refreshToken: refresh,
         username: username,
       );
     } on DioException catch (e) {
@@ -698,6 +702,7 @@ class ApiService {
         success: false,
         message: msg,
         token: null,
+        refreshToken: null,
         username: null,
       );
     } catch (e) {
@@ -706,15 +711,170 @@ class ApiService {
         success: false,
         message: 'Network error. Please try again.',
         token: null,
+        refreshToken: null,
+        username: null,
+      );
+    }
+  }
+
+  Future<({
+    bool success,
+    String message,
+    String? devResetUrl,
+  })> forgotPassword(String email) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Account/forgot-password',
+        data: {'email': email.trim()},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return (
+          success: true,
+          message: data['message'] as String? ??
+              'If an account exists with that email, you will receive password reset instructions shortly.',
+          devResetUrl: data['devResetUrl'] as String?,
+        );
+      }
+      return (
+        success: true,
+        message:
+            'If an account exists with that email, you will receive password reset instructions shortly.',
+        devResetUrl: null,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final raw = data is Map
+          ? (data['detail'] ?? data['message'])?.toString()
+          : null;
+      return (
+        success: false,
+        message: raw?.trim().isNotEmpty == true
+            ? raw!.trim()
+            : 'Could not send reset instructions. Please try again.',
+        devResetUrl: null,
+      );
+    } catch (e) {
+      debugPrint('ApiService.forgotPassword: $e');
+      return (
+        success: false,
+        message: 'Network error. Please try again.',
+        devResetUrl: null,
+      );
+    }
+  }
+
+  Future<({
+    bool success,
+    String message,
+    String? token,
+    String? refreshToken,
+    String? username,
+  })> resetPassword({
+    required String email,
+    required String token,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Account/reset-password',
+        data: {
+          'email': email.trim(),
+          'token': token.trim(),
+          'password': password,
+          'confirmPassword': confirmPassword,
+        },
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (
+          success: false,
+          message: 'Unexpected server response. Please try again.',
+          token: null,
+          refreshToken: null,
+          username: null,
+        );
+      }
+      return (
+        success: true,
+        message: data['message'] as String? ?? 'Password reset successfully.',
+        token: data['token'] as String?,
+        refreshToken: data['refreshToken'] as String?,
+        username: data['username'] as String?,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final raw = data is Map
+          ? (data['detail'] ?? data['message'])?.toString()
+          : null;
+      return (
+        success: false,
+        message: raw?.trim().isNotEmpty == true
+            ? raw!.trim()
+            : 'Could not reset password. Check your link and try again.',
+        token: null,
+        refreshToken: null,
+        username: null,
+      );
+    } catch (e) {
+      debugPrint('ApiService.resetPassword: $e');
+      return (
+        success: false,
+        message: 'Network error. Please try again.',
+        token: null,
+        refreshToken: null,
+        username: null,
+      );
+    }
+  }
+
+  Future<({
+    bool success,
+    String? accessToken,
+    String? refreshToken,
+    String? username,
+  })> refreshSession(String refreshToken) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        'Account/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (
+          success: false,
+          accessToken: null,
+          refreshToken: null,
+          username: null,
+        );
+      }
+      return (
+        success: true,
+        accessToken: data['token'] as String?,
+        refreshToken: data['refreshToken'] as String?,
+        username: data['username'] as String?,
+      );
+    } catch (e) {
+      debugPrint('ApiService.refreshSession: $e');
+      return (
+        success: false,
+        accessToken: null,
+        refreshToken: null,
         username: null,
       );
     }
   }
 
   /// Server-side odjava (opoziv JWT tokena).
-  Future<({bool success, String message})> logout() async {
+  Future<({bool success, String message})> logout({String? refreshToken}) async {
     try {
-      final response = await _dio.post<dynamic>('Account/logout');
+      final response = await _dio.post<dynamic>(
+        'Account/logout',
+        data: refreshToken != null && refreshToken.isNotEmpty
+            ? {'refreshToken': refreshToken}
+            : null,
+      );
       final data = response.data;
       final msg = data is Map
           ? (data['message'] as String? ?? 'Uspješno ste se odjavili.')
@@ -751,7 +911,12 @@ class ApiService {
   }
 
   /// Promjena vlastite lozinke (potrebna trenutna lozinka).
-  Future<({bool success, String message, String? token})> changePassword({
+  Future<({
+    bool success,
+    String message,
+    String? token,
+    String? refreshToken,
+  })> changePassword({
     required String staraLozinka,
     required String novaLozinka,
     required String potvrdaNoveLozinke,
@@ -769,12 +934,14 @@ class ApiService {
       if (data is Map) {
         final msg = data['message'] as String? ?? 'Password changed successfully.';
         final token = data['token'] as String?;
-        return (success: true, message: msg, token: token);
+        final refresh = data['refreshToken'] as String?;
+        return (success: true, message: msg, token: token, refreshToken: refresh);
       }
       return (
         success: true,
         message: 'Password changed successfully.',
         token: null,
+        refreshToken: null,
       );
     } on DioException catch (e) {
       return (
@@ -782,6 +949,7 @@ class ApiService {
         message: ApiErrorMessages.fromDio(e) ??
             'Password was not changed. Check your input.',
         token: null,
+        refreshToken: null,
       );
     } catch (e) {
       debugPrint('Greška u ApiService.changePassword: $e');
@@ -789,6 +957,7 @@ class ApiService {
         success: false,
         message: 'Network error. Please try again.',
         token: null,
+        refreshToken: null,
       );
     }
   }
