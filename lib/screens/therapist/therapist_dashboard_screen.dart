@@ -1201,12 +1201,16 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Icon(icon, size: compact ? 18 : 20, color: iconColor),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            fontSize: compact ? 15 : 17,
-            fontWeight: FontWeight.w800,
-            color: _TdUi.textPrimary,
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: compact ? 15 : 17,
+              fontWeight: FontWeight.w800,
+              color: _TdUi.textPrimary,
+            ),
           ),
         ),
       ],

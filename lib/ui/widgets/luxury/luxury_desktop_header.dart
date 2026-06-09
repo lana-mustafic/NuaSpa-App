@@ -479,6 +479,21 @@ class LuxuryDesktopHeader extends StatelessWidget {
       }
     }
 
+    if (isTherapistDash && auth.isZaposlenik) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: nav.therapistDashboardTitle ?? "Today's Overview",
+        subtitle: nav.therapistDashboardSubtitle ??
+            'Your schedule, clients and appointments for today.',
+        searchHint: 'Search clients, services…',
+        onSearchSubmitted: nav.goToCatalogWithSearch,
+      );
+    }
+
     if (isSettings && auth.isZaposlenik) {
       return _buildSpaciousLuxuryHeader(
         context,
