@@ -323,8 +323,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         nav.adminSuiteTarget == AdminSuiteRoute.finance;
     final isCatalog = nav.route == DesktopRouteKey.catalog;
     final compact = compactChrome;
-    final showRangePills =
-        isRevenue || isCommandCenter || isSettings;
+    final showRangePills = isRevenue || isCommandCenter;
 
     final roleLabel = auth.isAdmin
         ? 'Super Admin'
@@ -452,6 +451,20 @@ class LuxuryDesktopHeader extends StatelessWidget {
           onSearchChanged: nav.setReviewsSearchQuery,
         );
       }
+      if (isSettings) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Settings',
+          subtitle:
+              'Manage your account, security and workspace preferences.',
+          searchHint: 'Search across NuaSpa…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
+        );
+      }
     }
 
     return Padding(
@@ -526,7 +539,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistProfile
                       ? 'Manage your therapist profile, contact details, and professional identity.'
                       : isSettings
-                      ? 'Manage your account, session security, and workspace preferences.'
+                      ? 'Manage your account, security and workspace preferences.'
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
