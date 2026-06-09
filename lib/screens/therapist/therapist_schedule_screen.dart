@@ -1,15 +1,13 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/rezervacija.dart';
 import '../../models/rezervacija_povijest_item.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
-import 'therapist_schedule_timeline.dart';
 
 abstract final class _SchedUi {
   static const bgTop = Color(0xFF07040F);
@@ -19,12 +17,12 @@ abstract final class _SchedUi {
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
   static const green = Color(0xFF22C55E);
-  static const blue = Color(0xFF60A5FA);
+  static const amber = Color(0xFFF59E0B);
+  static const teal = Color(0xFF2DD4BF);
   static const gold = Color(0xFFF5B942);
-  static const cardRadius = 24.0;
-  static const heroRadius = 30.0;
-  static const gap = 24.0;
-  static const sidebarWidth = 340.0;
+  static const cardRadius = 18.0;
+  static const gap = 16.0;
+  static const sidebarWidth = 320.0;
   static const contentPadding = 32.0;
 }
 
@@ -32,9 +30,22 @@ const _statusPills = [
   'All',
   'Pending',
   'Confirmed',
-  'Paid',
-  'Unpaid',
-  'Cancelled',
+  'Cancelled/Past',
+];
+
+const _monthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 String _formatDate(DateTime d) =>
@@ -94,7 +105,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
   bool _autoLoadScheduled = false;
   String? _loadError;
   bool? _filterPotvrdjena;
-  bool? _filterPlacena;
   String _statusPill = 'All';
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -103,18 +113,24 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
   int _lastAvailabilityHint = -1;
+  late DateTime _calendarMonth;
+  Set<int> _daysWithAppointments = {};
 
   @override
   void initState() {
     super.initState();
     final n = DateTime.now();
     _day = DateTime(n.year, n.month, n.day);
+    _calendarMonth = DateTime(n.year, n.month, 1);
     _fadeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reload();
+      _loadMonthMarkers();
+    });
   }
 
   @override
@@ -169,8 +185,58 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
       },
     );
     if (picked != null) {
-      setState(() => _day = _onlyDate(picked));
+      final d = _onlyDate(picked);
+      setState(() {
+        _day = d;
+        _calendarMonth = DateTime(d.year, d.month, 1);
+      });
       await _reload();
+      await _loadMonthMarkers();
+    }
+  }
+
+  void _selectDay(DateTime d) {
+    final day = _onlyDate(d);
+    if (_day == day) return;
+    setState(() {
+      _day = day;
+      _calendarMonth = DateTime(day.year, day.month, 1);
+    });
+    _reload();
+    _fadeCtrl.forward(from: 0);
+  }
+
+  void _shiftCalendarMonth(int delta) {
+    setState(() {
+      _calendarMonth = DateTime(
+        _calendarMonth.year,
+        _calendarMonth.month + delta,
+        1,
+      );
+    });
+    _loadMonthMarkers();
+  }
+
+  Future<void> _loadMonthMarkers() async {
+    final auth = context.read<AuthProvider>();
+    final zid = auth.zaposlenikId;
+    if (!auth.isZaposlenik || zid == null) return;
+
+    try {
+      final list = await _api.getRezervacijeFiltered(includeOtkazane: true);
+      final monthStart = _calendarMonth;
+      final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 1);
+      final days = <int>{};
+      for (final r in list) {
+        final l = r.datumRezervacije.toLocal();
+        final d = DateTime(l.year, l.month, l.day);
+        if (!d.isBefore(monthStart) && d.isBefore(monthEnd)) {
+          days.add(d.day);
+        }
+      }
+      if (mounted) setState(() => _daysWithAppointments = days);
+    } catch (_) {
+      // Month dots are decorative; ignore marker load failures.
     }
   }
 
@@ -187,8 +253,16 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
   }
 
   void _shiftDay(int delta) {
-    setState(() => _day = _day.add(Duration(days: delta)));
+    final next = _day.add(Duration(days: delta));
+    setState(() {
+      _day = next;
+      if (next.month != _calendarMonth.month ||
+          next.year != _calendarMonth.year) {
+        _calendarMonth = DateTime(next.year, next.month, 1);
+      }
+    });
     _reload();
+    _loadMonthMarkers();
     _fadeCtrl.forward(from: 0);
   }
 
@@ -199,13 +273,10 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
       switch (pill) {
         case 'Pending':
           _filterPotvrdjena = false;
-          _filterPlacena = null;
         case 'Confirmed':
           _filterPotvrdjena = true;
-          _filterPlacena = null;
         default:
           _filterPotvrdjena = null;
-          _filterPlacena = null;
       }
     });
     _reload();
@@ -214,23 +285,19 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
 
   List<Rezervacija> _filterBookings(List<Rezervacija> all) {
     final q = _searchCtrl.text.trim().toLowerCase();
-    return all.where((r) {
+    final now = DateTime.now();
+    final filtered = all.where((r) {
       switch (_statusPill) {
         case 'Pending':
           if (r.isOtkazana || r.isPotvrdjena) return false;
         case 'Confirmed':
           if (r.isOtkazana || !r.isPotvrdjena) return false;
-        case 'Paid':
-          if (r.isOtkazana || !r.isPlacena) return false;
-        case 'Unpaid':
-          if (r.isOtkazana || r.isPlacena) return false;
-        case 'Cancelled':
-          if (!r.isOtkazana) return false;
+        case 'Cancelled/Past':
+          if (!r.isOtkazana && !r.datumRezervacije.toLocal().isBefore(now)) {
+            return false;
+          }
         default:
           break;
-      }
-      if (_filterPlacena != null && r.isPlacena != _filterPlacena) {
-        return false;
       }
       if (q.isNotEmpty) {
         final s = [
@@ -241,27 +308,30 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
         if (!s.contains(q)) return false;
       }
       return true;
-    }).toList();
+    }).toList()
+      ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+    return filtered;
   }
 
   _DayStats _dayStats(List<Rezervacija> dayAll) {
     final active = dayAll.where((r) => !r.isOtkazana).toList();
     final confirmed = active.where((r) => r.isPotvrdjena).length;
     final pending = active.where((r) => !r.isPotvrdjena).length;
-    final revenue = active
-        .where((r) => r.isPlacena)
-        .fold<double>(0, (s, r) => s + r.uslugaCijena);
+    final hoursBooked = active.fold<double>(
+      0,
+      (s, r) => s + r.uslugaTrajanjeMinuta / 60.0,
+    );
     final now = DateTime.now();
     final upcoming = active
-        .where((r) => r.datumRezervacije.isAfter(now))
+        .where((r) => r.datumRezervacije.toLocal().isAfter(now))
         .toList()
       ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
     return _DayStats(
       total: active.length,
       confirmed: confirmed,
       pending: pending,
-      revenue: revenue,
-      upcoming: upcoming.take(6).toList(),
+      hoursBooked: hoursBooked,
+      nextAppointment: upcoming.isEmpty ? null : upcoming.first,
     );
   }
 
@@ -270,16 +340,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scaffoldKey.currentState?.openEndDrawer();
     });
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        width: 420,
-      ),
-    );
   }
 
   @override
@@ -446,8 +506,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
                           statusPill: _statusPill,
                           searchCtrl: _searchCtrl,
                           filtered: filtered,
-                          slotovi: data.slotovi,
-                          selectedId: _detailBooking?.id,
                           onSearchChanged: () => setState(() {}),
                           onPill: _selectStatusPill,
                           onRefresh: _reload,
@@ -455,30 +513,22 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
                           onNextDay: () => _shiftDay(1),
                           onPickDate: _pickDate,
                           onSelect: _openBookingDetail,
-                          onBlockTime: () => _snack(
-                            'Block time is managed by your spa admin. Contact them to update availability.',
-                          ),
-                          onViewCalendar: () => context
+                          onManageAvailability: () => context
                               .read<DesktopNav>()
-                              .goTo(DesktopRouteKey.therapistAppointments),
-                          onWeekly: () => _snack(
-                            'Weekly view opens from your schedule — use the date picker to browse other days.',
-                          ),
+                              .goToScheduleForAvailability(),
                         );
                         final sidebar = _ScheduleSidebar(
                           stats: stats,
-                          onBlockTime: () => _snack(
-                            'Block time requests go through your spa administrator.',
-                          ),
-                          onOpenCalendar: () => context
+                          calendarMonth: _calendarMonth,
+                          selectedDay: _day,
+                          daysWithAppointments: _daysWithAppointments,
+                          onPrevMonth: () => _shiftCalendarMonth(-1),
+                          onNextMonth: () => _shiftCalendarMonth(1),
+                          onDaySelected: _selectDay,
+                          onOpenDetails: _openBookingDetail,
+                          onManageAvailability: () => context
                               .read<DesktopNav>()
-                              .goTo(DesktopRouteKey.therapistAppointments),
-                          onManageAvailability: () => _snack(
-                            'Availability is updated by your spa admin.',
-                          ),
-                          onViewReviews: () => context
-                              .read<DesktopNav>()
-                              .goTo(DesktopRouteKey.therapistReviews),
+                              .goToScheduleForAvailability(),
                         );
 
                         if (wide) {
@@ -527,7 +577,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
   Future<_DayData> _loadDay(int zaposlenikId, DateTime day) async {
     try {
       final includeCancelled =
-          _statusPill == 'Cancelled' || _statusPill == 'All';
+          _statusPill == 'Cancelled/Past' || _statusPill == 'All';
       final results = await Future.wait([
         _api.getRezervacijeFiltered(
           datum: day,
@@ -559,15 +609,15 @@ class _DayStats {
     required this.total,
     required this.confirmed,
     required this.pending,
-    required this.revenue,
-    required this.upcoming,
+    required this.hoursBooked,
+    this.nextAppointment,
   });
 
   final int total;
   final int confirmed;
   final int pending;
-  final double revenue;
-  final List<Rezervacija> upcoming;
+  final double hoursBooked;
+  final Rezervacija? nextAppointment;
 }
 
 class _ScheduleShell extends StatelessWidget {
@@ -619,8 +669,6 @@ class _MainScheduleColumn extends StatelessWidget {
     required this.statusPill,
     required this.searchCtrl,
     required this.filtered,
-    required this.slotovi,
-    required this.selectedId,
     required this.onSearchChanged,
     required this.onPill,
     required this.onRefresh,
@@ -628,9 +676,7 @@ class _MainScheduleColumn extends StatelessWidget {
     required this.onNextDay,
     required this.onPickDate,
     required this.onSelect,
-    required this.onBlockTime,
-    required this.onViewCalendar,
-    required this.onWeekly,
+    required this.onManageAvailability,
   });
 
   final DateTime day;
@@ -638,8 +684,6 @@ class _MainScheduleColumn extends StatelessWidget {
   final String statusPill;
   final TextEditingController searchCtrl;
   final List<Rezervacija> filtered;
-  final List<DateTime> slotovi;
-  final int? selectedId;
   final VoidCallback onSearchChanged;
   final ValueChanged<String> onPill;
   final VoidCallback onRefresh;
@@ -647,164 +691,126 @@ class _MainScheduleColumn extends StatelessWidget {
   final VoidCallback onNextDay;
   final VoidCallback onPickDate;
   final ValueChanged<Rezervacija> onSelect;
-  final VoidCallback onBlockTime;
-  final VoidCallback onViewCalendar;
-  final VoidCallback onWeekly;
+  final VoidCallback onManageAvailability;
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return day.year == now.year &&
+        day.month == now.month &&
+        day.day == now.day;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ScheduleHeroCard(
-          longDate: longDate,
-          onPrevDay: onPrevDay,
-          onNextDay: onNextDay,
-          onPickDate: onPickDate,
-        ),
-        const SizedBox(height: _SchedUi.gap),
-        _FilterActionBar(
-          statusPill: statusPill,
-          searchCtrl: searchCtrl,
-          onSearchChanged: onSearchChanged,
-          onPill: onPill,
-          onRefresh: onRefresh,
-          onBlockTime: onBlockTime,
-          onViewCalendar: onViewCalendar,
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isToday ? "Today's Schedule" : 'My Schedule',
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: _SchedUi.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    longDate,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _SchedUi.lavender.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _DateNavRow(
+              onPrev: onPrevDay,
+              onNext: onNextDay,
+              onPick: onPickDate,
+            ),
+          ],
         ),
         const SizedBox(height: 14),
-        const _StatusLegendRow(),
+        _SchedGlass(
+          radius: 14,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: TextField(
+            controller: searchCtrl,
+            onChanged: (_) => onSearchChanged(),
+            style: GoogleFonts.inter(color: _SchedUi.textPrimary, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Search clients or services…',
+              hintStyle: GoogleFonts.inter(
+                color: _SchedUi.textSecondary,
+                fontSize: 14,
+              ),
+              border: InputBorder.none,
+              icon: Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: _SchedUi.lavender.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final p in _statusPills) ...[
+                      _StatusPillChip(
+                        label: p,
+                        selected: statusPill == p,
+                        onTap: () => onPill(p),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            _GlassIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+          ],
+        ),
         const SizedBox(height: _SchedUi.gap),
+        Text(
+          'Selected Day Schedule',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: _SchedUi.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
         _MainScheduleCard(
-          longDate: longDate,
           filtered: filtered,
-          slotovi: slotovi,
-          selectedId: selectedId,
           onSelect: onSelect,
-          onWeekly: onWeekly,
-          onBlockTime: onBlockTime,
+          onManageAvailability: onManageAvailability,
         ),
       ],
     );
   }
 }
 
-class _ScheduleHeroCard extends StatelessWidget {
-  const _ScheduleHeroCard({
-    required this.longDate,
-    required this.onPrevDay,
-    required this.onNextDay,
-    required this.onPickDate,
-  });
-
-  final String longDate;
-  final VoidCallback onPrevDay;
-  final VoidCallback onNextDay;
-  final VoidCallback onPickDate;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SchedGlass(
-      radius: _SchedUi.heroRadius,
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 220),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final stack = c.maxWidth < 720;
-            final left = Row(
-              children: [
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    gradient: LinearGradient(
-                      colors: [
-                        _SchedUi.purple.withValues(alpha: 0.4),
-                        _SchedUi.lavender.withValues(alpha: 0.15),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: _SchedUi.purple.withValues(alpha: 0.45),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _SchedUi.purple.withValues(alpha: 0.35),
-                        blurRadius: 28,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.calendar_month_rounded,
-                    size: 44,
-                    color: _SchedUi.lavender,
-                  ),
-                ),
-                const SizedBox(width: 22),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "Today's Schedule",
-                        style: GoogleFonts.inter(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: _SchedUi.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Track appointments, blocked time and therapist availability.',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          height: 1.45,
-                          color: _SchedUi.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-            final nav = _DateNavRow(
-              longDate: longDate,
-              onPrev: onPrevDay,
-              onNext: onNextDay,
-              onPick: onPickDate,
-            );
-            if (stack) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [left, const SizedBox(height: 20), nav],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: left),
-                const SizedBox(width: 20),
-                nav,
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
 class _DateNavRow extends StatelessWidget {
   const _DateNavRow({
-    required this.longDate,
     required this.onPrev,
     required this.onNext,
     required this.onPick,
   });
 
-  final String longDate;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onPick;
@@ -815,153 +821,11 @@ class _DateNavRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _GlassIconButton(icon: Icons.chevron_left_rounded, onTap: onPrev),
-        const SizedBox(width: 10),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPick,
-            borderRadius: BorderRadius.circular(14),
-            child: _SchedGlass(
-              radius: 14,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              child: Text(
-                longDate,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: _SchedUi.textPrimary,
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 6),
+        _GlassIconButton(icon: Icons.calendar_today_rounded, onTap: onPick),
+        const SizedBox(width: 6),
         _GlassIconButton(icon: Icons.chevron_right_rounded, onTap: onNext),
       ],
-    );
-  }
-}
-
-class _FilterActionBar extends StatelessWidget {
-  const _FilterActionBar({
-    required this.statusPill,
-    required this.searchCtrl,
-    required this.onSearchChanged,
-    required this.onPill,
-    required this.onRefresh,
-    required this.onBlockTime,
-    required this.onViewCalendar,
-  });
-
-  final String statusPill;
-  final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
-  final ValueChanged<String> onPill;
-  final VoidCallback onRefresh;
-  final VoidCallback onBlockTime;
-  final VoidCallback onViewCalendar;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SchedGlass(
-              radius: 16,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: TextField(
-                controller: searchCtrl,
-                onChanged: (_) => onSearchChanged(),
-                style: GoogleFonts.inter(color: _SchedUi.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Search clients or services…',
-                  hintStyle: GoogleFonts.inter(
-                    color: _SchedUi.textSecondary,
-                    fontSize: 14,
-                  ),
-                  border: InputBorder.none,
-                  icon: Icon(
-                    Icons.search_rounded,
-                    color: _SchedUi.lavender.withValues(alpha: 0.8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            LayoutBuilder(
-              builder: (context, bc) {
-                final actions = Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _GlassIconButton(
-                      icon: Icons.refresh_rounded,
-                      onTap: onRefresh,
-                      size: 52,
-                    ),
-                    const SizedBox(width: 8),
-                    _GlassActionButton(
-                      label: 'Block Time',
-                      icon: Icons.block_rounded,
-                      onTap: onBlockTime,
-                    ),
-                    const SizedBox(width: 8),
-                    _PrimaryGradientButton(
-                      label: 'View Calendar',
-                      icon: Icons.calendar_month_outlined,
-                      onTap: onViewCalendar,
-                      compact: true,
-                    ),
-                  ],
-                );
-                if (bc.maxWidth < 800) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final p in _statusPills)
-                            _StatusPillChip(
-                              label: p,
-                              selected: statusPill == p,
-                              onTap: () => onPill(p),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      actions,
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final p in _statusPills)
-                            _StatusPillChip(
-                              label: p,
-                              selected: statusPill == p,
-                              onTap: () => onPill(p),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    actions,
-                  ],
-                );
-              },
-            ),
-          ],
-        );
-      },
     );
   }
 }
@@ -993,260 +857,253 @@ class _StatusPillChipState extends State<_StatusPillChip> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            gradient: widget.selected
-                ? const LinearGradient(
-                    colors: [_SchedUi.purple, _SchedUi.lavender],
-                  )
-                : null,
+            borderRadius: BorderRadius.circular(12),
             color: widget.selected
-                ? null
-                : Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
+                ? _SchedUi.purple.withValues(alpha: 0.18)
+                : (_hover
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.transparent),
             border: Border.all(
               color: widget.selected
-                  ? _SchedUi.lavender.withValues(alpha: 0.6)
-                  : Colors.white.withValues(alpha: _hover ? 0.2 : 0.1),
+                  ? _SchedUi.purple.withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: _hover ? 0.14 : 0.08),
             ),
-            boxShadow: widget.selected || _hover
-                ? [
-                    BoxShadow(
-                      color: _SchedUi.purple.withValues(
-                        alpha: widget.selected ? 0.4 : 0.2,
-                      ),
-                      blurRadius: 14,
-                    ),
-                  ]
-                : null,
           ),
           child: Text(
             widget.label,
             style: GoogleFonts.inter(
               fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontWeight: widget.selected ? FontWeight.w800 : FontWeight.w600,
               color: widget.selected
-                  ? Colors.white
-                  : _SchedUi.textSecondary,
+                  ? _SchedUi.textPrimary
+                  : _SchedUi.lavender.withValues(alpha: _hover ? 0.9 : 0.55),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _StatusLegendRow extends StatelessWidget {
-  const _StatusLegendRow();
-
-  @override
-  Widget build(BuildContext context) {
-    Widget dot(Color c, String label) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: _SchedUi.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-
-    return Wrap(
-      spacing: 18,
-      runSpacing: 8,
-      children: [
-        dot(_SchedUi.blue, 'Pending'),
-        dot(_SchedUi.green, 'Confirmed'),
-        dot(_SchedUi.gold, 'Premium / VIP'),
-        dot(Colors.white.withValues(alpha: 0.45), 'Cancelled / Past'),
-      ],
     );
   }
 }
 
 class _MainScheduleCard extends StatelessWidget {
   const _MainScheduleCard({
-    required this.longDate,
     required this.filtered,
-    required this.slotovi,
-    required this.selectedId,
     required this.onSelect,
-    required this.onWeekly,
-    required this.onBlockTime,
+    required this.onManageAvailability,
   });
 
-  final String longDate;
   final List<Rezervacija> filtered;
-  final List<DateTime> slotovi;
-  final int? selectedId;
   final ValueChanged<Rezervacija> onSelect;
-  final VoidCallback onWeekly;
-  final VoidCallback onBlockTime;
+  final VoidCallback onManageAvailability;
 
   @override
   Widget build(BuildContext context) {
-    return _SchedGlass(
-      radius: _SchedUi.heroRadius,
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 500),
-        child: filtered.isEmpty
-            ? _ScheduleEmptyState(longDate: longDate, onWeekly: onWeekly, onBlockTime: onBlockTime)
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Appointments (${filtered.length})',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _SchedUi.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 520),
-                      child: TherapistDayTimeline(
-                        rezervacije: filtered,
-                        selectedId: selectedId,
-                        onSelect: onSelect,
+    if (filtered.isEmpty) {
+      return _ScheduleEmptyState(onManageAvailability: onManageAvailability);
+    }
+    return Column(
+      children: [
+        for (var i = 0; i < filtered.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _ScheduleAppointmentCard(
+            r: filtered[i],
+            onTap: () => onSelect(filtered[i]),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ScheduleAppointmentCard extends StatelessWidget {
+  const _ScheduleAppointmentCard({
+    required this.r,
+    required this.onTap,
+  });
+
+  final Rezervacija r;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = TherapistAppointmentUtils.statusOfRezervacija(r);
+    final timeRange = TherapistAppointmentUtils.formatTimeRange(
+      start: r.datumRezervacije,
+      durationMinutes: r.uslugaTrajanjeMinuta,
+    );
+    final hasNotes =
+        r.napomenaZaTerapeuta != null && r.napomenaZaTerapeuta!.trim().isNotEmpty;
+    final room = r.prostorijaNaziv?.trim();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(_SchedUi.cardRadius),
+        child: _SchedGlass(
+          radius: _SchedUi.cardRadius,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      timeRange,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: _SchedUi.lavender,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  _SlotsSection(slotovi: slotovi),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      r.korisnikIme ?? 'Client',
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: _SchedUi.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${r.uslugaNaziv ?? 'Service'} · ${r.uslugaTrajanjeMinuta} min',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _SchedUi.textSecondary,
+                      ),
+                    ),
+                    if (room != null && room.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.meeting_room_outlined,
+                            size: 13,
+                            color: _SchedUi.lavender.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              room,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _SchedUi.lavender.withValues(alpha: 0.75),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (hasNotes) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.sticky_note_2_outlined,
+                            size: 13,
+                            color: _SchedUi.amber.withValues(alpha: 0.9),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Client notes',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _SchedUi.amber.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 10),
+              _StatusBadge(label: status.label, color: status.color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.38)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
 }
 
 class _ScheduleEmptyState extends StatelessWidget {
-  const _ScheduleEmptyState({
-    required this.longDate,
-    required this.onWeekly,
-    required this.onBlockTime,
-  });
+  const _ScheduleEmptyState({required this.onManageAvailability});
 
-  final String longDate;
-  final VoidCallback onWeekly;
-  final VoidCallback onBlockTime;
+  final VoidCallback onManageAvailability;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        ...List.generate(8, (i) {
-          final angle = i * math.pi / 4;
-          return Positioned(
-            left: 100 + 120 * math.cos(angle),
-            top: 60 + 80 * math.sin(angle),
-            child: Container(
-              width: 5,
-              height: 5,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _SchedUi.lavender.withValues(alpha: 0.4),
-                boxShadow: [
-                  BoxShadow(
-                    color: _SchedUi.purple.withValues(alpha: 0.4),
-                    blurRadius: 6,
-                  ),
-                ],
+    return _SchedGlass(
+      radius: _SchedUi.cardRadius,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 220),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'No appointments scheduled for this date.',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _SchedUi.textPrimary,
               ),
+              textAlign: TextAlign.center,
             ),
-          );
-        }),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      _SchedUi.purple.withValues(alpha: 0.35),
-                      _SchedUi.lavender.withValues(alpha: 0.08),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: _SchedUi.purple.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.self_improvement_rounded,
-                  size: 72,
-                  color: _SchedUi.lavender,
-                ),
+            const SizedBox(height: 6),
+            Text(
+              'Try another date or update your availability.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: _SchedUi.textSecondary,
               ),
-              const SizedBox(height: 28),
-              Text(
-                'You\'re all clear today!',
-                style: GoogleFonts.inter(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: _SchedUi.textPrimary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'No appointments scheduled for $longDate.',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  color: _SchedUi.textSecondary,
-                  height: 1.45,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Try another date or adjust your filters.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: _SchedUi.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.center,
-                children: [
-                  _OutlinedGlowButton(
-                    label: 'View Weekly Schedule',
-                    icon: Icons.date_range_rounded,
-                    onTap: onWeekly,
-                  ),
-                  _OutlinedGlowButton(
-                    label: 'Add Block Time',
-                    icon: Icons.block_rounded,
-                    onTap: onBlockTime,
-                  ),
-                ],
-              ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _OutlinedGlowButton(
+              label: 'Manage Availability',
+              icon: Icons.event_available_outlined,
+              onTap: onManageAvailability,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -1254,31 +1111,49 @@ class _ScheduleEmptyState extends StatelessWidget {
 class _ScheduleSidebar extends StatelessWidget {
   const _ScheduleSidebar({
     required this.stats,
-    required this.onBlockTime,
-    required this.onOpenCalendar,
+    required this.calendarMonth,
+    required this.selectedDay,
+    required this.daysWithAppointments,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+    required this.onDaySelected,
+    required this.onOpenDetails,
     required this.onManageAvailability,
-    required this.onViewReviews,
   });
 
   final _DayStats stats;
-  final VoidCallback onBlockTime;
-  final VoidCallback onOpenCalendar;
+  final DateTime calendarMonth;
+  final DateTime selectedDay;
+  final Set<int> daysWithAppointments;
+  final VoidCallback onPrevMonth;
+  final VoidCallback onNextMonth;
+  final ValueChanged<DateTime> onDaySelected;
+  final ValueChanged<Rezervacija> onOpenDetails;
   final VoidCallback onManageAvailability;
-  final VoidCallback onViewReviews;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _TodayOverviewCard(stats: stats),
-        const SizedBox(height: 18),
-        _UpcomingTimelineCard(upcoming: stats.upcoming),
-        const SizedBox(height: 18),
-        _QuickActionsCard(
-          onBlockTime: onBlockTime,
-          onOpenCalendar: onOpenCalendar,
-          onManageAvailability: onManageAvailability,
-          onViewReviews: onViewReviews,
+        _TodayOverviewCard(
+          stats: stats,
+          isToday: selectedDay.year == DateTime.now().year &&
+              selectedDay.month == DateTime.now().month &&
+              selectedDay.day == DateTime.now().day,
+        ),
+        const SizedBox(height: _SchedUi.gap),
+        _MiniCalendarCard(
+          month: calendarMonth,
+          selectedDay: selectedDay,
+          daysWithAppointments: daysWithAppointments,
+          onPrevMonth: onPrevMonth,
+          onNextMonth: onNextMonth,
+          onDaySelected: onDaySelected,
+        ),
+        const SizedBox(height: _SchedUi.gap),
+        _NextAppointmentCard(
+          next: stats.nextAppointment,
+          onOpenDetails: onOpenDetails,
         ),
       ],
     );
@@ -1286,265 +1161,94 @@ class _ScheduleSidebar extends StatelessWidget {
 }
 
 class _TodayOverviewCard extends StatelessWidget {
-  const _TodayOverviewCard({required this.stats});
-
-  final _DayStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SchedGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Today Overview',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _SchedUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _MiniKpi(
-            icon: Icons.event_rounded,
-            label: 'Appointments Today',
-            value: '${stats.total}',
-            accent: _SchedUi.purple,
-          ),
-          const SizedBox(height: 10),
-          _MiniKpi(
-            icon: Icons.check_circle_rounded,
-            label: 'Confirmed',
-            value: '${stats.confirmed}',
-            accent: _SchedUi.green,
-          ),
-          const SizedBox(height: 10),
-          _MiniKpi(
-            icon: Icons.schedule_rounded,
-            label: 'Pending',
-            value: '${stats.pending}',
-            accent: _SchedUi.blue,
-          ),
-          const SizedBox(height: 10),
-          _MiniKpi(
-            icon: Icons.payments_rounded,
-            label: 'Revenue',
-            value: '€${stats.revenue.toStringAsFixed(0)}',
-            accent: _SchedUi.gold,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniKpi extends StatelessWidget {
-  const _MiniKpi({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
+  const _TodayOverviewCard({
+    required this.stats,
+    required this.isToday,
   });
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
+  final _DayStats stats;
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: accent.withValues(alpha: 0.08),
-        border: Border.all(color: accent.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: accent.withValues(alpha: 0.15),
-              boxShadow: [
-                BoxShadow(color: accent.withValues(alpha: 0.3), blurRadius: 10),
-              ],
-            ),
-            child: Icon(icon, size: 18, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: _SchedUi.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: _SchedUi.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final hoursLabel = stats.hoursBooked == stats.hoursBooked.roundToDouble()
+        ? '${stats.hoursBooked.round()}h'
+        : '${stats.hoursBooked.toStringAsFixed(1)}h';
 
-class _UpcomingTimelineCard extends StatelessWidget {
-  const _UpcomingTimelineCard({required this.upcoming});
-
-  final List<Rezervacija> upcoming;
-
-  Color _dotColor(Rezervacija r) {
-    if (r.isOtkazana) return Colors.white54;
-    if (!r.isPotvrdjena) return _SchedUi.blue;
-    if (r.premiumKlijent || (r.isPotvrdjena && r.isPlacena)) {
-      return _SchedUi.gold;
-    }
-    return _SchedUi.green;
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return _SchedGlass(
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Upcoming Timeline',
+            isToday ? 'Today Overview' : 'Day Overview',
             style: GoogleFonts.inter(
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: FontWeight.w800,
               color: _SchedUi.textPrimary,
             ),
           ),
-          const SizedBox(height: 16),
-          if (upcoming.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.event_busy_outlined,
-                    size: 40,
-                    color: _SchedUi.lavender.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No upcoming appointments',
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      color: _SchedUi.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Column(
-              children: [
-                for (var i = 0; i < upcoming.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 12),
-                  _TimelineRow(r: upcoming[i], dotColor: _dotColor(upcoming[i])),
-                ],
-              ],
-            ),
+          const SizedBox(height: 14),
+          _OverviewStat(
+            label: isToday ? 'Appointments Today' : 'Appointments',
+            value: '${stats.total}',
+            color: _SchedUi.purple,
+          ),
+          const SizedBox(height: 8),
+          _OverviewStat(
+            label: 'Confirmed',
+            value: '${stats.confirmed}',
+            color: _SchedUi.green,
+          ),
+          const SizedBox(height: 8),
+          _OverviewStat(
+            label: 'Pending',
+            value: '${stats.pending}',
+            color: _SchedUi.amber,
+          ),
+          const SizedBox(height: 8),
+          _OverviewStat(
+            label: 'Hours Booked',
+            value: hoursLabel,
+            color: _SchedUi.lavender,
+          ),
         ],
       ),
     );
   }
 }
 
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({required this.r, required this.dotColor});
+class _OverviewStat extends StatelessWidget {
+  const _OverviewStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
-  final Rezervacija r;
-  final Color dotColor;
+  final String label;
+  final String value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final l = r.datumRezervacije.toLocal();
-    final time =
-        '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
-    final initials = (r.korisnikIme?.trim().isNotEmpty ?? false)
-        ? r.korisnikIme!.trim()[0].toUpperCase()
-        : '?';
-
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          children: [
-            Text(
-              time,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: _SchedUi.lavender,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: dotColor.withValues(alpha: 0.6), blurRadius: 8),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(width: 12),
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: _SchedUi.purple.withValues(alpha: 0.25),
+        Expanded(
           child: Text(
-            initials,
-            style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 13),
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _SchedUi.textSecondary,
+            ),
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                r.korisnikIme ?? 'Client',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: _SchedUi.textPrimary,
-                ),
-              ),
-              Text(
-                r.uslugaNaziv ?? 'Service',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: _SchedUi.textSecondary,
-                ),
-              ),
-            ],
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: color,
           ),
         ),
       ],
@@ -1552,56 +1256,151 @@ class _TimelineRow extends StatelessWidget {
   }
 }
 
-class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({
-    required this.onBlockTime,
-    required this.onOpenCalendar,
-    required this.onManageAvailability,
-    required this.onViewReviews,
+class _MiniCalendarCard extends StatelessWidget {
+  const _MiniCalendarCard({
+    required this.month,
+    required this.selectedDay,
+    required this.daysWithAppointments,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+    required this.onDaySelected,
   });
 
-  final VoidCallback onBlockTime;
-  final VoidCallback onOpenCalendar;
-  final VoidCallback onManageAvailability;
-  final VoidCallback onViewReviews;
+  final DateTime month;
+  final DateTime selectedDay;
+  final Set<int> daysWithAppointments;
+  final VoidCallback onPrevMonth;
+  final VoidCallback onNextMonth;
+  final ValueChanged<DateTime> onDaySelected;
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final firstWeekday = DateTime(month.year, month.month, 1).weekday;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leading = firstWeekday - 1;
+
     return _SchedGlass(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Quick Actions',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _SchedUi.textPrimary,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${_monthNames[month.month - 1]} ${month.year}',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: _SchedUi.textPrimary,
+                  ),
+                ),
+              ),
+              _GlassIconButton(
+                icon: Icons.chevron_left_rounded,
+                onTap: onPrevMonth,
+                size: 32,
+              ),
+              const SizedBox(width: 4),
+              _GlassIconButton(
+                icon: Icons.chevron_right_rounded,
+                onTap: onNextMonth,
+                size: 32,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final d in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      d,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _SchedUi.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
             ),
-          ),
-          const SizedBox(height: 14),
-          _QuickActionRow(
-            icon: Icons.block_rounded,
-            label: 'Block Time',
-            onTap: onBlockTime,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionRow(
-            icon: Icons.calendar_month_outlined,
-            label: 'Open Calendar',
-            onTap: onOpenCalendar,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionRow(
-            icon: Icons.event_available_rounded,
-            label: 'Manage Availability',
-            onTap: onManageAvailability,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionRow(
-            icon: Icons.reviews_outlined,
-            label: 'View Reviews',
-            onTap: onViewReviews,
+            itemCount: leading + daysInMonth,
+            itemBuilder: (context, index) {
+              if (index < leading) return const SizedBox.shrink();
+              final dayNum = index - leading + 1;
+              final date = DateTime(month.year, month.month, dayNum);
+              final isSelected = selectedDay.year == date.year &&
+                  selectedDay.month == date.month &&
+                  selectedDay.day == date.day;
+              final isToday = today == date;
+              final hasAppt = daysWithAppointments.contains(dayNum);
+
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onDaySelected(date),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: isSelected
+                          ? _SchedUi.purple.withValues(alpha: 0.22)
+                          : (isToday
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.transparent),
+                      border: Border.all(
+                        color: isSelected
+                            ? _SchedUi.purple.withValues(alpha: 0.5)
+                            : (isToday
+                                ? Colors.white.withValues(alpha: 0.14)
+                                : Colors.transparent),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$dayNum',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: isSelected || isToday
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                            color: isSelected
+                                ? _SchedUi.textPrimary
+                                : _SchedUi.lavender.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        if (hasAppt)
+                          Container(
+                            width: 4,
+                            height: 4,
+                            margin: const EdgeInsets.only(top: 2),
+                            decoration: const BoxDecoration(
+                              color: _SchedUi.teal,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -1609,76 +1408,94 @@ class _QuickActionsCard extends StatelessWidget {
   }
 }
 
-class _QuickActionRow extends StatefulWidget {
-  const _QuickActionRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
+class _NextAppointmentCard extends StatelessWidget {
+  const _NextAppointmentCard({
+    required this.next,
+    required this.onOpenDetails,
   });
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_QuickActionRow> createState() => _QuickActionRowState();
-}
-
-class _QuickActionRowState extends State<_QuickActionRow> {
-  bool _hover = false;
+  final Rezervacija? next;
+  final ValueChanged<Rezervacija> onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
-              border: Border.all(
-                color: _SchedUi.purple.withValues(alpha: _hover ? 0.4 : 0.18),
-              ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _SchedUi.purple.withValues(alpha: 0.22),
-                        blurRadius: 14,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Icon(widget.icon, color: _SchedUi.lavender, size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: _SchedUi.textPrimary,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: Colors.white.withValues(alpha: _hover ? 0.7 : 0.4),
-                ),
-              ],
+    return _SchedGlass(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Next Appointment',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: _SchedUi.textPrimary,
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          if (next == null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No upcoming appointments.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _SchedUi.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'You\'re all clear.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: _SchedUi.textSecondary,
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            Text(
+              TherapistAppointmentUtils.formatUpcomingDateTime(
+                next!.datumRezervacije,
+              ),
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _SchedUi.lavender,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              next!.korisnikIme ?? 'Client',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _SchedUi.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${next!.uslugaNaziv ?? 'Service'} · ${next!.uslugaTrajanjeMinuta} min',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: _SchedUi.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _StatusBadge(
+              label: TherapistAppointmentUtils.statusOfRezervacija(next!).label,
+              color: TherapistAppointmentUtils.statusOfRezervacija(next!).color,
+            ),
+            const SizedBox(height: 12),
+            _OutlinedGlowButton(
+              label: 'View Details',
+              icon: Icons.visibility_outlined,
+              onTap: () => onOpenDetails(next!),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1697,30 +1514,33 @@ class _SlotsSection extends StatelessWidget {
         Text(
           'Available slots (${slotovi.length})',
           style: GoogleFonts.inter(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w700,
             color: _SchedUi.textSecondary,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         if (slotovi.isEmpty)
           Text(
             'No open slots for this day.',
-            style: GoogleFonts.inter(color: _SchedUi.textSecondary),
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: _SchedUi.textSecondary,
+            ),
           )
         else
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
+            runSpacing: 6,
             children: slotovi
                 .map(
                   (t) => Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                       color: _SchedUi.green.withValues(alpha: 0.12),
                       border: Border.all(
                         color: _SchedUi.green.withValues(alpha: 0.35),
@@ -1731,7 +1551,7 @@ class _SlotsSection extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w700,
                         color: _SchedUi.green,
-                        fontSize: 12,
+                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -2148,8 +1968,7 @@ class _TherapistClientDrawerContentState
                                     avatar: Icon(
                                       Icons.workspace_premium_outlined,
                                       size: 18,
-                                      color: TherapistSchedulePalette
-                                          .premiumStroke,
+                                      color: _SchedUi.gold,
                                     ),
                                     label: Text(
                                       r.premiumKlijent
