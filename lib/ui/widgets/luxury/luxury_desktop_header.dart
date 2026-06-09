@@ -529,7 +529,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapists
                       ? 'Therapists'
                       : isTherapistDash
-                      ? 'Good morning, Therapist!'
+                      ? "Today's Overview"
                       : isTherapistAppts
                       ? 'My Appointments'
                       : isTherapistSchedule
@@ -567,7 +567,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapists
                       ? 'Manage your spa therapists, specialties and schedules.'
                       : isTherapistDash
-                      ? 'Here\'s your overview for today.'
+                      ? 'Your schedule, clients and appointments for today.'
                       : isTherapistAppts
                       ? 'Your assigned bookings and daily schedule.'
                       : isTherapistSchedule

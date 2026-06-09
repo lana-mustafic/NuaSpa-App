@@ -34,6 +34,7 @@ class LuxurySideItem {
     required this.icon,
     this.suite,
     this.purpleGradientNav = false,
+    this.isSectionDivider = false,
   });
 
   final DesktopRouteKey route;
@@ -45,6 +46,9 @@ class LuxurySideItem {
 
   /// Premium purple gradient when this item is selected (e.g. Reviews hub).
   final bool purpleGradientNav;
+
+  /// Renders a visual separator between nav groups (non-interactive).
+  final bool isSectionDivider;
 }
 
 class DesktopShell extends StatefulWidget {
@@ -175,6 +179,12 @@ class _DesktopShellState extends State<DesktopShell> {
         route: DesktopRouteKey.therapistReviews,
         label: 'My Reviews',
         icon: Icons.reviews_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.therapistProfile,
+        label: '',
+        icon: Icons.horizontal_rule_rounded,
+        isSectionDivider: true,
       ),
       LuxurySideItem(
         route: DesktopRouteKey.therapistProfile,
@@ -513,6 +523,18 @@ class _LuxuryRail extends StatelessWidget {
                   separatorBuilder: (_, _) => SizedBox(height: compact ? 2 : 3),
                   itemBuilder: (_, i) {
                     final it = items[i];
+                    if (it.isSectionDivider) {
+                      return Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: compact ? 6 : 8,
+                        ),
+                        child: Divider(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          thickness: 0.5,
+                          height: 1,
+                        ),
+                      );
+                    }
                     final sel = _selected(nav, it);
                     return _SidebarTile(
                       expanded: expanded,
