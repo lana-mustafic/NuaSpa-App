@@ -200,7 +200,19 @@ class LuxuryDesktopHeader extends StatelessWidget {
       ),
     );
     if (ok == true && context.mounted) {
-      await context.read<AuthProvider>().logout();
+      final serverOk = await context.read<AuthProvider>().logout();
+      if (!context.mounted) return;
+      if (!serverOk) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Server sign-out failed. Your local session was cleared.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            width: 420,
+          ),
+        );
+      }
     }
   }
 
@@ -326,7 +338,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     final showRangePills = isRevenue || isCommandCenter;
 
     final roleLabel = auth.isAdmin
-        ? 'Super Admin'
+        ? 'Administrator'
         : auth.isZaposlenik
             ? 'Therapist'
             : 'Client';
@@ -465,6 +477,34 @@ class LuxuryDesktopHeader extends StatelessWidget {
           onSearchSubmitted: nav.performAdminGlobalSearch,
         );
       }
+    }
+
+    if (isSettings && auth.isZaposlenik) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: 'Settings',
+        subtitle: 'Manage your account, security and workspace preferences.',
+        searchHint: 'Search clients, services…',
+        onSearchSubmitted: nav.goToCatalogWithSearch,
+      );
+    }
+
+    if (isSettings) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: 'Settings',
+        subtitle: 'Manage your account, security and workspace preferences.',
+        searchHint: 'Search services & treatments…',
+        onSearchSubmitted: nav.goToCatalogWithSearch,
+      );
     }
 
     return Padding(
@@ -1065,7 +1105,11 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                     ),
                   ),
                   Text(
-                    'Super Admin',
+                    auth.isAdmin
+                        ? 'Administrator'
+                        : auth.isZaposlenik
+                            ? 'Therapist'
+                            : 'Client',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
