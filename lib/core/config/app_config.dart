@@ -27,6 +27,9 @@ abstract final class AppConfig {
   static String get apiBaseUrl {
     final override = _resolveBaseUrl();
     if (override.isEmpty) {
+      if (kDebugMode && kIsWeb) {
+        return 'http://localhost:5088/api/';
+      }
       if (kDebugMode && !kIsWeb && Platform.isWindows) {
         return 'http://localhost:5088/api/';
       }

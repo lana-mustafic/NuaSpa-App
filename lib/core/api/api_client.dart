@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'auth_interceptor.dart';
+
 import '../config/app_config.dart';
+import 'auth_interceptor.dart';
+import 'http_client_adapter.dart';
 
 /// Jedinstveni Dio za cijelu aplikaciju (JWT + isti baseUrl).
 class ApiClient {
@@ -22,22 +21,7 @@ class ApiClient {
     );
 
     dio.interceptors.add(AuthInterceptor());
-
-    // Produkcija: koristi zadano potvrđivanje certifikata.
-    // Development: dozvoli self-signed samo za lokalne hostove, da app može raditi dok se ne postavi valjan cert.
-    if (!kReleaseMode) {
-      dio.httpClientAdapter = IOHttpClientAdapter(
-        createHttpClient: () {
-          final client = HttpClient();
-          client.badCertificateCallback =
-              (X509Certificate cert, String host, int port) {
-            // Dev-only allowlist (ne prihvataj sve!).
-            return host == '10.0.2.2' || host == 'localhost' || host == '127.0.0.1';
-          };
-          return client;
-        },
-      );
-    }
+    configureDioHttpAdapter(dio, releaseMode: kReleaseMode);
   }
 
   static final ApiClient _instance = ApiClient._();
