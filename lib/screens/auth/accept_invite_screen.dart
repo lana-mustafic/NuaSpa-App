@@ -87,6 +87,7 @@ class _AcceptInviteScreenState extends State<AcceptInviteScreen> {
       await context.read<AuthProvider>().applySessionToken(
             result.token!,
             username: result.username,
+            refreshToken: result.refreshToken,
           );
       if (!mounted) return;
       return;

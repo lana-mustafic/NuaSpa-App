@@ -1331,7 +1331,10 @@ class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
     );
     if (result.success) {
       if (result.token != null && result.token!.isNotEmpty) {
-        await context.read<AuthProvider>().applySessionToken(result.token!);
+        await context.read<AuthProvider>().applySessionToken(
+              result.token!,
+              refreshToken: result.refreshToken,
+            );
       }
       _oldC.clear();
       _newC.clear();
