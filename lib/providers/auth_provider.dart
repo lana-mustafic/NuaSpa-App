@@ -108,7 +108,37 @@ class AuthProvider extends ChangeNotifier {
   Future<void> checkAuthState() async {
     _status = AuthStatus.initializing;
     notifyListeners();
+    await _syncSessionFromStorage();
+    notifyListeners();
+  }
 
+  /// Re-reads JWT claims without flipping the app into initializing state.
+  Future<bool> reloadLocalSession() async {
+    final previous = _status;
+    await _syncSessionFromStorage();
+    if (_status == AuthStatus.unauthenticated &&
+        previous == AuthStatus.authenticated) {
+      notifyListeners();
+      return false;
+    }
+    if (_status != previous) {
+      notifyListeners();
+    }
+    return _status == AuthStatus.authenticated;
+  }
+
+  Future<void> applySessionToken(String token, {String? username}) async {
+    await _storage.write(key: 'jwt_token', value: token);
+    if (username != null && username.trim().isNotEmpty) {
+      _loggedInUsername = username.trim();
+    }
+    await _refreshRolesFromToken();
+    _loggedInUsername ??= parseJwtStringClaim(token, 'unique_name');
+    _status = AuthStatus.authenticated;
+    notifyListeners();
+  }
+
+  Future<void> _syncSessionFromStorage() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
       if (isJwtSessionValid(token)) {
@@ -130,14 +160,16 @@ class AuthProvider extends ChangeNotifier {
       _loggedInUsername = null;
       _status = AuthStatus.unauthenticated;
     }
-    notifyListeners();
   }
 
-  Future<void> logout() async {
+  /// Returns `true` when the server acknowledged logout.
+  Future<bool> logout() async {
+    var serverOk = false;
     try {
-      await ApiService().logout();
+      final result = await ApiService().logout();
+      serverOk = result.success;
     } catch (_) {
-      // Lokalna sesija se briše čak i ako server nije dostupan.
+      serverOk = false;
     }
     await _storage.delete(key: 'jwt_token');
     _roles = [];
@@ -145,6 +177,7 @@ class AuthProvider extends ChangeNotifier {
     _loggedInUsername = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
+    return serverOk;
   }
 
   void consumeInfoMessage() {
