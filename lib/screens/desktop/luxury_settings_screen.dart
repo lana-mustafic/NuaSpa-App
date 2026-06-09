@@ -3,19 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/config/app_config.dart';
 import '../../core/jwt_roles.dart';
-import '../../core/validation/nua_validators.dart';
+import '../../core/settings/settings_messages.dart';
+import '../../models/account_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/widgets/luxury/luxury_desktop_header.dart';
-
-/// Keep in sync with [pubspec.yaml] version.
-const _kAppVersion = '1.0.0';
 
 abstract final class _SetUi {
   static const bgTop = Color(0xFF07040F);
@@ -32,20 +31,6 @@ abstract final class _SetUi {
   static const sectionGap = 28.0;
 }
 
-class _SessionSnapshot {
-  const _SessionSnapshot({
-    this.email,
-    this.firstName,
-    this.lastName,
-    this.expiresAt,
-  });
-
-  final String? email;
-  final String? firstName;
-  final String? lastName;
-  final DateTime? expiresAt;
-}
-
 class LuxurySettingsScreen extends StatefulWidget {
   const LuxurySettingsScreen({super.key});
 
@@ -58,8 +43,13 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
   static const _storage = FlutterSecureStorage();
   static const _tabs = ['Account', 'Security', 'Workspace', 'Application'];
 
-  _SessionSnapshot? _session;
-  bool _loadingSession = true;
+  final _api = ApiService();
+  AccountProfile? _profile;
+  DateTime? _tokenExpiresAt;
+  bool _loading = true;
+  String? _profileError;
+  String? _appVersion;
+  bool _refreshingSession = false;
   late final TabController _tabCtrl;
 
   @override
@@ -69,7 +59,8 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
       ..addListener(() {
         if (!_tabCtrl.indexIsChanging) setState(() {});
       });
-    _loadSession();
+    _loadAll();
+    _loadAppVersion();
   }
 
   @override
@@ -78,34 +69,48 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
     super.dispose();
   }
 
-  Future<void> _loadSession() async {
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersion = info.version);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _appVersion = '—');
+    }
+  }
+
+  Future<void> _loadTokenExpiry() async {
     final token = await _storage.read(key: 'jwt_token');
+    _tokenExpiresAt = parseJwtExpiry(token);
+  }
+
+  Future<void> _loadAll() async {
+    setState(() {
+      _loading = true;
+      _profileError = null;
+    });
+    await _loadTokenExpiry();
+    final profile = await _api.getAccountProfile();
     if (!mounted) return;
     setState(() {
-      _session = _SessionSnapshot(
-        email: parseJwtStringClaim(token, 'email'),
-        firstName: parseJwtStringClaim(token, 'Ime'),
-        lastName: parseJwtStringClaim(token, 'Prezime'),
-        expiresAt: parseJwtExpiry(token),
-      );
-      _loadingSession = false;
+      _profile = profile;
+      _profileError = profile == null
+          ? 'Could not load account details. Check your connection and try again.'
+          : null;
+      _loading = false;
     });
   }
 
-  String _roleLabel(AuthProvider auth) {
+  String _roleLabel(AccountProfile? profile, AuthProvider auth) {
+    if (profile != null) {
+      if (profile.roles.contains('Admin')) return 'Administrator';
+      if (profile.roles.contains('Zaposlenik')) return 'Therapist';
+      if (profile.roles.contains('Klijent')) return 'Client';
+    }
     if (auth.isAdmin) return 'Administrator';
     if (auth.isZaposlenik) return 'Therapist';
     return 'Client';
-  }
-
-  String _fullName(_SessionSnapshot? s) {
-    if (s == null) return '';
-    final parts = [s.firstName, s.lastName]
-        .whereType<String>()
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    return parts.join(' ');
   }
 
   String _formatExpiry(DateTime? dt) {
@@ -130,27 +135,69 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
     return '${months[local.month - 1]} ${local.day}, ${local.year} · $h:$m';
   }
 
+  bool get _sessionExpiringSoon {
+    final exp = _tokenExpiresAt;
+    if (exp == null) return false;
+    return exp.difference(DateTime.now()) <= const Duration(minutes: 15);
+  }
+
   Future<void> _refreshSession(BuildContext context) async {
-    await context.read<AuthProvider>().checkAuthState();
-    await _loadSession();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Session refreshed.'),
+    if (_refreshingSession) return;
+    setState(() => _refreshingSession = true);
+    final auth = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await auth.reloadLocalSession();
+    await _loadAll();
+    if (!mounted) return;
+    setState(() => _refreshingSession = false);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Session details reloaded.'
+              : 'Your session has expired. Please sign in again.',
+        ),
         behavior: SnackBarBehavior.floating,
+        width: 420,
       ),
     );
   }
 
-  void _onEditProfile(AuthProvider auth, DesktopNav nav) {
-    if (auth.isZaposlenik) {
+  void _onEditProfile(AuthProvider auth, DesktopNav nav, AccountProfile? profile) {
+    if (auth.isZaposlenik && auth.zaposlenikId != null) {
       nav.goTo(DesktopRouteKey.therapistProfile);
       return;
     }
+    if (auth.isZaposlenik) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Your therapist profile is not linked to this account yet. Contact your spa administrator.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          width: 420,
+        ),
+      );
+      return;
+    }
+    if (auth.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Administrator account details are managed by your system operator.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          width: 420,
+        ),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Profile details are managed through your account administrator.',
+          profile?.email != null
+              ? 'Contact NuaSpa to update your client profile details.'
+              : 'Profile editing is not available for your account yet.',
         ),
         behavior: SnackBarBehavior.floating,
         width: 420,
@@ -192,7 +239,21 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
       ),
     );
     if (ok == true && context.mounted) {
-      await context.read<AuthProvider>().logout();
+      final serverOk = await context.read<AuthProvider>().logout();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            SettingsMessages.en(
+              serverOk
+                  ? 'Signed out successfully.'
+                  : 'Server sign-out failed. Your local session was cleared.',
+            ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          width: 420,
+        ),
+      );
     }
   }
 
@@ -333,29 +394,33 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final nav = context.watch<DesktopNav>();
+    final profile = _profile;
 
-    final fullName = _fullName(_session);
-    final display = fullName.isNotEmpty
-        ? fullName
-        : (auth.displayName ?? 'Signed in');
-    final isActive = auth.status == AuthStatus.authenticated;
+    final displayName = profile != null && profile.fullName.isNotEmpty
+        ? profile.fullName
+        : (profile?.userName ?? auth.displayName ?? 'Signed in');
+    final accountActive = profile?.isActive ?? auth.status == AuthStatus.authenticated;
+    final sessionActive =
+        auth.status == AuthStatus.authenticated && accountActive;
     final workspaceLinks = _workspaceLinks(auth, nav);
-    final expiresLabel = _loadingSession
-        ? 'Loading…'
-        : _formatExpiry(_session?.expiresAt);
-    final role = _roleLabel(auth);
+    final expiresLabel =
+        _loading ? 'Loading…' : _formatExpiry(_tokenExpiresAt);
+    final role = _roleLabel(profile, auth);
 
     final accountRows = <_SettingsRowData>[
-      if (fullName.isNotEmpty)
-        _SettingsRowData(label: 'Full name', value: fullName),
-      _SettingsRowData(label: 'Username', value: auth.displayName ?? '—'),
-      if (_session?.email != null)
-        _SettingsRowData(label: 'Email', value: _session!.email!),
+      if (profile != null && profile.fullName.isNotEmpty)
+        _SettingsRowData(label: 'Full name', value: profile.fullName),
+      _SettingsRowData(
+        label: 'Username',
+        value: profile?.userName ?? auth.displayName ?? '—',
+      ),
+      if (profile?.email != null && profile!.email!.isNotEmpty)
+        _SettingsRowData(label: 'Email', value: profile.email!),
       _SettingsRowData(label: 'Role', value: role),
-      if (auth.roles.isNotEmpty)
+      if ((profile?.roles ?? auth.roles).isNotEmpty)
         _SettingsRowData(
-          label: 'Permissions',
-          value: auth.roles.join(', '),
+          label: 'Roles',
+          value: (profile?.roles ?? auth.roles).join(', '),
         ),
     ];
 
@@ -366,12 +431,24 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _AccountSummaryStrip(
-              displayName: display,
+              displayName: displayName,
               role: role,
               initials: auth.userInitials ?? 'NS',
-              isActive: isActive,
+              isActive: sessionActive,
               expiresLabel: expiresLabel,
             ),
+            if (_sessionExpiringSoon && !_loading) ...[
+              const SizedBox(height: 12),
+              _SessionExpiryBanner(expiresLabel: expiresLabel),
+            ],
+            if (_profileError != null) ...[
+              const SizedBox(height: 12),
+              _SettingsNotice(
+                message: _profileError!,
+                actionLabel: 'Retry',
+                onAction: _loadAll,
+              ),
+            ],
             const SizedBox(height: 20),
             _SettingsTabBar(
               tabs: _tabs,
@@ -379,30 +456,47 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
               onTab: (i) => _tabCtrl.animateTo(i),
             ),
             const SizedBox(height: _SetUi.sectionGap),
-            switch (_tabCtrl.index) {
-              0 => _AccountTab(
-                  rows: accountRows,
-                  onEditProfile: () => _onEditProfile(auth, nav),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
-              1 => _SecurityTab(
-                  isActive: isActive,
-                  statusLabel: isActive ? 'Active' : auth.status.name,
-                  role: role,
-                  expiresLabel: expiresLabel,
-                  loadingSession: _loadingSession,
-                  onRefresh: _loadingSession
-                      ? null
-                      : () => _refreshSession(context),
-                  onSignOut: () => _confirmSignOut(context),
-                ),
-              2 => _WorkspaceTab(
-                  auth: auth,
-                  links: workspaceLinks,
-                ),
-              _ => _ApplicationTab(
-                  onCopyApiUrl: () => _copyApiUrl(context),
-                ),
-            },
+              )
+            else
+              switch (_tabCtrl.index) {
+                0 => _AccountTab(
+                    rows: accountRows,
+                    onEditProfile: () => _onEditProfile(auth, nav, profile),
+                  ),
+                1 => _SecurityTab(
+                    isActive: sessionActive,
+                    statusLabel: sessionActive
+                        ? 'Active'
+                        : (accountActive
+                            ? auth.status.name
+                            : 'Account inactive'),
+                    role: role,
+                    expiresLabel: expiresLabel,
+                    hasPassword: profile?.hasPassword ?? true,
+                    refreshing: _refreshingSession,
+                    onRefresh: () => _refreshSession(context),
+                    onSignOut: () => _confirmSignOut(context),
+                    onPasswordChanged: _loadAll,
+                  ),
+                2 => _WorkspaceTab(
+                    auth: auth,
+                    links: workspaceLinks,
+                  ),
+                _ => _ApplicationTab(
+                    appVersion: _appVersion ?? '—',
+                    onCopyApiUrl: () => _copyApiUrl(context),
+                  ),
+              },
           ],
         ),
       ),
@@ -832,24 +926,94 @@ class _AccountTab extends StatelessWidget {
   }
 }
 
+class _SessionExpiryBanner extends StatelessWidget {
+  const _SessionExpiryBanner({required this.expiresLabel});
+
+  final String expiresLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SetGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(
+            Icons.schedule_rounded,
+            size: 18,
+            color: _SetUi.orange.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Your session expires soon ($expiresLabel). Reload session details or sign in again after expiry.',
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                height: 1.4,
+                color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsNotice extends StatelessWidget {
+  const _SettingsNotice({
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SetGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.inter(
+                fontSize: 12.5,
+                color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ),
+          TextButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
+      ),
+    );
+  }
+}
+
 class _SecurityTab extends StatelessWidget {
   const _SecurityTab({
     required this.isActive,
     required this.statusLabel,
     required this.role,
     required this.expiresLabel,
-    required this.loadingSession,
+    required this.hasPassword,
+    required this.refreshing,
     required this.onRefresh,
     required this.onSignOut,
+    required this.onPasswordChanged,
   });
 
   final bool isActive;
   final String statusLabel;
   final String role;
   final String expiresLabel;
-  final bool loadingSession;
-  final VoidCallback? onRefresh;
+  final bool hasPassword;
+  final bool refreshing;
+  final VoidCallback onRefresh;
   final VoidCallback onSignOut;
+  final VoidCallback onPasswordChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -877,9 +1041,15 @@ class _SecurityTab extends StatelessWidget {
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: onRefresh,
-                    icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: const Text('Refresh session'),
+                    onPressed: refreshing ? null : onRefresh,
+                    icon: refreshing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 17),
+                    label: Text(refreshing ? 'Reloading…' : 'Reload session'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white.withValues(alpha: 0.82),
                       side: BorderSide(
@@ -918,12 +1088,28 @@ class _SecurityTab extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: _SetUi.gap),
-        _SettingsPanel(
-          title: 'Password',
-          subtitle: 'Update your account password.',
-          child: const _ChangePasswordPanel(),
-        ),
+        if (hasPassword) ...[
+          const SizedBox(height: _SetUi.gap),
+          _SettingsPanel(
+            title: 'Password',
+            subtitle: 'Update your account password.',
+            child: _ChangePasswordPanel(onChanged: onPasswordChanged),
+          ),
+        ] else ...[
+          const SizedBox(height: _SetUi.gap),
+          _SettingsPanel(
+            title: 'Password',
+            subtitle: 'Portal access activation.',
+            child: Text(
+              'Password is not set yet. Use your invitation link to activate access.',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                height: 1.45,
+                color: _SetUi.textSecondary,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -962,8 +1148,12 @@ class _WorkspaceTab extends StatelessWidget {
 }
 
 class _ApplicationTab extends StatelessWidget {
-  const _ApplicationTab({required this.onCopyApiUrl});
+  const _ApplicationTab({
+    required this.appVersion,
+    required this.onCopyApiUrl,
+  });
 
+  final String appVersion;
   final VoidCallback onCopyApiUrl;
 
   @override
@@ -975,7 +1165,7 @@ class _ApplicationTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const _SettingsRow(label: 'App', value: 'NuaSpa Desktop'),
-          _SettingsRow(label: 'Version', value: _kAppVersion),
+          _SettingsRow(label: 'Version', value: appVersion),
           _SettingsRow(
             label: 'Platform',
             value: defaultTargetPlatform.name,
@@ -1094,7 +1284,9 @@ class _WorkspaceRowState extends State<_WorkspaceRow> {
 }
 
 class _ChangePasswordPanel extends StatefulWidget {
-  const _ChangePasswordPanel();
+  const _ChangePasswordPanel({required this.onChanged});
+
+  final VoidCallback onChanged;
 
   @override
   State<_ChangePasswordPanel> createState() => _ChangePasswordPanelState();
@@ -1133,16 +1325,48 @@ class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result.message),
+        content: Text(SettingsMessages.en(result.message)),
         behavior: SnackBarBehavior.floating,
       ),
     );
     if (result.success) {
+      if (result.token != null && result.token!.isNotEmpty) {
+        await context.read<AuthProvider>().applySessionToken(result.token!);
+      }
       _oldC.clear();
       _newC.clear();
       _confirmC.clear();
       setState(() => _attemptedSubmit = false);
+      widget.onChanged();
     }
+  }
+
+  String? _required(String? value, String label) {
+    if (value == null || value.trim().isEmpty) {
+      return '$label is required.';
+    }
+    return null;
+  }
+
+  String? _newPassword(String? value) {
+    final err = _required(value, 'New password');
+    if (err != null) return err;
+    if (value!.length < 6) {
+      return 'New password must be at least 6 characters.';
+    }
+    if (value == _oldC.text) {
+      return 'New password must be different from your current password.';
+    }
+    return null;
+  }
+
+  String? _confirmPassword(String? value) {
+    final err = _required(value, 'Password confirmation');
+    if (err != null) return err;
+    if (value != _newC.text) {
+      return 'New password and confirmation do not match.';
+    }
+    return null;
   }
 
   InputDecoration _decoration(String label, {Widget? suffix}) {
@@ -1203,10 +1427,7 @@ class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
                         setState(() => _obscureOld = !_obscureOld),
                   ),
                 ),
-                validator: (v) => NuaValidators.requiredText(
-                  v,
-                  fieldLabel: 'Current password',
-                ),
+                validator: (v) => _required(v, 'Current password'),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1226,7 +1447,7 @@ class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
                         setState(() => _obscureNew = !_obscureNew),
                   ),
                 ),
-                validator: NuaValidators.password,
+                validator: _newPassword,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1246,8 +1467,7 @@ class _ChangePasswordPanelState extends State<_ChangePasswordPanel> {
                         setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
                 ),
-                validator: (v) =>
-                    NuaValidators.confirmPassword(v, _newC.text),
+                validator: _confirmPassword,
               ),
             ],
           ),
