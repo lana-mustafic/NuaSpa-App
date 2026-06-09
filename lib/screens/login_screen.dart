@@ -31,20 +31,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final success = await context.read<AuthProvider>().login(
+    final result = await context.read<AuthProvider>().login(
       _usernameController.text.trim(),
       _passwordController.text,
     );
 
     if (!mounted) return;
 
-    if (!success) {
+    if (!result.success && result.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Invalid username or password.'),
+          content: Text(result.errorMessage!),
           backgroundColor: const Color(0xFFEC4899).withValues(alpha: 0.92),
           behavior: SnackBarBehavior.floating,
-          width: 360,
+          width: 420,
         ),
       );
     }
@@ -390,13 +390,13 @@ class _LoginFormCard extends StatelessWidget {
                 const SizedBox(height: 28),
                 _LoginTextField(
                   controller: usernameController,
-                  label: 'Username',
-                  hint: 'your.username',
+                  label: 'Username or email',
+                  hint: 'you@spa.com',
                   icon: Icons.person_outline_rounded,
                   textInputAction: TextInputAction.next,
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {
-                      return 'Please enter your username';
+                      return 'Please enter your username or email';
                     }
                     return null;
                   },
@@ -427,7 +427,6 @@ class _LoginFormCard extends StatelessWidget {
                     if (v == null || v.isEmpty) {
                       return 'Please enter your password';
                     }
-                    if (v.length < 3) return 'Password is too short';
                     return null;
                   },
                 ),
