@@ -647,8 +647,13 @@ class ApiService {
     }
   }
 
-  /// Returns `(success, message)` — message is user-facing in both cases.
-  Future<({bool success, String message})> acceptTherapistInvite({
+  /// Returns activation result; includes JWT when the server signs the user in.
+  Future<({
+    bool success,
+    String message,
+    String? token,
+    String? username,
+  })> acceptTherapistInvite({
     required String token,
     required String password,
     required String confirmPassword,
@@ -663,22 +668,45 @@ class ApiService {
         },
       );
       final data = response.data;
-      final msg = data is Map<String, dynamic>
-          ? (data['message'] as String? ?? 'Account activated.')
-          : 'Account activated.';
-      return (success: true, message: msg);
+      if (data is! Map<String, dynamic>) {
+        return (
+          success: false,
+          message: 'Unexpected server response. Please try again.',
+          token: null,
+          username: null,
+        );
+      }
+      final msg = data['message'] as String? ?? 'Account activated.';
+      final jwt = data['token'] as String?;
+      final username = data['username'] as String?;
+      return (
+        success: true,
+        message: msg,
+        token: jwt,
+        username: username,
+      );
     } on DioException catch (e) {
       final data = e.response?.data;
-      final msg = data is Map && data['message'] != null
-          ? data['message'].toString()
+      final raw = data is Map
+          ? (data['detail'] ?? data['message'])?.toString()
+          : null;
+      final msg = raw?.trim().isNotEmpty == true
+          ? raw!.trim()
           : 'Could not activate account. Check your link and try again.';
       debugPrint('Greška u ApiService.acceptTherapistInvite: $e');
-      return (success: false, message: msg);
+      return (
+        success: false,
+        message: msg,
+        token: null,
+        username: null,
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.acceptTherapistInvite: $e');
       return (
         success: false,
         message: 'Network error. Please try again.',
+        token: null,
+        username: null,
       );
     }
   }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/admin/therapist_account_status.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 
@@ -81,6 +83,15 @@ class _AcceptInviteScreenState extends State<AcceptInviteScreen> {
     if (!mounted) return;
     setState(() => _loading = false);
 
+    if (result.success && result.token != null && result.token!.isNotEmpty) {
+      await context.read<AuthProvider>().applySessionToken(
+            result.token!,
+            username: result.username,
+          );
+      if (!mounted) return;
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result.message),
@@ -88,10 +99,6 @@ class _AcceptInviteScreenState extends State<AcceptInviteScreen> {
         width: 420,
       ),
     );
-
-    if (result.success) {
-      Navigator.pop(context, true);
-    }
   }
 
   @override
@@ -282,7 +289,7 @@ class _AcceptInviteScreenState extends State<AcceptInviteScreen> {
                                   ),
                                 )
                               : Text(
-                                  'Activate & continue to sign in',
+                                  'Activate & sign in',
                                   style: GoogleFonts.inter(
                                     fontWeight: FontWeight.w800,
                                   ),
