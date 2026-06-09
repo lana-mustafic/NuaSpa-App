@@ -50,6 +50,9 @@ class DesktopNav extends ChangeNotifier {
   String _reviewsSearchQuery = '';
   bool _pendingCatalogFavoritesTab = false;
   String? _therapistPageSummary;
+  String? _therapistDashboardTitle;
+  String? _therapistDashboardSubtitle;
+  int _therapistDashboardRefresh = 0;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
   int _appointmentEditRequest = 0;
@@ -127,6 +130,24 @@ class DesktopNav extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? get therapistDashboardTitle => _therapistDashboardTitle;
+
+  /// Dynamic subtitle under therapist dashboard title.
+  String? get therapistDashboardSubtitle => _therapistDashboardSubtitle;
+
+  void setTherapistDashboardHeader({String? title, String? subtitle}) {
+    final changed =
+        _therapistDashboardTitle != title ||
+        _therapistDashboardSubtitle != subtitle;
+    if (!changed) return;
+    _therapistDashboardTitle = title;
+    _therapistDashboardSubtitle = subtitle;
+    notifyListeners();
+  }
+
+  /// Bumped when navigating back to therapist dashboard (refresh data).
+  int get therapistDashboardRefresh => _therapistDashboardRefresh;
+
   String get clientSearchQuery => _clientSearchQuery;
 
   String get paymentSearchQuery => _paymentSearchQuery;
@@ -173,7 +194,13 @@ class DesktopNav extends ChangeNotifier {
         r != DesktopRouteKey.adminCalendar) {
       _calendarSearchCtrl?.clear();
     }
+    final revisitingDashboard =
+        r == DesktopRouteKey.therapistDashboard &&
+        _route != DesktopRouteKey.therapistDashboard;
     _route = r;
+    if (revisitingDashboard) {
+      _therapistDashboardRefresh++;
+    }
     notifyListeners();
   }
 

@@ -4,11 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
+import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/admin/therapist_admin_profile.dart';
-import '../../models/rezervacija.dart';
 import '../../models/therapist/therapist_dashboard.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
+import 'therapist_appointment_detail_dialog.dart';
 import 'therapist_portal_scaffold.dart';
 
 abstract final class _TdUi {
@@ -19,7 +20,6 @@ abstract final class _TdUi {
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
   static const teal = Color(0xFF2DD4BF);
-  static const amber = Color(0xFFF59E0B);
   static const gold = Color(0xFFF5B942);
   static const cardRadius = 18.0;
   static const kpiHeight = 112.0;
@@ -28,88 +28,24 @@ abstract final class _TdUi {
   static const sidebarWidth = 300.0;
 }
 
-DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
-String _formatTime(DateTime d) {
-  final l = d.toLocal();
-  return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+String _greetingFor(String name) {
+  final hour = DateTime.now().hour;
+  final salutation = hour < 12
+      ? 'Good morning'
+      : hour < 18
+      ? 'Good afternoon'
+      : 'Good evening';
+  return '$salutation, $name';
 }
 
-String _formatTimeRange(Rezervacija r) {
-  final start = r.datumRezervacije.toLocal();
-  final end = start.add(Duration(minutes: r.uslugaTrajanjeMinuta));
-  return '${_formatTime(start)} — ${_formatTime(end)}';
-}
-
-String _formatUpcomingDateTime(DateTime d) {
-  final l = d.toLocal();
-  final now = DateTime.now();
-  final today = _dayOnly(now);
-  final day = _dayOnly(l);
-  final time = _formatTime(l);
-  if (day == today) return 'Today, $time';
-  final tomorrow = today.add(const Duration(days: 1));
-  if (day == tomorrow) return 'Tomorrow, $time';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${months[l.month - 1]} ${l.day}, $time';
-}
-
-(String label, Color color) _statusOf(Rezervacija r) {
-  if (r.isOtkazana) return ('Cancelled', _TdUi.amber);
-  if (r.isPotvrdjena) return ('Confirmed', _TdUi.teal);
-  return ('Pending', _TdUi.amber);
-}
-
-List<Rezervacija> _todayAppointments(List<Rezervacija> all) {
-  final today = _dayOnly(DateTime.now());
-  return all
-      .where((r) {
-        final d = _dayOnly(r.datumRezervacije.toLocal());
-        return d == today && !r.isOtkazana;
-      })
-      .toList()
-    ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
-}
-
-List<Rezervacija> _upcomingWeek(List<Rezervacija> all) {
-  final now = DateTime.now();
-  final today = _dayOnly(now);
-  final end = now.add(const Duration(days: 7));
-  return all
-      .where((r) {
-        final day = _dayOnly(r.datumRezervacije.toLocal());
-        return day != today &&
-            r.datumRezervacije.isAfter(now) &&
-            r.datumRezervacije.isBefore(end) &&
-            !r.isOtkazana;
-      })
-      .toList()
-    ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
-}
-
-class _DashboardBundle {
-  const _DashboardBundle({
-    required this.dashboard,
-    required this.appointments,
-    required this.reviews,
-  });
-
-  final TherapistDashboard dashboard;
-  final List<Rezervacija> appointments;
-  final List<TherapistReviewRow> reviews;
+String _subtitleFor(int todayCount) {
+  if (todayCount == 0) {
+    return 'No appointments scheduled today.';
+  }
+  if (todayCount == 1) {
+    return 'You have 1 appointment scheduled today.';
+  }
+  return 'You have $todayCount appointments scheduled today.';
 }
 
 class TherapistDashboardScreen extends StatefulWidget {
@@ -122,7 +58,9 @@ class TherapistDashboardScreen extends StatefulWidget {
 
 class _TherapistDashboardScreenState extends State<TherapistDashboardScreen> {
   final _api = ApiService();
-  Future<_DashboardBundle?>? _future;
+  Future<TherapistDashboard?>? _future;
+  int _lastRefreshToken = -1;
+  String? _loadError;
 
   @override
   void initState() {
@@ -130,36 +68,40 @@ class _TherapistDashboardScreenState extends State<TherapistDashboardScreen> {
     _reload();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final token = context.read<DesktopNav>().therapistDashboardRefresh;
+    if (token != _lastRefreshToken) {
+      _lastRefreshToken = token;
+      if (token > 0) _reload();
+    }
+  }
+
   void _reload() {
     final auth = context.read<AuthProvider>();
     if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
+      setState(() {
+        _loadError = 'You do not have permission to view this dashboard.';
+        _future = Future.value(null);
+      });
       return;
     }
     setState(() {
-      _future = _loadBundle();
+      _loadError = null;
+      _future = _loadDashboard();
     });
   }
 
-  Future<_DashboardBundle?> _loadBundle() async {
-    final results = await Future.wait([
-      _api.getTherapistDashboard(day: DateTime.now()),
-      _api.getRezervacije(),
-      _api.getTherapistMyReviews(maxReviews: 5),
-    ]);
+  Future<TherapistDashboard?> _loadDashboard() async {
+    final data = await _api.getTherapistDashboard(day: DateTime.now());
+    if (!mounted || data == null) return data;
 
-    final dashboard = results[0] as TherapistDashboard?;
-    if (dashboard == null) return null;
-
-    final appointments = results[1] as List<Rezervacija>;
-    final reviewResult = results[2] as (List<TherapistReviewRow>, String?);
-    final reviews = List<TherapistReviewRow>.from(reviewResult.$1)
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    return _DashboardBundle(
-      dashboard: dashboard,
-      appointments: appointments,
-      reviews: reviews,
+    context.read<DesktopNav>().setTherapistDashboardHeader(
+      title: _greetingFor(data.therapistIme),
+      subtitle: _subtitleFor(data.todayAppointments),
     );
+    return data;
   }
 
   @override
@@ -174,7 +116,7 @@ class _TherapistDashboardScreenState extends State<TherapistDashboardScreen> {
     }
 
     return _TherapistDashShell(
-      child: FutureBuilder<_DashboardBundle?>(
+      child: FutureBuilder<TherapistDashboard?>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -186,16 +128,16 @@ class _TherapistDashboardScreenState extends State<TherapistDashboardScreen> {
               ),
             );
           }
-          final bundle = snap.data;
-          if (bundle == null) {
+          final d = snap.data;
+          if (d == null) {
             return _TherapistDashGlass(
               padding: const EdgeInsets.all(28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'Could not load dashboard.',
-                    style: TextStyle(
+                  Text(
+                    _loadError ?? 'Could not load dashboard.',
+                    style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       color: _TdUi.textPrimary,
                     ),
@@ -210,7 +152,7 @@ class _TherapistDashboardScreenState extends State<TherapistDashboardScreen> {
               ),
             );
           }
-          return _TherapistDashboardBody(bundle: bundle);
+          return _TherapistDashboardBody(data: d);
         },
       ),
     );
@@ -238,15 +180,12 @@ class _TherapistDashShell extends StatelessWidget {
 }
 
 class _TherapistDashboardBody extends StatelessWidget {
-  const _TherapistDashboardBody({required this.bundle});
+  const _TherapistDashboardBody({required this.data});
 
-  final _DashboardBundle bundle;
+  final TherapistDashboard data;
 
   @override
   Widget build(BuildContext context) {
-    final data = bundle.dashboard;
-    final today = _todayAppointments(bundle.appointments);
-    final upcoming = _upcomingWeek(bundle.appointments);
     final rating = data.prosjecnaOcjena;
     final ratingLabel = rating > 0 ? rating.toStringAsFixed(1) : '—';
     final revenueLabel = '${data.revenueThisMonth.toStringAsFixed(0)} KM';
@@ -284,14 +223,14 @@ class _TherapistDashboardBody extends StatelessWidget {
                   _TherapistKpiSpec(
                     title: 'Rating',
                     value: ratingLabel,
-                    helper: 'Average rating',
+                    helper: 'All-time average',
                     icon: Icons.star_rounded,
                     accent: _TdUi.gold,
                   ),
                   _TherapistKpiSpec(
                     title: 'Revenue',
                     value: revenueLabel,
-                    helper: 'This month',
+                    helper: 'Collected this month',
                     icon: Icons.account_balance_wallet_rounded,
                     accent: _TdUi.lavender,
                   ),
@@ -301,9 +240,9 @@ class _TherapistDashboardBody extends StatelessWidget {
               if (stack)
                 Column(
                   children: [
-                    _TodayScheduleCard(appointments: today),
+                    _TodayScheduleCard(appointments: data.todaySchedule),
                     const SizedBox(height: _TdUi.gap),
-                    _DashboardSidebar(upcoming: upcoming),
+                    _DashboardSidebar(upcoming: data.upcomingSchedule),
                   ],
                 )
               else
@@ -312,20 +251,21 @@ class _TherapistDashboardBody extends StatelessWidget {
                   children: [
                     Expanded(
                       flex: 3,
-                      child: _TodayScheduleCard(appointments: today),
+                      child: _TodayScheduleCard(appointments: data.todaySchedule),
                     ),
                     const SizedBox(width: _TdUi.gap),
                     SizedBox(
                       width: _TdUi.sidebarWidth,
-                      child: _DashboardSidebar(upcoming: upcoming),
+                      child: _DashboardSidebar(upcoming: data.upcomingSchedule),
                     ),
                   ],
                 ),
               const SizedBox(height: _TdUi.gap),
               _MyReviewsCard(
-                reviews: bundle.reviews,
+                latestReview: data.latestReview,
                 averageRating: rating,
                 reviewCount: data.reviewCount,
+                completedThisMonth: data.completedThisMonth,
               ),
             ],
           ),
@@ -469,7 +409,7 @@ class _TherapistKpiCardState extends State<_TherapistKpiCard> {
 class _DashboardSidebar extends StatelessWidget {
   const _DashboardSidebar({required this.upcoming});
 
-  final List<Rezervacija> upcoming;
+  final List<TherapistDashboardAppointmentRow> upcoming;
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +426,7 @@ class _DashboardSidebar extends StatelessWidget {
 class _TodayScheduleCard extends StatelessWidget {
   const _TodayScheduleCard({required this.appointments});
 
-  final List<Rezervacija> appointments;
+  final List<TherapistDashboardAppointmentRow> appointments;
 
   @override
   Widget build(BuildContext context) {
@@ -510,13 +450,32 @@ class _TodayScheduleCard extends StatelessWidget {
               onAction: () => nav.goTo(DesktopRouteKey.schedule),
             )
           else
-            Column(
-              children: [
-                for (var i = 0; i < appointments.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 10),
-                  _ScheduleAppointmentRow(r: appointments[i]),
-                ],
-              ],
+            Builder(
+              builder: (context) {
+                final now = DateTime.now();
+                var nextIndex = -1;
+                for (var i = 0; i < appointments.length; i++) {
+                  final row = appointments[i];
+                  final end = row.datumRezervacije.add(
+                    Duration(minutes: row.uslugaTrajanjeMinuta),
+                  );
+                  if (end.isAfter(now)) {
+                    nextIndex = i;
+                    break;
+                  }
+                }
+                return Column(
+                  children: [
+                    for (var i = 0; i < appointments.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      _ScheduleAppointmentRow(
+                        row: appointments[i],
+                        highlightNext: i == nextIndex,
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
         ],
       ),
@@ -525,83 +484,131 @@ class _TodayScheduleCard extends StatelessWidget {
 }
 
 class _ScheduleAppointmentRow extends StatelessWidget {
-  const _ScheduleAppointmentRow({required this.r});
+  const _ScheduleAppointmentRow({
+    required this.row,
+    this.highlightNext = false,
+  });
 
-  final Rezervacija r;
+  final TherapistDashboardAppointmentRow row;
+  final bool highlightNext;
 
   @override
   Widget build(BuildContext context) {
-    final status = _statusOf(r);
-    final hasNotes =
-        r.napomenaZaTerapeuta != null && r.napomenaZaTerapeuta!.trim().isNotEmpty;
+    final status = TherapistAppointmentUtils.statusOfDashboardRow(row);
+    final notes = row.napomenaZaTerapeuta?.trim();
+    final hasNotes = notes != null && notes.isNotEmpty;
+    final room = row.prostorijaNaziv?.trim();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => showTherapistAppointmentDetailDialog(context, row),
         borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 108,
-            child: Text(
-              _formatTimeRange(r),
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: _TdUi.lavender,
-                height: 1.35,
-              ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: highlightNext
+                ? _TdUi.purple.withValues(alpha: 0.1)
+                : Colors.white.withValues(alpha: 0.04),
+            border: Border.all(
+              color: highlightNext
+                  ? _TdUi.purple.withValues(alpha: 0.28)
+                  : Colors.white.withValues(alpha: 0.08),
             ),
           ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r.korisnikIme ?? 'Client',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _TdUi.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Row(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 108,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        '${r.uslugaNaziv ?? 'Service'} · ${r.uslugaTrajanjeMinuta} min',
+                    if (highlightNext)
+                      Text(
+                        'Next',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: _TdUi.lavender,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    Text(
+                      TherapistAppointmentUtils.formatTimeRange(
+                        start: row.datumRezervacije,
+                        durationMinutes: row.uslugaTrajanjeMinuta,
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _TdUi.lavender,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.korisnikIme ?? 'Client',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _TdUi.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${row.uslugaNaziv ?? 'Service'} · ${row.uslugaTrajanjeMinuta} min',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: _TdUi.textSecondary,
+                            ),
+                          ),
+                        ),
+                        if (hasNotes) ...[
+                          const SizedBox(width: 6),
+                          Tooltip(
+                            message: notes,
+                            child: Icon(
+                              Icons.sticky_note_2_outlined,
+                              size: 14,
+                              color: _TdUi.gold.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (room != null && room.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        room,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: _TdUi.textSecondary,
-                        ),
-                      ),
-                    ),
-                    if (hasNotes) ...[
-                      const SizedBox(width: 6),
-                      Tooltip(
-                        message: 'Client notes available',
-                        child: Icon(
-                          Icons.sticky_note_2_outlined,
-                          size: 14,
-                          color: _TdUi.gold.withValues(alpha: 0.9),
                         ),
                       ),
                     ],
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              _StatusBadge(label: status.label, color: status.color),
+            ],
           ),
-          const SizedBox(width: 10),
-          _StatusBadge(label: status.$1, color: status.$2),
-        ],
+        ),
       ),
     );
   }
@@ -610,12 +617,11 @@ class _ScheduleAppointmentRow extends StatelessWidget {
 class _UpcomingAppointmentsCard extends StatelessWidget {
   const _UpcomingAppointmentsCard({required this.upcoming});
 
-  final List<Rezervacija> upcoming;
+  final List<TherapistDashboardAppointmentRow> upcoming;
 
   @override
   Widget build(BuildContext context) {
     final nav = context.read<DesktopNav>();
-    final shown = upcoming.take(4).toList();
 
     return _TherapistDashGlass(
       padding: const EdgeInsets.all(18),
@@ -652,7 +658,7 @@ class _UpcomingAppointmentsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (shown.isEmpty)
+          if (upcoming.isEmpty)
             Text(
               'No upcoming appointments.',
               style: GoogleFonts.inter(
@@ -664,9 +670,9 @@ class _UpcomingAppointmentsCard extends StatelessWidget {
           else
             Column(
               children: [
-                for (var i = 0; i < shown.length; i++) ...[
+                for (var i = 0; i < upcoming.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
-                  _UpcomingRow(r: shown[i]),
+                  _UpcomingRow(row: upcoming[i]),
                 ],
               ],
             ),
@@ -677,60 +683,73 @@ class _UpcomingAppointmentsCard extends StatelessWidget {
 }
 
 class _UpcomingRow extends StatelessWidget {
-  const _UpcomingRow({required this.r});
+  const _UpcomingRow({required this.row});
 
-  final Rezervacija r;
+  final TherapistDashboardAppointmentRow row;
 
   @override
   Widget build(BuildContext context) {
-    final status = _statusOf(r);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
+    final status = TherapistAppointmentUtils.statusOfDashboardRow(row);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => showTherapistAppointmentDetailDialog(context, row),
         borderRadius: BorderRadius.circular(12),
-        color: Colors.white.withValues(alpha: 0.03),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _formatUpcomingDateTime(r.datumRezervacije),
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _TdUi.lavender,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  r.korisnikIme ?? 'Client',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _TdUi.textPrimary,
-                  ),
-                ),
-                Text(
-                  r.uslugaNaziv ?? 'Service',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: _TdUi.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withValues(alpha: 0.03),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
           ),
-          const SizedBox(width: 8),
-          _StatusBadge(label: status.$1, color: status.$2, compact: true),
-        ],
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      TherapistAppointmentUtils.formatUpcomingDateTime(
+                        row.datumRezervacije,
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _TdUi.lavender,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row.korisnikIme ?? 'Client',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _TdUi.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      row.uslugaNaziv ?? 'Service',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: _TdUi.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _StatusBadge(
+                label: status.label,
+                color: status.color,
+                compact: true,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -852,20 +871,21 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
 
 class _MyReviewsCard extends StatelessWidget {
   const _MyReviewsCard({
-    required this.reviews,
+    required this.latestReview,
     required this.averageRating,
     required this.reviewCount,
+    required this.completedThisMonth,
   });
 
-  final List<TherapistReviewRow> reviews;
+  final TherapistReviewRow? latestReview;
   final double averageRating;
   final int reviewCount;
+  final int completedThisMonth;
 
   @override
   Widget build(BuildContext context) {
     final nav = context.read<DesktopNav>();
-    final hasReviews = reviewCount > 0 && reviews.isNotEmpty;
-    final latest = hasReviews ? reviews.first : null;
+    final hasReviews = reviewCount > 0 && latestReview != null;
     final ratingLabel =
         averageRating > 0 ? averageRating.toStringAsFixed(1) : '—';
 
@@ -964,8 +984,8 @@ class _MyReviewsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        latest!.komentar.trim().isNotEmpty
-                            ? latest.komentar.trim()
+                        latestReview!.komentar.trim().isNotEmpty
+                            ? latestReview!.komentar.trim()
                             : 'No comment provided.',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -977,7 +997,7 @@ class _MyReviewsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${latest.korisnikIme} · ${latest.uslugaNaziv}',
+                        '${latestReview!.korisnikIme} · ${latestReview!.uslugaNaziv}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
@@ -990,6 +1010,15 @@ class _MyReviewsCard extends StatelessWidget {
                 ),
               ],
             ),
+          const SizedBox(height: 12),
+          Text(
+            '$completedThisMonth completed appointments this month',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _TdUi.textSecondary,
+            ),
+          ),
         ],
       ),
     );

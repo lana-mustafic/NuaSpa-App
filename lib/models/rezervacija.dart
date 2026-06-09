@@ -18,6 +18,7 @@ class Rezervacija {
   final double uslugaCijena;
   final int zaposlenikId;
   final String? zaposlenikIme;
+  final String? prostorijaNaziv;
   final bool premiumKlijent;
   /// VIP tretman na samoj rezervaciji (postavlja admin).
   final bool isVip;
@@ -42,6 +43,7 @@ class Rezervacija {
     this.uslugaCijena = 0,
     this.zaposlenikId = 0,
     this.zaposlenikIme,
+    this.prostorijaNaziv,
     this.premiumKlijent = false,
     this.isVip = false,
   });
@@ -72,6 +74,7 @@ class Rezervacija {
       uslugaCijena: (json['uslugaCijena'] as num?)?.toDouble() ?? 0,
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
+      prostorijaNaziv: json['prostorijaNaziv'] as String?,
       premiumKlijent: json['premiumKlijent'] as bool? ?? false,
       isVip: json['isVip'] as bool? ?? false,
     );

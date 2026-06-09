@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
+import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/rezervacija.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
@@ -84,7 +85,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     _fadeCtrl.forward(from: 0);
   }
 
-  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  DateTime _dayOnly(DateTime d) => TherapistAppointmentUtils.dayOnly(d);
 
   bool _isThisMonth(DateTime d) {
     final now = DateTime.now();
@@ -96,13 +97,8 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
       .toList()
     ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
 
-  List<Rezervacija> _today(List<Rezervacija> all, DateTime today) => all
-      .where((r) {
-        final d = _dayOnly(r.datumRezervacije.toLocal());
-        return d == today && !r.isOtkazana;
-      })
-      .toList()
-    ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
+  List<Rezervacija> _today(List<Rezervacija> all, DateTime today) =>
+      TherapistAppointmentUtils.todayAppointments(all, reference: today);
 
   List<Rezervacija> _completed(List<Rezervacija> all, DateTime now) => all
       .where((r) => r.datumRezervacije.isBefore(now) && !r.isOtkazana)
@@ -971,11 +967,7 @@ class _AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = r.isOtkazana
-        ? ('Cancelled', _ApptUi.orange)
-        : r.isPotvrdjena
-        ? ('Confirmed', _ApptUi.green)
-        : ('Pending', _ApptUi.lavender);
+    final status = TherapistAppointmentUtils.statusOfRezervacija(r);
 
     return _ApptGlass(
       padding: const EdgeInsets.all(20),
@@ -1027,7 +1019,7 @@ class _AppointmentCard extends StatelessWidget {
               ],
             ),
           ),
-          _StatusChip(label: status.$1, color: status.$2),
+          _StatusChip(label: status.label, color: status.color),
         ],
       ),
     );
