@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
+import '../core/api/auth_login_failure.dart';
 import '../core/api/auth_repository.dart';
 import '../core/api/services/api_service.dart';
-import '../core/jwt_roles.dart';
 import '../core/auth/auth_events.dart';
+import '../core/auth/login_messages.dart';
+import '../core/jwt_roles.dart';
 
 enum AuthStatus {
   initializing,
@@ -66,42 +68,62 @@ class AuthProvider extends ChangeNotifier {
     _loggedInUsername ??= parseJwtStringClaim(token, 'unique_name');
   }
 
-  Future<bool> login(String username, String password) async {
+  Future<({bool success, String? errorMessage})> login(
+    String username,
+    String password,
+  ) async {
     _status = AuthStatus.authenticating;
     notifyListeners();
 
     try {
       debugPrint(
-        "Pokušaj logina za: $username na ${_repository.baseUrlForDebug}",
+        'AuthProvider.login attempt for $username at ${_repository.baseUrlForDebug}',
       );
       final response = await _repository.login(username, password);
-      
-      // Provjeravamo da li response sadrži token
-      if (response.data != null && response.data['token'] != null) {
-        final token = response.data['token'];
+      final data = response.data;
+      final token = data is Map ? data['token'] as String? : null;
+
+      if (token != null && token.isNotEmpty) {
+        final apiUsername = data is Map ? data['username'] as String? : null;
         await _storage.write(key: 'jwt_token', value: token);
-        _loggedInUsername = username.trim();
+        _loggedInUsername = (apiUsername?.trim().isNotEmpty == true
+                ? apiUsername!.trim()
+                : username.trim());
         await _refreshRolesFromToken();
         _status = AuthStatus.authenticated;
         notifyListeners();
-        return true;
-      } else {
-        debugPrint("Login uspio, ali token nije pronađen u odgovoru.");
-        _roles = [];
-        _zaposlenikId = null;
-        _loggedInUsername = null;
-        _status = AuthStatus.error;
-        notifyListeners();
-        return false;
+        return (success: true, errorMessage: null);
       }
-    } catch (e) {
-      debugPrint("Login Error: $e"); // Ovo će ti reći ako je Connection Refused
+
+      debugPrint('AuthProvider.login: response missing token.');
       _roles = [];
       _zaposlenikId = null;
       _loggedInUsername = null;
-      _status = AuthStatus.error;
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
-      return false;
+      return (
+        success: false,
+        errorMessage: LoginMessages.en('Sign-in failed. Please try again.'),
+      );
+    } on AuthLoginFailure catch (e) {
+      debugPrint('AuthProvider.login failed: ${e.message}');
+      _roles = [];
+      _zaposlenikId = null;
+      _loggedInUsername = null;
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
+      return (success: false, errorMessage: e.message);
+    } catch (e) {
+      debugPrint('AuthProvider.login unexpected error: $e');
+      _roles = [];
+      _zaposlenikId = null;
+      _loggedInUsername = null;
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
+      return (
+        success: false,
+        errorMessage: LoginMessages.en('Sign-in failed. Please try again.'),
+      );
     }
   }
 
