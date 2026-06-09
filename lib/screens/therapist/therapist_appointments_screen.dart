@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +8,7 @@ import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/rezervacija.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
-import '../../ui/widgets/luxury/luxury_mini_sparkline.dart';
+import 'therapist_appointment_detail_dialog.dart';
 import 'therapist_portal_scaffold.dart';
 
 abstract final class _ApptUi {
@@ -20,21 +18,12 @@ abstract final class _ApptUi {
   static const textSecondary = Color(0xA6FFFFFF);
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
+  static const teal = Color(0xFF2DD4BF);
   static const green = Color(0xFF22C55E);
-  static const orange = Color(0xFFF97316);
-  static const pink = Color(0xFFEC4899);
-  static const cardRadius = 24.0;
-  static const heroRadius = 30.0;
-  static const kpiHeight = 190.0;
-  static const gap = 24.0;
-  static const sidebarWidth = 340.0;
+  static const red = Color(0xFFEF4444);
+  static const cardRadius = 18.0;
+  static const gap = 16.0;
   static const contentPadding = 32.0;
-}
-
-List<double> _sparkFrom(num value, {int points = 7}) {
-  final v = value.toDouble();
-  if (v <= 0) return List<double>.filled(points, 0);
-  return List.generate(points, (i) => v * (0.55 + 0.45 * (i / (points - 1))));
 }
 
 class TherapistAppointmentsScreen extends StatefulWidget {
@@ -61,7 +50,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     super.initState();
     _fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 280),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
     _reload();
@@ -86,11 +75,6 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
   }
 
   DateTime _dayOnly(DateTime d) => TherapistAppointmentUtils.dayOnly(d);
-
-  bool _isThisMonth(DateTime d) {
-    final now = DateTime.now();
-    return d.year == now.year && d.month == now.month;
-  }
 
   List<Rezervacija> _upcoming(List<Rezervacija> all, DateTime now) => all
       .where((r) => r.datumRezervacije.isAfter(now) && !r.isOtkazana)
@@ -140,38 +124,41 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
 
   _ApptMetrics _metrics(List<Rezervacija> all) {
     final now = DateTime.now();
+    final today = _dayOnly(now);
     final upcoming = _upcoming(all, now);
-    final completed = _completed(all, now);
-    final cancelled = _cancelled(all);
-    final monthTotal =
-        all.where((r) => _isThisMonth(r.datumRezervacije.toLocal())).length;
-    final monthCompleted = completed
-        .where((r) => _isThisMonth(r.datumRezervacije.toLocal()))
-        .length;
     return _ApptMetrics(
       upcoming: upcoming.length,
-      completed: completed.length,
-      cancelled: cancelled.length,
-      monthTotal: monthTotal,
-      monthCompleted: monthCompleted,
-      upcomingList: upcoming.take(5).toList(),
+      today: _today(all, today).length,
+      completed: _completed(all, now).length,
+      cancelled: _cancelled(all).length,
+      nextAppointment: upcoming.isEmpty ? null : upcoming.first,
+      tabCounts: {
+        'Upcoming': upcoming.length,
+        'Today': _today(all, today).length,
+        'Completed': _completed(all, now).length,
+        'Cancelled': _cancelled(all).length,
+      },
     );
   }
 
-  String _formatDt(DateTime d) {
+  String _formatCardDate(DateTime d) {
     final l = d.toLocal();
-    return '${l.day.toString().padLeft(2, '0')}.${l.month.toString().padLeft(2, '0')}.${l.year} '
-        '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        width: 420,
-      ),
-    );
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final time = TherapistAppointmentUtils.formatTime(l);
+    return '${months[l.month - 1]} ${l.day}, ${l.year} · $time';
   }
 
   @override
@@ -200,70 +187,71 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
           final all = snap.data ?? [];
           final metrics = _metrics(all);
           final filtered = _applyStatus(_applyTab(all));
+          final nav = context.read<DesktopNav>();
 
           return FadeTransition(
             opacity: _fadeAnim,
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final wide = c.maxWidth >= 1100;
-                final main = _MainColumn(
-                  tab: _tab,
-                  statusFilter: _statusFilter,
-                  metrics: metrics,
-                  filtered: filtered,
-                  onTab: _selectTab,
-                  onStatus: (v) => setState(() => _statusFilter = v),
-                  onRefresh: _reload,
-                  onNewAppointment: () {
-                    _snack(
-                      'New bookings are created by your spa admin. Open My Schedule to review your day.',
-                    );
-                  },
-                  formatDt: _formatDt,
-                );
-                final sidebar = _RightSidebar(
-                  upcoming: metrics.upcomingList,
-                  onViewCalendar: () =>
-                      context.read<DesktopNav>().goTo(DesktopRouteKey.schedule),
-                  onNewAppointment: () {
-                    _snack(
-                      'Contact your spa administrator to book a new appointment.',
-                    );
-                  },
-                  onBlockTime: () {
-                    _snack('Use My Schedule to review and manage your day.');
-                    context.read<DesktopNav>().goTo(DesktopRouteKey.schedule);
-                  },
-                  onViewSchedule: () =>
-                      context.read<DesktopNav>().goTo(DesktopRouteKey.schedule),
-                );
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                _ApptUi.contentPadding,
+                8,
+                _ApptUi.contentPadding,
+                40,
+              ),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final wide = c.maxWidth >= 1024;
+                  final listPane = _AppointmentListPane(
+                    filtered: filtered,
+                    formatCardDate: _formatCardDate,
+                  );
+                  final sidebar = _AppointmentsSidebar(
+                    next: metrics.nextAppointment,
+                    onOpenDetails: (r) =>
+                        showTherapistRezervacijaDetailDialog(context, r),
+                    onViewSchedule: () =>
+                        nav.goTo(DesktopRouteKey.schedule),
+                    onManageAvailability: () =>
+                        nav.goTo(DesktopRouteKey.schedule),
+                    onMyReviews: () =>
+                        nav.goTo(DesktopRouteKey.therapistReviews),
+                  );
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    _ApptUi.contentPadding,
-                    8,
-                    _ApptUi.contentPadding,
-                    40,
-                  ),
-                  child: wide
-                      ? Row(
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ApptTabsRow(
+                        active: _tab,
+                        counts: metrics.tabCounts,
+                        onTab: _selectTab,
+                      ),
+                      const SizedBox(height: 12),
+                      _FilterToolbar(
+                        statusFilter: _statusFilter,
+                        onStatus: (v) => setState(() => _statusFilter = v),
+                        onRefresh: _reload,
+                      ),
+                      const SizedBox(height: 12),
+                      _SummaryStrip(metrics: metrics),
+                      const SizedBox(height: _ApptUi.gap),
+                      if (wide)
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: main),
+                            Expanded(flex: 7, child: listPane),
                             const SizedBox(width: _ApptUi.gap),
-                            SizedBox(width: _ApptUi.sidebarWidth, child: sidebar),
+                            Expanded(flex: 3, child: sidebar),
                           ],
                         )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            main,
-                            const SizedBox(height: _ApptUi.gap),
-                            sidebar,
-                          ],
-                        ),
-                );
-              },
+                      else ...[
+                        listPane,
+                        const SizedBox(height: _ApptUi.gap),
+                        sidebar,
+                      ],
+                    ],
+                  );
+                },
+              ),
             ),
           );
         },
@@ -275,19 +263,19 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
 class _ApptMetrics {
   const _ApptMetrics({
     required this.upcoming,
+    required this.today,
     required this.completed,
     required this.cancelled,
-    required this.monthTotal,
-    required this.monthCompleted,
-    required this.upcomingList,
+    required this.tabCounts,
+    this.nextAppointment,
   });
 
   final int upcoming;
+  final int today;
   final int completed;
   final int cancelled;
-  final int monthTotal;
-  final int monthCompleted;
-  final List<Rezervacija> upcomingList;
+  final Rezervacija? nextAppointment;
+  final Map<String, int> tabCounts;
 }
 
 class _ApptShell extends StatelessWidget {
@@ -297,175 +285,28 @@ class _ApptShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [_ApptUi.bgTop, _ApptUi.bgBottom],
-            ),
-          ),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_ApptUi.bgTop, _ApptUi.bgBottom],
         ),
-        Positioned(
-          top: -80,
-          left: -40,
-          child: Container(
-            width: 320,
-            height: 320,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  _ApptUi.purple.withValues(alpha: 0.22),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 60,
-          right: -60,
-          child: Container(
-            width: 280,
-            height: 280,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  _ApptUi.lavender.withValues(alpha: 0.14),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-        child,
-      ],
-    );
-  }
-}
-
-class _MainColumn extends StatelessWidget {
-  const _MainColumn({
-    required this.tab,
-    required this.statusFilter,
-    required this.metrics,
-    required this.filtered,
-    required this.onTab,
-    required this.onStatus,
-    required this.onRefresh,
-    required this.onNewAppointment,
-    required this.formatDt,
-  });
-
-  final String tab;
-  final String statusFilter;
-  final _ApptMetrics metrics;
-  final List<Rezervacija> filtered;
-  final ValueChanged<String> onTab;
-  final ValueChanged<String> onStatus;
-  final VoidCallback onRefresh;
-  final VoidCallback onNewAppointment;
-  final String Function(DateTime) formatDt;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _ToolbarRow(
-          tab: tab,
-          statusFilter: statusFilter,
-          onTab: onTab,
-          onStatus: onStatus,
-          onRefresh: onRefresh,
-          onNewAppointment: onNewAppointment,
-        ),
-        const SizedBox(height: _ApptUi.gap),
-        _KpiRow(metrics: metrics),
-        const SizedBox(height: _ApptUi.gap),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
-          child: filtered.isEmpty
-              ? _MainEmptyState(
-                  key: ValueKey('empty_$tab'),
-                  tab: tab,
-                  onViewSchedule: () => context
-                      .read<DesktopNav>()
-                      .goTo(DesktopRouteKey.schedule),
-                )
-              : _AppointmentList(
-                  key: ValueKey('list_${tab}_$statusFilter'),
-                  items: filtered,
-                  formatDt: formatDt,
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ToolbarRow extends StatelessWidget {
-  const _ToolbarRow({
-    required this.tab,
-    required this.statusFilter,
-    required this.onTab,
-    required this.onStatus,
-    required this.onRefresh,
-    required this.onNewAppointment,
-  });
-
-  final String tab;
-  final String statusFilter;
-  final ValueChanged<String> onTab;
-  final ValueChanged<String> onStatus;
-  final VoidCallback onRefresh;
-  final VoidCallback onNewAppointment;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final stack = c.maxWidth < 900;
-        final tabs = _ApptTabsRow(active: tab, onTab: onTab);
-        final actions = _ToolbarActions(
-          statusFilter: statusFilter,
-          onStatus: onStatus,
-          onRefresh: onRefresh,
-          onNewAppointment: onNewAppointment,
-        );
-        if (stack) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              tabs,
-              const SizedBox(height: 14),
-              actions,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(child: tabs),
-            const SizedBox(width: 16),
-            actions,
-          ],
-        );
-      },
+      ),
+      child: child,
     );
   }
 }
 
 class _ApptTabsRow extends StatelessWidget {
-  const _ApptTabsRow({required this.active, required this.onTab});
+  const _ApptTabsRow({
+    required this.active,
+    required this.counts,
+    required this.onTab,
+  });
 
   final String active;
+  final Map<String, int> counts;
   final ValueChanged<String> onTab;
 
   @override
@@ -477,6 +318,7 @@ class _ApptTabsRow extends StatelessWidget {
           for (final t in _TherapistAppointmentsScreenState._tabs)
             _ApptTab(
               label: t,
+              count: counts[t] ?? 0,
               selected: active == t,
               onTap: () => onTab(t),
             ),
@@ -489,11 +331,13 @@ class _ApptTabsRow extends StatelessWidget {
 class _ApptTab extends StatefulWidget {
   const _ApptTab({
     required this.label,
+    required this.count,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final int count;
   final bool selected;
   final VoidCallback onTap;
 
@@ -513,34 +357,26 @@ class _ApptTabState extends State<_ApptTab> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.only(right: 28),
-          padding: const EdgeInsets.only(bottom: 10),
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected
-                    ? _ApptUi.purple
-                    : (_hover
-                        ? _ApptUi.lavender.withValues(alpha: 0.35)
-                        : Colors.transparent),
-                width: selected ? 2.5 : 1,
-              ),
+            borderRadius: BorderRadius.circular(12),
+            color: selected
+                ? _ApptUi.purple.withValues(alpha: 0.18)
+                : (_hover
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.transparent),
+            border: Border.all(
+              color: selected
+                  ? _ApptUi.purple.withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: 0.06),
             ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: _ApptUi.purple.withValues(alpha: 0.45),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
           ),
           child: Text(
-            widget.label,
+            '${widget.label} (${widget.count})',
             style: GoogleFonts.inter(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
               color: selected
                   ? _ApptUi.textPrimary
@@ -553,29 +389,24 @@ class _ApptTabState extends State<_ApptTab> {
   }
 }
 
-class _ToolbarActions extends StatelessWidget {
-  const _ToolbarActions({
+class _FilterToolbar extends StatelessWidget {
+  const _FilterToolbar({
     required this.statusFilter,
     required this.onStatus,
     required this.onRefresh,
-    required this.onNewAppointment,
   });
 
   final String statusFilter;
   final ValueChanged<String> onStatus;
   final VoidCallback onRefresh;
-  final VoidCallback onNewAppointment;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Row(
       children: [
         _ApptGlass(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          radius: 14,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          radius: 12,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: statusFilter,
@@ -586,22 +417,10 @@ class _ToolbarActions extends StatelessWidget {
                 fontSize: 13,
               ),
               items: const [
-                DropdownMenuItem(
-                  value: 'All Status',
-                  child: Text('All Status'),
-                ),
-                DropdownMenuItem(
-                  value: 'Confirmed',
-                  child: Text('Confirmed'),
-                ),
-                DropdownMenuItem(
-                  value: 'Pending',
-                  child: Text('Pending'),
-                ),
-                DropdownMenuItem(
-                  value: 'Cancelled',
-                  child: Text('Cancelled'),
-                ),
+                DropdownMenuItem(value: 'All Status', child: Text('All Status')),
+                DropdownMenuItem(value: 'Confirmed', child: Text('Confirmed')),
+                DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+                DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
               ],
               onChanged: (v) {
                 if (v != null) onStatus(v);
@@ -609,325 +428,59 @@ class _ToolbarActions extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
         _IconGlassButton(
           icon: Icons.refresh_rounded,
           tooltip: 'Refresh',
           onTap: onRefresh,
         ),
-        _PrimaryGradientButton(
-          label: '+ New Appointment',
-          icon: Icons.add_rounded,
-          onTap: onNewAppointment,
-        ),
       ],
     );
   }
 }
 
-class _KpiRow extends StatelessWidget {
-  const _KpiRow({required this.metrics});
+class _SummaryStrip extends StatelessWidget {
+  const _SummaryStrip({required this.metrics});
 
   final _ApptMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
-      _KpiSpec(
-        label: 'Upcoming',
-        value: '${metrics.upcoming}',
-        suffix: ' appointments',
-        trend: '0% vs yesterday',
-        icon: Icons.upcoming_rounded,
-        accent: _ApptUi.purple,
-        sparkline: _sparkFrom(metrics.upcoming),
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(17),
+        color: Colors.white.withValues(alpha: 0.035),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      _KpiSpec(
-        label: 'Completed',
-        value: '${metrics.completed}',
-        suffix: '',
-        trend: '0% vs last month',
-        icon: Icons.check_circle_rounded,
-        accent: _ApptUi.green,
-        sparkline: _sparkFrom(metrics.completed),
-      ),
-      _KpiSpec(
-        label: 'Cancelled',
-        value: '${metrics.cancelled}',
-        suffix: '',
-        trend: '0% vs last month',
-        icon: Icons.cancel_rounded,
-        accent: _ApptUi.orange,
-        sparkline: _sparkFrom(metrics.cancelled),
-      ),
-      _KpiSpec(
-        label: 'Total This Month',
-        value: '${metrics.monthTotal}',
-        suffix: ' appointments',
-        trend: '0% vs last month',
-        icon: Icons.calendar_month_rounded,
-        accent: _ApptUi.pink,
-        sparkline: _sparkFrom(metrics.monthTotal),
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final cols = c.maxWidth >= 1200
-            ? 4
-            : c.maxWidth >= 600
-            ? 2
-            : 1;
-        final w = (c.maxWidth - 18 * (cols - 1)) / cols;
-        return Wrap(
-          spacing: 18,
-          runSpacing: 18,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
           children: [
-            for (final card in cards)
-              SizedBox(
-                width: w.clamp(200, c.maxWidth),
-                height: _ApptUi.kpiHeight,
-                child: _KpiCard(spec: card),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _KpiSpec {
-  const _KpiSpec({
-    required this.label,
-    required this.value,
-    required this.suffix,
-    required this.trend,
-    required this.icon,
-    required this.accent,
-    required this.sparkline,
-  });
-
-  final String label;
-  final String value;
-  final String suffix;
-  final String trend;
-  final IconData icon;
-  final Color accent;
-  final List<double> sparkline;
-}
-
-class _KpiCard extends StatefulWidget {
-  const _KpiCard({required this.spec});
-
-  final _KpiSpec spec;
-
-  @override
-  State<_KpiCard> createState() => _KpiCardState();
-}
-
-class _KpiCardState extends State<_KpiCard> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.spec;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: double.infinity,
-        transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
-        child: _ApptGlass(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: s.accent.withValues(alpha: 0.14),
-                  border: Border.all(color: s.accent.withValues(alpha: 0.38)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: s.accent.withValues(alpha: _hover ? 0.5 : 0.28),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: Icon(s.icon, color: s.accent, size: 20),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                s.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _ApptUi.textSecondary,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              RichText(
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  style: GoogleFonts.inter(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: _ApptUi.textPrimary,
-                    height: 1.0,
-                  ),
-                  children: [
-                    TextSpan(text: s.value),
-                    if (s.suffix.isNotEmpty)
-                      TextSpan(
-                        text: s.suffix,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _ApptUi.textSecondary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                s.trend,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _ApptUi.textSecondary,
-                ),
-              ),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: LuxuryMiniSparkline(
-                    values: s.sparkline,
-                    height: 28,
-                    accentColor: s.accent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MainEmptyState extends StatelessWidget {
-  const _MainEmptyState({
-    super.key,
-    required this.tab,
-    required this.onViewSchedule,
-  });
-
-  final String tab;
-  final VoidCallback onViewSchedule;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ApptGlass(
-      radius: _ApptUi.heroRadius,
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 420),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            ...List.generate(6, (i) {
-              final angle = i * math.pi / 3;
-              return Positioned(
-                left: 120 + 140 * math.cos(angle),
-                top: 80 + 90 * math.sin(angle),
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _ApptUi.lavender.withValues(alpha: 0.35),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _ApptUi.purple.withValues(alpha: 0.5),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        _ApptUi.purple.withValues(alpha: 0.35),
-                        _ApptUi.lavender.withValues(alpha: 0.15),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: _ApptUi.purple.withValues(alpha: 0.45),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _ApptUi.purple.withValues(alpha: 0.4),
-                        blurRadius: 40,
-                        spreadRadius: 4,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.calendar_month_rounded,
-                    size: 56,
-                    color: _ApptUi.lavender,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  tab == 'Cancelled'
-                      ? 'No cancelled appointments'
-                      : 'No appointments yet',
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: _ApptUi.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  tab == 'Cancelled'
-                      ? 'Cancelled bookings assigned to you will appear here.'
-                      : 'You have no upcoming appointments.\n'
-                          'Appointments assigned to you will appear here.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: _ApptUi.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                _OutlinedGlowButton(
-                  label: 'View Full Schedule',
-                  icon: Icons.calendar_month_outlined,
-                  onTap: onViewSchedule,
-                ),
-              ],
+            _SummaryItem(
+              label: 'Upcoming',
+              value: metrics.upcoming,
+              color: _ApptUi.lavender,
+            ),
+            _SummaryDot(),
+            _SummaryItem(
+              label: 'Today',
+              value: metrics.today,
+              color: _ApptUi.teal,
+            ),
+            _SummaryDot(),
+            _SummaryItem(
+              label: 'Completed',
+              value: metrics.completed,
+              color: _ApptUi.green,
+            ),
+            _SummaryDot(),
+            _SummaryItem(
+              label: 'Cancelled',
+              value: metrics.cancelled,
+              color: _ApptUi.red,
             ),
           ],
         ),
@@ -936,286 +489,383 @@ class _MainEmptyState extends StatelessWidget {
   }
 }
 
-class _AppointmentList extends StatelessWidget {
-  const _AppointmentList({
-    super.key,
-    required this.items,
-    required this.formatDt,
+class _SummaryDot extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Text(
+        '•',
+        style: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.25),
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  const _SummaryItem({
+    required this.label,
+    required this.value,
+    required this.color,
   });
 
-  final List<Rezervacija> items;
-  final String Function(DateTime) formatDt;
+  final String label;
+  final int value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: TextStyle(color: color),
+          ),
+          TextSpan(
+            text: '$value',
+            style: const TextStyle(color: _ApptUi.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppointmentListPane extends StatelessWidget {
+  const _AppointmentListPane({
+    required this.filtered,
+    required this.formatCardDate,
+  });
+
+  final List<Rezervacija> filtered;
+  final String Function(DateTime) formatCardDate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (filtered.isEmpty) {
+      return const _CompactListEmpty();
+    }
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          _AppointmentCard(r: items[i], formatDt: formatDt),
+        for (var i = 0; i < filtered.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _AppointmentCard(
+            r: filtered[i],
+            formatCardDate: formatCardDate,
+          ),
         ],
       ],
+    );
+  }
+}
+
+class _CompactListEmpty extends StatelessWidget {
+  const _CompactListEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(_ApptUi.cardRadius),
+        color: Colors.white.withValues(alpha: 0.03),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'No appointments in this view.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: _ApptUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try another filter or date.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: _ApptUi.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _AppointmentCard extends StatelessWidget {
-  const _AppointmentCard({required this.r, required this.formatDt});
+  const _AppointmentCard({
+    required this.r,
+    required this.formatCardDate,
+  });
 
   final Rezervacija r;
-  final String Function(DateTime) formatDt;
+  final String Function(DateTime) formatCardDate;
 
   @override
   Widget build(BuildContext context) {
     final status = TherapistAppointmentUtils.statusOfRezervacija(r);
+    final hasNotes =
+        r.napomenaZaTerapeuta != null && r.napomenaZaTerapeuta!.trim().isNotEmpty;
 
     return _ApptGlass(
-      padding: const EdgeInsets.all(20),
-      child: Row(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: _ApptUi.purple.withValues(alpha: 0.14),
-              border: Border.all(color: _ApptUi.purple.withValues(alpha: 0.3)),
-            ),
-            child: const Icon(
-              Icons.spa_outlined,
-              color: _ApptUi.lavender,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.korisnikIme ?? 'Client',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: _ApptUi.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${r.uslugaNaziv ?? 'Service'} · ${r.uslugaTrajanjeMinuta} min',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _ApptUi.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            formatCardDate(r.datumRezervacije),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _ApptUi.lavender.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                        if (hasNotes) ...[
+                          const SizedBox(width: 6),
+                          Tooltip(
+                            message: r.napomenaZaTerapeuta!.trim(),
+                            child: Icon(
+                              Icons.sticky_note_2_outlined,
+                              size: 14,
+                              color: _ApptUi.lavender.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _StatusChip(label: status.label, color: status.color),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () =>
+                  showTherapistRezervacijaDetailDialog(context, r),
+              style: TextButton.styleFrom(
+                foregroundColor: _ApptUi.lavender,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'View Details',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r.uslugaNaziv ?? 'Service',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: _ApptUi.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  r.korisnikIme ?? 'Client',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: _ApptUi.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  formatDt(r.datumRezervacije),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _ApptUi.lavender.withValues(alpha: 0.85),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _StatusChip(label: status.label, color: status.color),
         ],
       ),
     );
   }
 }
 
-class _RightSidebar extends StatelessWidget {
-  const _RightSidebar({
-    required this.upcoming,
-    required this.onViewCalendar,
-    required this.onNewAppointment,
-    required this.onBlockTime,
+class _AppointmentsSidebar extends StatelessWidget {
+  const _AppointmentsSidebar({
+    required this.next,
+    required this.onOpenDetails,
     required this.onViewSchedule,
+    required this.onManageAvailability,
+    required this.onMyReviews,
   });
 
-  final List<Rezervacija> upcoming;
-  final VoidCallback onViewCalendar;
-  final VoidCallback onNewAppointment;
-  final VoidCallback onBlockTime;
+  final Rezervacija? next;
+  final void Function(Rezervacija) onOpenDetails;
   final VoidCallback onViewSchedule;
+  final VoidCallback onManageAvailability;
+  final VoidCallback onMyReviews;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _UpcomingOverviewCard(
-          upcoming: upcoming,
-          onViewCalendar: onViewCalendar,
+        _NextAppointmentCard(
+          next: next,
+          onOpenDetails: onOpenDetails,
         ),
-        const SizedBox(height: 18),
-        _QuickActionsCard(
-          onNewAppointment: onNewAppointment,
-          onBlockTime: onBlockTime,
+        const SizedBox(height: _ApptUi.gap),
+        _CompactQuickActions(
           onViewSchedule: onViewSchedule,
+          onManageAvailability: onManageAvailability,
+          onMyReviews: onMyReviews,
         ),
       ],
     );
   }
 }
 
-class _UpcomingOverviewCard extends StatelessWidget {
-  const _UpcomingOverviewCard({
-    required this.upcoming,
-    required this.onViewCalendar,
+class _NextAppointmentCard extends StatelessWidget {
+  const _NextAppointmentCard({
+    required this.next,
+    required this.onOpenDetails,
   });
 
-  final List<Rezervacija> upcoming;
-  final VoidCallback onViewCalendar;
+  final Rezervacija? next;
+  final void Function(Rezervacija) onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
     return _ApptGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Upcoming Overview',
-            style: GoogleFonts.inter(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: _ApptUi.textPrimary,
+      padding: const EdgeInsets.all(18),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 220),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Next Appointment',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: _ApptUi.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
-          if (upcoming.isEmpty)
-            _SidebarEmpty(
-              icon: Icons.event_available_rounded,
-              title: 'No upcoming appointments',
-              subtitle: 'You\'re all clear!',
-              buttonLabel: 'View Calendar',
-              onTap: onViewCalendar,
-            )
-          else
-            Column(
-              children: [
-                for (var i = 0; i < upcoming.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 10),
-                  _MiniBookingTile(r: upcoming[i]),
-                ],
-                const SizedBox(height: 14),
-                _OutlinedGlowButton(
-                  label: 'View Calendar',
-                  icon: Icons.calendar_month_outlined,
-                  onTap: onViewCalendar,
-                  compact: true,
+            const SizedBox(height: 12),
+            if (next == null)
+              Text(
+                'No upcoming appointments.\nYou\'re all clear.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: _ApptUi.textSecondary,
                 ),
-              ],
-            ),
-        ],
+              )
+            else ...[
+              Text(
+                TherapistAppointmentUtils.formatUpcomingDateTime(
+                  next!.datumRezervacije,
+                ),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _ApptUi.lavender,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                next!.korisnikIme ?? 'Client',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _ApptUi.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${next!.uslugaNaziv ?? 'Service'} · ${next!.uslugaTrajanjeMinuta} min',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: _ApptUi.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _StatusChip(
+                label: TherapistAppointmentUtils.statusOfRezervacija(next!).label,
+                color: TherapistAppointmentUtils.statusOfRezervacija(next!).color,
+              ),
+              const SizedBox(height: 12),
+              _CompactOutlineButton(
+                label: 'Open Details',
+                onTap: () => onOpenDetails(next!),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _MiniBookingTile extends StatelessWidget {
-  const _MiniBookingTile({required this.r});
-
-  final Rezervacija r;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = r.datumRezervacije.toLocal();
-    final time =
-        '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            time,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              color: _ApptUi.lavender,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r.uslugaNaziv ?? 'Service',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: _ApptUi.textPrimary,
-                  ),
-                ),
-                Text(
-                  r.korisnikIme ?? 'Client',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: _ApptUi.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickActionsCard extends StatelessWidget {
-  const _QuickActionsCard({
-    required this.onNewAppointment,
-    required this.onBlockTime,
+class _CompactQuickActions extends StatelessWidget {
+  const _CompactQuickActions({
     required this.onViewSchedule,
+    required this.onManageAvailability,
+    required this.onMyReviews,
   });
 
-  final VoidCallback onNewAppointment;
-  final VoidCallback onBlockTime;
   final VoidCallback onViewSchedule;
+  final VoidCallback onManageAvailability;
+  final VoidCallback onMyReviews;
 
   @override
   Widget build(BuildContext context) {
     return _ApptGlass(
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Quick Actions',
             style: GoogleFonts.inter(
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: FontWeight.w800,
               color: _ApptUi.textPrimary,
             ),
           ),
-          const SizedBox(height: 14),
-          _QuickActionTile(
-            icon: Icons.add_circle_outline_rounded,
-            label: 'New Appointment',
-            onTap: onNewAppointment,
-          ),
           const SizedBox(height: 10),
-          _QuickActionTile(
-            icon: Icons.block_rounded,
-            label: 'Block Time',
-            onTap: onBlockTime,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionTile(
-            icon: Icons.calendar_month_outlined,
-            label: 'View My Schedule',
+          _QuickActionButton(
+            icon: Icons.view_timeline_rounded,
+            label: 'View Schedule',
             onTap: onViewSchedule,
+          ),
+          const SizedBox(height: 8),
+          _QuickActionButton(
+            icon: Icons.event_available_outlined,
+            label: 'Manage Availability',
+            onTap: onManageAvailability,
+          ),
+          const SizedBox(height: 8),
+          _QuickActionButton(
+            icon: Icons.reviews_outlined,
+            label: 'My Reviews',
+            onTap: onMyReviews,
           ),
         ],
       ),
@@ -1223,8 +873,8 @@ class _QuickActionsCard extends StatelessWidget {
   }
 }
 
-class _QuickActionTile extends StatefulWidget {
-  const _QuickActionTile({
+class _QuickActionButton extends StatefulWidget {
+  const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -1235,10 +885,10 @@ class _QuickActionTile extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_QuickActionTile> createState() => _QuickActionTileState();
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
 }
 
-class _QuickActionTileState extends State<_QuickActionTile> {
+class _QuickActionButtonState extends State<_QuickActionButton> {
   bool _hover = false;
 
   @override
@@ -1250,44 +900,36 @@ class _QuickActionTileState extends State<_QuickActionTile> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            duration: const Duration(milliseconds: 160),
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: _hover ? 0.07 : 0.035),
               border: Border.all(
-                color: _ApptUi.purple.withValues(alpha: _hover ? 0.45 : 0.2),
+                color: _ApptUi.purple.withValues(alpha: _hover ? 0.35 : 0.18),
               ),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _ApptUi.purple.withValues(alpha: 0.25),
-                        blurRadius: 16,
-                      ),
-                    ]
-                  : null,
             ),
             child: Row(
               children: [
-                Icon(widget.icon, color: _ApptUi.lavender, size: 22),
-                const SizedBox(width: 12),
+                Icon(widget.icon, size: 16, color: _ApptUi.lavender),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     widget.label,
                     style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                       color: _ApptUi.textPrimary,
                     ),
                   ),
                 ),
                 Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: Colors.white.withValues(alpha: _hover ? 0.7 : 0.4),
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: Colors.white.withValues(alpha: _hover ? 0.6 : 0.35),
                 ),
               ],
             ),
@@ -1298,85 +940,20 @@ class _QuickActionTileState extends State<_QuickActionTile> {
   }
 }
 
-class _SidebarEmpty extends StatelessWidget {
-  const _SidebarEmpty({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String buttonLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _ApptUi.purple.withValues(alpha: 0.12),
-              border: Border.all(color: _ApptUi.purple.withValues(alpha: 0.3)),
-            ),
-            child: Icon(icon, color: _ApptUi.lavender, size: 32),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              color: _ApptUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: _ApptUi.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _OutlinedGlowButton(
-            label: buttonLabel,
-            icon: Icons.calendar_month_outlined,
-            onTap: onTap,
-            compact: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrimaryGradientButton extends StatefulWidget {
-  const _PrimaryGradientButton({
+class _CompactOutlineButton extends StatefulWidget {
+  const _CompactOutlineButton({
     required this.label,
-    required this.icon,
     required this.onTap,
   });
 
   final String label;
-  final IconData icon;
   final VoidCallback onTap;
 
   @override
-  State<_PrimaryGradientButton> createState() => _PrimaryGradientButtonState();
+  State<_CompactOutlineButton> createState() => _CompactOutlineButtonState();
 }
 
-class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
+class _CompactOutlineButtonState extends State<_CompactOutlineButton> {
   bool _hover = false;
 
   @override
@@ -1388,114 +965,25 @@ class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 54,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            duration: const Duration(milliseconds: 160),
+            height: 38,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                colors: [
-                  _ApptUi.purple.withValues(alpha: _hover ? 1 : 0.92),
-                  _ApptUi.lavender.withValues(alpha: _hover ? 1 : 0.92),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _ApptUi.purple.withValues(alpha: _hover ? 0.55 : 0.38),
-                  blurRadius: _hover ? 22 : 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlinedGlowButton extends StatefulWidget {
-  const _OutlinedGlowButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.compact = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool compact;
-
-  @override
-  State<_OutlinedGlowButton> createState() => _OutlinedGlowButtonState();
-}
-
-class _OutlinedGlowButtonState extends State<_OutlinedGlowButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final h = widget.compact ? 48.0 : 58.0;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: h,
-            padding: EdgeInsets.symmetric(horizontal: widget.compact ? 18 : 28),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _ApptUi.purple.withValues(alpha: _hover ? 0.75 : 0.45),
-                width: 1.5,
+                color: _ApptUi.purple.withValues(alpha: _hover ? 0.5 : 0.28),
               ),
-              color: _ApptUi.purple.withValues(alpha: _hover ? 0.12 : 0.06),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _ApptUi.purple.withValues(alpha: 0.35),
-                        blurRadius: 20,
-                      ),
-                    ]
-                  : null,
+              color: _ApptUi.purple.withValues(alpha: _hover ? 0.1 : 0.05),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: _ApptUi.lavender, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700,
-                    fontSize: widget.compact ? 13 : 15,
-                    color: _ApptUi.textPrimary,
-                  ),
-                ),
-              ],
+            child: Text(
+              widget.label,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: _ApptUi.textPrimary,
+              ),
             ),
           ),
         ),
@@ -1533,13 +1021,13 @@ class _IconGlassButtonState extends State<_IconGlassButton> {
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              width: 52,
-              height: 52,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: _hover ? 0.18 : 0.1),
@@ -1547,6 +1035,7 @@ class _IconGlassButtonState extends State<_IconGlassButton> {
               ),
               child: Icon(
                 widget.icon,
+                size: 20,
                 color: Colors.white.withValues(alpha: 0.85),
               ),
             ),
@@ -1573,18 +1062,11 @@ class _ApptGlass extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Container(
-        padding: padding ?? const EdgeInsets.all(24),
+        padding: padding ?? const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.035),
           borderRadius: BorderRadius.circular(radius),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: _ApptUi.purple.withValues(alpha: 0.1),
-              blurRadius: 40,
-              offset: const Offset(0, 12),
-            ),
-          ],
         ),
         child: child,
       ),
@@ -1601,17 +1083,17 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.38)),
       ),
       child: Text(
         label,
         style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),
