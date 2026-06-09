@@ -195,35 +195,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
 
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day,
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2035),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: _SchedUi.purple,
-              surface: _SchedUi.bgBottom,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      final d = _onlyDate(picked);
-      setState(() {
-        _day = d;
-        _calendarMonth = DateTime(d.year, d.month, 1);
-      });
-      await _reload();
-    }
-  }
-
   void _selectDay(DateTime d) {
     final day = _onlyDate(d);
     if (_day == day) return;
@@ -510,7 +481,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
                   builder: (context, c) {
                     final wide = c.maxWidth >= 1100;
                     final main = _MainScheduleColumn(
-                      day: _day,
                       longDate: longDate,
                       statusPill: _statusPill,
                       filtered: filtered,
@@ -518,7 +488,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
                       onRefresh: _reload,
                       onPrevDay: () => _shiftDay(-1),
                       onNextDay: () => _shiftDay(1),
-                      onPickDate: _pickDate,
                       onSelect: _openBookingDetail,
                       onManageAvailability: _showAvailabilityInfo,
                       isRefreshing: _loading,
@@ -562,16 +531,6 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
               ),
             ),
           ),
-          if (_loading && !_initialLoad)
-            const Positioned(
-              top: 12,
-              right: 24,
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
         ],
       ),
     );
@@ -647,7 +606,6 @@ class _ScheduleShell extends StatelessWidget {
 
 class _MainScheduleColumn extends StatelessWidget {
   const _MainScheduleColumn({
-    required this.day,
     required this.longDate,
     required this.statusPill,
     required this.filtered,
@@ -655,13 +613,11 @@ class _MainScheduleColumn extends StatelessWidget {
     required this.onRefresh,
     required this.onPrevDay,
     required this.onNextDay,
-    required this.onPickDate,
     required this.onSelect,
     required this.onManageAvailability,
     this.isRefreshing = false,
   });
 
-  final DateTime day;
   final String longDate;
   final String statusPill;
   final List<Rezervacija> filtered;
@@ -669,91 +625,41 @@ class _MainScheduleColumn extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onPrevDay;
   final VoidCallback onNextDay;
-  final VoidCallback onPickDate;
   final ValueChanged<Rezervacija> onSelect;
   final VoidCallback onManageAvailability;
   final bool isRefreshing;
-
-  bool get _isToday {
-    final now = DateTime.now();
-    return day.year == now.year &&
-        day.month == now.month &&
-        day.day == now.day;
-  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isToday ? "Today's Schedule" : 'My Schedule',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: _SchedUi.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    longDate,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _SchedUi.lavender.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _DateNavRow(
-              onPrev: onPrevDay,
-              onNext: onNextDay,
-              onPick: onPickDate,
-            ),
-          ],
+        _SelectedDayToolbar(
+          longDate: longDate,
+          onPrev: onPrevDay,
+          onNext: onNextDay,
+          onRefresh: onRefresh,
+          isRefreshing: isRefreshing,
         ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final p in _statusPills) ...[
-                      _StatusPillChip(
-                        label: p,
-                        selected: statusPill == p,
-                        onTap: () => onPill(p),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final p in _statusPills) ...[
+                _StatusPillChip(
+                  label: p,
+                  selected: statusPill == p,
+                  onTap: () => onPill(p),
                 ),
-              ),
-            ),
-            if (isRefreshing)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            _GlassIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
-          ],
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: _SchedUi.gap),
         Text(
-          'Selected Day Schedule',
+          'Schedule for $longDate',
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w800,
@@ -771,28 +677,56 @@ class _MainScheduleColumn extends StatelessWidget {
   }
 }
 
-class _DateNavRow extends StatelessWidget {
-  const _DateNavRow({
+class _SelectedDayToolbar extends StatelessWidget {
+  const _SelectedDayToolbar({
+    required this.longDate,
     required this.onPrev,
     required this.onNext,
-    required this.onPick,
+    required this.onRefresh,
+    this.isRefreshing = false,
   });
 
+  final String longDate;
   final VoidCallback onPrev;
   final VoidCallback onNext;
-  final VoidCallback onPick;
+  final VoidCallback onRefresh;
+  final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _GlassIconButton(icon: Icons.chevron_left_rounded, onTap: onPrev),
-        const SizedBox(width: 6),
-        _GlassIconButton(icon: Icons.calendar_today_rounded, onTap: onPick),
-        const SizedBox(width: 6),
-        _GlassIconButton(icon: Icons.chevron_right_rounded, onTap: onNext),
-      ],
+    return _SchedGlass(
+      radius: 14,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          _GlassIconButton(icon: Icons.chevron_left_rounded, onTap: onPrev),
+          Expanded(
+            child: Text(
+              longDate,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _SchedUi.textPrimary,
+              ),
+            ),
+          ),
+          _GlassIconButton(icon: Icons.chevron_right_rounded, onTap: onNext),
+          const SizedBox(width: 4),
+          if (isRefreshing)
+            const Padding(
+              padding: EdgeInsets.only(right: 6),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          _GlassIconButton(icon: Icons.refresh_rounded, onTap: onRefresh),
+        ],
+      ),
     );
   }
 }
@@ -1056,12 +990,10 @@ class _ScheduleEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SchedGlass(
       radius: _SchedUi.cardRadius,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 220),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
             Text(
               'No appointments scheduled for this date.',
               style: GoogleFonts.inter(
@@ -1080,14 +1012,13 @@ class _ScheduleEmptyState extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             _OutlinedGlowButton(
               label: 'Manage Availability',
               icon: Icons.event_available_outlined,
               onTap: onManageAvailability,
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
