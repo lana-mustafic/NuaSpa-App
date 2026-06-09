@@ -102,6 +102,7 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
   final ScrollController _scrollController = ScrollController();
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
+  int _lastAvailabilityHint = -1;
 
   @override
   void initState() {
@@ -122,6 +123,28 @@ class _TherapistScheduleScreenState extends State<TherapistScheduleScreen>
     _scrollController.dispose();
     _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final hint = context.read<DesktopNav>().scheduleAvailabilityHint;
+    if (hint != _lastAvailabilityHint && hint > 0) {
+      _lastAvailabilityHint = hint;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Availability is managed by your spa admin. '
+              'Use this schedule to view bookings and open slots.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            width: 460,
+          ),
+        );
+      });
+    }
   }
 
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);

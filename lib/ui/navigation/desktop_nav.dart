@@ -53,6 +53,9 @@ class DesktopNav extends ChangeNotifier {
   String? _therapistDashboardTitle;
   String? _therapistDashboardSubtitle;
   int _therapistDashboardRefresh = 0;
+  int _therapistAppointmentsRefresh = 0;
+  String _therapistAppointmentSearchQuery = '';
+  int _scheduleAvailabilityHint = 0;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
   int _appointmentEditRequest = 0;
@@ -148,6 +151,15 @@ class DesktopNav extends ChangeNotifier {
   /// Bumped when navigating back to therapist dashboard (refresh data).
   int get therapistDashboardRefresh => _therapistDashboardRefresh;
 
+  /// Bumped when navigating back to therapist appointments (refresh data).
+  int get therapistAppointmentsRefresh => _therapistAppointmentsRefresh;
+
+  String get therapistAppointmentSearchQuery =>
+      _therapistAppointmentSearchQuery;
+
+  /// Bumped when therapist opens schedule for availability info.
+  int get scheduleAvailabilityHint => _scheduleAvailabilityHint;
+
   String get clientSearchQuery => _clientSearchQuery;
 
   String get paymentSearchQuery => _paymentSearchQuery;
@@ -197,9 +209,36 @@ class DesktopNav extends ChangeNotifier {
     final revisitingDashboard =
         r == DesktopRouteKey.therapistDashboard &&
         _route != DesktopRouteKey.therapistDashboard;
+    final revisitingAppointments =
+        r == DesktopRouteKey.therapistAppointments &&
+        _route != DesktopRouteKey.therapistAppointments;
     _route = r;
     if (revisitingDashboard) {
       _therapistDashboardRefresh++;
+    }
+    if (revisitingAppointments) {
+      _therapistAppointmentsRefresh++;
+    }
+    notifyListeners();
+  }
+
+  void setTherapistAppointmentSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_therapistAppointmentSearchQuery == value &&
+        _route == DesktopRouteKey.therapistAppointments) {
+      return;
+    }
+    _therapistAppointmentSearchQuery = value;
+    if (_route != DesktopRouteKey.therapistAppointments) {
+      _route = DesktopRouteKey.therapistAppointments;
+    }
+    notifyListeners();
+  }
+
+  void goToScheduleForAvailability() {
+    _scheduleAvailabilityHint++;
+    if (_route != DesktopRouteKey.schedule) {
+      _route = DesktopRouteKey.schedule;
     }
     notifyListeners();
   }

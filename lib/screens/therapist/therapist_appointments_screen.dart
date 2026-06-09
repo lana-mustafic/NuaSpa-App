@@ -6,6 +6,7 @@ import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
 import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../models/rezervacija.dart';
+import '../../models/therapist/therapist_appointments_list.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import 'therapist_appointment_detail_dialog.dart';
@@ -20,6 +21,7 @@ abstract final class _ApptUi {
   static const lavender = Color(0xFF9D6BFF);
   static const teal = Color(0xFF2DD4BF);
   static const green = Color(0xFF22C55E);
+  static const gold = Color(0xFFF5B942);
   static const red = Color(0xFFEF4444);
   static const cardRadius = 18.0;
   static const gap = 16.0;
@@ -27,7 +29,9 @@ abstract final class _ApptUi {
 }
 
 class TherapistAppointmentsScreen extends StatefulWidget {
-  const TherapistAppointmentsScreen({super.key});
+  const TherapistAppointmentsScreen({super.key, required this.filterDay});
+
+  final DateTime filterDay;
 
   @override
   State<TherapistAppointmentsScreen> createState() =>
@@ -37,9 +41,15 @@ class TherapistAppointmentsScreen extends StatefulWidget {
 class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
-  Future<List<Rezervacija>>? _future;
+  TherapistAppointmentsList? _data;
+  String? _loadError;
+  bool _loading = false;
+  bool _initialLoad = true;
   String _tab = 'Upcoming';
   String _statusFilter = 'All Status';
+  int _lastRefreshToken = -1;
+  String _lastSearch = '';
+  DateTime? _lastFilterDay;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
 
@@ -53,6 +63,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
       duration: const Duration(milliseconds: 280),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
+    _lastFilterDay = widget.filterDay;
     _reload();
   }
 
@@ -62,9 +73,100 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     super.dispose();
   }
 
-  void _reload() {
+  @override
+  void didUpdateWidget(TherapistAppointmentsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameDay(oldWidget.filterDay, widget.filterDay)) {
+      _lastFilterDay = widget.filterDay;
+      _reload();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<DesktopNav>();
+    var needReload = false;
+
+    final refresh = nav.therapistAppointmentsRefresh;
+    if (refresh != _lastRefreshToken) {
+      _lastRefreshToken = refresh;
+      if (refresh > 0) needReload = true;
+    }
+
+    final search = nav.therapistAppointmentSearchQuery;
+    if (search != _lastSearch) {
+      _lastSearch = search;
+      needReload = true;
+    }
+
+    if (_lastFilterDay == null || !_sameDay(_lastFilterDay!, widget.filterDay)) {
+      _lastFilterDay = widget.filterDay;
+      needReload = true;
+    }
+
+    if (needReload) _reload();
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _tabApiKey(String tab) {
+    switch (tab) {
+      case 'Today':
+        return 'today';
+      case 'Completed':
+        return 'completed';
+      case 'Cancelled':
+        return 'cancelled';
+      default:
+        return 'upcoming';
+    }
+  }
+
+  String _statusApiKey(String filter) {
+    switch (filter) {
+      case 'Confirmed':
+        return 'confirmed';
+      case 'Pending':
+        return 'pending';
+      case 'Cancelled':
+        return 'cancelled';
+      default:
+        return 'all';
+    }
+  }
+
+  Future<void> _reload() async {
+    final auth = context.read<AuthProvider>();
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
+      setState(() {
+        _loadError = 'You do not have permission to view appointments.';
+        _data = null;
+        _loading = false;
+        _initialLoad = false;
+      });
+      return;
+    }
+
     setState(() {
-      _future = _api.getRezervacije();
+      _loading = true;
+      _loadError = null;
+    });
+
+    final (data, error) = await _api.getTherapistAppointmentsAll(
+      tab: _tabApiKey(_tab),
+      day: widget.filterDay,
+      search: _lastSearch.isEmpty ? null : _lastSearch,
+      statusFilter: _statusApiKey(_statusFilter),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _data = data;
+      _loadError = error;
+      _loading = false;
+      _initialLoad = false;
     });
   }
 
@@ -72,73 +174,30 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     if (_tab == tab) return;
     setState(() => _tab = tab);
     _fadeCtrl.forward(from: 0);
+    _reload();
   }
 
-  DateTime _dayOnly(DateTime d) => TherapistAppointmentUtils.dayOnly(d);
-
-  List<Rezervacija> _upcoming(List<Rezervacija> all, DateTime now) => all
-      .where((r) => r.datumRezervacije.isAfter(now) && !r.isOtkazana)
-      .toList()
-    ..sort((a, b) => a.datumRezervacije.compareTo(b.datumRezervacije));
-
-  List<Rezervacija> _today(List<Rezervacija> all, DateTime today) =>
-      TherapistAppointmentUtils.todayAppointments(all, reference: today);
-
-  List<Rezervacija> _completed(List<Rezervacija> all, DateTime now) => all
-      .where((r) => r.datumRezervacije.isBefore(now) && !r.isOtkazana)
-      .toList()
-    ..sort((a, b) => b.datumRezervacije.compareTo(a.datumRezervacije));
-
-  List<Rezervacija> _cancelled(List<Rezervacija> all) => all
-      .where((r) => r.isOtkazana)
-      .toList()
-    ..sort((a, b) => b.datumRezervacije.compareTo(a.datumRezervacije));
-
-  List<Rezervacija> _applyTab(List<Rezervacija> all) {
-    final now = DateTime.now();
-    final today = _dayOnly(now);
-    switch (_tab) {
-      case 'Today':
-        return _today(all, today);
-      case 'Completed':
-        return _completed(all, now);
-      case 'Cancelled':
-        return _cancelled(all);
-      default:
-        return _upcoming(all, now);
-    }
+  void _selectStatus(String status) {
+    if (_statusFilter == status) return;
+    setState(() => _statusFilter = status);
+    _reload();
   }
 
-  List<Rezervacija> _applyStatus(List<Rezervacija> list) {
-    switch (_statusFilter) {
-      case 'Confirmed':
-        return list.where((r) => r.isPotvrdjena && !r.isOtkazana).toList();
-      case 'Pending':
-        return list.where((r) => !r.isPotvrdjena && !r.isOtkazana).toList();
-      case 'Cancelled':
-        return list.where((r) => r.isOtkazana).toList();
-      default:
-        return list;
-    }
+  Rezervacija? _nextRezervacija(AuthProvider auth) {
+    final next = _data?.nextAppointment;
+    if (next == null) return null;
+    final zid = auth.zaposlenikId ?? 0;
+    return next.toRezervacija(zaposlenikId: zid);
   }
 
-  _ApptMetrics _metrics(List<Rezervacija> all) {
-    final now = DateTime.now();
-    final today = _dayOnly(now);
-    final upcoming = _upcoming(all, now);
-    return _ApptMetrics(
-      upcoming: upcoming.length,
-      today: _today(all, today).length,
-      completed: _completed(all, now).length,
-      cancelled: _cancelled(all).length,
-      nextAppointment: upcoming.isEmpty ? null : upcoming.first,
-      tabCounts: {
-        'Upcoming': upcoming.length,
-        'Today': _today(all, today).length,
-        'Completed': _completed(all, now).length,
-        'Cancelled': _cancelled(all).length,
-      },
-    );
+  Map<String, int> _tabCounts() {
+    final d = _data;
+    return {
+      'Upcoming': d?.upcomingCount ?? 0,
+      'Today': d?.todayCount ?? 0,
+      'Completed': d?.completedCount ?? 0,
+      'Cancelled': d?.cancelledCount ?? 0,
+    };
   }
 
   String _formatCardDate(DateTime d) {
@@ -161,35 +220,87 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     return '${months[l.month - 1]} ${l.day}, ${l.year} · $time';
   }
 
+  Future<void> _openDetails(
+    BuildContext context,
+    TherapistAppointmentRow row,
+  ) async {
+    final auth = context.read<AuthProvider>();
+    final zid = auth.zaposlenikId ?? 0;
+    final rez = row.toRezervacija(zaposlenikId: zid);
+    await showTherapistRezervacijaDetailDialog(
+      context,
+      rez,
+      onConfirmChanged: row.isOtkazana
+          ? null
+          : (v) async {
+              final ok = await _api.updateRezervacijaPotvrdjena(rez.id, v);
+              if (!context.mounted) return;
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Update failed. Please try again.'),
+                  ),
+                );
+                return;
+              }
+              await _reload();
+            },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    if (!AppPermissions.of(auth).has(AppPermission.manageOwnAppointments)) {
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
       return const _ApptShell(
         child: TherapistEmptyState(message: 'Therapist login required.'),
       );
     }
 
-    return _ApptShell(
-      child: FutureBuilder<List<Rezervacija>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: CircularProgressIndicator(strokeWidth: 2),
+    if (_initialLoad && _loading) {
+      return const _ApptShell(
+        child: Center(
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    if (_loadError != null && _data == null) {
+      return _ApptShell(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _loadError!,
+                style: GoogleFonts.inter(
+                  color: _ApptUi.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            );
-          }
+              const SizedBox(height: 12),
+              TextButton(onPressed: _reload, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
 
-          final all = snap.data ?? [];
-          final metrics = _metrics(all);
-          final filtered = _applyStatus(_applyTab(all));
-          final nav = context.read<DesktopNav>();
+    final data = _data;
+    final items = data?.items ?? const <TherapistAppointmentRow>[];
+    final counts = _tabCounts();
+    final nav = context.read<DesktopNav>();
+    final next = _nextRezervacija(auth);
+    final truncated = data != null && data.ukupno > data.items.length;
 
-          return FadeTransition(
+    return _ApptShell(
+      child: Stack(
+        children: [
+          FadeTransition(
             opacity: _fadeAnim,
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -202,17 +313,36 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
                 builder: (context, c) {
                   final wide = c.maxWidth >= 1024;
                   final listPane = _AppointmentListPane(
-                    filtered: filtered,
+                    items: items,
                     formatCardDate: _formatCardDate,
+                    onOpenDetails: (row) => _openDetails(context, row),
                   );
                   final sidebar = _AppointmentsSidebar(
-                    next: metrics.nextAppointment,
-                    onOpenDetails: (r) =>
-                        showTherapistRezervacijaDetailDialog(context, r),
-                    onViewSchedule: () =>
-                        nav.goTo(DesktopRouteKey.schedule),
-                    onManageAvailability: () =>
-                        nav.goTo(DesktopRouteKey.schedule),
+                    next: next,
+                    onOpenDetails: (r) => showTherapistRezervacijaDetailDialog(
+                      context,
+                      r,
+                      onConfirmChanged: r.isOtkazana
+                          ? null
+                          : (v) async {
+                              final ok =
+                                  await _api.updateRezervacijaPotvrdjena(r.id, v);
+                              if (!context.mounted) return;
+                              if (!ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Update failed. Please try again.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              await _reload();
+                            },
+                    ),
+                    onViewSchedule: () => nav.goTo(DesktopRouteKey.schedule),
+                    onManageAvailability: nav.goToScheduleForAvailability,
                     onMyReviews: () =>
                         nav.goTo(DesktopRouteKey.therapistReviews),
                   );
@@ -222,17 +352,30 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
                     children: [
                       _ApptTabsRow(
                         active: _tab,
-                        counts: metrics.tabCounts,
+                        counts: counts,
                         onTab: _selectTab,
                       ),
                       const SizedBox(height: 12),
                       _FilterToolbar(
                         statusFilter: _statusFilter,
-                        onStatus: (v) => setState(() => _statusFilter = v),
+                        onStatus: _selectStatus,
                         onRefresh: _reload,
+                        isRefreshing: _loading,
                       ),
                       const SizedBox(height: 12),
-                      _SummaryStrip(metrics: metrics),
+                      _SummaryStrip(
+                        upcoming: counts['Upcoming'] ?? 0,
+                        today: counts['Today'] ?? 0,
+                        completed: counts['Completed'] ?? 0,
+                        cancelled: counts['Cancelled'] ?? 0,
+                      ),
+                      if (truncated && data != null) ...[
+                        const SizedBox(height: 10),
+                        _TruncatedBanner(
+                          shown: data.items.length,
+                          total: data.ukupno,
+                        ),
+                      ],
                       const SizedBox(height: _ApptUi.gap),
                       if (wide)
                         Row(
@@ -253,29 +396,21 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
                 },
               ),
             ),
-          );
-        },
+          ),
+          if (_loading && !_initialLoad)
+            const Positioned(
+              top: 8,
+              right: 24,
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
       ),
     );
   }
-}
-
-class _ApptMetrics {
-  const _ApptMetrics({
-    required this.upcoming,
-    required this.today,
-    required this.completed,
-    required this.cancelled,
-    required this.tabCounts,
-    this.nextAppointment,
-  });
-
-  final int upcoming;
-  final int today;
-  final int completed;
-  final int cancelled;
-  final Rezervacija? nextAppointment;
-  final Map<String, int> tabCounts;
 }
 
 class _ApptShell extends StatelessWidget {
@@ -394,11 +529,13 @@ class _FilterToolbar extends StatelessWidget {
     required this.statusFilter,
     required this.onStatus,
     required this.onRefresh,
+    this.isRefreshing = false,
   });
 
   final String statusFilter;
   final ValueChanged<String> onStatus;
   final VoidCallback onRefresh;
+  final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
@@ -430,9 +567,9 @@ class _FilterToolbar extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         _IconGlassButton(
-          icon: Icons.refresh_rounded,
+          icon: isRefreshing ? Icons.hourglass_top_rounded : Icons.refresh_rounded,
           tooltip: 'Refresh',
-          onTap: onRefresh,
+          onTap: isRefreshing ? () {} : onRefresh,
         ),
       ],
     );
@@ -440,9 +577,17 @@ class _FilterToolbar extends StatelessWidget {
 }
 
 class _SummaryStrip extends StatelessWidget {
-  const _SummaryStrip({required this.metrics});
+  const _SummaryStrip({
+    required this.upcoming,
+    required this.today,
+    required this.completed,
+    required this.cancelled,
+  });
 
-  final _ApptMetrics metrics;
+  final int upcoming;
+  final int today;
+  final int completed;
+  final int cancelled;
 
   @override
   Widget build(BuildContext context) {
@@ -461,28 +606,55 @@ class _SummaryStrip extends StatelessWidget {
           children: [
             _SummaryItem(
               label: 'Upcoming',
-              value: metrics.upcoming,
+              value: upcoming,
               color: _ApptUi.lavender,
             ),
             _SummaryDot(),
             _SummaryItem(
               label: 'Today',
-              value: metrics.today,
+              value: today,
               color: _ApptUi.teal,
             ),
             _SummaryDot(),
             _SummaryItem(
               label: 'Completed',
-              value: metrics.completed,
+              value: completed,
               color: _ApptUi.green,
             ),
             _SummaryDot(),
             _SummaryItem(
               label: 'Cancelled',
-              value: metrics.cancelled,
+              value: cancelled,
               color: _ApptUi.red,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TruncatedBanner extends StatelessWidget {
+  const _TruncatedBanner({required this.shown, required this.total});
+
+  final int shown;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: _ApptUi.purple.withValues(alpha: 0.12),
+        border: Border.all(color: _ApptUi.purple.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        'Showing $shown of $total appointments in this view.',
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: _ApptUi.lavender,
         ),
       ),
     );
@@ -538,29 +710,30 @@ class _SummaryItem extends StatelessWidget {
 
 class _AppointmentListPane extends StatelessWidget {
   const _AppointmentListPane({
-    required this.filtered,
+    required this.items,
     required this.formatCardDate,
+    required this.onOpenDetails,
   });
 
-  final List<Rezervacija> filtered;
+  final List<TherapistAppointmentRow> items;
   final String Function(DateTime) formatCardDate;
+  final void Function(TherapistAppointmentRow) onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
-    if (filtered.isEmpty) {
+    if (items.isEmpty) {
       return const _CompactListEmpty();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < filtered.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
-          _AppointmentCard(
-            r: filtered[i],
-            formatCardDate: formatCardDate,
-          ),
-        ],
-      ],
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => _AppointmentCard(
+        row: items[index],
+        formatCardDate: formatCardDate,
+        onOpenDetails: () => onOpenDetails(items[index]),
+      ),
     );
   }
 }
@@ -606,18 +779,23 @@ class _CompactListEmpty extends StatelessWidget {
 
 class _AppointmentCard extends StatelessWidget {
   const _AppointmentCard({
-    required this.r,
+    required this.row,
     required this.formatCardDate,
+    required this.onOpenDetails,
   });
 
-  final Rezervacija r;
+  final TherapistAppointmentRow row;
   final String Function(DateTime) formatCardDate;
+  final VoidCallback onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
-    final status = TherapistAppointmentUtils.statusOfRezervacija(r);
+    final rez = row.toRezervacija(zaposlenikId: 0);
+    final status = TherapistAppointmentUtils.statusOfRezervacija(rez);
     final hasNotes =
-        r.napomenaZaTerapeuta != null && r.napomenaZaTerapeuta!.trim().isNotEmpty;
+        row.napomenaZaTerapeuta != null &&
+        row.napomenaZaTerapeuta!.trim().isNotEmpty;
+    final room = row.prostorijaNaziv?.trim();
 
     return _ApptGlass(
       padding: const EdgeInsets.all(16),
@@ -631,17 +809,30 @@ class _AppointmentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      r.korisnikIme ?? 'Client',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: _ApptUi.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            row.korisnikIme ?? 'Client',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: _ApptUi.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (row.isVip) ...[
+                          const SizedBox(width: 6),
+                          _BadgeChip(label: 'VIP', color: _ApptUi.gold),
+                        ] else if (row.premiumKlijent) ...[
+                          const SizedBox(width: 6),
+                          _BadgeChip(label: 'Premium', color: _ApptUi.teal),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${r.uslugaNaziv ?? 'Service'} · ${r.uslugaTrajanjeMinuta} min',
+                      '${row.uslugaNaziv ?? 'Service'} · ${row.uslugaTrajanjeMinuta} min',
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         color: _ApptUi.textSecondary,
@@ -652,7 +843,7 @@ class _AppointmentCard extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            formatCardDate(r.datumRezervacije),
+                            formatCardDate(row.datumRezervacije.toLocal()),
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -660,10 +851,30 @@ class _AppointmentCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (room != null && room.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.meeting_room_outlined,
+                            size: 13,
+                            color: _ApptUi.lavender.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              room,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _ApptUi.lavender.withValues(alpha: 0.75),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                         if (hasNotes) ...[
                           const SizedBox(width: 6),
                           Tooltip(
-                            message: r.napomenaZaTerapeuta!.trim(),
+                            message: row.napomenaZaTerapeuta!.trim(),
                             child: Icon(
                               Icons.sticky_note_2_outlined,
                               size: 14,
@@ -684,8 +895,7 @@ class _AppointmentCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () =>
-                  showTherapistRezervacijaDetailDialog(context, r),
+              onPressed: onOpenDetails,
               style: TextButton.styleFrom(
                 foregroundColor: _ApptUi.lavender,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -702,6 +912,33 @@ class _AppointmentCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BadgeChip extends StatelessWidget {
+  const _BadgeChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
       ),
     );
   }

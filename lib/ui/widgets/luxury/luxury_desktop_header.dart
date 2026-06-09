@@ -504,7 +504,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
         title: 'My Appointments',
         subtitle: 'Your assigned bookings and daily schedule.',
         searchHint: 'Search clients, services…',
-        onSearchSubmitted: nav.goToCatalogWithSearch,
+        initialSearchQuery: nav.therapistAppointmentSearchQuery,
+        onSearchSubmitted: nav.setTherapistAppointmentSearchQuery,
+        onSearchChanged: nav.setTherapistAppointmentSearchQuery,
       );
     }
 

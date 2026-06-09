@@ -33,6 +33,7 @@ import '../../../models/admin/therapist_account_status.dart';
 import '../../../models/admin/therapist_admin_roster.dart';
 import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
+import '../../../models/therapist/therapist_appointments_list.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
@@ -264,6 +265,91 @@ class ApiService {
       debugPrint('Greška u ApiService.patchTherapistMe: $e');
       return null;
     }
+  }
+
+  Future<(TherapistAppointmentsList?, String?)> getTherapistAppointments({
+    required String tab,
+    DateTime? day,
+    String? search,
+    String statusFilter = 'all',
+    int page = 1,
+    int pageSize = 100,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'tab': tab.toLowerCase(),
+        'statusFilter': statusFilter.toLowerCase(),
+        'page': page,
+        'pageSize': pageSize,
+      };
+      if (day != null) {
+        final d = DateTime(day.year, day.month, day.day);
+        query['day'] = d.toIso8601String();
+      }
+      final trimmed = search?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        query['search'] = trimmed;
+      }
+
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/me/appointments',
+        queryParameters: query,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return (null, 'Unexpected server response.');
+      }
+      return (TherapistAppointmentsList.fromJson(data), null);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistAppointments: $e');
+      return (null, 'Could not load appointments. Please try again.');
+    }
+  }
+
+  /// Fetches all pages for the therapist appointments list (up to 20 pages).
+  Future<(TherapistAppointmentsList?, String?)> getTherapistAppointmentsAll({
+    required String tab,
+    DateTime? day,
+    String? search,
+    String statusFilter = 'all',
+  }) async {
+    TherapistAppointmentsList? merged;
+    var page = 1;
+    const maxPages = 20;
+
+    while (page <= maxPages) {
+      final (chunk, error) = await getTherapistAppointments(
+        tab: tab,
+        day: day,
+        search: search,
+        statusFilter: statusFilter,
+        page: page,
+        pageSize: 100,
+      );
+      if (error != null) return (null, error);
+      if (chunk == null) return (null, 'Unexpected server response.');
+
+      if (merged == null) {
+        merged = chunk;
+      } else {
+        merged = TherapistAppointmentsList(
+          upcomingCount: merged.upcomingCount,
+          todayCount: merged.todayCount,
+          completedCount: merged.completedCount,
+          cancelledCount: merged.cancelledCount,
+          nextAppointment: merged.nextAppointment,
+          ukupno: chunk.ukupno,
+          stranica: chunk.stranica,
+          velicinaStranice: chunk.velicinaStranice,
+          items: [...merged.items, ...chunk.items],
+        );
+      }
+
+      if (merged.items.length >= chunk.ukupno) break;
+      page++;
+    }
+
+    return (merged, null);
   }
 
   Future<TherapistDashboard?> getTherapistDashboard({DateTime? day}) async {
