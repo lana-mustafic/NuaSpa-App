@@ -34,6 +34,7 @@ import '../../../models/admin/therapist_admin_roster.dart';
 import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/therapist/therapist_appointments_list.dart';
+import '../../../models/therapist/therapist_my_services_result.dart';
 import '../../../models/therapist/therapist_schedule.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
@@ -244,6 +245,75 @@ class ApiService {
     } catch (e) {
       debugPrint('Greška u ApiService.getTherapistMe: $e');
       return null;
+    }
+  }
+
+  /// Certified services for the logged-in therapist (server-side eligibility).
+  Future<TherapistMyServicesResult> getTherapistMyServices() async {
+    Zaposlenik? therapist;
+    String? profileError;
+    try {
+      final profileResponse = await _dio.get<dynamic>('Zaposlenik/me');
+      final profileData = profileResponse.data;
+      if (profileData is Map<String, dynamic>) {
+        therapist = Zaposlenik.fromJson(profileData);
+      } else {
+        profileError = 'Could not load your therapist profile.';
+      }
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyServices (profile): $e');
+      if (e.response?.statusCode == 403) {
+        return const TherapistMyServicesResult(
+          accountNotLinked: true,
+          error:
+              'Your account is not linked to a therapist profile. Contact your spa administrator.',
+        );
+      }
+      profileError = ApiErrorMessages.fromDio(e) ??
+          'Could not load your therapist profile.';
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyServices (profile): $e');
+      profileError = 'Could not load your therapist profile.';
+    }
+
+    if (therapist == null) {
+      return TherapistMyServicesResult(
+        profileError: profileError,
+        error: profileError ?? 'Could not load your therapist profile.',
+      );
+    }
+
+    try {
+      final response = await _dio.get<dynamic>('Zaposlenik/me/services');
+      final data = response.data;
+      if (data is! List) {
+        return TherapistMyServicesResult(
+          therapist: therapist,
+          servicesError: 'Could not load your certified services.',
+          error: 'Could not load your certified services.',
+        );
+      }
+      final services = data
+          .map((e) => Usluga.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return TherapistMyServicesResult(therapist: therapist, services: services);
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyServices (services): $e');
+      final message = ApiErrorMessages.fromDio(e) ??
+          'Could not load your certified services.';
+      return TherapistMyServicesResult(
+        therapist: therapist,
+        servicesError: message,
+        error: message,
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyServices (services): $e');
+      const message = 'Could not load your certified services.';
+      return TherapistMyServicesResult(
+        therapist: therapist,
+        servicesError: message,
+        error: message,
+      );
     }
   }
 
