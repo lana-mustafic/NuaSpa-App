@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
-import '../../models/usluga.dart';
+import '../../core/therapist/therapist_service_eligibility.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../providers/auth_provider.dart';
@@ -38,29 +38,6 @@ class _ProfileData {
 
   final Zaposlenik profile;
   final int certifiedCount;
-}
-
-List<Usluga> _linkedServices(Zaposlenik me, List<Usluga> all) {
-  final katId = me.kategorijaUslugaId;
-  if (katId != null && katId > 0) {
-    return all.where((u) => u.kategorijaUslugaId == katId).toList();
-  }
-  final tags = me.specijalizacija
-      .split(RegExp(r'[,;/]'))
-      .map((e) => e.trim().toLowerCase())
-      .where((e) => e.isNotEmpty)
-      .toSet();
-  if (tags.isEmpty) return const [];
-  return all
-      .where((u) => tags.contains(u.naziv.trim().toLowerCase()))
-      .toList();
-}
-
-String _initials(Zaposlenik z) {
-  final a = z.ime.trim().isNotEmpty ? z.ime.trim()[0] : '';
-  final b = z.prezime.trim().isNotEmpty ? z.prezime.trim()[0] : '';
-  final s = '$a$b'.toUpperCase();
-  return s.isEmpty ? 'TH' : s;
 }
 
 String _formatDate(DateTime? d) {
@@ -149,17 +126,13 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   Future<void> _reload() async {
     setState(() {
       _future = () async {
-        final results = await Future.wait([
-          _api.getTherapistMe(),
-          _api.getUsluge(),
-        ]);
-        final me = results[0] as Zaposlenik?;
-        final all = results[1] as List<Usluga>;
+        final result = await _api.getTherapistMyServices();
+        final me = result.therapist;
         if (me == null) return null;
         _bind(me);
         return _ProfileData(
           profile: me,
-          certifiedCount: _linkedServices(me, all).length,
+          certifiedCount: result.services.length,
         );
       }();
     });
@@ -235,7 +208,7 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _HeroProfileCard(
-                initials: _initials(z),
+                initials: therapistInitials(z),
                 name: z.fullName,
                 specialization: z.specijalizacija.trim().isEmpty
                     ? 'Therapist'
