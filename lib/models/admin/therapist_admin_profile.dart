@@ -5,6 +5,7 @@ import 'therapist_weekly_schedule_day.dart';
 
 class TherapistReviewRow {
   TherapistReviewRow({
+    this.id = 0,
     required this.createdAt,
     required this.korisnikIme,
     required this.ocjena,
@@ -13,6 +14,7 @@ class TherapistReviewRow {
     this.adminOdgovor,
   });
 
+  final int id;
   final DateTime createdAt;
   final String korisnikIme;
   final int ocjena;
@@ -27,6 +29,7 @@ class TherapistReviewRow {
         : DateTime.fromMillisecondsSinceEpoch(0);
 
     return TherapistReviewRow(
+      id: (json['id'] as num?)?.toInt() ?? 0,
       createdAt: created,
       korisnikIme: json['korisnikIme'] as String? ?? '',
       ocjena: (json['ocjena'] as num?)?.toInt() ?? 0,
