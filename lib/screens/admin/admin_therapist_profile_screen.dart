@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/format/km_format.dart';
+import '../../core/therapist/therapist_service_eligibility.dart';
 import '../../models/admin/therapist_account_status.dart';
 import '../../models/admin/therapist_admin_profile.dart';
 import '../../models/admin/therapist_kpi.dart';
@@ -2716,11 +2717,8 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
   late Future<List<Usluga>> _servicesFuture = _loadServices();
 
   Future<List<Usluga>> _loadServices() async {
-    final all = await widget.api.getUsluge();
-    final katId = widget.therapist.kategorijaUslugaId;
-    if (katId == null || katId <= 0) return const [];
-    return all.where((u) => u.kategorijaUslugaId == katId).toList()
-      ..sort((a, b) => a.naziv.compareTo(b.naziv));
+    final all = await widget.api.getUslugeAll();
+    return linkedServicesForTherapist(widget.therapist, all);
   }
 
   void _refresh() {
