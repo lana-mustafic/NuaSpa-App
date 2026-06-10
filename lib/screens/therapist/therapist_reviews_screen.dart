@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
+import '../../core/platform/nua_spa_platform.dart';
 import '../../models/admin/therapist_admin_profile.dart';
+import '../../models/therapist/therapist_my_reviews_summary.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
+import 'therapist_appointments_screen.dart';
 import 'therapist_portal_scaffold.dart';
 
 abstract final class _RevUi {
@@ -20,73 +25,25 @@ abstract final class _RevUi {
   static const cardRadius = 24.0;
   static const gap = 20.0;
   static const contentPadding = 32.0;
-}
-
-class _ReviewStats {
-  const _ReviewStats({
-    required this.averageRating,
-    required this.total,
-    this.mostReviewedService,
-    this.latestReview,
-  });
-
-  final double averageRating;
-  final int total;
-  final String? mostReviewedService;
-  final TherapistReviewRow? latestReview;
-}
-
-_ReviewStats _computeStats(List<TherapistReviewRow> reviews) {
-  if (reviews.isEmpty) {
-    return const _ReviewStats(averageRating: 0, total: 0);
-  }
-
-  final total = reviews.length;
-  final sum = reviews.fold<int>(0, (s, r) => s + r.ocjena);
-  final avg = sum / total;
-
-  final byService = <String, int>{};
-  for (final r in reviews) {
-    final key = r.uslugaNaziv.trim().isEmpty ? 'Service' : r.uslugaNaziv.trim();
-    byService[key] = (byService[key] ?? 0) + 1;
-  }
-  String? topService;
-  var topCount = 0;
-  for (final e in byService.entries) {
-    if (e.value > topCount) {
-      topCount = e.value;
-      topService = e.key;
-    }
-  }
-
-  final sorted = [...reviews]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-  return _ReviewStats(
-    averageRating: avg,
-    total: total,
-    mostReviewedService: topService,
-    latestReview: sorted.first,
-  );
+  static const pageSize = 20;
 }
 
 String _formatShortDate(DateTime d) {
   const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
   final loc = d.toLocal();
   return '${months[loc.month - 1]} ${loc.day}, ${loc.year}';
 }
+
+String _clientInitial(String name) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return '?';
+  return String.fromCharCode(trimmed.runes.first).toUpperCase();
+}
+
+int _clampStars(int stars) => stars.clamp(0, 5);
 
 List<TherapistReviewRow> _filterReviews(
   List<TherapistReviewRow> all, {
@@ -115,7 +72,8 @@ List<TherapistReviewRow> _filterReviews(
           (r) =>
               r.korisnikIme.toLowerCase().contains(q) ||
               r.uslugaNaziv.toLowerCase().contains(q) ||
-              r.komentar.toLowerCase().contains(q),
+              r.komentar.toLowerCase().contains(q) ||
+              (r.adminOdgovor ?? '').toLowerCase().contains(q),
         )
         .toList();
   }
@@ -140,6 +98,44 @@ List<TherapistReviewRow> _sortReviews(
   return copy;
 }
 
+void _openAppointments(BuildContext context) {
+  if (nuaspaUseMobileShell()) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TherapistAppointmentsScreen(
+          filterDay: DateTime(
+            DateTime.now().year,
+            DateTime.now().month,
+            DateTime.now().day,
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+  context.read<DesktopNav>().goTo(DesktopRouteKey.therapistAppointments);
+}
+
+class _ReviewsData {
+  const _ReviewsData({
+    required this.summary,
+    required this.reviews,
+    required this.totalReviews,
+    required this.currentPage,
+    this.loadError,
+    this.summaryError,
+  });
+
+  final TherapistMyReviewsSummary summary;
+  final List<TherapistReviewRow> reviews;
+  final int totalReviews;
+  final int currentPage;
+  final String? loadError;
+  final String? summaryError;
+
+  bool get hasMore => reviews.length < totalReviews;
+}
+
 class TherapistReviewsScreen extends StatefulWidget {
   const TherapistReviewsScreen({super.key});
 
@@ -150,11 +146,14 @@ class TherapistReviewsScreen extends StatefulWidget {
 class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
-  Future<(List<TherapistReviewRow> items, String? error)>? _future;
+  Future<_ReviewsData>? _future;
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   String _ratingFilter = 'All';
   String _sortMode = 'Newest First';
+  String _searchQuery = '';
+  Timer? _searchDebounce;
+  bool _loadingMore = false;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
 
@@ -171,15 +170,89 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
   }
 
+  Future<_ReviewsData> _fetchPage({required int page, _ReviewsData? prior}) async {
+    final summaryFuture = page == 1
+        ? _api.getTherapistMyReviewsSummary()
+        : null;
+    final pageFuture = _api.getTherapistMyReviewsPage(
+      page: page,
+      pageSize: _RevUi.pageSize,
+    );
+
+    final summaryResult = summaryFuture != null
+        ? await summaryFuture
+        : null;
+    final pageResult = await pageFuture;
+
+    if (summaryResult?.accountNotLinked == true || pageResult.accountNotLinked) {
+      throw _ReviewsLoadException(
+        summaryResult?.error ??
+            pageResult.error ??
+            'Your account is not linked to a therapist profile.',
+        accountNotLinked: true,
+      );
+    }
+
+    final summary = summaryResult?.summary ??
+        prior?.summary ??
+        const TherapistMyReviewsSummary();
+    final summaryError = summaryResult?.error;
+
+    if (pageResult.error != null && page == 1 && summaryError != null) {
+      throw _ReviewsLoadException(pageResult.error!);
+    }
+
+    final merged = page == 1
+        ? pageResult.items
+        : [...?prior?.reviews, ...pageResult.items];
+
+    return _ReviewsData(
+      summary: summary,
+      reviews: merged,
+      totalReviews: pageResult.total > 0
+          ? pageResult.total
+          : (summary.totalCount > 0 ? summary.totalCount : merged.length),
+      currentPage: pageResult.page,
+      loadError: pageResult.error,
+      summaryError: summaryError,
+    );
+  }
+
   Future<void> _reload() async {
     setState(() {
-      _future = _api.getTherapistMyReviews();
+      _future = _fetchPage(page: 1);
+    });
+    await _future;
+    if (mounted) _fadeCtrl.forward(from: 0);
+  }
+
+  Future<void> _loadMore(_ReviewsData data) async {
+    if (_loadingMore || !data.hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await _fetchPage(page: data.currentPage + 1, prior: data);
+      if (!mounted) return;
+      setState(() {
+        _future = Future.value(next);
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = value.trim().toLowerCase());
     });
   }
 
@@ -188,7 +261,10 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     final auth = context.watch<AuthProvider>();
     if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
       return const _ReviewsShell(
-        child: TherapistEmptyState(message: 'Therapist login required.'),
+        child: TherapistEmptyState(
+          message:
+              'Therapist login required. Your account must be linked to a therapist profile.',
+        ),
       );
     }
 
@@ -196,10 +272,10 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
       child: RefreshIndicator(
         color: _RevUi.lavender,
         onRefresh: _reload,
-        child: FutureBuilder<(List<TherapistReviewRow> items, String? error)>(
+        child: FutureBuilder<_ReviewsData>(
           future: _future,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
+            if (snap.connectionState == ConnectionState.waiting && !_loadingMore) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
@@ -215,29 +291,49 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
               );
             }
 
-            final loadError = snap.data?.$2;
-            if (loadError != null) {
+            if (snap.hasError) {
+              final err = snap.error;
+              final message = err is _ReviewsLoadException
+                  ? err.message
+                  : 'Something went wrong while loading reviews.';
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(32),
+                padding: const EdgeInsets.all(_RevUi.contentPadding),
                 children: [
-                  Text(
-                    loadError,
-                    style: GoogleFonts.inter(color: Colors.white70),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(onPressed: _reload, child: const Text('Retry')),
+                  _ErrorCard(message: message, onRetry: _reload),
                 ],
               );
             }
 
-            final all = snap.data?.$1 ?? [];
-            final stats = _computeStats(all);
+            final data = snap.data;
+            if (data == null) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(_RevUi.contentPadding),
+                children: [
+                  _ErrorCard(
+                    message: 'Could not load reviews.',
+                    onRetry: _reload,
+                  ),
+                ],
+              );
+            }
+
+            if (data.loadError != null && data.reviews.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(_RevUi.contentPadding),
+                children: [
+                  _ErrorCard(message: data.loadError!, onRetry: _reload),
+                ],
+              );
+            }
+
             final filtered = _sortReviews(
               _filterReviews(
-                all,
+                data.reviews,
                 ratingFilter: _ratingFilter,
-                query: _searchCtrl.text,
+                query: _searchQuery,
               ),
               _sortMode,
             );
@@ -256,25 +352,105 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _CompactHero(stats: stats),
+                    if (data.summaryError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _InfoBanner(message: data.summaryError!),
+                      ),
+                    _CompactHero(summary: data.summary),
                     const SizedBox(height: _RevUi.gap),
-                    _SummaryStrip(stats: stats),
+                    _SummaryStrip(summary: data.summary),
                     const SizedBox(height: _RevUi.gap),
                     _ReviewsSection(
-                      allReviews: all,
+                      summary: data.summary,
+                      loadedCount: data.reviews.length,
                       filtered: filtered,
+                      hasLoadedReviews: data.reviews.isNotEmpty,
+                      hasMore: data.hasMore,
+                      loadingMore: _loadingMore,
                       ratingFilter: _ratingFilter,
                       sortMode: _sortMode,
                       searchCtrl: _searchCtrl,
-                      onSearchChanged: () => setState(() {}),
+                      isFilteringLoadedOnly: data.hasMore,
+                      onSearchChanged: _onSearchChanged,
                       onRatingFilter: (f) => setState(() => _ratingFilter = f),
                       onSort: (s) => setState(() => _sortMode = s),
+                      onLoadMore: () => _loadMore(data),
+                      onViewAppointments: () => _openAppointments(context),
                     ),
                   ],
                 ),
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewsLoadException implements Exception {
+  _ReviewsLoadException(this.message, {this.accountNotLinked = false});
+
+  final String message;
+  final bool accountNotLinked;
+
+  @override
+  String toString() => message;
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RevGlass(
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              color: _RevUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try again'),
+            style: TextButton.styleFrom(foregroundColor: _RevUi.lavender),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: _RevUi.gold.withValues(alpha: 0.1),
+        border: Border.all(color: _RevUi.gold.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        message,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: _RevUi.textPrimary,
         ),
       ),
     );
@@ -324,16 +500,13 @@ class _ReviewsShell extends StatelessWidget {
 }
 
 class _CompactHero extends StatelessWidget {
-  const _CompactHero({required this.stats});
+  const _CompactHero({required this.summary});
 
-  final _ReviewStats stats;
+  final TherapistMyReviewsSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    final avg = stats.total > 0
-        ? stats.averageRating.toStringAsFixed(1)
-        : '—';
-    final latest = stats.latestReview;
+    final latest = summary.latestReview;
 
     return _RevGlass(
       radius: 20,
@@ -362,30 +535,10 @@ class _CompactHero extends StatelessWidget {
                   color: _RevUi.textSecondary,
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _HeroMetric(
-                    icon: Icons.star_rounded,
-                    value: stats.total > 0 ? '$avg' : '—',
-                    label: 'Average Rating',
-                    accent: _RevUi.gold,
-                  ),
-                  const SizedBox(width: 20),
-                  _HeroMetric(
-                    icon: Icons.rate_review_outlined,
-                    value: stats.total.toString(),
-                    label: 'Total Reviews',
-                    accent: _RevUi.lavender,
-                  ),
-                ],
-              ),
             ],
           );
 
-          if (!wide || latest == null) {
-            return headline;
-          }
+          if (!wide || latest == null) return headline;
 
           final previewText = latest.komentar.trim().isEmpty
               ? 'No written comment.'
@@ -438,7 +591,10 @@ class _CompactHero extends StatelessWidget {
                               ),
                             ),
                           ),
-                          _StarRating(stars: latest.ocjena, size: 14),
+                          _StarRating(
+                            stars: _clampStars(latest.ocjena),
+                            size: 14,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -464,64 +620,19 @@ class _CompactHero extends StatelessWidget {
   }
 }
 
-class _HeroMetric extends StatelessWidget {
-  const _HeroMetric({
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: accent),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: _RevUi.textPrimary,
-                height: 1,
-              ),
-            ),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _RevUi.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class _SummaryStrip extends StatelessWidget {
-  const _SummaryStrip({required this.stats});
+  const _SummaryStrip({required this.summary});
 
-  final _ReviewStats stats;
+  final TherapistMyReviewsSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    final avg = stats.total > 0
-        ? stats.averageRating.toStringAsFixed(1)
+    final avg = summary.totalCount > 0
+        ? summary.averageRating.toStringAsFixed(1)
         : '—';
-    final topService = stats.mostReviewedService ?? '—';
+    final topService = summary.mostReviewedServiceName?.trim().isNotEmpty == true
+        ? summary.mostReviewedServiceName!.trim()
+        : '—';
 
     return _RevGlass(
       radius: 16,
@@ -532,11 +643,11 @@ class _SummaryStrip extends StatelessWidget {
           final items = [
             _SummaryCell(
               label: 'Average Rating',
-              value: stats.total > 0 ? '$avg / 5' : '—',
+              value: summary.totalCount > 0 ? '$avg / 5' : '—',
             ),
             _SummaryCell(
               label: 'Total Reviews',
-              value: stats.total.toString(),
+              value: summary.totalCount.toString(),
             ),
             _SummaryCell(
               label: 'Most Reviewed Service',
@@ -614,24 +725,38 @@ class _SummaryCell extends StatelessWidget {
 
 class _ReviewsSection extends StatelessWidget {
   const _ReviewsSection({
-    required this.allReviews,
+    required this.summary,
+    required this.loadedCount,
     required this.filtered,
+    required this.hasLoadedReviews,
+    required this.hasMore,
+    required this.loadingMore,
     required this.ratingFilter,
     required this.sortMode,
     required this.searchCtrl,
+    required this.isFilteringLoadedOnly,
     required this.onSearchChanged,
     required this.onRatingFilter,
     required this.onSort,
+    required this.onLoadMore,
+    required this.onViewAppointments,
   });
 
-  final List<TherapistReviewRow> allReviews;
+  final TherapistMyReviewsSummary summary;
+  final int loadedCount;
   final List<TherapistReviewRow> filtered;
+  final bool hasLoadedReviews;
+  final bool hasMore;
+  final bool loadingMore;
   final String ratingFilter;
   final String sortMode;
   final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
+  final bool isFilteringLoadedOnly;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onRatingFilter;
   final ValueChanged<String> onSort;
+  final VoidCallback onLoadMore;
+  final VoidCallback onViewAppointments;
 
   @override
   Widget build(BuildContext context) {
@@ -650,7 +775,7 @@ class _ReviewsSection extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              '(${allReviews.length})',
+              '(${summary.totalCount})',
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -659,6 +784,16 @@ class _ReviewsSection extends StatelessWidget {
             ),
           ],
         ),
+        if (isFilteringLoadedOnly && loadedCount < summary.totalCount) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Showing $loadedCount of ${summary.totalCount} reviews. Load more to search older feedback.',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: _RevUi.textSecondary,
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         _FilterToolbar(
           searchCtrl: searchCtrl,
@@ -669,12 +804,8 @@ class _ReviewsSection extends StatelessWidget {
           onSort: onSort,
         ),
         const SizedBox(height: 16),
-        if (!allReviews.isNotEmpty)
-          _ReviewsEmptyState(
-            onViewAppointments: () => context
-                .read<DesktopNav>()
-                .goTo(DesktopRouteKey.therapistAppointments),
-          )
+        if (!hasLoadedReviews)
+          _ReviewsEmptyState(onViewAppointments: onViewAppointments)
         else if (filtered.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 48),
@@ -693,6 +824,27 @@ class _ReviewsSection extends StatelessWidget {
               for (var i = 0; i < filtered.length; i++) ...[
                 _ReviewCard(review: filtered[i]),
                 if (i < filtered.length - 1) const SizedBox(height: 12),
+              ],
+              if (hasMore) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: loadingMore
+                      ? const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton(
+                          onPressed: onLoadMore,
+                          style: TextButton.styleFrom(
+                            foregroundColor: _RevUi.lavender,
+                          ),
+                          child: Text(
+                            'Load more reviews ($loadedCount of ${summary.totalCount})',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                ),
               ],
             ],
           ),
@@ -714,7 +866,7 @@ class _FilterToolbar extends StatelessWidget {
   final TextEditingController searchCtrl;
   final String ratingFilter;
   final String sortMode;
-  final VoidCallback onSearchChanged;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onRatingFilter;
   final ValueChanged<String> onSort;
 
@@ -737,7 +889,7 @@ class _FilterToolbar extends StatelessWidget {
                   height: 40,
                   child: TextField(
                     controller: searchCtrl,
-                    onChanged: (_) => onSearchChanged(),
+                    onChanged: onSearchChanged,
                     style: GoogleFonts.inter(
                       color: _RevUi.textPrimary,
                       fontSize: 13,
@@ -774,11 +926,7 @@ class _FilterToolbar extends StatelessWidget {
               );
             }
             return Row(
-              children: [
-                search,
-                const SizedBox(width: 12),
-                sort,
-              ],
+              children: [search, const SizedBox(width: 12), sort],
             );
           },
         ),
@@ -820,14 +968,18 @@ class _RatingFilterChip extends StatefulWidget {
 
 class _RatingFilterChipState extends State<_RatingFilterChip> {
   bool _hover = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -840,7 +992,9 @@ class _RatingFilterChipState extends State<_RatingFilterChip> {
                 : null,
             color: widget.selected
                 ? null
-                : Colors.white.withValues(alpha: _hover ? 0.07 : 0.04),
+                : Colors.white.withValues(
+                    alpha: (_hover || _pressed) ? 0.07 : 0.04,
+                  ),
             border: Border.all(
               color: widget.selected
                   ? _RevUi.lavender.withValues(alpha: 0.5)
@@ -927,6 +1081,8 @@ class _ReviewCard extends StatefulWidget {
 
 class _ReviewCardState extends State<_ReviewCard> {
   bool _hover = false;
+  bool _pressed = false;
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -938,105 +1094,164 @@ class _ReviewCardState extends State<_ReviewCard> {
     final comment = r.komentar.trim().isEmpty
         ? 'No written comment provided.'
         : r.komentar.trim();
-    final initial = clientName.isNotEmpty
-        ? String.fromCharCode(clientName.runes.first).toUpperCase()
-        : '?';
+    final adminReply = r.adminOdgovor?.trim();
+    final stars = _clampStars(r.ocjena);
+    final longComment = comment.length > 220;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: _hover
-              ? Colors.white.withValues(alpha: 0.055)
-              : Colors.white.withValues(alpha: 0.035),
-          border: Border.all(
-            color: _hover
-                ? _RevUi.purple.withValues(alpha: 0.32)
-                : Colors.white.withValues(alpha: 0.08),
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: (_hover || _pressed)
+                ? Colors.white.withValues(alpha: 0.055)
+                : Colors.white.withValues(alpha: 0.035),
+            border: Border.all(
+              color: (_hover || _pressed)
+                  ? _RevUi.purple.withValues(alpha: 0.32)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
+            boxShadow: (_hover || _pressed)
+                ? [
+                    BoxShadow(
+                      color: _RevUi.purple.withValues(alpha: 0.16),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: _hover
-              ? [
-                  BoxShadow(
-                    color: _RevUi.purple.withValues(alpha: 0.16),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ClientAvatar(initials: initial),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ClientAvatar(initials: _clientInitial(clientName)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                clientName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: _RevUi.textPrimary,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                serviceName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _RevUi.lavender.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _StarRating(stars: stars),
+                            const SizedBox(height: 4),
+                            Text(
+                              _formatShortDate(r.createdAt),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: _RevUi.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      comment,
+                      maxLines: _expanded ? null : 4,
+                      overflow: _expanded ? null : TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: _RevUi.textSecondary.withValues(alpha: 0.95),
+                      ),
+                    ),
+                    if (longComment)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _expanded = !_expanded),
+                          child: Text(
+                            _expanded ? 'Show less' : 'Read more',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _RevUi.lavender,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (adminReply != null && adminReply.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white.withValues(alpha: 0.04),
+                          border: Border.all(
+                            color: _RevUi.purple.withValues(alpha: 0.2),
+                          ),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              clientName,
+                              'Spa response',
                               style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: _RevUi.textPrimary,
-                                letterSpacing: -0.2,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.4,
+                                color: _RevUi.lavender.withValues(alpha: 0.85),
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 6),
                             Text(
-                              serviceName,
+                              adminReply,
                               style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: _RevUi.lavender.withValues(alpha: 0.9),
+                                fontSize: 13,
+                                height: 1.45,
+                                color: _RevUi.textSecondary,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _StarRating(stars: r.ocjena),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatShortDate(r.createdAt),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: _RevUi.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    comment,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: _RevUi.textSecondary.withValues(alpha: 0.95),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1144,9 +1359,7 @@ class _ReviewsEmptyState extends StatelessWidget {
             onPressed: onViewAppointments,
             icon: const Icon(Icons.event_available_outlined, size: 18),
             label: const Text('View Appointments'),
-            style: TextButton.styleFrom(
-              foregroundColor: _RevUi.lavender,
-            ),
+            style: TextButton.styleFrom(foregroundColor: _RevUi.lavender),
           ),
         ],
       ),
