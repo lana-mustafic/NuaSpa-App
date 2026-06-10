@@ -14,6 +14,7 @@ import '../../screens/mobile/mobile_profile_screen.dart';
 import '../../screens/reservations/reservation_create_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
+import '../../screens/therapist/therapist_services_screen.dart';
 import '../theme/mobile_spa_theme.dart';
 
 /// Floating glass bottom navigation with a raised center "Book Now" action.
@@ -321,7 +322,7 @@ class _MobileDrawer extends StatelessWidget {
                   );
                 },
               ),
-            if (auth.isZaposlenik)
+            if (auth.isZaposlenik) ...[
               ListTile(
                 leading: const Icon(Icons.calendar_month_outlined),
                 title: const Text('Therapist schedule'),
@@ -340,6 +341,20 @@ class _MobileDrawer extends StatelessWidget {
                   );
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.spa_outlined),
+                title: const Text('My Services'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TherapistServicesScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
             if (auth.isAdmin) ...[
               ListTile(
                 leading: const Icon(Icons.payments_outlined),
