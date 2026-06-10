@@ -80,6 +80,9 @@ class ServiceDetailsScreen extends StatefulWidget {
   /// When true, renders the admin management layout (catalog / therapist admin).
   final bool adminPanelView;
 
+  /// When true, skips client-only API calls (therapist viewing own service).
+  final bool therapistView;
+
   /// Preselect a completed visit when opening from bookings ("Rate service").
   final int? initialRezervacijaId;
 
@@ -87,6 +90,7 @@ class ServiceDetailsScreen extends StatefulWidget {
     super.key,
     required this.serviceId,
     this.adminPanelView = false,
+    this.therapistView = false,
     this.initialRezervacijaId,
   });
 
@@ -128,10 +132,12 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     super.initState();
     _recenzijeFuture = _apiService.getRecenzijeByUsluga(widget.serviceId);
     _serviceFuture = _loadServiceAndTherapists();
-    Future.microtask(() {
-      if (!mounted) return;
-      context.read<ServiceProvider>().fetchFavorites();
-    });
+    if (!widget.therapistView) {
+      Future.microtask(() {
+        if (!mounted) return;
+        context.read<ServiceProvider>().fetchFavorites();
+      });
+    }
   }
 
   Future<Usluga?> _loadServiceAndTherapists() async {
@@ -139,9 +145,11 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     if (!mounted) return null;
 
     if (result.service != null) {
-      PreporukaTracker.instance.trackServiceView(result.service!.id);
-      await _loadTherapistsForService(result.service!);
-      await _loadReviewableVisits();
+      if (!widget.therapistView) {
+        PreporukaTracker.instance.trackServiceView(result.service!.id);
+        await _loadTherapistsForService(result.service!);
+        await _loadReviewableVisits();
+      }
       return result.service;
     }
 
