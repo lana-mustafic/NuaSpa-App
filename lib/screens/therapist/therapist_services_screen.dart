@@ -79,6 +79,13 @@ String _durationLabel(Usluga u) {
   return u.trajanje;
 }
 
+String _initials(Zaposlenik z) {
+  final a = z.ime.trim().isNotEmpty ? z.ime.trim()[0] : '';
+  final b = z.prezime.trim().isNotEmpty ? z.prezime.trim()[0] : '';
+  final s = '$a$b'.toUpperCase();
+  return s.isEmpty ? 'TH' : s;
+}
+
 List<Usluga> _sortServices(List<Usluga> list, String mode) {
   final copy = [...list];
   switch (mode) {
@@ -240,9 +247,11 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                 builder: (context, c) {
                   final wide = c.maxWidth >= 1100;
                   final main = _MainColumn(
+                    me: me,
                     linked: data.linked,
                     filtered: filtered,
                     categoryName: katName,
+                    certificationsCount: tags.length,
                     sortMode: _sortMode,
                     searchCtrl: _searchCtrl,
                     onSearchChanged: () => setState(() {}),
@@ -255,9 +264,10 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                       );
                     },
                   );
-                  final sidebar = _ServiceSummarySidebar(
-                    totalServices: data.linked.length,
-                    categoriesCount: data.categories.length,
+                  final sidebar = _TherapistProfileCard(
+                    therapist: me,
+                    categoryName: katName,
+                    certifiedServicesCount: data.linked.length,
                     certificationsCount: tags.length,
                   );
 
@@ -344,9 +354,11 @@ class _ServicesShell extends StatelessWidget {
 
 class _MainColumn extends StatelessWidget {
   const _MainColumn({
+    required this.me,
     required this.linked,
     required this.filtered,
     required this.categoryName,
+    required this.certificationsCount,
     required this.sortMode,
     required this.searchCtrl,
     required this.onSearchChanged,
@@ -354,9 +366,11 @@ class _MainColumn extends StatelessWidget {
     required this.onOpenService,
   });
 
+  final Zaposlenik me;
   final List<Usluga> linked;
   final List<Usluga> filtered;
   final String? categoryName;
+  final int certificationsCount;
   final String sortMode;
   final TextEditingController searchCtrl;
   final VoidCallback onSearchChanged;
@@ -368,14 +382,16 @@ class _MainColumn extends StatelessWidget {
     final catLabel = categoryName?.trim().isNotEmpty == true
         ? categoryName!.trim()
         : 'Your specialty';
+    final firstName = me.ime.trim().isNotEmpty ? me.ime.trim() : 'Therapist';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _HeroCard(
+          firstName: firstName,
           categoryName: catLabel,
-          subtitle:
-              'Services you are certified to perform at NuaSpa.',
+          certifiedCount: linked.length,
+          certificationsCount: certificationsCount,
         ),
         const SizedBox(height: 18),
         _LinkedServicesCard(
@@ -394,137 +410,82 @@ class _MainColumn extends StatelessWidget {
 
 class _HeroCard extends StatelessWidget {
   const _HeroCard({
+    required this.firstName,
     required this.categoryName,
-    required this.subtitle,
+    required this.certifiedCount,
+    required this.certificationsCount,
   });
 
+  final String firstName;
   final String categoryName;
-  final String subtitle;
+  final int certifiedCount;
+  final int certificationsCount;
 
   @override
   Widget build(BuildContext context) {
+    final servicesLabel =
+        '$certifiedCount Certified Service${certifiedCount == 1 ? '' : 's'}';
+    final certsLabel =
+        '$certificationsCount Certification${certificationsCount == 1 ? '' : 's'}';
+
     return _SvcGlass(
       radius: 20,
-      padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final stack = c.maxWidth < 640;
-          final illustration = const _SpaHeroIllustration();
-          final content = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  gradient: LinearGradient(
-                    colors: [
-                      _SvcUi.purple.withValues(alpha: 0.5),
-                      _SvcUi.lavender.withValues(alpha: 0.35),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: _SvcUi.lavender.withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Text(
-                  'Certified Therapist',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                categoryName,
-                style: GoogleFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: _SvcUi.textPrimary,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: _SvcUi.textSecondary,
-                ),
-              ),
-            ],
-          );
-
-          if (stack) {
-            return Column(
-              children: [
-                illustration,
-                const SizedBox(height: 12),
-                content,
-              ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              illustration,
-              const SizedBox(width: 18),
-              Expanded(child: content),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SpaHeroIllustration extends StatelessWidget {
-  const _SpaHeroIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      height: 96,
-      child: Stack(
-        alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 96,
-            height: 96,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
+              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
                 colors: [
-                  _SvcUi.purple.withValues(alpha: 0.35),
-                  _SvcUi.lavender.withValues(alpha: 0.05),
+                  _SvcUi.purple.withValues(alpha: 0.55),
+                  _SvcUi.lavender.withValues(alpha: 0.35),
                 ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: _SvcUi.purple.withValues(alpha: 0.35),
-                  blurRadius: 40,
-                  spreadRadius: 4,
+              border: Border.all(
+                color: _SvcUi.lavender.withValues(alpha: 0.4),
+              ),
+            ),
+            child: const Icon(Icons.spa_rounded, size: 22, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome back, $firstName',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _SvcUi.lavender.withValues(alpha: 0.9),
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  categoryName,
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: _SvcUi.textPrimary,
+                    letterSpacing: -0.4,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _HeroStatChip(label: servicesLabel),
+                    _HeroStatChip(label: certsLabel),
+                  ],
                 ),
               ],
-            ),
-          ),
-          const Icon(Icons.spa_rounded, size: 36, color: _SvcUi.lavender),
-          Positioned(
-            left: 4,
-            bottom: 14,
-            child: _IllustrationOrb(icon: Icons.water_drop_outlined, size: 24),
-          ),
-          Positioned(
-            right: 2,
-            top: 12,
-            child: _IllustrationOrb(
-              icon: Icons.self_improvement_rounded,
-              size: 22,
             ),
           ),
         ],
@@ -533,29 +494,28 @@ class _SpaHeroIllustration extends StatelessWidget {
   }
 }
 
-class _IllustrationOrb extends StatelessWidget {
-  const _IllustrationOrb({required this.icon, required this.size});
+class _HeroStatChip extends StatelessWidget {
+  const _HeroStatChip({required this.label});
 
-  final IconData icon;
-  final double size;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size + 16,
-      height: size + 16,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.06),
-        border: Border.all(color: _SvcUi.purple.withValues(alpha: 0.35)),
-        boxShadow: [
-          BoxShadow(
-            color: _SvcUi.purple.withValues(alpha: 0.25),
-            blurRadius: 12,
-          ),
-        ],
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
-      child: Icon(icon, size: size * 0.55, color: _SvcUi.lavender),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: _SvcUi.textPrimary,
+        ),
+      ),
     );
   }
 }
@@ -587,42 +547,60 @@ class _LinkedServicesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Services ($totalCount)',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: _SvcUi.textPrimary,
-            ),
+          Row(
+            children: [
+              Text(
+                'Your Services',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _SvcUi.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '($totalCount)',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _SvcUi.textSecondary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, c) {
               final stack = c.maxWidth < 720;
-              final search = Expanded(
+              final search = SizedBox(
+                width: stack ? double.infinity : 260,
                 child: _SvcGlass(
                   radius: 14,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: TextField(
-                    controller: searchCtrl,
-                    onChanged: (_) => onSearchChanged(),
-                    style: GoogleFonts.inter(
-                      color: _SvcUi.textPrimary,
-                      fontSize: 14,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Search services…',
-                      hintStyle: GoogleFonts.inter(
-                        color: _SvcUi.textSecondary,
-                        fontSize: 14,
+                  child: SizedBox(
+                    height: 40,
+                    child: TextField(
+                      controller: searchCtrl,
+                      onChanged: (_) => onSearchChanged(),
+                      style: GoogleFonts.inter(
+                        color: _SvcUi.textPrimary,
+                        fontSize: 13,
                       ),
-                      border: InputBorder.none,
-                      icon: Icon(
-                        Icons.search_rounded,
-                        size: 20,
-                        color: _SvcUi.lavender.withValues(alpha: 0.8),
+                      decoration: InputDecoration(
+                        hintText: 'Filter services…',
+                        hintStyle: GoogleFonts.inter(
+                          color: _SvcUi.textSecondary,
+                          fontSize: 13,
+                        ),
+                        border: InputBorder.none,
+                        icon: Icon(
+                          Icons.search_rounded,
+                          size: 18,
+                          color: _SvcUi.lavender.withValues(alpha: 0.7),
+                        ),
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                      isDense: true,
                     ),
                   ),
                 ),
@@ -634,7 +612,7 @@ class _LinkedServicesCard extends StatelessWidget {
                   children: [
                     search,
                     const SizedBox(height: 10),
-                    sort,
+                    Align(alignment: Alignment.centerLeft, child: sort),
                   ],
                 );
               }
@@ -643,6 +621,7 @@ class _LinkedServicesCard extends StatelessWidget {
                   search,
                   const SizedBox(width: 10),
                   sort,
+                  const Spacer(),
                 ],
               );
             },
@@ -760,30 +739,42 @@ class _ServiceRowState extends State<_ServiceRow> {
   @override
   Widget build(BuildContext context) {
     final u = widget.service;
-    final category = u.kategorija.trim().isNotEmpty ? u.kategorija.trim() : 'General';
+    final category =
+        u.kategorija.trim().isNotEmpty ? u.kategorija.trim() : 'General';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(16),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: _hover
-              ? Colors.white.withValues(alpha: 0.05)
+              ? Colors.white.withValues(alpha: 0.055)
               : Colors.white.withValues(alpha: 0.025),
           border: Border.all(
             color: _hover
-                ? _SvcUi.purple.withValues(alpha: 0.28)
+                ? _SvcUi.purple.withValues(alpha: 0.38)
                 : Colors.white.withValues(alpha: 0.08),
           ),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: _SvcUi.purple.withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final narrow = c.maxWidth < 760;
-            final thumb = _ServiceThumbnail(service: u);
-            final info = Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ServiceThumbnail(service: u, hovered: _hover),
+            const SizedBox(width: 14),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -795,70 +786,39 @@ class _ServiceRowState extends State<_ServiceRow> {
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: _SvcUi.textPrimary,
+                      letterSpacing: -0.2,
+                      height: 1.25,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
+                  Text(
+                    category,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _SvcUi.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     _durationLabel(u),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: _SvcUi.lavender.withValues(alpha: 0.85),
+                      color: _SvcUi.lavender.withValues(alpha: 0.9),
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ServiceBadge(
-                        label: category,
-                        color: _SvcUi.lavender,
-                      ),
-                      _ServiceBadge(
-                        label: 'Certified',
-                        color: _SvcUi.green,
-                      ),
-                    ],
+                  _ServiceBadge(label: 'Certified', color: _SvcUi.green),
+                  const SizedBox(height: 12),
+                  _ViewDetailsAction(
+                    hovered: _hover,
+                    onTap: widget.onViewDetails,
                   ),
                 ],
               ),
-            );
-
-            if (narrow) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [thumb, const SizedBox(width: 14), info],
-                  ),
-                  const SizedBox(height: 14),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _OutlinedButton(
-                      label: 'View Details',
-                      onTap: widget.onViewDetails,
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                thumb,
-                const SizedBox(width: 18),
-                info,
-                const SizedBox(width: 16),
-                _OutlinedButton(
-                  label: 'View Details',
-                  onTap: widget.onViewDetails,
-                ),
-              ],
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -893,23 +853,29 @@ class _ServiceBadge extends StatelessWidget {
 }
 
 class _ServiceThumbnail extends StatelessWidget {
-  const _ServiceThumbnail({required this.service});
+  const _ServiceThumbnail({required this.service, required this.hovered});
 
   final Usluga service;
+  final bool hovered;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        width: 88,
-        height: 66,
-        child: ServiceNetworkImage(
-          imageUrl: service.slikaUrl,
-          fit: BoxFit.cover,
-          error: Container(
-            color: _SvcUi.purple.withValues(alpha: 0.2),
-            child: const Icon(Icons.spa_outlined, color: _SvcUi.lavender),
+        width: 84,
+        height: 84,
+        child: AnimatedScale(
+          scale: hovered ? 1.06 : 1.0,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: ServiceNetworkImage(
+            imageUrl: service.slikaUrl,
+            fit: BoxFit.cover,
+            error: Container(
+              color: _SvcUi.purple.withValues(alpha: 0.2),
+              child: const Icon(Icons.spa_outlined, color: _SvcUi.lavender),
+            ),
           ),
         ),
       ),
@@ -917,50 +883,34 @@ class _ServiceThumbnail extends StatelessWidget {
   }
 }
 
-class _OutlinedButton extends StatefulWidget {
-  const _OutlinedButton({required this.label, required this.onTap});
+class _ViewDetailsAction extends StatelessWidget {
+  const _ViewDetailsAction({required this.hovered, required this.onTap});
 
-  final String label;
+  final bool hovered;
   final VoidCallback onTap;
 
   @override
-  State<_OutlinedButton> createState() => _OutlinedButtonState();
-}
-
-class _OutlinedButtonState extends State<_OutlinedButton> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _SvcUi.purple.withValues(alpha: _hover ? 0.65 : 0.4),
-              ),
-              color: _SvcUi.purple.withValues(alpha: _hover ? 0.15 : 0.08),
-            ),
-            child: Center(
-              child: Text(
-                widget.label,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _SvcUi.textPrimary,
-                ),
-              ),
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: hovered
+                ? _SvcUi.lavender
+                : _SvcUi.textSecondary.withValues(alpha: 0.95),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('View Details'),
+              SizedBox(width: 4),
+              Text('→'),
+            ],
           ),
         ),
       ),
@@ -968,40 +918,105 @@ class _OutlinedButtonState extends State<_OutlinedButton> {
   }
 }
 
-class _ServiceSummarySidebar extends StatelessWidget {
-  const _ServiceSummarySidebar({
-    required this.totalServices,
-    required this.categoriesCount,
+class _TherapistProfileCard extends StatelessWidget {
+  const _TherapistProfileCard({
+    required this.therapist,
+    required this.categoryName,
+    required this.certifiedServicesCount,
     required this.certificationsCount,
   });
 
-  final int totalServices;
-  final int categoriesCount;
+  final Zaposlenik therapist;
+  final String? categoryName;
+  final int certifiedServicesCount;
   final int certificationsCount;
 
   @override
   Widget build(BuildContext context) {
+    final catLabel = categoryName?.trim().isNotEmpty == true
+        ? categoryName!.trim()
+        : 'Your specialty';
+    final initials = _initials(therapist);
+    final servicesLabel =
+        '$certifiedServicesCount Certified Service${certifiedServicesCount == 1 ? '' : 's'}';
+    final certsLabel =
+        '$certificationsCount Certification${certificationsCount == 1 ? '' : 's'}';
+
     return _SvcGlass(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Service Summary',
+            'Therapist Profile',
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: _SvcUi.textPrimary,
             ),
           ),
+          const SizedBox(height: 18),
+          Center(
+            child: Container(
+              width: 72,
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_SvcUi.purple, _SvcUi.lavender],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _SvcUi.purple.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Text(
+                initials,
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 14),
-          _SummaryLine(label: 'Total Services', value: '$totalServices'),
-          const SizedBox(height: 10),
-          _SummaryLine(label: 'Categories', value: '$categoriesCount'),
-          const SizedBox(height: 10),
-          _SummaryLine(
+          Center(
+            child: Text(
+              therapist.fullName,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _SvcUi.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: Color(0x18FFFFFF), height: 1),
+          const SizedBox(height: 14),
+          _ProfileStatRow(
+            icon: Icons.category_outlined,
+            label: 'Category',
+            value: catLabel,
+          ),
+          const SizedBox(height: 12),
+          _ProfileStatRow(
+            icon: Icons.verified_outlined,
+            label: 'Certified Services',
+            value: servicesLabel,
+          ),
+          const SizedBox(height: 12),
+          _ProfileStatRow(
+            icon: Icons.workspace_premium_outlined,
             label: 'Certifications',
-            value: '$certificationsCount',
+            value: certsLabel,
           ),
         ],
       ),
@@ -1009,31 +1024,48 @@ class _ServiceSummarySidebar extends StatelessWidget {
   }
 }
 
-class _SummaryLine extends StatelessWidget {
-  const _SummaryLine({required this.label, required this.value});
+class _ProfileStatRow extends StatelessWidget {
+  const _ProfileStatRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Icon(icon, size: 16, color: _SvcUi.lavender.withValues(alpha: 0.75)),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _SvcUi.textSecondary,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: _SvcUi.textPrimary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _SvcUi.textSecondary,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _SvcUi.textPrimary,
+                  height: 1.3,
+                ),
+              ),
+            ],
           ),
         ),
       ],
