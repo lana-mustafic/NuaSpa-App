@@ -17,12 +17,8 @@ abstract final class _RevUi {
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
   static const gold = Color(0xFFF5B942);
-  static const green = Color(0xFF22C55E);
-  static const orange = Color(0xFFF97316);
   static const cardRadius = 24.0;
-  static const heroRadius = 30.0;
-  static const gap = 24.0;
-  static const sidebarWidth = 340.0;
+  static const gap = 20.0;
   static const contentPadding = 32.0;
 }
 
@@ -30,93 +26,47 @@ class _ReviewStats {
   const _ReviewStats({
     required this.averageRating,
     required this.total,
-    required this.satisfactionPct,
-    required this.positiveCount,
-    required this.fiveStarPct,
-    required this.topServices,
+    this.mostReviewedService,
+    this.latestReview,
   });
 
   final double averageRating;
   final int total;
-  final int satisfactionPct;
-  final int positiveCount;
-  final int fiveStarPct;
-  final List<_ServiceRating> topServices;
-}
-
-class _ServiceRating {
-  const _ServiceRating({
-    required this.name,
-    required this.avg,
-    required this.count,
-  });
-
-  final String name;
-  final double avg;
-  final int count;
+  final String? mostReviewedService;
+  final TherapistReviewRow? latestReview;
 }
 
 _ReviewStats _computeStats(List<TherapistReviewRow> reviews) {
   if (reviews.isEmpty) {
-    return const _ReviewStats(
-      averageRating: 0,
-      total: 0,
-      satisfactionPct: 0,
-      positiveCount: 0,
-      fiveStarPct: 0,
-      topServices: [],
-    );
+    return const _ReviewStats(averageRating: 0, total: 0);
   }
+
   final total = reviews.length;
   final sum = reviews.fold<int>(0, (s, r) => s + r.ocjena);
   final avg = sum / total;
-  final positive = reviews.where((r) => r.ocjena >= 4).length;
-  final five = reviews.where((r) => r.ocjena >= 5).length;
-  final satPct = ((positive / total) * 100).round();
 
-  final byService = <String, List<int>>{};
+  final byService = <String, int>{};
   for (final r in reviews) {
     final key = r.uslugaNaziv.trim().isEmpty ? 'Service' : r.uslugaNaziv.trim();
-    byService.putIfAbsent(key, () => []).add(r.ocjena);
+    byService[key] = (byService[key] ?? 0) + 1;
   }
-  final top = byService.entries
-      .map(
-        (e) => _ServiceRating(
-          name: e.key,
-          avg: e.value.reduce((a, b) => a + b) / e.value.length,
-          count: e.value.length,
-        ),
-      )
-      .toList()
-    ..sort((a, b) => b.avg.compareTo(a.avg));
+  String? topService;
+  var topCount = 0;
+  for (final e in byService.entries) {
+    if (e.value > topCount) {
+      topCount = e.value;
+      topService = e.key;
+    }
+  }
+
+  final sorted = [...reviews]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   return _ReviewStats(
     averageRating: avg,
     total: total,
-    satisfactionPct: satPct,
-    positiveCount: positive,
-    fiveStarPct: ((five / total) * 100).round(),
-    topServices: top.take(5).toList(),
+    mostReviewedService: topService,
+    latestReview: sorted.first,
   );
-}
-
-String _formatReviewDate(DateTime d) {
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  final loc = d.toLocal();
-  return 'Completed on ${months[loc.month - 1]} ${loc.day}, ${loc.year}';
 }
 
 String _formatShortDate(DateTime d) {
@@ -138,42 +88,23 @@ String _formatShortDate(DateTime d) {
   return '${months[loc.month - 1]} ${loc.day}, ${loc.year}';
 }
 
-String _sentimentLabel(int stars) {
-  if (stars >= 4) return 'Positive';
-  if (stars == 3) return 'Neutral';
-  return 'Critical';
-}
-
-Color _sentimentColor(String label) {
-  switch (label) {
-    case 'Positive':
-      return _RevUi.green;
-    case 'Neutral':
-      return _RevUi.lavender;
-    default:
-      return _RevUi.orange;
-  }
-}
-
 List<TherapistReviewRow> _filterReviews(
   List<TherapistReviewRow> all, {
-  required String pill,
+  required String ratingFilter,
   required String query,
 }) {
   var list = [...all];
-  switch (pill) {
-    case '5 Stars':
-      list = list.where((r) => r.ocjena >= 5).toList();
-      break;
-    case '4 Stars':
+  switch (ratingFilter) {
+    case '5★':
+      list = list.where((r) => r.ocjena == 5).toList();
+    case '4★':
       list = list.where((r) => r.ocjena == 4).toList();
-      break;
-    case 'Positive':
-      list = list.where((r) => r.ocjena >= 4).toList();
-      break;
-    case 'Critical':
-      list = list.where((r) => r.ocjena <= 2).toList();
-      break;
+    case '3★':
+      list = list.where((r) => r.ocjena == 3).toList();
+    case '2★':
+      list = list.where((r) => r.ocjena == 2).toList();
+    case '1★':
+      list = list.where((r) => r.ocjena == 1).toList();
     default:
       break;
   }
@@ -199,13 +130,10 @@ List<TherapistReviewRow> _sortReviews(
   switch (mode) {
     case 'Oldest First':
       copy.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      break;
     case 'Highest Rating':
       copy.sort((a, b) => b.ocjena.compareTo(a.ocjena));
-      break;
     case 'Lowest Rating':
       copy.sort((a, b) => a.ocjena.compareTo(b.ocjena));
-      break;
     default:
       copy.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
@@ -225,7 +153,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
   Future<(List<TherapistReviewRow> items, String? error)>? _future;
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  String _filterPill = 'All Reviews';
+  String _ratingFilter = 'All';
   String _sortMode = 'Newest First';
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -308,7 +236,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
             final filtered = _sortReviews(
               _filterReviews(
                 all,
-                pill: _filterPill,
+                ratingFilter: _ratingFilter,
                 query: _searchCtrl.text,
               ),
               _sortMode,
@@ -316,61 +244,34 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
 
             return FadeTransition(
               opacity: _fadeAnim,
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final wide = c.maxWidth >= 1100;
-                  final main = _MainColumn(
-                    allReviews: all,
-                    filtered: filtered,
-                    stats: stats,
-                    filterPill: _filterPill,
-                    sortMode: _sortMode,
-                    searchCtrl: _searchCtrl,
-                    onSearchChanged: () => setState(() {}),
-                    onPill: (p) {
-                      setState(() => _filterPill = p);
-                      _fadeCtrl.forward(from: 0);
-                    },
-                    onSort: (s) => setState(() => _sortMode = s),
-                    onRefresh: _reload,
-                  );
-                  final sidebar = _ReviewsSidebar(
-                    stats: stats,
-                    onViewAppointments: () => context
-                        .read<DesktopNav>()
-                        .goTo(DesktopRouteKey.therapistAppointments),
-                  );
-
-                  return SingleChildScrollView(
-                    controller: _scrollCtrl,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
-                      _RevUi.contentPadding,
-                      8,
-                      _RevUi.contentPadding,
-                      40,
+              child: SingleChildScrollView(
+                controller: _scrollCtrl,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  _RevUi.contentPadding,
+                  8,
+                  _RevUi.contentPadding,
+                  40,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _CompactHero(stats: stats),
+                    const SizedBox(height: _RevUi.gap),
+                    _SummaryStrip(stats: stats),
+                    const SizedBox(height: _RevUi.gap),
+                    _ReviewsSection(
+                      allReviews: all,
+                      filtered: filtered,
+                      ratingFilter: _ratingFilter,
+                      sortMode: _sortMode,
+                      searchCtrl: _searchCtrl,
+                      onSearchChanged: () => setState(() {}),
+                      onRatingFilter: (f) => setState(() => _ratingFilter = f),
+                      onSort: (s) => setState(() => _sortMode = s),
                     ),
-                    child: wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: main),
-                              const SizedBox(width: _RevUi.gap),
-                              SizedBox(
-                                width: _RevUi.sidebarWidth,
-                                child: sidebar,
-                              ),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              main,
-                              const SizedBox(height: _RevUi.gap),
-                              sidebar,
-                            ],
-                          ),
-                  );
-                },
+                  ],
+                ),
               ),
             );
           },
@@ -403,13 +304,13 @@ class _ReviewsShell extends StatelessWidget {
           top: -60,
           right: 40,
           child: Container(
-            width: 300,
-            height: 300,
+            width: 260,
+            height: 260,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  _RevUi.purple.withValues(alpha: 0.22),
+                  _RevUi.purple.withValues(alpha: 0.18),
                   Colors.transparent,
                 ],
               ),
@@ -422,59 +323,8 @@ class _ReviewsShell extends StatelessWidget {
   }
 }
 
-class _MainColumn extends StatelessWidget {
-  const _MainColumn({
-    required this.allReviews,
-    required this.filtered,
-    required this.stats,
-    required this.filterPill,
-    required this.sortMode,
-    required this.searchCtrl,
-    required this.onSearchChanged,
-    required this.onPill,
-    required this.onSort,
-    required this.onRefresh,
-  });
-
-  final List<TherapistReviewRow> allReviews;
-  final List<TherapistReviewRow> filtered;
-  final _ReviewStats stats;
-  final String filterPill;
-  final String sortMode;
-  final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
-  final ValueChanged<String> onPill;
-  final ValueChanged<String> onSort;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _HeroSummaryCard(stats: stats),
-        const SizedBox(height: _RevUi.gap),
-        _FilterActionBar(
-          searchCtrl: searchCtrl,
-          filterPill: filterPill,
-          sortMode: sortMode,
-          onSearchChanged: onSearchChanged,
-          onPill: onPill,
-          onSort: onSort,
-          onRefresh: onRefresh,
-        ),
-        const SizedBox(height: _RevUi.gap),
-        _RecentReviewsCard(
-          reviews: filtered,
-          hasAny: allReviews.isNotEmpty,
-        ),
-      ],
-    );
-  }
-}
-
-class _HeroSummaryCard extends StatelessWidget {
-  const _HeroSummaryCard({required this.stats});
+class _CompactHero extends StatelessWidget {
+  const _CompactHero({required this.stats});
 
   final _ReviewStats stats;
 
@@ -483,317 +333,478 @@ class _HeroSummaryCard extends StatelessWidget {
     final avg = stats.total > 0
         ? stats.averageRating.toStringAsFixed(1)
         : '—';
+    final latest = stats.latestReview;
 
     return _RevGlass(
-      radius: _RevUi.heroRadius,
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 240),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final stack = c.maxWidth < 900;
-            final left = const _StarHeroIllustration();
-            final center = Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+      radius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final wide = c.maxWidth >= 900;
+          final headline = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Client Feedback',
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: _RevUi.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Ratings and comments from clients after completed appointments.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: _RevUi.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  Text(
-                    'Your Client Feedback',
-                    style: GoogleFonts.inter(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: _RevUi.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
+                  _HeroMetric(
+                    icon: Icons.star_rounded,
+                    value: stats.total > 0 ? '$avg' : '—',
+                    label: 'Average Rating',
+                    accent: _RevUi.gold,
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Track ratings, reviews and client satisfaction from completed appointments.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      height: 1.45,
-                      color: _RevUi.textSecondary,
-                    ),
+                  const SizedBox(width: 20),
+                  _HeroMetric(
+                    icon: Icons.rate_review_outlined,
+                    value: stats.total.toString(),
+                    label: 'Total Reviews',
+                    accent: _RevUi.lavender,
                   ),
                 ],
               ),
-            );
-            final statsRow = Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            ],
+          );
+
+          if (!wide || latest == null) {
+            return headline;
+          }
+
+          final previewText = latest.komentar.trim().isEmpty
+              ? 'No written comment.'
+              : latest.komentar.trim();
+          final clipped = previewText.length > 120
+              ? '${previewText.substring(0, 117)}…'
+              : previewText;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: headline),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white.withValues(alpha: 0.04),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Latest Review',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: _RevUi.lavender.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              latest.korisnikIme.isEmpty
+                                  ? 'Client'
+                                  : latest.korisnikIme,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _RevUi.textPrimary,
+                              ),
+                            ),
+                          ),
+                          _StarRating(stars: latest.ocjena, size: 14),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        clipped,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: _RevUi.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeroMetric extends StatelessWidget {
+  const _HeroMetric({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: accent),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: _RevUi.textPrimary,
+                height: 1,
+              ),
+            ),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _RevUi.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryStrip extends StatelessWidget {
+  const _SummaryStrip({required this.stats});
+
+  final _ReviewStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final avg = stats.total > 0
+        ? stats.averageRating.toStringAsFixed(1)
+        : '—';
+    final topService = stats.mostReviewedService ?? '—';
+
+    return _RevGlass(
+      radius: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final stack = c.maxWidth < 720;
+          final items = [
+            _SummaryCell(
+              label: 'Average Rating',
+              value: stats.total > 0 ? '$avg / 5' : '—',
+            ),
+            _SummaryCell(
+              label: 'Total Reviews',
+              value: stats.total.toString(),
+            ),
+            _SummaryCell(
+              label: 'Most Reviewed Service',
+              value: topService,
+            ),
+          ];
+
+          if (stack) {
+            return Column(
               children: [
-                _HeroStatTile(
-                  icon: Icons.star_rounded,
-                  label: 'Average Rating',
-                  value: stats.total > 0 ? '$avg / 5' : '—',
-                  accent: _RevUi.gold,
-                ),
-                _HeroStatTile(
-                  icon: Icons.reviews_outlined,
-                  label: 'Total Reviews',
-                  value: '${stats.total}',
-                  accent: _RevUi.purple,
-                ),
-                _HeroStatTile(
-                  icon: Icons.sentiment_satisfied_alt_rounded,
-                  label: 'Satisfaction Rate',
-                  value: stats.total > 0 ? '${stats.satisfactionPct}%' : '—',
-                  accent: _RevUi.green,
-                ),
-                _HeroStatTile(
-                  icon: Icons.thumb_up_alt_outlined,
-                  label: 'Positive Reviews',
-                  value: '${stats.positiveCount}',
-                  accent: _RevUi.lavender,
-                ),
+                for (var i = 0; i < items.length; i++) ...[
+                  items[i],
+                  if (i < items.length - 1) const SizedBox(height: 12),
+                ],
               ],
             );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                Expanded(child: items[i]),
+                if (i < items.length - 1)
+                  Container(
+                    width: 1,
+                    height: 36,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SummaryCell extends StatelessWidget {
+  const _SummaryCell({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: _RevUi.textSecondary,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: _RevUi.textPrimary,
+            height: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewsSection extends StatelessWidget {
+  const _ReviewsSection({
+    required this.allReviews,
+    required this.filtered,
+    required this.ratingFilter,
+    required this.sortMode,
+    required this.searchCtrl,
+    required this.onSearchChanged,
+    required this.onRatingFilter,
+    required this.onSort,
+  });
+
+  final List<TherapistReviewRow> allReviews;
+  final List<TherapistReviewRow> filtered;
+  final String ratingFilter;
+  final String sortMode;
+  final TextEditingController searchCtrl;
+  final VoidCallback onSearchChanged;
+  final ValueChanged<String> onRatingFilter;
+  final ValueChanged<String> onSort;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Reviews',
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: _RevUi.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '(${allReviews.length})',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _RevUi.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _FilterToolbar(
+          searchCtrl: searchCtrl,
+          ratingFilter: ratingFilter,
+          sortMode: sortMode,
+          onSearchChanged: onSearchChanged,
+          onRatingFilter: onRatingFilter,
+          onSort: onSort,
+        ),
+        const SizedBox(height: 16),
+        if (!allReviews.isNotEmpty)
+          _ReviewsEmptyState(
+            onViewAppointments: () => context
+                .read<DesktopNav>()
+                .goTo(DesktopRouteKey.therapistAppointments),
+          )
+        else if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Text(
+              'No reviews match your filters.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: _RevUi.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < filtered.length; i++) ...[
+                _ReviewCard(review: filtered[i]),
+                if (i < filtered.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _FilterToolbar extends StatelessWidget {
+  const _FilterToolbar({
+    required this.searchCtrl,
+    required this.ratingFilter,
+    required this.sortMode,
+    required this.onSearchChanged,
+    required this.onRatingFilter,
+    required this.onSort,
+  });
+
+  final TextEditingController searchCtrl;
+  final String ratingFilter;
+  final String sortMode;
+  final VoidCallback onSearchChanged;
+  final ValueChanged<String> onRatingFilter;
+  final ValueChanged<String> onSort;
+
+  static const _filters = ['All', '5★', '4★', '3★', '2★', '1★'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, c) {
+            final stack = c.maxWidth < 720;
+            final search = SizedBox(
+              width: stack ? double.infinity : 280,
+              child: _RevGlass(
+                radius: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: searchCtrl,
+                    onChanged: (_) => onSearchChanged(),
+                    style: GoogleFonts.inter(
+                      color: _RevUi.textPrimary,
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search client, service, or comment…',
+                      hintStyle: GoogleFonts.inter(
+                        color: _RevUi.textSecondary,
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      icon: Icon(
+                        Icons.search_rounded,
+                        size: 18,
+                        color: _RevUi.lavender.withValues(alpha: 0.75),
+                      ),
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ),
+            );
+            final sort = _SortDropdown(value: sortMode, onChanged: onSort);
 
             if (stack) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [left, const SizedBox(width: 20), center],
-                  ),
-                  const SizedBox(height: 20),
-                  statsRow,
+                  search,
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerLeft, child: sort),
                 ],
               );
             }
             return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                left,
-                const SizedBox(width: 24),
-                center,
-                const SizedBox(width: 16),
-                SizedBox(width: 280, child: statsRow),
+                search,
+                const SizedBox(width: 12),
+                sort,
               ],
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _StarHeroIllustration extends StatelessWidget {
-  const _StarHeroIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      height: 120,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 110,
-            height: 110,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: LinearGradient(
-                colors: [
-                  _RevUi.purple.withValues(alpha: 0.45),
-                  _RevUi.lavender.withValues(alpha: 0.15),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _RevUi.gold.withValues(alpha: 0.35),
-                  blurRadius: 32,
-                  spreadRadius: 2,
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final f in _filters) ...[
+                _RatingFilterChip(
+                  label: f,
+                  selected: ratingFilter == f,
+                  onTap: () => onRatingFilter(f),
                 ),
+                const SizedBox(width: 8),
               ],
-            ),
+            ],
           ),
-          const Icon(Icons.star_rounded, size: 56, color: _RevUi.gold),
-          Positioned(
-            top: 8,
-            right: 4,
-            child: Icon(
-              Icons.star_rounded,
-              size: 22,
-              color: _RevUi.gold.withValues(alpha: 0.7),
-            ),
-          ),
-          Positioned(
-            bottom: 10,
-            left: 6,
-            child: Icon(
-              Icons.star_rounded,
-              size: 18,
-              color: _RevUi.lavender.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _HeroStatTile extends StatelessWidget {
-  const _HeroStatTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 128,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: accent),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: _RevUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: _RevUi.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterActionBar extends StatelessWidget {
-  const _FilterActionBar({
-    required this.searchCtrl,
-    required this.filterPill,
-    required this.sortMode,
-    required this.onSearchChanged,
-    required this.onPill,
-    required this.onSort,
-    required this.onRefresh,
-  });
-
-  final TextEditingController searchCtrl;
-  final String filterPill;
-  final String sortMode;
-  final VoidCallback onSearchChanged;
-  final ValueChanged<String> onPill;
-  final ValueChanged<String> onSort;
-  final VoidCallback onRefresh;
-
-  static const _pills = [
-    'All Reviews',
-    '5 Stars',
-    '4 Stars',
-    'Positive',
-    'Critical',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return _RevGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _RevGlass(
-            radius: 14,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: TextField(
-              controller: searchCtrl,
-              onChanged: (_) => onSearchChanged(),
-              style: GoogleFonts.inter(color: _RevUi.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Search client or service…',
-                hintStyle: GoogleFonts.inter(
-                  color: _RevUi.textSecondary,
-                  fontSize: 14,
-                ),
-                border: InputBorder.none,
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: _RevUi.lavender.withValues(alpha: 0.85),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, c) {
-              final stack = c.maxWidth < 800;
-              final pills = SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final p in _pills) ...[
-                      _FilterPill(
-                        label: p,
-                        selected: filterPill == p,
-                        onTap: () => onPill(p),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-              );
-              final actions = Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _SortDropdown(value: sortMode, onChanged: onSort),
-                  const SizedBox(width: 8),
-                  _GlassIconButton(
-                    icon: Icons.refresh_rounded,
-                    onTap: onRefresh,
-                  ),
-                ],
-              );
-              if (stack) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [pills, const SizedBox(height: 12), actions],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(child: pills),
-                  const SizedBox(width: 12),
-                  actions,
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterPill extends StatefulWidget {
-  const _FilterPill({
+class _RatingFilterChip extends StatefulWidget {
+  const _RatingFilterChip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -804,10 +815,10 @@ class _FilterPill extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_FilterPill> createState() => _FilterPillState();
+  State<_RatingFilterChip> createState() => _RatingFilterChipState();
 }
 
-class _FilterPillState extends State<_FilterPill> {
+class _RatingFilterChipState extends State<_RatingFilterChip> {
   bool _hover = false;
 
   @override
@@ -819,7 +830,7 @@ class _FilterPillState extends State<_FilterPill> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             gradient: widget.selected
@@ -829,27 +840,17 @@ class _FilterPillState extends State<_FilterPill> {
                 : null,
             color: widget.selected
                 ? null
-                : Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
+                : Colors.white.withValues(alpha: _hover ? 0.07 : 0.04),
             border: Border.all(
               color: widget.selected
                   ? _RevUi.lavender.withValues(alpha: 0.5)
-                  : Colors.white.withValues(alpha: 0.12),
+                  : Colors.white.withValues(alpha: 0.1),
             ),
-            boxShadow: widget.selected || _hover
-                ? [
-                    BoxShadow(
-                      color: _RevUi.purple.withValues(
-                        alpha: widget.selected ? 0.4 : 0.15,
-                      ),
-                      blurRadius: 12,
-                    ),
-                  ]
-                : null,
           ),
           child: Text(
             widget.label,
             style: GoogleFonts.inter(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: widget.selected ? Colors.white : _RevUi.textSecondary,
             ),
@@ -877,7 +878,7 @@ class _SortDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 160,
-      height: 44,
+      height: 40,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
@@ -915,73 +916,6 @@ class _SortDropdown extends StatelessWidget {
   }
 }
 
-class _RecentReviewsCard extends StatelessWidget {
-  const _RecentReviewsCard({
-    required this.reviews,
-    required this.hasAny,
-  });
-
-  final List<TherapistReviewRow> reviews;
-  final bool hasAny;
-
-  @override
-  Widget build(BuildContext context) {
-    return _RevGlass(
-      radius: _RevUi.heroRadius,
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Recent Reviews',
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: _RevUi.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Latest client feedback from completed appointments.',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _RevUi.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 20),
-          if (!hasAny)
-            _ReviewsEmptyState(
-              onViewAppointments: () => context
-                  .read<DesktopNav>()
-                  .goTo(DesktopRouteKey.therapistAppointments),
-            )
-          else if (reviews.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                'No reviews match your filters.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: _RevUi.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            )
-          else
-            Column(
-              children: [
-                for (var i = 0; i < reviews.length; i++) ...[
-                  _ReviewCard(review: reviews[i]),
-                  if (i < reviews.length - 1) const SizedBox(height: 14),
-                ],
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ReviewCard extends StatefulWidget {
   const _ReviewCard({required this.review});
 
@@ -997,168 +931,112 @@ class _ReviewCardState extends State<_ReviewCard> {
   @override
   Widget build(BuildContext context) {
     final r = widget.review;
-    final sentiment = _sentimentLabel(r.ocjena);
-    final sColor = _sentimentColor(sentiment);
-    final initials = r.korisnikIme.trim().isNotEmpty
-        ? r.korisnikIme.trim()[0].toUpperCase()
-        : '?';
+    final clientName =
+        r.korisnikIme.trim().isEmpty ? 'Client' : r.korisnikIme.trim();
+    final serviceName =
+        r.uslugaNaziv.trim().isEmpty ? 'Service' : r.uslugaNaziv.trim();
     final comment = r.komentar.trim().isEmpty
         ? 'No written comment provided.'
         : r.komentar.trim();
+    final initial = clientName.isNotEmpty
+        ? String.fromCharCode(clientName.runes.first).toUpperCase()
+        : '?';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
-        padding: const EdgeInsets.all(24),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_RevUi.cardRadius),
-          color: Colors.white.withValues(alpha: _hover ? 0.06 : 0.04),
+          borderRadius: BorderRadius.circular(16),
+          color: _hover
+              ? Colors.white.withValues(alpha: 0.055)
+              : Colors.white.withValues(alpha: 0.035),
           border: Border.all(
-            color: _RevUi.purple.withValues(alpha: _hover ? 0.35 : 0.15),
+            color: _hover
+                ? _RevUi.purple.withValues(alpha: 0.32)
+                : Colors.white.withValues(alpha: 0.08),
           ),
           boxShadow: _hover
               ? [
                   BoxShadow(
-                    color: _RevUi.purple.withValues(alpha: 0.2),
+                    color: _RevUi.purple.withValues(alpha: 0.16),
                     blurRadius: 20,
-                    offset: const Offset(0, 8),
+                    offset: const Offset(0, 6),
                   ),
                 ]
               : null,
         ),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final narrow = c.maxWidth < 720;
-            final avatar = _ClientAvatar(initials: initials);
-            final bodyContent = Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ClientAvatar(initials: initial),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        r.korisnikIme.isEmpty ? 'Client' : r.korisnikIme,
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: _RevUi.textPrimary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              clientName,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: _RevUi.textPrimary,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              serviceName,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _RevUi.lavender.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      _ServiceBadge(label: r.uslugaNaziv),
-                      _StarRating(stars: r.ocjena),
-                      Text(
-                        _formatShortDate(r.createdAt),
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: _RevUi.textSecondary,
-                        ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _StarRating(stars: r.ocjena),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatShortDate(r.createdAt),
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: _RevUi.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Text(
                     comment,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       height: 1.5,
-                      color: _RevUi.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _formatReviewDate(r.createdAt),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _RevUi.lavender.withValues(alpha: 0.85),
+                      color: _RevUi.textSecondary.withValues(alpha: 0.95),
                     ),
                   ),
                 ],
-              );
-            final trailing = Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _SentimentBadge(label: sentiment, color: sColor),
-                const SizedBox(height: 8),
-                PopupMenuButton<String>(
-                  tooltip: 'More',
-                  color: _RevUi.bgBottom,
-                  icon: Icon(
-                    Icons.more_vert_rounded,
-                    color: Colors.white.withValues(alpha: 0.65),
-                  ),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'view',
-                      child: Text('View details'),
-                    ),
-                  ],
-                  onSelected: (v) {
-                    if (v != 'view') return;
-                    showDialog<void>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: _RevUi.bgBottom,
-                        title: Text(
-                          widget.review.korisnikIme,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        content: SingleChildScrollView(
-                          child: Text(
-                            widget.review.komentar,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-
-            if (narrow) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      avatar,
-                      const SizedBox(width: 14),
-                      Expanded(child: bodyContent),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Align(alignment: Alignment.centerRight, child: trailing),
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                avatar,
-                const SizedBox(width: 18),
-                Expanded(child: bodyContent),
-                const SizedBox(width: 12),
-                trailing,
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1173,8 +1051,8 @@ class _ClientAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 52,
-      height: 52,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
@@ -1183,19 +1061,13 @@ class _ClientAvatar extends StatelessWidget {
             _RevUi.lavender.withValues(alpha: 0.25),
           ],
         ),
-        border: Border.all(color: _RevUi.lavender.withValues(alpha: 0.45)),
-        boxShadow: [
-          BoxShadow(
-            color: _RevUi.purple.withValues(alpha: 0.35),
-            blurRadius: 14,
-          ),
-        ],
+        border: Border.all(color: _RevUi.lavender.withValues(alpha: 0.4)),
       ),
       child: Center(
         child: Text(
           initials,
           style: GoogleFonts.inter(
-            fontSize: 20,
+            fontSize: 16,
             fontWeight: FontWeight.w800,
             color: Colors.white,
           ),
@@ -1206,9 +1078,10 @@ class _ClientAvatar extends StatelessWidget {
 }
 
 class _StarRating extends StatelessWidget {
-  const _StarRating({required this.stars});
+  const _StarRating({required this.stars, this.size = 15});
 
   final int stars;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -1218,64 +1091,10 @@ class _StarRating extends StatelessWidget {
         for (var i = 0; i < 5; i++)
           Icon(
             i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
-            size: 16,
+            size: size,
             color: _RevUi.gold,
           ),
       ],
-    );
-  }
-}
-
-class _ServiceBadge extends StatelessWidget {
-  const _ServiceBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = label.trim().isEmpty ? 'Service' : label.trim();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: _RevUi.purple.withValues(alpha: 0.15),
-        border: Border.all(color: _RevUi.purple.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: _RevUi.lavender,
-        ),
-      ),
-    );
-  }
-}
-
-class _SentimentBadge extends StatelessWidget {
-  const _SentimentBadge({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.15),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: color,
-        ),
-      ),
     );
   }
 }
@@ -1288,398 +1107,48 @@ class _ReviewsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 420),
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(_RevUi.heroRadius),
+        borderRadius: BorderRadius.circular(20),
         color: Colors.white.withValues(alpha: 0.03),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  _RevUi.gold.withValues(alpha: 0.25),
-                  _RevUi.purple.withValues(alpha: 0.08),
-                ],
-              ),
-            ),
-            child: const Icon(
-              Icons.rate_review_outlined,
-              size: 64,
-              color: _RevUi.lavender,
-            ),
+          Icon(
+            Icons.rate_review_outlined,
+            size: 48,
+            color: _RevUi.lavender.withValues(alpha: 0.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Text(
             'No reviews yet',
             style: GoogleFonts.inter(
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
               color: _RevUi.textPrimary,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             'Client reviews will appear here after completed appointments.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 14,
+              fontSize: 13,
               height: 1.45,
               color: _RevUi.textSecondary,
             ),
           ),
-          const SizedBox(height: 24),
-          _OutlinedButton(
-            label: 'View Completed Appointments',
-            icon: Icons.event_available_rounded,
-            onTap: onViewAppointments,
+          const SizedBox(height: 20),
+          TextButton.icon(
+            onPressed: onViewAppointments,
+            icon: const Icon(Icons.event_available_outlined, size: 18),
+            label: const Text('View Appointments'),
+            style: TextButton.styleFrom(
+              foregroundColor: _RevUi.lavender,
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ReviewsSidebar extends StatelessWidget {
-  const _ReviewsSidebar({
-    required this.stats,
-    required this.onViewAppointments,
-  });
-
-  final _ReviewStats stats;
-  final VoidCallback onViewAppointments;
-
-  @override
-  Widget build(BuildContext context) {
-    final nav = context.read<DesktopNav>();
-    final avg = stats.total > 0
-        ? stats.averageRating.toStringAsFixed(1)
-        : '—';
-
-    return Column(
-      children: [
-        _RevGlass(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Rating Overview',
-                style: GoogleFonts.inter(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: _RevUi.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 18),
-              _OverviewLine(
-                label: 'Average Rating',
-                value: stats.total > 0 ? '$avg / 5' : '—',
-                progress: stats.total > 0 ? stats.averageRating / 5 : 0,
-                accent: _RevUi.gold,
-              ),
-              const SizedBox(height: 14),
-              _OverviewLine(
-                label: '5★ Reviews',
-                value: stats.total > 0 ? '${stats.fiveStarPct}%' : '—',
-                progress: stats.fiveStarPct / 100,
-                accent: _RevUi.gold,
-              ),
-              const SizedBox(height: 14),
-              _OverviewLine(
-                label: 'Client Satisfaction',
-                value: stats.total > 0 ? '${stats.satisfactionPct}%' : '—',
-                progress: stats.satisfactionPct / 100,
-                accent: _RevUi.green,
-              ),
-              const SizedBox(height: 14),
-              _OverviewLine(
-                label: 'Total Reviews',
-                value: '${stats.total}',
-                progress: stats.total > 0 ? 1.0 : 0,
-                accent: _RevUi.purple,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        _RevGlass(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Top Rated Services',
-                style: GoogleFonts.inter(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: _RevUi.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (stats.topServices.isEmpty)
-                Text(
-                  'No service ratings yet.',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: _RevUi.textSecondary,
-                  ),
-                )
-              else
-                for (var i = 0; i < stats.topServices.length; i++) ...[
-                  _TopServiceRow(service: stats.topServices[i]),
-                  if (i < stats.topServices.length - 1)
-                    const SizedBox(height: 12),
-                ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        _RevGlass(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Quick Actions',
-                style: GoogleFonts.inter(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: _RevUi.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _QuickRow(
-                icon: Icons.event_note_rounded,
-                label: 'View Appointments',
-                onTap: onViewAppointments,
-              ),
-              const SizedBox(height: 10),
-              _QuickRow(
-                icon: Icons.calendar_month_rounded,
-                label: 'My Schedule',
-                onTap: () => nav.goTo(DesktopRouteKey.schedule),
-              ),
-              const SizedBox(height: 10),
-              _QuickRow(
-                icon: Icons.spa_outlined,
-                label: 'My Services',
-                onTap: () => nav.goTo(DesktopRouteKey.therapistServices),
-              ),
-              const SizedBox(height: 10),
-              _QuickRow(
-                icon: Icons.person_outline_rounded,
-                label: 'Update Profile',
-                onTap: () => nav.goTo(DesktopRouteKey.therapistProfile),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _OverviewLine extends StatelessWidget {
-  const _OverviewLine({
-    required this.label,
-    required this.value,
-    required this.progress,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final double progress;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: _RevUi.textSecondary,
-                ),
-              ),
-            ),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: _RevUi.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 8,
-            child: Stack(
-              children: [
-                Container(color: Colors.white.withValues(alpha: 0.08)),
-                FractionallySizedBox(
-                  widthFactor: progress.clamp(0.0, 1.0),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [accent, accent.withValues(alpha: 0.6)],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TopServiceRow extends StatelessWidget {
-  const _TopServiceRow({required this.service});
-
-  final _ServiceRating service;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = (service.avg / 5).clamp(0.0, 1.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                service.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _RevUi.textPrimary,
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.star_rounded, size: 14, color: _RevUi.gold),
-                const SizedBox(width: 4),
-                Text(
-                  service.avg.toStringAsFixed(1),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: _RevUi.gold,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 6,
-            child: Stack(
-              children: [
-                Container(color: Colors.white.withValues(alpha: 0.08)),
-                FractionallySizedBox(
-                  widthFactor: pct,
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [_RevUi.purple, _RevUi.lavender],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _QuickRow extends StatefulWidget {
-  const _QuickRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_QuickRow> createState() => _QuickRowState();
-}
-
-class _QuickRowState extends State<_QuickRow> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: Colors.white.withValues(alpha: _hover ? 0.08 : 0.04),
-              border: Border.all(
-                color: _RevUi.purple.withValues(alpha: _hover ? 0.4 : 0.18),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(widget.icon, color: _RevUi.lavender, size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: _RevUi.textPrimary,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: Colors.white.withValues(alpha: _hover ? 0.7 : 0.35),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1713,103 +1182,6 @@ class _RevGlass extends StatelessWidget {
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withValues(alpha: 0.05),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Icon(icon, color: Colors.white.withValues(alpha: 0.85)),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlinedButton extends StatefulWidget {
-  const _OutlinedButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  State<_OutlinedButton> createState() => _OutlinedButtonState();
-}
-
-class _OutlinedButtonState extends State<_OutlinedButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: _RevUi.purple.withValues(alpha: _hover ? 0.7 : 0.45),
-                width: 1.5,
-              ),
-              color: _RevUi.purple.withValues(alpha: _hover ? 0.14 : 0.06),
-              boxShadow: _hover
-                  ? [
-                      BoxShadow(
-                        color: _RevUi.purple.withValues(alpha: 0.35),
-                        blurRadius: 16,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: _RevUi.lavender, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700,
-                    color: _RevUi.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
