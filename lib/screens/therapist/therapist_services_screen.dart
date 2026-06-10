@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
-import '../../models/kategorija_usluga.dart';
+import '../../core/therapist/therapist_service_eligibility.dart';
+import '../../models/therapist/therapist_my_services_result.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../../models/zaposlenik_status.dart';
 import '../../providers/auth_provider.dart';
 import '../catalog/service_details_screen.dart';
 import 'therapist_portal_scaffold.dart';
@@ -20,56 +24,12 @@ abstract final class _SvcUi {
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
   static const green = Color(0xFF22C55E);
+  static const gold = Color(0xFFF5B942);
+  static const orange = Color(0xFFF97316);
   static const cardRadius = 24.0;
   static const gap = 24.0;
   static const sidebarWidth = 260.0;
   static const contentPadding = 32.0;
-}
-
-class _ServicesData {
-  const _ServicesData({
-    required this.me,
-    required this.linked,
-    required this.categories,
-  });
-
-  final Zaposlenik? me;
-  final List<Usluga> linked;
-  final List<KategorijaUsluga> categories;
-}
-
-List<String> _specializationTags(String raw) => raw
-    .split(RegExp(r'[,;/]'))
-    .map((e) => e.trim())
-    .where((e) => e.isNotEmpty)
-    .toList();
-
-List<Usluga> _linkedServices(Zaposlenik me, List<Usluga> all) {
-  final katId = me.kategorijaUslugaId;
-  if (katId != null && katId > 0) {
-    return all.where((u) => u.kategorijaUslugaId == katId).toList()
-      ..sort((a, b) => a.naziv.compareTo(b.naziv));
-  }
-  final tags = _specializationTags(me.specijalizacija)
-      .map((e) => e.toLowerCase())
-      .toSet();
-  if (tags.isEmpty) return const [];
-  return all
-      .where((u) => tags.contains(u.naziv.trim().toLowerCase()))
-      .toList()
-    ..sort((a, b) => a.naziv.compareTo(b.naziv));
-}
-
-List<KategorijaUsluga> _categoriesFromServices(List<Usluga> services) {
-  final seen = <int>{};
-  final out = <KategorijaUsluga>[];
-  for (final s in services) {
-    final id = s.kategorijaUslugaId;
-    if (id <= 0 || !seen.add(id)) continue;
-    out.add(KategorijaUsluga(id: id, naziv: s.kategorija));
-  }
-  out.sort((a, b) => a.naziv.compareTo(b.naziv));
-  return out;
 }
 
 String _durationLabel(Usluga u) {
@@ -77,13 +37,6 @@ String _durationLabel(Usluga u) {
   final m = RegExp(r'(\d+)').firstMatch(u.trajanje);
   if (m != null) return '${m.group(1)} min';
   return u.trajanje;
-}
-
-String _initials(Zaposlenik z) {
-  final a = z.ime.trim().isNotEmpty ? z.ime.trim()[0] : '';
-  final b = z.prezime.trim().isNotEmpty ? z.prezime.trim()[0] : '';
-  final s = '$a$b'.toUpperCase();
-  return s.isEmpty ? 'TH' : s;
 }
 
 List<Usluga> _sortServices(List<Usluga> list, String mode) {
@@ -101,6 +54,28 @@ List<Usluga> _sortServices(List<Usluga> list, String mode) {
   return copy;
 }
 
+String _statusLabel(ZaposlenikStatus status) {
+  switch (status) {
+    case ZaposlenikStatus.active:
+      return 'Active';
+    case ZaposlenikStatus.onLeave:
+      return 'On leave';
+    case ZaposlenikStatus.inactive:
+      return 'Inactive';
+  }
+}
+
+Color _statusColor(ZaposlenikStatus status) {
+  switch (status) {
+    case ZaposlenikStatus.active:
+      return _SvcUi.green;
+    case ZaposlenikStatus.onLeave:
+      return _SvcUi.gold;
+    case ZaposlenikStatus.inactive:
+      return _SvcUi.orange;
+  }
+}
+
 class TherapistServicesScreen extends StatefulWidget {
   const TherapistServicesScreen({super.key});
 
@@ -112,10 +87,12 @@ class TherapistServicesScreen extends StatefulWidget {
 class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
-  Future<_ServicesData>? _future;
+  Future<TherapistMyServicesResult>? _future;
   final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
   String _sortMode = 'A to Z';
+  String _searchQuery = '';
+  Timer? _searchDebounce;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
 
@@ -132,6 +109,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
@@ -140,35 +118,30 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
 
   Future<void> _reload() async {
     setState(() {
-      _future = () async {
-        final results = await Future.wait([
-          _api.getTherapistMe(),
-          _api.getUsluge(),
-        ]);
-        final me = results[0] as Zaposlenik?;
-        final all = results[1] as List<Usluga>;
-        if (me == null) {
-          return const _ServicesData(me: null, linked: [], categories: []);
-        }
-        final linked = _linkedServices(me, all);
-        return _ServicesData(
-          me: me,
-          linked: linked,
-          categories: _categoriesFromServices(linked),
-        );
-      }();
+      _future = _api.getTherapistMyServices();
+    });
+    await _future;
+    if (mounted) {
+      _fadeCtrl.forward(from: 0);
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() => _searchQuery = value.trim().toLowerCase());
     });
   }
 
   List<Usluga> _filterList(List<Usluga> linked) {
-    final q = _searchCtrl.text.trim().toLowerCase();
     var list = linked;
-    if (q.isNotEmpty) {
+    if (_searchQuery.isNotEmpty) {
       list = list
           .where(
             (u) =>
-                u.naziv.toLowerCase().contains(q) ||
-                u.kategorija.toLowerCase().contains(q),
+                u.naziv.toLowerCase().contains(_searchQuery) ||
+                u.kategorija.toLowerCase().contains(_searchQuery),
           )
           .toList();
     }
@@ -180,7 +153,10 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     final auth = context.watch<AuthProvider>();
     if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
       return const _ServicesShell(
-        child: TherapistEmptyState(message: 'Therapist login required.'),
+        child: TherapistEmptyState(
+          message:
+              'Therapist login required. Your account must be linked to a therapist profile.',
+        ),
       );
     }
 
@@ -188,7 +164,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
       child: RefreshIndicator(
         color: _SvcUi.lavender,
         onRefresh: _reload,
-        child: FutureBuilder<_ServicesData>(
+        child: FutureBuilder<TherapistMyServicesResult>(
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
@@ -207,39 +183,68 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
               );
             }
 
-            final data = snap.data;
-            final me = data?.me;
-            if (data == null || me == null) {
+            if (snap.hasError) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(_SvcUi.contentPadding),
                 children: [
-                  _SvcGlass(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Could not load your service list.',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            color: _SvcUi.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _PrimaryButton(
-                          label: 'Try again',
-                          icon: Icons.refresh_rounded,
-                          onTap: _reload,
-                        ),
-                      ],
-                    ),
+                  _ErrorCard(
+                    message: 'Something went wrong while loading your services.',
+                    onRetry: _reload,
                   ),
                 ],
               );
             }
 
-            final tags = _specializationTags(me.specijalizacija);
-            final filtered = _filterList(data.linked);
+            final result = snap.data;
+            if (result == null) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(_SvcUi.contentPadding),
+                children: [
+                  _ErrorCard(
+                    message: 'Could not load your service list.',
+                    onRetry: _reload,
+                  ),
+                ],
+              );
+            }
+
+            if (result.accountNotLinked) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(_SvcUi.contentPadding),
+                children: [
+                  _ErrorCard(
+                    message: result.error ??
+                        'Your account is not linked to a therapist profile.',
+                    onRetry: _reload,
+                  ),
+                ],
+              );
+            }
+
+            final me = result.therapist;
+            if (me == null) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(_SvcUi.contentPadding),
+                children: [
+                  _ErrorCard(
+                    message: result.error ??
+                        result.profileError ??
+                        'Could not load your therapist profile.',
+                    onRetry: _reload,
+                  ),
+                ],
+              );
+            }
+
+            final tags = specializationTagsFor(me);
+            final linked = result.services;
+            final filtered = _filterList(linked);
             final katName = me.kategorijaUslugaNaziv?.trim();
+            final isSearching = _searchQuery.isNotEmpty;
 
             return FadeTransition(
               opacity: _fadeAnim,
@@ -248,27 +253,33 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                   final wide = c.maxWidth >= 1100;
                   final main = _MainColumn(
                     me: me,
-                    linked: data.linked,
+                    linked: linked,
                     filtered: filtered,
+                    isSearching: isSearching,
                     categoryName: katName,
-                    certificationsCount: tags.length,
                     sortMode: _sortMode,
                     searchCtrl: _searchCtrl,
-                    onSearchChanged: () => setState(() {}),
+                    onSearchChanged: _onSearchChanged,
                     onSort: (v) => setState(() => _sortMode = v),
                     onOpenService: (id) {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => ServiceDetailsScreen(serviceId: id),
+                          builder: (_) => ServiceDetailsScreen(
+                            serviceId: id,
+                            therapistView: true,
+                          ),
                         ),
                       );
                     },
+                    partialError: result.isPartialSuccess
+                        ? result.servicesError
+                        : null,
                   );
                   final sidebar = _TherapistProfileCard(
                     therapist: me,
                     categoryName: katName,
-                    certifiedServicesCount: data.linked.length,
-                    certificationsCount: tags.length,
+                    certifiedServicesCount: linked.length,
+                    specializationsCount: tags.length,
                   );
 
                   return SingleChildScrollView(
@@ -305,6 +316,37 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SvcGlass(
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w800,
+              color: _SvcUi.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _PrimaryButton(
+            label: 'Try again',
+            icon: Icons.refresh_rounded,
+            onTap: onRetry,
+          ),
+        ],
       ),
     );
   }
@@ -357,25 +399,27 @@ class _MainColumn extends StatelessWidget {
     required this.me,
     required this.linked,
     required this.filtered,
+    required this.isSearching,
     required this.categoryName,
-    required this.certificationsCount,
     required this.sortMode,
     required this.searchCtrl,
     required this.onSearchChanged,
     required this.onSort,
     required this.onOpenService,
+    this.partialError,
   });
 
   final Zaposlenik me;
   final List<Usluga> linked;
   final List<Usluga> filtered;
+  final bool isSearching;
   final String? categoryName;
-  final int certificationsCount;
   final String sortMode;
   final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSort;
   final ValueChanged<int> onOpenService;
+  final String? partialError;
 
   @override
   Widget build(BuildContext context) {
@@ -390,13 +434,20 @@ class _MainColumn extends StatelessWidget {
         _HeroCard(
           firstName: firstName,
           categoryName: catLabel,
-          certifiedCount: linked.length,
-          certificationsCount: certificationsCount,
+          status: me.status,
         ),
+        if (partialError != null) ...[
+          const SizedBox(height: 12),
+          _PartialErrorBanner(message: partialError!),
+        ],
         const SizedBox(height: 18),
         _LinkedServicesCard(
           totalCount: linked.length,
           services: filtered,
+          isSearching: isSearching,
+          hasConfiguredProfile: (me.kategorijaUslugaId ?? 0) > 0 &&
+              specializationTagsFor(me).isNotEmpty,
+          therapistActive: me.status == ZaposlenikStatus.active,
           sortMode: sortMode,
           searchCtrl: searchCtrl,
           onSearchChanged: onSearchChanged,
@@ -408,25 +459,55 @@ class _MainColumn extends StatelessWidget {
   }
 }
 
+class _PartialErrorBanner extends StatelessWidget {
+  const _PartialErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: _SvcUi.orange.withValues(alpha: 0.12),
+        border: Border.all(color: _SvcUi.orange.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              size: 18, color: _SvcUi.orange.withValues(alpha: 0.9)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _SvcUi.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HeroCard extends StatelessWidget {
   const _HeroCard({
     required this.firstName,
     required this.categoryName,
-    required this.certifiedCount,
-    required this.certificationsCount,
+    required this.status,
   });
 
   final String firstName;
   final String categoryName;
-  final int certifiedCount;
-  final int certificationsCount;
+  final ZaposlenikStatus status;
 
   @override
   Widget build(BuildContext context) {
-    final servicesLabel =
-        '$certifiedCount Certified Service${certifiedCount == 1 ? '' : 's'}';
-    final certsLabel =
-        '$certificationsCount Certification${certificationsCount == 1 ? '' : 's'}';
+    final statusColor = _statusColor(status);
 
     return _SvcGlass(
       radius: 20,
@@ -477,13 +558,22 @@ class _HeroCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _HeroStatChip(label: servicesLabel),
-                    _HeroStatChip(label: certsLabel),
-                  ],
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: statusColor.withValues(alpha: 0.14),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    _statusLabel(status),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -494,36 +584,13 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _HeroStatChip extends StatelessWidget {
-  const _HeroStatChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: _SvcUi.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
 class _LinkedServicesCard extends StatelessWidget {
   const _LinkedServicesCard({
     required this.totalCount,
     required this.services,
+    required this.isSearching,
+    required this.hasConfiguredProfile,
+    required this.therapistActive,
     required this.sortMode,
     required this.searchCtrl,
     required this.onSearchChanged,
@@ -533,9 +600,12 @@ class _LinkedServicesCard extends StatelessWidget {
 
   final int totalCount;
   final List<Usluga> services;
+  final bool isSearching;
+  final bool hasConfiguredProfile;
+  final bool therapistActive;
   final String sortMode;
   final TextEditingController searchCtrl;
-  final VoidCallback onSearchChanged;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSort;
   final ValueChanged<int> onOpenService;
 
@@ -581,7 +651,7 @@ class _LinkedServicesCard extends StatelessWidget {
                     height: 40,
                     child: TextField(
                       controller: searchCtrl,
-                      onChanged: (_) => onSearchChanged(),
+                      onChanged: onSearchChanged,
                       style: GoogleFonts.inter(
                         color: _SvcUi.textPrimary,
                         fontSize: 13,
@@ -628,37 +698,91 @@ class _LinkedServicesCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           if (services.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.spa_outlined,
-                    size: 40,
-                    color: _SvcUi.lavender.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No services match your search.',
-                    style: GoogleFonts.inter(
-                      color: _SvcUi.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+            _ServicesEmptyState(
+              isSearching: isSearching,
+              hasConfiguredProfile: hasConfiguredProfile,
+              totalCount: totalCount,
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: services.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, i) => _ServiceRow(
                 service: services[i],
+                showCertifiedBadge: therapistActive,
                 onViewDetails: () => onOpenService(services[i].id),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServicesEmptyState extends StatelessWidget {
+  const _ServicesEmptyState({
+    required this.isSearching,
+    required this.hasConfiguredProfile,
+    required this.totalCount,
+  });
+
+  final bool isSearching;
+  final bool hasConfiguredProfile;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final String message;
+    final String? subtitle;
+
+    if (isSearching) {
+      message = 'No services match your filter.';
+      subtitle = null;
+    } else if (totalCount == 0 && !hasConfiguredProfile) {
+      message = 'No certified services yet.';
+      subtitle =
+          'Ask your spa administrator to set your category and specializations.';
+    } else if (totalCount == 0) {
+      message = 'No certified services yet.';
+      subtitle =
+          'Your specializations do not match any active services in your category.';
+    } else {
+      message = 'No services match your filter.';
+      subtitle = null;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.spa_outlined,
+            size: 40,
+            color: _SvcUi.lavender.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: _SvcUi.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: _SvcUi.textSecondary.withValues(alpha: 0.85),
+                height: 1.4,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -696,19 +820,19 @@ class _SortDropdown extends StatelessWidget {
               value: value,
               isExpanded: true,
               dropdownColor: _SvcUi.bgBottom,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: _SvcUi.textPrimary,
-          ),
-          icon: Icon(
-            Icons.expand_more_rounded,
-            color: Colors.white.withValues(alpha: 0.6),
-          ),
-          items: [
-            for (final o in _options)
-              DropdownMenuItem(value: o, child: Text(o)),
-          ],
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _SvcUi.textPrimary,
+              ),
+              icon: Icon(
+                Icons.expand_more_rounded,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+              items: [
+                for (final o in _options)
+                  DropdownMenuItem(value: o, child: Text(o)),
+              ],
               onChanged: (v) {
                 if (v != null) onChanged(v);
               },
@@ -723,10 +847,12 @@ class _SortDropdown extends StatelessWidget {
 class _ServiceRow extends StatefulWidget {
   const _ServiceRow({
     required this.service,
+    required this.showCertifiedBadge,
     required this.onViewDetails,
   });
 
   final Usluga service;
+  final bool showCertifiedBadge;
   final VoidCallback onViewDetails;
 
   @override
@@ -735,6 +861,7 @@ class _ServiceRow extends StatefulWidget {
 
 class _ServiceRowState extends State<_ServiceRow> {
   bool _hover = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -742,83 +869,93 @@ class _ServiceRowState extends State<_ServiceRow> {
     final category =
         u.kategorija.trim().isNotEmpty ? u.kategorija.trim() : 'General';
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: _hover
-              ? Colors.white.withValues(alpha: 0.055)
-              : Colors.white.withValues(alpha: 0.025),
-          border: Border.all(
-            color: _hover
-                ? _SvcUi.purple.withValues(alpha: 0.38)
-                : Colors.white.withValues(alpha: 0.08),
-          ),
-          boxShadow: _hover
-              ? [
-                  BoxShadow(
-                    color: _SvcUi.purple.withValues(alpha: 0.18),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ServiceThumbnail(service: u, hovered: _hover),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    u.naziv,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _SvcUi.textPrimary,
-                      letterSpacing: -0.2,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    category,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _SvcUi.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _durationLabel(u),
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _SvcUi.lavender.withValues(alpha: 0.9),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _ServiceBadge(label: 'Certified', color: _SvcUi.green),
-                  const SizedBox(height: 12),
-                  _ViewDetailsAction(
-                    hovered: _hover,
-                    onTap: widget.onViewDetails,
-                  ),
-                ],
-              ),
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: (_hover || _pressed)
+                ? Colors.white.withValues(alpha: 0.055)
+                : Colors.white.withValues(alpha: 0.025),
+            border: Border.all(
+              color: (_hover || _pressed)
+                  ? _SvcUi.purple.withValues(alpha: 0.38)
+                  : Colors.white.withValues(alpha: 0.08),
             ),
-          ],
+            boxShadow: (_hover || _pressed)
+                ? [
+                    BoxShadow(
+                      color: _SvcUi.purple.withValues(alpha: 0.18),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ServiceThumbnail(
+                service: u,
+                hovered: _hover || _pressed,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      u.naziv,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _SvcUi.textPrimary,
+                        letterSpacing: -0.2,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      category,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _SvcUi.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_durationLabel(u)} · ${u.cijenaKm}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _SvcUi.lavender.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    if (widget.showCertifiedBadge) ...[
+                      const SizedBox(height: 10),
+                      _ServiceBadge(label: 'Certified', color: _SvcUi.green),
+                    ],
+                    const SizedBox(height: 12),
+                    _ViewDetailsAction(
+                      hovered: _hover || _pressed,
+                      onTap: widget.onViewDetails,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -869,6 +1006,7 @@ class _ServiceThumbnail extends StatelessWidget {
           scale: hovered ? 1.06 : 1.0,
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
+          alignment: Alignment.center,
           child: ServiceNetworkImage(
             imageUrl: service.slikaUrl,
             fit: BoxFit.cover,
@@ -923,24 +1061,25 @@ class _TherapistProfileCard extends StatelessWidget {
     required this.therapist,
     required this.categoryName,
     required this.certifiedServicesCount,
-    required this.certificationsCount,
+    required this.specializationsCount,
   });
 
   final Zaposlenik therapist;
   final String? categoryName;
   final int certifiedServicesCount;
-  final int certificationsCount;
+  final int specializationsCount;
 
   @override
   Widget build(BuildContext context) {
     final catLabel = categoryName?.trim().isNotEmpty == true
         ? categoryName!.trim()
-        : 'Your specialty';
-    final initials = _initials(therapist);
+        : 'Not set';
+    final initials = therapistInitials(therapist);
     final servicesLabel =
-        '$certifiedServicesCount Certified Service${certifiedServicesCount == 1 ? '' : 's'}';
-    final certsLabel =
-        '$certificationsCount Certification${certificationsCount == 1 ? '' : 's'}';
+        '$certifiedServicesCount certified service${certifiedServicesCount == 1 ? '' : 's'}';
+    final specsLabel = specializationsCount == 0
+        ? 'None listed'
+        : '$specializationsCount specialization${specializationsCount == 1 ? '' : 's'}';
 
     return _SvcGlass(
       padding: const EdgeInsets.all(20),
@@ -1015,8 +1154,8 @@ class _TherapistProfileCard extends StatelessWidget {
           const SizedBox(height: 12),
           _ProfileStatRow(
             icon: Icons.workspace_premium_outlined,
-            label: 'Certifications',
-            value: certsLabel,
+            label: 'Specializations',
+            value: specsLabel,
           ),
         ],
       ),
