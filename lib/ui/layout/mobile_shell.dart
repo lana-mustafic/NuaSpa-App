@@ -14,6 +14,7 @@ import '../../screens/mobile/mobile_profile_screen.dart';
 import '../../screens/reservations/reservation_create_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
+import '../../screens/therapist/therapist_reviews_screen.dart';
 import '../../screens/therapist/therapist_services_screen.dart';
 import '../theme/mobile_spa_theme.dart';
 
@@ -350,6 +351,19 @@ class _MobileDrawer extends StatelessWidget {
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => const TherapistServicesScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.star_outline_rounded),
+                title: const Text('My Reviews'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TherapistReviewsScreen(),
                     ),
                   );
                 },
