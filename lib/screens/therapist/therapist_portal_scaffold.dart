@@ -4,6 +4,78 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 
+String therapistPortalGreeting(String name) {
+  final trimmed = name.trim();
+  final display = trimmed.isNotEmpty ? trimmed : 'Therapist';
+  final hour = DateTime.now().hour;
+  final salutation = hour < 12
+      ? 'Good morning'
+      : hour < 18
+      ? 'Good afternoon'
+      : 'Good evening';
+  return '$salutation, $display';
+}
+
+/// Mobile pushed routes: dashboard-style title block with back navigation.
+class TherapistMobilePageShell extends StatelessWidget {
+  const TherapistMobilePageShell({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF07040F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF07040F),
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        toolbarHeight: 72,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: const Color(0xFFF5F3FA),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.25,
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: child,
+    );
+  }
+}
+
 /// Shared chrome for therapist portal screens.
 class TherapistPortalScaffold extends StatelessWidget {
   const TherapistPortalScaffold({

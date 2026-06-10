@@ -526,6 +526,36 @@ class LuxuryDesktopHeader extends StatelessWidget {
       );
     }
 
+    if (isTherapistServices && auth.isZaposlenik) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: nav.therapistServicesTitle ?? 'My Services',
+        subtitle: nav.therapistServicesSubtitle ??
+            'View treatments you are certified to perform at NuaSpa.',
+        searchHint: 'Search clients, services…',
+        onSearchSubmitted: nav.goToCatalogWithSearch,
+      );
+    }
+
+    if (isTherapistReviews && auth.isZaposlenik) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: nav.therapistReviewsTitle ?? 'My Reviews',
+        subtitle: nav.therapistReviewsSubtitle ??
+            'Client feedback from appointments you performed.',
+        searchHint: 'Search clients, services…',
+        onSearchSubmitted: nav.goToCatalogWithSearch,
+      );
+    }
+
     if (isSettings && auth.isZaposlenik) {
       return _buildSpaciousLuxuryHeader(
         context,

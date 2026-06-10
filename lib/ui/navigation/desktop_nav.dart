@@ -52,6 +52,10 @@ class DesktopNav extends ChangeNotifier {
   String? _therapistPageSummary;
   String? _therapistDashboardTitle;
   String? _therapistDashboardSubtitle;
+  String? _therapistServicesTitle;
+  String? _therapistServicesSubtitle;
+  String? _therapistReviewsTitle;
+  String? _therapistReviewsSubtitle;
   int _therapistDashboardRefresh = 0;
   int _therapistAppointmentsRefresh = 0;
   int _therapistScheduleRefresh = 0;
@@ -147,6 +151,34 @@ class DesktopNav extends ChangeNotifier {
     if (!changed) return;
     _therapistDashboardTitle = title;
     _therapistDashboardSubtitle = subtitle;
+    notifyListeners();
+  }
+
+  String? get therapistServicesTitle => _therapistServicesTitle;
+
+  String? get therapistServicesSubtitle => _therapistServicesSubtitle;
+
+  void setTherapistServicesHeader({String? title, String? subtitle}) {
+    final changed =
+        _therapistServicesTitle != title ||
+        _therapistServicesSubtitle != subtitle;
+    if (!changed) return;
+    _therapistServicesTitle = title;
+    _therapistServicesSubtitle = subtitle;
+    notifyListeners();
+  }
+
+  String? get therapistReviewsTitle => _therapistReviewsTitle;
+
+  String? get therapistReviewsSubtitle => _therapistReviewsSubtitle;
+
+  void setTherapistReviewsHeader({String? title, String? subtitle}) {
+    final changed =
+        _therapistReviewsTitle != title ||
+        _therapistReviewsSubtitle != subtitle;
+    if (!changed) return;
+    _therapistReviewsTitle = title;
+    _therapistReviewsSubtitle = subtitle;
     notifyListeners();
   }
 

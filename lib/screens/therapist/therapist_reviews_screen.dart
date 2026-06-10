@@ -98,6 +98,32 @@ List<TherapistReviewRow> _sortReviews(
   return copy;
 }
 
+String _reviewsHeaderSubtitle(TherapistMyReviewsSummary summary) {
+  if (summary.totalCount == 0) {
+    return 'Client feedback from appointments you performed.';
+  }
+  final avg = summary.averageRating.toStringAsFixed(1);
+  if (summary.totalCount == 1) {
+    return '1 review · $avg average rating.';
+  }
+  return '${summary.totalCount} reviews · $avg average rating.';
+}
+
+void _applyReviewsHeader(
+  BuildContext context, {
+  required String firstName,
+  required TherapistMyReviewsSummary summary,
+}) {
+  final title = therapistPortalGreeting(firstName);
+  final subtitle = _reviewsHeaderSubtitle(summary);
+  if (!nuaspaUseMobileShell()) {
+    context.read<DesktopNav>().setTherapistReviewsHeader(
+      title: title,
+      subtitle: subtitle,
+    );
+  }
+}
+
 void _openAppointments(BuildContext context) {
   if (nuaspaUseMobileShell()) {
     Navigator.of(context).push(
@@ -152,6 +178,9 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
   String _ratingFilter = 'All';
   String _sortMode = 'Newest First';
   String _searchQuery = '';
+  String _headerTitle = 'My Reviews';
+  String _headerSubtitle =
+      'Client feedback from appointments you performed.';
   Timer? _searchDebounce;
   bool _loadingMore = false;
   late final AnimationController _fadeCtrl;
@@ -229,8 +258,28 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     setState(() {
       _future = _fetchPage(page: 1);
     });
-    await _future;
-    if (mounted) _fadeCtrl.forward(from: 0);
+    final data = await _future;
+    if (!mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final firstName = auth.displayName?.trim().split(RegExp(r'\s+')).first ??
+        'Therapist';
+    final summary = data?.summary ?? const TherapistMyReviewsSummary();
+    final title = therapistPortalGreeting(firstName);
+    final subtitle = _reviewsHeaderSubtitle(summary);
+    _applyReviewsHeader(
+      context,
+      firstName: firstName,
+      summary: summary,
+    );
+    if (nuaspaUseMobileShell()) {
+      setState(() {
+        _headerTitle = title;
+        _headerSubtitle = subtitle;
+      });
+    }
+
+    _fadeCtrl.forward(from: 0);
   }
 
   Future<void> _loadMore(_ReviewsData data) async {
@@ -256,19 +305,31 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     });
   }
 
+  Widget _wrapForPlatform(Widget child) {
+    if (!nuaspaUseMobileShell()) return child;
+    return TherapistMobilePageShell(
+      title: _headerTitle,
+      subtitle: _headerSubtitle,
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
-      return const _ReviewsShell(
-        child: TherapistEmptyState(
-          message:
-              'Therapist login required. Your account must be linked to a therapist profile.',
+      return _wrapForPlatform(
+        const _ReviewsShell(
+          child: TherapistEmptyState(
+            message:
+                'Therapist login required. Your account must be linked to a therapist profile.',
+          ),
         ),
       );
     }
 
-    return _ReviewsShell(
+    return _wrapForPlatform(
+      _ReviewsShell(
       child: RefreshIndicator(
         color: _RevUi.lavender,
         onRefresh: _reload,
@@ -357,8 +418,6 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _InfoBanner(message: data.summaryError!),
                       ),
-                    _CompactHero(summary: data.summary),
-                    const SizedBox(height: _RevUi.gap),
                     _SummaryStrip(summary: data.summary),
                     const SizedBox(height: _RevUi.gap),
                     _ReviewsSection(
@@ -384,6 +443,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -495,127 +555,6 @@ class _ReviewsShell extends StatelessWidget {
         ),
         child,
       ],
-    );
-  }
-}
-
-class _CompactHero extends StatelessWidget {
-  const _CompactHero({required this.summary});
-
-  final TherapistMyReviewsSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final latest = summary.latestReview;
-
-    return _RevGlass(
-      radius: 20,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 900;
-          final headline = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Client Feedback',
-                style: GoogleFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: _RevUi.textPrimary,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Ratings and comments from clients after completed appointments.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: _RevUi.textSecondary,
-                ),
-              ),
-            ],
-          );
-
-          if (!wide || latest == null) return headline;
-
-          final previewText = latest.komentar.trim().isEmpty
-              ? 'No written comment.'
-              : latest.komentar.trim();
-          final clipped = previewText.length > 120
-              ? '${previewText.substring(0, 117)}…'
-              : previewText;
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: headline),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    color: Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Latest Review',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: _RevUi.lavender.withValues(alpha: 0.9),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              latest.korisnikIme.isEmpty
-                                  ? 'Client'
-                                  : latest.korisnikIme,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: _RevUi.textPrimary,
-                              ),
-                            ),
-                          ),
-                          _StarRating(
-                            stars: _clampStars(latest.ocjena),
-                            size: 14,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        clipped,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          height: 1.45,
-                          color: _RevUi.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
     );
   }
 }

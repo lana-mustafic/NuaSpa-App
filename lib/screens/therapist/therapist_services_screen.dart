@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
+import '../../core/platform/nua_spa_platform.dart';
 import '../../core/therapist/therapist_service_eligibility.dart';
 import '../../models/therapist/therapist_my_services_result.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../providers/auth_provider.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../catalog/service_details_screen.dart';
 import 'therapist_portal_scaffold.dart';
 import '../../ui/widgets/service_network_image.dart';
@@ -54,25 +56,36 @@ List<Usluga> _sortServices(List<Usluga> list, String mode) {
   return copy;
 }
 
-String _statusLabel(ZaposlenikStatus status) {
-  switch (status) {
-    case ZaposlenikStatus.active:
-      return 'Active';
-    case ZaposlenikStatus.onLeave:
-      return 'On leave';
-    case ZaposlenikStatus.inactive:
-      return 'Inactive';
+String _servicesHeaderSubtitle({
+  required int serviceCount,
+  String? categoryName,
+}) {
+  if (serviceCount == 0) {
+    return 'View treatments you are certified to perform at NuaSpa.';
   }
+  final cat = categoryName?.trim();
+  if (cat != null && cat.isNotEmpty) {
+    return '$serviceCount certified services · $cat';
+  }
+  return '$serviceCount certified services at NuaSpa.';
 }
 
-Color _statusColor(ZaposlenikStatus status) {
-  switch (status) {
-    case ZaposlenikStatus.active:
-      return _SvcUi.green;
-    case ZaposlenikStatus.onLeave:
-      return _SvcUi.gold;
-    case ZaposlenikStatus.inactive:
-      return _SvcUi.orange;
+void _applyServicesHeader(
+  BuildContext context, {
+  required String firstName,
+  required int serviceCount,
+  String? categoryName,
+}) {
+  final title = therapistPortalGreeting(firstName);
+  final subtitle = _servicesHeaderSubtitle(
+    serviceCount: serviceCount,
+    categoryName: categoryName,
+  );
+  if (!nuaspaUseMobileShell()) {
+    context.read<DesktopNav>().setTherapistServicesHeader(
+      title: title,
+      subtitle: subtitle,
+    );
   }
 }
 
@@ -92,6 +105,9 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
   final _searchCtrl = TextEditingController();
   String _sortMode = 'A to Z';
   String _searchQuery = '';
+  String _headerTitle = 'My Services';
+  String _headerSubtitle =
+      'View treatments you are certified to perform at NuaSpa.';
   Timer? _searchDebounce;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -120,10 +136,33 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     setState(() {
       _future = _api.getTherapistMyServices();
     });
-    await _future;
-    if (mounted) {
-      _fadeCtrl.forward(from: 0);
+    final result = await _future;
+    if (!mounted) return;
+
+    final me = result?.therapist;
+    if (me != null) {
+      final firstName =
+          me.ime.trim().isNotEmpty ? me.ime.trim() : 'Therapist';
+      final title = therapistPortalGreeting(firstName);
+      final subtitle = _servicesHeaderSubtitle(
+        serviceCount: result!.services.length,
+        categoryName: me.kategorijaUslugaNaziv,
+      );
+      _applyServicesHeader(
+        context,
+        firstName: firstName,
+        serviceCount: result.services.length,
+        categoryName: me.kategorijaUslugaNaziv,
+      );
+      if (nuaspaUseMobileShell()) {
+        setState(() {
+          _headerTitle = title;
+          _headerSubtitle = subtitle;
+        });
+      }
     }
+
+    _fadeCtrl.forward(from: 0);
   }
 
   void _onSearchChanged(String value) {
@@ -148,19 +187,31 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     return _sortServices(list, _sortMode);
   }
 
+  Widget _wrapForPlatform(Widget child) {
+    if (!nuaspaUseMobileShell()) return child;
+    return TherapistMobilePageShell(
+      title: _headerTitle,
+      subtitle: _headerSubtitle,
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
-      return const _ServicesShell(
-        child: TherapistEmptyState(
-          message:
-              'Therapist login required. Your account must be linked to a therapist profile.',
+      return _wrapForPlatform(
+        const _ServicesShell(
+          child: TherapistEmptyState(
+            message:
+                'Therapist login required. Your account must be linked to a therapist profile.',
+          ),
         ),
       );
     }
 
-    return _ServicesShell(
+    return _wrapForPlatform(
+      _ServicesShell(
       child: RefreshIndicator(
         color: _SvcUi.lavender,
         onRefresh: _reload,
@@ -317,6 +368,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
           },
         ),
       ),
+      ),
     );
   }
 }
@@ -423,19 +475,9 @@ class _MainColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final catLabel = categoryName?.trim().isNotEmpty == true
-        ? categoryName!.trim()
-        : 'Your specialty';
-    final firstName = me.ime.trim().isNotEmpty ? me.ime.trim() : 'Therapist';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _HeroCard(
-          firstName: firstName,
-          categoryName: catLabel,
-          status: me.status,
-        ),
         if (partialError != null) ...[
           const SizedBox(height: 12),
           _PartialErrorBanner(message: partialError!),
@@ -486,96 +528,6 @@ class _PartialErrorBanner extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: _SvcUi.textPrimary,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.firstName,
-    required this.categoryName,
-    required this.status,
-  });
-
-  final String firstName;
-  final String categoryName;
-  final ZaposlenikStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusColor = _statusColor(status);
-
-    return _SvcGlass(
-      radius: 20,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: LinearGradient(
-                colors: [
-                  _SvcUi.purple.withValues(alpha: 0.55),
-                  _SvcUi.lavender.withValues(alpha: 0.35),
-                ],
-              ),
-              border: Border.all(
-                color: _SvcUi.lavender.withValues(alpha: 0.4),
-              ),
-            ),
-            child: const Icon(Icons.spa_rounded, size: 22, color: Colors.white),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back, $firstName',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _SvcUi.lavender.withValues(alpha: 0.9),
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  categoryName,
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: _SvcUi.textPrimary,
-                    letterSpacing: -0.4,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    color: statusColor.withValues(alpha: 0.14),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    _statusLabel(status),
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
