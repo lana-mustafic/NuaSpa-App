@@ -34,6 +34,7 @@ import '../../../models/admin/therapist_admin_roster.dart';
 import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/therapist/therapist_appointments_list.dart';
+import '../../../models/therapist/therapist_my_reviews_summary.dart';
 import '../../../models/therapist/therapist_my_services_result.dart';
 import '../../../models/therapist/therapist_schedule.dart';
 import '../../../models/admin/spa_centar.dart';
@@ -473,27 +474,81 @@ class ApiService {
     }
   }
 
-  Future<(List<TherapistReviewRow> items, String? error)> getTherapistMyReviews({
-    int maxReviews = 30,
+  Future<TherapistMyReviewsSummaryResult> getTherapistMyReviewsSummary() async {
+    try {
+      final response = await _dio.get<dynamic>('Zaposlenik/me/reviews/summary');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return const TherapistMyReviewsSummaryResult(
+          error: 'Could not load review summary.',
+        );
+      }
+      return TherapistMyReviewsSummaryResult(
+        summary: TherapistMyReviewsSummary.fromJson(data),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyReviewsSummary: $e');
+      if (e.response?.statusCode == 403) {
+        return const TherapistMyReviewsSummaryResult(
+          accountNotLinked: true,
+          error:
+              'Your account is not linked to a therapist profile. Contact your spa administrator.',
+        );
+      }
+      return TherapistMyReviewsSummaryResult(
+        error: ApiErrorMessages.fromDio(e) ?? 'Could not load review summary.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyReviewsSummary: $e');
+      return const TherapistMyReviewsSummaryResult(
+        error: 'Could not load review summary.',
+      );
+    }
+  }
+
+  Future<TherapistReviewsPageResult> getTherapistMyReviewsPage({
+    int page = 1,
+    int pageSize = 20,
   }) async {
     try {
       final response = await _dio.get<dynamic>(
         'Zaposlenik/me/reviews',
-        queryParameters: {'maxReviews': maxReviews},
+        queryParameters: {'page': page, 'pageSize': pageSize},
       );
       final data = response.data;
-      if (data is! List) {
-        return (<TherapistReviewRow>[], 'Unexpected server response.');
+      if (data is! Map) {
+        return const TherapistReviewsPageResult(
+          error: 'Unexpected server response.',
+        );
       }
-      final items = data
-          .map<TherapistReviewRow>(
-            (e) => TherapistReviewRow.fromJson(e as Map<String, dynamic>),
-          )
-          .toList();
-      return (items, null);
+      final items = parsePagedItems(
+        data,
+        (json) => TherapistReviewRow.fromJson(json),
+      );
+      final total = parsePagedTotal(data) ?? items.length;
+      final currentPage = (data['stranica'] as num?)?.toInt() ?? page;
+      final size = (data['velicinaStranice'] as num?)?.toInt() ?? pageSize;
+      return TherapistReviewsPageResult(
+        items: items,
+        total: total,
+        page: currentPage,
+        pageSize: size,
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyReviewsPage: $e');
+      if (e.response?.statusCode == 403) {
+        return const TherapistReviewsPageResult(
+          accountNotLinked: true,
+          error:
+              'Your account is not linked to a therapist profile. Contact your spa administrator.',
+        );
+      }
+      return TherapistReviewsPageResult(
+        error: ApiErrorMessages.fromDio(e) ?? 'Could not load reviews.',
+      );
     } catch (e) {
-      debugPrint('Greška u ApiService.getTherapistMyReviews: $e');
-      return (<TherapistReviewRow>[], 'Could not load reviews.');
+      debugPrint('Greška u ApiService.getTherapistMyReviewsPage: $e');
+      return const TherapistReviewsPageResult(error: 'Could not load reviews.');
     }
   }
 
