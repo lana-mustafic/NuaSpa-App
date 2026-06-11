@@ -35,6 +35,7 @@ import '../../../models/admin/therapist_day_availability.dart';
 import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/therapist/therapist_appointments_list.dart';
 import '../../../models/therapist/therapist_my_reviews_summary.dart';
+import '../../../models/therapist/therapist_my_profile.dart';
 import '../../../models/therapist/therapist_my_services_result.dart';
 import '../../../models/therapist/therapist_service_detail.dart';
 import '../../../models/therapist/therapist_schedule.dart';
@@ -319,9 +320,43 @@ class ApiService {
     }
   }
 
-  Future<Zaposlenik?> patchTherapistMe({
+  Future<TherapistMyProfileResult> getTherapistMyProfile() async {
+    try {
+      final response = await _dio.get<dynamic>('Zaposlenik/me/profile');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return const TherapistMyProfileResult(
+          error: 'Could not load your therapist profile.',
+        );
+      }
+      return TherapistMyProfileResult(
+        profile: TherapistMyProfile.fromJson(data),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyProfile: $e');
+      if (e.response?.statusCode == 403) {
+        return const TherapistMyProfileResult(
+          accountNotLinked: true,
+          error:
+              'Your account is not linked to a therapist profile. Contact your spa administrator.',
+        );
+      }
+      return TherapistMyProfileResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load your therapist profile.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistMyProfile: $e');
+      return const TherapistMyProfileResult(
+        error: 'Could not load your therapist profile.',
+      );
+    }
+  }
+
+  Future<TherapistProfilePatchResult> patchTherapistMe({
     String? telefon,
     String? jezici,
+    String? bio,
   }) async {
     try {
       final response = await _dio.patch<dynamic>(
@@ -329,13 +364,49 @@ class ApiService {
         data: {
           if (telefon != null) 'telefon': telefon,
           if (jezici != null) 'jezici': jezici,
+          if (bio != null) 'bio': bio,
         },
       );
       final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      return Zaposlenik.fromJson(data);
+      if (data is! Map<String, dynamic>) {
+        return const TherapistProfilePatchResult(
+          error: 'Could not save profile.',
+        );
+      }
+      return TherapistProfilePatchResult(profile: Zaposlenik.fromJson(data));
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.patchTherapistMe: $e');
+      return TherapistProfilePatchResult(
+        error: ApiErrorMessages.fromDio(e) ?? 'Could not save profile.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.patchTherapistMe: $e');
+      return const TherapistProfilePatchResult(error: 'Could not save profile.');
+    }
+  }
+
+  Future<Zaposlenik?> uploadTherapistAvatar(String filePath) async {
+    try {
+      final fileName = filePath.split(RegExp(r'[/\\]')).last;
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final response = await _dio.post<dynamic>(
+        'Zaposlenik/me/avatar',
+        data: formData,
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      final profile = data['profile'];
+      if (profile is Map<String, dynamic>) {
+        return Zaposlenik.fromJson(profile);
+      }
+      return null;
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.uploadTherapistAvatar: $e');
+      return null;
+    } catch (e) {
+      debugPrint('Greška u ApiService.uploadTherapistAvatar: $e');
       return null;
     }
   }

@@ -12,6 +12,8 @@ class Zaposlenik {
   final String? jezici;
   final String? obrazovanje;
   final String? lokacija;
+  final String? bio;
+  final String? slikaUrl;
   final DateTime? datumZaposlenja;
   final ZaposlenikStatus status;
 
@@ -27,6 +29,8 @@ class Zaposlenik {
     this.jezici,
     this.obrazovanje,
     this.lokacija,
+    this.bio,
+    this.slikaUrl,
     this.datumZaposlenja,
     this.status = ZaposlenikStatus.active,
   });
@@ -49,6 +53,8 @@ class Zaposlenik {
       jezici: json['jezici'] as String?,
       obrazovanje: json['obrazovanje'] as String?,
       lokacija: json['lokacija'] as String?,
+      bio: json['bio'] as String?,
+      slikaUrl: json['slikaUrl'] as String?,
       datumZaposlenja:
           dz == null ? null : DateTime.tryParse(dz.toString()),
       status: ZaposlenikStatus.fromApi(json['status']),
@@ -68,6 +74,8 @@ class Zaposlenik {
       if (obrazovanje != null && obrazovanje!.trim().isNotEmpty)
         'obrazovanje': obrazovanje,
       if (lokacija != null && lokacija!.trim().isNotEmpty) 'lokacija': lokacija,
+      if (bio != null && bio!.trim().isNotEmpty) 'bio': bio,
+      if (slikaUrl != null && slikaUrl!.trim().isNotEmpty) 'slikaUrl': slikaUrl,
       if (datumZaposlenja != null)
         'datumZaposlenja': datumZaposlenja!.toIso8601String(),
       'status': status.apiValue,
@@ -86,6 +94,8 @@ class Zaposlenik {
     String? jezici,
     String? obrazovanje,
     String? lokacija,
+    String? bio,
+    String? slikaUrl,
     DateTime? datumZaposlenja,
     ZaposlenikStatus? status,
   }) {
@@ -102,6 +112,8 @@ class Zaposlenik {
       jezici: jezici ?? this.jezici,
       obrazovanje: obrazovanje ?? this.obrazovanje,
       lokacija: lokacija ?? this.lokacija,
+      bio: bio ?? this.bio,
+      slikaUrl: slikaUrl ?? this.slikaUrl,
       datumZaposlenja: datumZaposlenja ?? this.datumZaposlenja,
       status: status ?? this.status,
     );
