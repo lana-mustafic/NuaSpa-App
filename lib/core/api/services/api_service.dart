@@ -389,6 +389,7 @@ class ApiService {
     DateTime? day,
     String? search,
     String statusFilter = 'all',
+    int? uslugaId,
   }) async {
     TherapistAppointmentsList? merged;
     var page = 1;
@@ -402,6 +403,7 @@ class ApiService {
         statusFilter: statusFilter,
         page: page,
         pageSize: 100,
+        uslugaId: uslugaId,
       );
       if (error != null) return (null, error);
       if (chunk == null) return (null, 'Unexpected server response.');

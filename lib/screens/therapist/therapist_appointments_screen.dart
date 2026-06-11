@@ -29,9 +29,16 @@ abstract final class _ApptUi {
 }
 
 class TherapistAppointmentsScreen extends StatefulWidget {
-  const TherapistAppointmentsScreen({super.key, required this.filterDay});
+  const TherapistAppointmentsScreen({
+    super.key,
+    required this.filterDay,
+    this.initialTab = 'Upcoming',
+    this.filterUslugaId,
+  });
 
   final DateTime filterDay;
+  final String initialTab;
+  final int? filterUslugaId;
 
   @override
   State<TherapistAppointmentsScreen> createState() =>
@@ -45,7 +52,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
   String? _loadError;
   bool _loading = false;
   bool _initialLoad = true;
-  String _tab = 'Upcoming';
+  late String _tab;
   String _statusFilter = 'All Status';
   int _lastRefreshToken = -1;
   String _lastSearch = '';
@@ -63,6 +70,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
       duration: const Duration(milliseconds: 280),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
+    _tab = widget.initialTab;
     _lastFilterDay = widget.filterDay;
     _reload();
   }
@@ -159,6 +167,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
       day: widget.filterDay,
       search: _lastSearch.isEmpty ? null : _lastSearch,
       statusFilter: _statusApiKey(_statusFilter),
+      uslugaId: widget.filterUslugaId,
     );
 
     if (!mounted) return;
