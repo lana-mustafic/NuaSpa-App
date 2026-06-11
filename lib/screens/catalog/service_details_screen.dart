@@ -15,10 +15,12 @@ import '../../core/platform/nua_spa_platform.dart';
 import 'admin_service_details_panel.dart';
 import 'assign_therapist_dialog.dart';
 import 'service_editor_dialog.dart';
+import '../../core/therapist/therapist_service_eligibility.dart';
 import '../../models/recenzija.dart';
 import '../../models/reviewable_visit.dart';
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
+import '../../models/zaposlenik_status.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/theme/luxury_modal_style.dart';
 import '../../ui/widgets/service_network_image.dart';
@@ -104,6 +106,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
   late Future<Usluga?> _serviceFuture;
   late Future<RecenzijeLoadResult> _recenzijeFuture;
+  Future<Zaposlenik?>? _therapistFuture;
 
   final TextEditingController _komentarController = TextEditingController();
   int _ocjena = 5;
@@ -132,6 +135,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     super.initState();
     _recenzijeFuture = _apiService.getRecenzijeByUsluga(widget.serviceId);
     _serviceFuture = _loadServiceAndTherapists();
+    if (widget.therapistView) {
+      _therapistFuture =
+          _apiService.getTherapistMyServices().then((r) => r.therapist);
+    }
     if (!widget.therapistView) {
       Future.microtask(() {
         if (!mounted) return;
@@ -665,6 +672,104 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
     );
   }
 
+  Widget _buildTherapistDetails(BuildContext context, Usluga service) {
+    return FutureBuilder<Zaposlenik?>(
+      future: _therapistFuture,
+      builder: (context, therapistSnap) {
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_DetailsStyle.bgDeep, _DetailsStyle.bgMid],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 9,
+                  child: _TherapistLeftPanel(service: service),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  flex: 15,
+                  child: _TherapistRightPanel(
+                    service: service,
+                    therapist: therapistSnap.data,
+                    therapistLoading:
+                        therapistSnap.connectionState == ConnectionState.waiting,
+                    scrollController: _rightScrollController,
+                    recenzijeFuture: _recenzijeFuture,
+                    onRefresh: _refreshRecenzije,
+                    onBack: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTherapistMobileDetails(BuildContext context, Usluga service) {
+    return FutureBuilder<Zaposlenik?>(
+      future: _therapistFuture,
+      builder: (context, therapistSnap) {
+        final bottomInset = MediaQuery.paddingOf(context).bottom;
+        return Scaffold(
+          backgroundColor: _DetailsStyle.bgDeep,
+          body: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                expandedHeight: 200,
+                backgroundColor: _DetailsStyle.bgDeep,
+                surfaceTintColor: Colors.transparent,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: _DetailsStyle.textPrimary,
+                  onPressed: () => Navigator.pop(context),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: ServiceNetworkImage(
+                    imageUrl: service.slikaUrl,
+                    fit: BoxFit.cover,
+                    error: ColoredBox(
+                      color: _DetailsStyle.accentPurple.withValues(alpha: 0.12),
+                      child: Icon(
+                        Icons.spa_outlined,
+                        size: 48,
+                        color: _DetailsStyle.accentPurple.withValues(alpha: 0.35),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottomInset),
+                  child: _TherapistDetailsBody(
+                    service: service,
+                    therapist: therapistSnap.data,
+                    therapistLoading:
+                        therapistSnap.connectionState == ConnectionState.waiting,
+                    recenzijeFuture: _recenzijeFuture,
+                    onRefresh: _refreshRecenzije,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -736,6 +841,13 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
 
           if (widget.adminPanelView) {
             return _buildAdminPanelDetails(context, service);
+          }
+
+          if (widget.therapistView) {
+            if (nuaspaUseMobileShell()) {
+              return _buildTherapistMobileDetails(context, service);
+            }
+            return _buildTherapistDetails(context, service);
           }
 
           if (nuaspaUseMobileShell()) {
@@ -2011,6 +2123,627 @@ class _MobileReviewsBlock extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ── Therapist service management layout ─────────────────────────────────────
+
+double _therapistImageHeight(BuildContext context) {
+  final base = (MediaQuery.sizeOf(context).height - 300).clamp(320.0, 520.0);
+  return (base * 0.72).clamp(230.0, 380.0);
+}
+
+String _therapistAvailabilityLabel(ZaposlenikStatus status) {
+  return switch (status) {
+    ZaposlenikStatus.active => 'Available',
+    ZaposlenikStatus.onLeave => 'On Leave',
+    ZaposlenikStatus.inactive => 'Unavailable',
+  };
+}
+
+double _averageReviewRating(List<Recenzija> reviews) {
+  if (reviews.isEmpty) return 0;
+  final sum = reviews.fold<int>(0, (a, r) => a + r.ocjena);
+  return sum / reviews.length;
+}
+
+class _TherapistLeftPanel extends StatelessWidget {
+  const _TherapistLeftPanel({required this.service});
+
+  final Usluga service;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageHeight = _therapistImageHeight(context);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_DetailsStyle.cardRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: DecoratedBox(
+          decoration: _DetailsStyle.glassCard(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(_DetailsStyle.cardRadius),
+                ),
+                child: ServiceNetworkImage(
+                  imageUrl: service.slikaUrl,
+                  height: imageHeight,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  error: Container(
+                    height: imageHeight,
+                    color: _DetailsStyle.accentPurple.withValues(alpha: 0.12),
+                    child: Icon(
+                      Icons.spa_outlined,
+                      size: 56,
+                      color: _DetailsStyle.accentPurple.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      service.naziv,
+                      style: _DetailsStyle.displayTitle(context).copyWith(
+                        fontSize: 24,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(
+                          service.cijenaKm,
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: _DetailsStyle.accentPurple,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 16,
+                          color: _DetailsStyle.textSecondary,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          service.trajanje,
+                          style: _DetailsStyle.body(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _CategoryPill(label: service.kategorija),
+                        _CertifiedBadge(),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CertifiedBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const green = Color(0xFF22C55E);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: green.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: green.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_rounded, size: 14, color: green),
+          const SizedBox(width: 5),
+          Text(
+            'Certified',
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: green,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapistRightPanel extends StatelessWidget {
+  const _TherapistRightPanel({
+    required this.service,
+    required this.therapist,
+    required this.therapistLoading,
+    required this.scrollController,
+    required this.recenzijeFuture,
+    required this.onRefresh,
+    required this.onBack,
+  });
+
+  final Usluga service;
+  final Zaposlenik? therapist;
+  final bool therapistLoading;
+  final ScrollController scrollController;
+  final Future<RecenzijeLoadResult> recenzijeFuture;
+  final VoidCallback onRefresh;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_DetailsStyle.cardRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: DecoratedBox(
+          decoration: _DetailsStyle.glassCard(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 0),
+                child: Row(
+                  children: [
+                    const _IconCircle(icon: Icons.medical_services_outlined),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Service Overview',
+                            style: _DetailsStyle.sectionTitle(context),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Manage and review your assigned treatment.',
+                            style: _DetailsStyle.label(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _GlassIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      tooltip: 'Back',
+                      onPressed: onBack,
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Scrollbar(
+                  controller: scrollController,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    primary: false,
+                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                    child: _TherapistDetailsBody(
+                      service: service,
+                      therapist: therapist,
+                      therapistLoading: therapistLoading,
+                      recenzijeFuture: recenzijeFuture,
+                      onRefresh: onRefresh,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TherapistDetailsBody extends StatelessWidget {
+  const _TherapistDetailsBody({
+    required this.service,
+    required this.therapist,
+    required this.therapistLoading,
+    required this.recenzijeFuture,
+    required this.onRefresh,
+  });
+
+  final Usluga service;
+  final Zaposlenik? therapist;
+  final bool therapistLoading;
+  final Future<RecenzijeLoadResult> recenzijeFuture;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final description = service.opis.trim();
+    final isAuthorized = therapist == null
+        ? therapistLoading
+        : therapistIsEligibleForService(therapist!, service);
+    final isCertified = therapistLoading || isAuthorized;
+    final isAvailable = therapistLoading
+        ? true
+        : (therapist?.status.isBookable ?? false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TherapistStatusCard(
+          isCertified: isCertified,
+          isAvailable: isAvailable,
+          isAuthorized: isAuthorized,
+        ),
+        const SizedBox(height: 16),
+        _TherapistSectionCard(
+          title: 'Description',
+          child: Text(
+            description.isEmpty
+                ? 'No description provided for this service.'
+                : description,
+            style: _DetailsStyle.body(context).copyWith(
+              color: description.isEmpty
+                  ? _DetailsStyle.textSecondary
+                  : _DetailsStyle.textPrimary.withValues(alpha: 0.9),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        FutureBuilder<RecenzijeLoadResult>(
+          future: recenzijeFuture,
+          builder: (context, snapshot) {
+            final reviews = snapshot.data?.items ?? [];
+            final average = _averageReviewRating(reviews);
+            final status = therapist?.status ?? ZaposlenikStatus.active;
+
+            return _TherapistSectionCard(
+              title: 'Service Information',
+              child: Column(
+                children: [
+                  _TherapistInfoRow(
+                    icon: Icons.schedule_outlined,
+                    label: 'Duration',
+                    value: service.trajanje,
+                  ),
+                  _TherapistInfoRow(
+                    icon: Icons.category_outlined,
+                    label: 'Category',
+                    value: service.kategorija,
+                  ),
+                  _TherapistInfoRow(
+                    icon: Icons.verified_outlined,
+                    label: 'Certification Status',
+                    value: isCertified ? 'Certified' : 'Not certified',
+                    valueColor: isCertified
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFFFF8A80),
+                  ),
+                  _TherapistInfoRow(
+                    icon: Icons.event_available_outlined,
+                    label: 'Availability Status',
+                    value: therapistLoading
+                        ? 'Loading…'
+                        : _therapistAvailabilityLabel(status),
+                    valueColor: therapistLoading
+                        ? _DetailsStyle.textSecondary
+                        : status.isBookable
+                            ? const Color(0xFF22C55E)
+                            : const Color(0xFFF5B942),
+                  ),
+                  if (reviews.isNotEmpty)
+                    _TherapistInfoRow(
+                      icon: Icons.star_outline_rounded,
+                      label: 'Average Rating',
+                      value: average.toStringAsFixed(1),
+                      valueColor: _DetailsStyle.gold,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 14),
+        FutureBuilder<RecenzijeLoadResult>(
+          future: recenzijeFuture,
+          builder: (context, snapshot) {
+            final loading = snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData;
+            final result = snapshot.data;
+            final reviews = result?.items ?? [];
+            final loadError = result?.error;
+            final truncated = result?.truncated ?? false;
+
+            return _TherapistSectionCard(
+              title: 'Reviews',
+              trailing: _GlassIconButton(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh',
+                onPressed: onRefresh,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _DetailsStyle.accentPurple,
+                        ),
+                      ),
+                    )
+                  else if (loadError != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(loadError, style: _DetailsStyle.body(context)),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: onRefresh,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  else if (reviews.isEmpty)
+                    const _TherapistReviewsEmptyState()
+                  else ...[
+                    Row(
+                      children: [
+                        _ReviewCountBadge(count: reviews.length),
+                        const SizedBox(width: 10),
+                        Text(
+                          '${_averageReviewRating(reviews).toStringAsFixed(1)} avg',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _DetailsStyle.gold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (truncated) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        'Showing the most recent reviews.',
+                        style: _DetailsStyle.label(context),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    ...reviews.map(
+                      (r) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ReviewCard(review: r, lightSurface: false),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _TherapistStatusCard extends StatelessWidget {
+  const _TherapistStatusCard({
+    required this.isCertified,
+    required this.isAvailable,
+    required this.isAuthorized,
+  });
+
+  final bool isCertified;
+  final bool isAvailable;
+  final bool isAuthorized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _DetailsStyle.accentPurple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _DetailsStyle.accentPurple.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your Status',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _DetailsStyle.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _TherapistStatusLine(
+            label: 'Certified',
+            active: isCertified,
+          ),
+          const SizedBox(height: 8),
+          _TherapistStatusLine(
+            label: 'Available',
+            active: isAvailable,
+          ),
+          const SizedBox(height: 8),
+          _TherapistStatusLine(
+            label: 'Authorized to perform this service',
+            active: isAuthorized,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapistStatusLine extends StatelessWidget {
+  const _TherapistStatusLine({
+    required this.label,
+    required this.active,
+  });
+
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFF22C55E) : _DetailsStyle.textSecondary;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          active ? Icons.check_circle_rounded : Icons.cancel_outlined,
+          size: 18,
+          color: color,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: active
+                  ? _DetailsStyle.textPrimary.withValues(alpha: 0.92)
+                  : _DetailsStyle.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TherapistSectionCard extends StatelessWidget {
+  const _TherapistSectionCard({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
+
+  final String title;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(title, style: _DetailsStyle.sectionTitle(context)),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapistInfoRow extends StatelessWidget {
+  const _TherapistInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: _DetailsStyle.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label, style: _DetailsStyle.label(context)),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? _DetailsStyle.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapistReviewsEmptyState extends StatelessWidget {
+  const _TherapistReviewsEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        children: [
+          Icon(
+            Icons.rate_review_outlined,
+            size: 44,
+            color: _DetailsStyle.accentPurple.withValues(alpha: 0.45),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'No reviews yet',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _DetailsStyle.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Clients will be able to leave reviews after completed appointments.',
+            textAlign: TextAlign.center,
+            style: _DetailsStyle.body(context),
+          ),
+        ],
+      ),
     );
   }
 }
