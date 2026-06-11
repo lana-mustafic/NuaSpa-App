@@ -23,6 +23,14 @@ enum DesktopRouteKey {
   admin,
 }
 
+/// Scroll targets for [DesktopRouteKey.therapistProfile] header section nav.
+enum TherapistProfileSection {
+  overview,
+  about,
+  contact,
+  staffRecord,
+}
+
 class DesktopNav extends ChangeNotifier {
   static DateTimeRange defaultHeaderDateRange() {
     final now = DateTime.now();
@@ -67,6 +75,10 @@ class DesktopNav extends ChangeNotifier {
   int _therapistScheduleRefresh = 0;
   String _therapistAppointmentSearchQuery = '';
   String _therapistScheduleSearchQuery = '';
+  String _therapistReviewsSearchQuery = '';
+  String _therapistServicesSearchQuery = '';
+  int _therapistProfileSectionPulse = 0;
+  TherapistProfileSection? _pendingTherapistProfileSection;
   int _scheduleAvailabilityHint = 0;
   String _appointmentSearchQuery = '';
   int _appointmentCreateRequest = 0;
@@ -219,6 +231,12 @@ class DesktopNav extends ChangeNotifier {
 
   String get therapistScheduleSearchQuery => _therapistScheduleSearchQuery;
 
+  String get therapistReviewsSearchQuery => _therapistReviewsSearchQuery;
+
+  String get therapistServicesSearchQuery => _therapistServicesSearchQuery;
+
+  int get therapistProfileSectionPulse => _therapistProfileSectionPulse;
+
   /// Bumped when therapist opens schedule for availability info.
   int get scheduleAvailabilityHint => _scheduleAvailabilityHint;
 
@@ -318,6 +336,41 @@ class DesktopNav extends ChangeNotifier {
     _therapistScheduleSearchQuery = value;
     if (_route != DesktopRouteKey.schedule) {
       _route = DesktopRouteKey.schedule;
+    }
+    notifyListeners();
+  }
+
+  void setTherapistReviewsSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_therapistReviewsSearchQuery == value &&
+        _route == DesktopRouteKey.therapistReviews) {
+      return;
+    }
+    _therapistReviewsSearchQuery = value;
+    notifyListeners();
+  }
+
+  void setTherapistServicesSearchQuery(String raw) {
+    final value = raw.trim();
+    if (_therapistServicesSearchQuery == value &&
+        _route == DesktopRouteKey.therapistServices) {
+      return;
+    }
+    _therapistServicesSearchQuery = value;
+    notifyListeners();
+  }
+
+  TherapistProfileSection? takeTherapistProfileSectionRequest() {
+    final target = _pendingTherapistProfileSection;
+    _pendingTherapistProfileSection = null;
+    return target;
+  }
+
+  void goToTherapistProfileSection(TherapistProfileSection section) {
+    _pendingTherapistProfileSection = section;
+    _therapistProfileSectionPulse++;
+    if (_route != DesktopRouteKey.therapistProfile) {
+      _route = DesktopRouteKey.therapistProfile;
     }
     notifyListeners();
   }

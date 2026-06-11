@@ -105,6 +105,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
   final _searchCtrl = TextEditingController();
   String _sortMode = 'A to Z';
   String _searchQuery = '';
+  String _lastNavSearch = '';
   String _headerTitle = 'My Services';
   String _headerSubtitle =
       'View treatments you are certified to perform at NuaSpa.';
@@ -130,6 +131,19 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (nuaspaUseMobileShell()) return;
+    final search = context.read<DesktopNav>().therapistServicesSearchQuery;
+    if (search == _lastNavSearch) return;
+    _lastNavSearch = search;
+    if (_searchCtrl.text != search) {
+      _searchCtrl.text = search;
+    }
+    setState(() => _searchQuery = search.trim().toLowerCase());
   }
 
   Future<void> _reload() async {
@@ -310,6 +324,7 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                     categoryName: katName,
                     sortMode: _sortMode,
                     searchCtrl: _searchCtrl,
+                    showInlineSearch: nuaspaUseMobileShell(),
                     onSearchChanged: _onSearchChanged,
                     onSort: (v) => setState(() => _sortMode = v),
                     onOpenService: (id) {
@@ -464,6 +479,7 @@ class _MainColumn extends StatelessWidget {
     required this.categoryName,
     required this.sortMode,
     required this.searchCtrl,
+    required this.showInlineSearch,
     required this.onSearchChanged,
     required this.onSort,
     required this.onOpenService,
@@ -477,6 +493,7 @@ class _MainColumn extends StatelessWidget {
   final String? categoryName;
   final String sortMode;
   final TextEditingController searchCtrl;
+  final bool showInlineSearch;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSort;
   final ValueChanged<int> onOpenService;
@@ -501,6 +518,7 @@ class _MainColumn extends StatelessWidget {
           therapistActive: me.status == ZaposlenikStatus.active,
           sortMode: sortMode,
           searchCtrl: searchCtrl,
+          showInlineSearch: showInlineSearch,
           onSearchChanged: onSearchChanged,
           onSort: onSort,
           onOpenService: onOpenService,
@@ -554,6 +572,7 @@ class _LinkedServicesCard extends StatelessWidget {
     required this.therapistActive,
     required this.sortMode,
     required this.searchCtrl,
+    required this.showInlineSearch,
     required this.onSearchChanged,
     required this.onSort,
     required this.onOpenService,
@@ -566,6 +585,7 @@ class _LinkedServicesCard extends StatelessWidget {
   final bool therapistActive;
   final String sortMode;
   final TextEditingController searchCtrl;
+  final bool showInlineSearch;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSort;
   final ValueChanged<int> onOpenService;
@@ -637,6 +657,14 @@ class _LinkedServicesCard extends StatelessWidget {
                 ),
               );
               final sort = _SortDropdown(value: sortMode, onChanged: onSort);
+              if (!showInlineSearch) {
+                return Row(
+                  children: [
+                    sort,
+                    const Spacer(),
+                  ],
+                );
+              }
               if (stack) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

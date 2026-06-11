@@ -536,8 +536,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
         title: nav.therapistServicesTitle ?? 'My Services',
         subtitle: nav.therapistServicesSubtitle ??
             'View treatments you are certified to perform at NuaSpa.',
-        searchHint: 'Search clients, services…',
-        onSearchSubmitted: nav.goToCatalogWithSearch,
+        searchHint: 'Filter services by name or category…',
+        initialSearchQuery: nav.therapistServicesSearchQuery,
+        onSearchSubmitted: nav.setTherapistServicesSearchQuery,
+        onSearchChanged: nav.setTherapistServicesSearchQuery,
       );
     }
 
@@ -551,8 +553,27 @@ class LuxuryDesktopHeader extends StatelessWidget {
         title: nav.therapistReviewsTitle ?? 'My Reviews',
         subtitle: nav.therapistReviewsSubtitle ??
             'Client feedback from appointments you performed.',
-        searchHint: 'Search clients, services…',
-        onSearchSubmitted: nav.goToCatalogWithSearch,
+        searchHint: 'Search client, service, or comment…',
+        initialSearchQuery: nav.therapistReviewsSearchQuery,
+        onSearchSubmitted: nav.setTherapistReviewsSearchQuery,
+        onSearchChanged: nav.setTherapistReviewsSearchQuery,
+      );
+    }
+
+    if (isTherapistProfile && auth.isZaposlenik) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: nav.therapistProfileTitle ?? 'My Profile',
+        subtitle: nav.therapistProfileSubtitle ??
+            'Manage your therapist profile, contact details, and professional identity.',
+        showSearch: false,
+        centerWidget: _TherapistProfileSectionNav(
+          onSection: nav.goToTherapistProfileSection,
+        ),
       );
     }
 
@@ -676,7 +697,10 @@ class LuxuryDesktopHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: compact ? 12 : 22),
-          if (!isRevenue && !isCommandCenter && !isSettings) ...[
+          if (!isRevenue &&
+              !isCommandCenter &&
+              !isSettings &&
+              !isTherapistProfile) ...[
             ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: compact ? 340 : 380,
@@ -923,12 +947,14 @@ class LuxuryDesktopHeader extends StatelessWidget {
     required int notificationCount,
     required String title,
     required String subtitle,
-    required String searchHint,
-    required ValueChanged<String> onSearchSubmitted,
+    String searchHint = '',
+    ValueChanged<String>? onSearchSubmitted,
     ValueChanged<String>? onSearchChanged,
     String? initialSearchQuery,
     TextEditingController? searchController,
     String? summaryLine,
+    bool showSearch = true,
+    Widget? centerWidget,
   }) {
     return _SpaciousLuxuryPageHeader(
       title: title,
@@ -939,6 +965,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
       onSearchChanged: onSearchChanged,
       initialSearchQuery: initialSearchQuery,
       searchController: searchController,
+      showSearch: showSearch,
+      centerWidget: centerWidget,
       auth: auth,
       day: day,
       notificationCount: notificationCount,
@@ -946,6 +974,90 @@ class LuxuryDesktopHeader extends StatelessWidget {
       onPickDate: () => _pickDate(context),
       onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
       onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
+    );
+  }
+}
+
+class _TherapistProfileSectionNav extends StatelessWidget {
+  const _TherapistProfileSectionNav({required this.onSection});
+
+  final ValueChanged<TherapistProfileSection> onSection;
+
+  static const _items = <(TherapistProfileSection, String)>[
+    (TherapistProfileSection.overview, 'Overview'),
+    (TherapistProfileSection.about, 'About'),
+    (TherapistProfileSection.contact, 'Contact'),
+    (TherapistProfileSection.staffRecord, 'Staff record'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < _items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            _SectionNavChip(
+              label: _items[i].$2,
+              onTap: () => onSection(_items[i].$1),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionNavChip extends StatefulWidget {
+  const _SectionNavChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_SectionNavChip> createState() => _SectionNavChipState();
+}
+
+class _SectionNavChipState extends State<_SectionNavChip> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = _hover
+        ? const Color.fromRGBO(123, 77, 255, 0.18)
+        : const Color.fromRGBO(255, 255, 255, 0.06);
+    final border = _hover
+        ? const Color.fromRGBO(123, 77, 255, 0.42)
+        : const Color.fromRGBO(255, 255, 255, 0.1);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: border),
+            ),
+            child: Text(
+              widget.label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFF5F3FA),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -960,8 +1072,8 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     required this.title,
     required this.subtitle,
     this.summaryLine,
-    required this.searchHint,
-    required this.onSearchSubmitted,
+    this.searchHint = '',
+    this.onSearchSubmitted,
     required this.auth,
     required this.day,
     required this.notificationCount,
@@ -972,16 +1084,20 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     this.onSearchChanged,
     this.initialSearchQuery,
     this.searchController,
+    this.showSearch = true,
+    this.centerWidget,
   });
 
   final String title;
   final String subtitle;
   final String? summaryLine;
   final String searchHint;
-  final ValueChanged<String> onSearchSubmitted;
+  final ValueChanged<String>? onSearchSubmitted;
   final ValueChanged<String>? onSearchChanged;
   final String? initialSearchQuery;
   final TextEditingController? searchController;
+  final bool showSearch;
+  final Widget? centerWidget;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -1245,51 +1361,39 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
-      shortcuts: <ShortcutActivator, Intent>{
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-            _FocusDashboardSearchIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-            _FocusDashboardSearchIntent(),
-      },
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          _FocusDashboardSearchIntent: CallbackAction<_FocusDashboardSearchIntent>(
-            onInvoke: (_) {
-              _searchFocus.requestFocus();
-              return null;
-            },
-          ),
-        },
-        child: Padding(
+    final header = Padding(
       padding: LuxuryPageChrome.headerPadding,
       child: LayoutBuilder(
         builder: (context, c) {
           final w = c.maxWidth;
-          final showSearch = w >= 720;
+          final hasCenterChrome =
+              widget.showSearch || widget.centerWidget != null;
+          final showCenter = hasCenterChrome && w >= 720;
           final showProfileDetails = w >= 980;
-          final useWideRow = w >= _wideBreakpoint && showSearch;
+          final useWideRow = w >= _wideBreakpoint && showCenter;
           final contentHeight = useWideRow
               ? LuxuryPageChrome.headerRowHeight
-              : (showSearch
+              : (showCenter
                   ? LuxuryPageChrome.headerStackedHeight
                   : LuxuryPageChrome.headerRowHeight);
 
           const searchMaxW = 400.0;
 
-          final search = DeskGlobalSearchBar(
-            dashboardStyle: true,
-            showShortcutHint: true,
-            maxWidth: searchMaxW,
-            focusNode: _searchFocus,
-            controller: _searchController,
-            hintText: widget.searchHint,
-            onSubmitted: widget.onSearchSubmitted,
-            onChanged: widget.onSearchChanged,
-          );
+          final Widget? centerChrome = widget.showSearch
+              ? DeskGlobalSearchBar(
+                  dashboardStyle: true,
+                  showShortcutHint: true,
+                  maxWidth: searchMaxW,
+                  focusNode: _searchFocus,
+                  controller: _searchController,
+                  hintText: widget.searchHint,
+                  onSubmitted: widget.onSearchSubmitted,
+                  onChanged: widget.onSearchChanged,
+                )
+              : widget.centerWidget;
 
           Widget content;
-          if (useWideRow) {
+          if (useWideRow && centerChrome != null) {
             content = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -1303,7 +1407,15 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                   ),
                 ),
                 const SizedBox(width: _gap),
-                search,
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: centerChrome,
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 _controlsRow(showProfileDetails: showProfileDetails),
               ],
@@ -1321,11 +1433,11 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                       _controlsRow(showProfileDetails: showProfileDetails),
                     ],
                   ),
-                  if (showSearch) ...[
+                  if (showCenter && centerChrome != null) ...[
                     SizedBox(height: LuxuryPageChrome.stackedSearchGap),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: search,
+                      child: centerChrome,
                     ),
                   ],
                 ],
@@ -1342,7 +1454,27 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
           );
         },
       ),
-        ),
+    );
+
+    if (!widget.showSearch) return header;
+
+    return Shortcuts(
+      shortcuts: <ShortcutActivator, Intent>{
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _FocusDashboardSearchIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _FocusDashboardSearchIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _FocusDashboardSearchIntent: CallbackAction<_FocusDashboardSearchIntent>(
+            onInvoke: (_) {
+              _searchFocus.requestFocus();
+              return null;
+            },
+          ),
+        },
+        child: header,
       ),
     );
   }

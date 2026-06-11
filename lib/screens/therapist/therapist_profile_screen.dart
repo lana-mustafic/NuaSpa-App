@@ -183,6 +183,10 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   final _jezici = TextEditingController();
   final _bio = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _sectionOverviewKey = GlobalKey();
+  final _sectionAboutKey = GlobalKey();
+  final _sectionContactKey = GlobalKey();
+  final _sectionStaffKey = GlobalKey();
   Future<_ProfileData?>? _future;
   Zaposlenik? _loadedProfile;
   String? _loadedLoginEmail;
@@ -190,6 +194,7 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   String _originalJezici = '';
   String _originalBio = '';
   int _lastRefreshToken = -1;
+  int _lastSectionPulse = -1;
   String? _loadError;
   bool _saving = false;
   bool _uploadingAvatar = false;
@@ -218,11 +223,40 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final token = context.read<DesktopNav>().therapistProfileRefresh;
+    final nav = context.read<DesktopNav>();
+    final token = nav.therapistProfileRefresh;
     if (token != _lastRefreshToken) {
       _lastRefreshToken = token;
       if (token > 0) _reload();
     }
+
+    final sectionPulse = nav.therapistProfileSectionPulse;
+    if (sectionPulse != _lastSectionPulse) {
+      _lastSectionPulse = sectionPulse;
+      final section = nav.takeTherapistProfileSectionRequest();
+      if (section != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToSection(section);
+        });
+      }
+    }
+  }
+
+  void _scrollToSection(TherapistProfileSection section) {
+    final key = switch (section) {
+      TherapistProfileSection.overview => _sectionOverviewKey,
+      TherapistProfileSection.about => _sectionAboutKey,
+      TherapistProfileSection.contact => _sectionContactKey,
+      TherapistProfileSection.staffRecord => _sectionStaffKey,
+    };
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      alignment: 0.04,
+    );
   }
 
   void _onFieldChanged() {
@@ -476,7 +510,9 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
           final main = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _HeroProfileCard(
+              KeyedSubtree(
+                key: _sectionOverviewKey,
+                child: _HeroProfileCard(
                 initials: therapistInitials(z),
                 imageUrl: z.slikaUrl,
                 uploadingAvatar: _uploadingAvatar,
@@ -487,11 +523,17 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
                 status: z.status,
                 insights: insights,
                 onAvatarTap: _pickAndUploadAvatar,
+                ),
               ),
               const SizedBox(height: 16),
-              _AboutMeCard(controller: _bio),
+              KeyedSubtree(
+                key: _sectionAboutKey,
+                child: _AboutMeCard(controller: _bio),
+              ),
               const SizedBox(height: _ProfUi.gap),
-              _ProfGlass(
+              KeyedSubtree(
+                key: _sectionContactKey,
+                child: _ProfGlass(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -588,8 +630,11 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
                   ],
                 ),
               ),
+              ),
               const SizedBox(height: _ProfUi.gap),
-              _ProfGlass(
+              KeyedSubtree(
+                key: _sectionStaffKey,
+                child: _ProfGlass(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -665,6 +710,7 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
                     ],
                   ],
                 ),
+              ),
               ),
             ],
           );

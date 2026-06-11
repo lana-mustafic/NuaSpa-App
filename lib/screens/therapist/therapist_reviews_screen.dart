@@ -178,6 +178,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
   String _ratingFilter = 'All';
   String _sortMode = 'Newest First';
   String _searchQuery = '';
+  String _lastNavSearch = '';
   String _headerTitle = 'My Reviews';
   String _headerSubtitle =
       'Client feedback from appointments you performed.';
@@ -204,6 +205,19 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (nuaspaUseMobileShell()) return;
+    final search = context.read<DesktopNav>().therapistReviewsSearchQuery;
+    if (search == _lastNavSearch) return;
+    _lastNavSearch = search;
+    if (_searchCtrl.text != search) {
+      _searchCtrl.text = search;
+    }
+    setState(() => _searchQuery = search.trim().toLowerCase());
   }
 
   Future<_ReviewsData> _fetchPage({required int page, _ReviewsData? prior}) async {
@@ -430,6 +444,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
                       ratingFilter: _ratingFilter,
                       sortMode: _sortMode,
                       searchCtrl: _searchCtrl,
+                      showInlineSearch: nuaspaUseMobileShell(),
                       isFilteringLoadedOnly: data.hasMore,
                       onSearchChanged: _onSearchChanged,
                       onRatingFilter: (f) => setState(() => _ratingFilter = f),
@@ -673,6 +688,7 @@ class _ReviewsSection extends StatelessWidget {
     required this.ratingFilter,
     required this.sortMode,
     required this.searchCtrl,
+    required this.showInlineSearch,
     required this.isFilteringLoadedOnly,
     required this.onSearchChanged,
     required this.onRatingFilter,
@@ -690,6 +706,7 @@ class _ReviewsSection extends StatelessWidget {
   final String ratingFilter;
   final String sortMode;
   final TextEditingController searchCtrl;
+  final bool showInlineSearch;
   final bool isFilteringLoadedOnly;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onRatingFilter;
@@ -738,6 +755,7 @@ class _ReviewsSection extends StatelessWidget {
           searchCtrl: searchCtrl,
           ratingFilter: ratingFilter,
           sortMode: sortMode,
+          showInlineSearch: showInlineSearch,
           onSearchChanged: onSearchChanged,
           onRatingFilter: onRatingFilter,
           onSort: onSort,
@@ -797,6 +815,7 @@ class _FilterToolbar extends StatelessWidget {
     required this.searchCtrl,
     required this.ratingFilter,
     required this.sortMode,
+    required this.showInlineSearch,
     required this.onSearchChanged,
     required this.onRatingFilter,
     required this.onSort,
@@ -805,6 +824,7 @@ class _FilterToolbar extends StatelessWidget {
   final TextEditingController searchCtrl;
   final String ratingFilter;
   final String sortMode;
+  final bool showInlineSearch;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onRatingFilter;
   final ValueChanged<String> onSort;
@@ -854,6 +874,9 @@ class _FilterToolbar extends StatelessWidget {
             );
             final sort = _SortDropdown(value: sortMode, onChanged: onSort);
 
+            if (!showInlineSearch) {
+              return Align(alignment: Alignment.centerLeft, child: sort);
+            }
             if (stack) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
