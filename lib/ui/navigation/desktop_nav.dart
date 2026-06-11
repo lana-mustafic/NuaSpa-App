@@ -56,7 +56,10 @@ class DesktopNav extends ChangeNotifier {
   String? _therapistServicesSubtitle;
   String? _therapistReviewsTitle;
   String? _therapistReviewsSubtitle;
+  String? _therapistProfileTitle;
+  String? _therapistProfileSubtitle;
   int _therapistDashboardRefresh = 0;
+  int _therapistProfileRefresh = 0;
   int _therapistAppointmentsRefresh = 0;
   int? _pendingTherapistAppointmentsUslugaId;
   String? _pendingTherapistAppointmentsTab;
@@ -185,8 +188,25 @@ class DesktopNav extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? get therapistProfileTitle => _therapistProfileTitle;
+
+  String? get therapistProfileSubtitle => _therapistProfileSubtitle;
+
+  void setTherapistProfileHeader({String? title, String? subtitle}) {
+    final changed =
+        _therapistProfileTitle != title ||
+        _therapistProfileSubtitle != subtitle;
+    if (!changed) return;
+    _therapistProfileTitle = title;
+    _therapistProfileSubtitle = subtitle;
+    notifyListeners();
+  }
+
   /// Bumped when navigating back to therapist dashboard (refresh data).
   int get therapistDashboardRefresh => _therapistDashboardRefresh;
+
+  /// Bumped when navigating back to therapist profile (refresh data).
+  int get therapistProfileRefresh => _therapistProfileRefresh;
 
   /// Bumped when navigating back to therapist appointments (refresh data).
   int get therapistAppointmentsRefresh => _therapistAppointmentsRefresh;
@@ -257,6 +277,9 @@ class DesktopNav extends ChangeNotifier {
     final revisitingSchedule =
         r == DesktopRouteKey.schedule &&
         _route != DesktopRouteKey.schedule;
+    final revisitingProfile =
+        r == DesktopRouteKey.therapistProfile &&
+        _route != DesktopRouteKey.therapistProfile;
     _route = r;
     if (revisitingDashboard) {
       _therapistDashboardRefresh++;
@@ -266,6 +289,9 @@ class DesktopNav extends ChangeNotifier {
     }
     if (revisitingSchedule) {
       _therapistScheduleRefresh++;
+    }
+    if (revisitingProfile) {
+      _therapistProfileRefresh++;
     }
     notifyListeners();
   }

@@ -616,7 +616,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistReviews
                       ? 'My Reviews'
                       : isTherapistProfile
-                      ? 'Profile'
+                      ? (nav.therapistProfileTitle ?? 'My Profile')
                       : isSettings
                       ? 'Settings'
                       : auth.isAdmin
@@ -655,7 +655,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistReviews
                       ? 'Client feedback from appointments you performed.'
                       : isTherapistProfile
-                      ? 'Manage your therapist profile, contact details, and professional identity.'
+                      ? (nav.therapistProfileSubtitle ??
+                          'Manage your therapist profile, contact details, and professional identity.')
                       : isSettings
                       ? 'Manage your account, security and workspace preferences.'
                       : auth.isAdmin

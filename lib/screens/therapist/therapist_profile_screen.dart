@@ -1,15 +1,18 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api/media_url_resolver.dart';
 import '../../core/api/services/api_service.dart';
 import '../../core/auth/app_permissions.dart';
 import '../../core/therapist/therapist_appointment_utils.dart';
 import '../../core/therapist/therapist_service_eligibility.dart';
-import '../../models/therapist/therapist_appointments_list.dart';
+import '../../models/therapist/therapist_my_profile.dart';
 import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../providers/auth_provider.dart';
+import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/luxury_modal_style.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
 import 'therapist_portal_scaffold.dart';
@@ -33,29 +36,41 @@ abstract final class _ProfUi {
 
 class _ProfileInsights {
   const _ProfileInsights({
-    required this.certifiedServices,
+    required this.eligibleServices,
     required this.averageRating,
-    required this.completedSessions,
+    required this.reviewCount,
+    required this.allTimeCompletedSessions,
+    required this.completedSessionsThisMonth,
     required this.memberSince,
+    this.accountLinkedAt,
     this.nextAppointment,
   });
 
-  final int certifiedServices;
+  final int eligibleServices;
   final double averageRating;
-  final int completedSessions;
+  final int reviewCount;
+  final int allTimeCompletedSessions;
+  final int completedSessionsThisMonth;
   final DateTime? memberSince;
-  final TherapistAppointmentRow? nextAppointment;
+  final DateTime? accountLinkedAt;
+  final TherapistProfileNextAppointment? nextAppointment;
 }
 
 class _ProfileData {
   const _ProfileData({
     required this.profile,
     required this.insights,
+    this.loginEmail,
+    this.loadError,
   });
 
   final Zaposlenik profile;
   final _ProfileInsights insights;
+  final String? loginEmail;
+  final String? loadError;
 }
+
+final _phonePattern = RegExp(r'^\+?[0-9][0-9\s\-]{7,18}$');
 
 String _formatDate(DateTime? d) {
   if (d == null) return '—';
@@ -77,12 +92,14 @@ String _formatDate(DateTime? d) {
   return '${months[loc.month - 1]} ${loc.day}, ${loc.year}';
 }
 
-int _profileCompleteness(Zaposlenik z) {
+int _profileCompleteness(Zaposlenik z, {String? loginEmail}) {
   var score = 0;
   if ((z.telefon ?? '').trim().isNotEmpty) score += 25;
   if ((z.jezici ?? '').trim().isNotEmpty) score += 25;
-  if ((z.email ?? '').trim().isNotEmpty) score += 25;
-  if (z.specijalizacija.trim().isNotEmpty) score += 25;
+  if ((z.bio ?? '').trim().isNotEmpty) score += 25;
+  final hasEmail = (z.email ?? '').trim().isNotEmpty ||
+      (loginEmail ?? '').trim().isNotEmpty;
+  if (hasEmail) score += 25;
   return score;
 }
 
@@ -111,29 +128,17 @@ String _formatRating(double rating) {
   return rating.toStringAsFixed(1);
 }
 
-String _therapistBio(Zaposlenik z) {
-  final parts = <String>[];
-  final spec = z.specijalizacija.trim();
-  if (spec.isNotEmpty) {
-    parts.add(
-      'Licensed therapist specializing in $spec, dedicated to personalized wellness experiences.',
-    );
-  }
-  final edu = (z.obrazovanje ?? '').trim();
-  if (edu.isNotEmpty) parts.add(edu);
-  final langs = (z.jezici ?? '').trim();
-  if (langs.isNotEmpty) {
-    parts.add('Sessions available in $langs.');
-  }
-  final loc = (z.lokacija ?? '').trim();
-  if (loc.isNotEmpty) parts.add('Based at $loc.');
-  if (parts.isEmpty) {
-    return 'Welcome to your NuaSpa therapist profile. Add your contact details and languages so clients can get to know you better.';
-  }
-  return parts.join(' ');
+String _nextAppointmentLabel(TherapistProfileNextAppointment? apt) {
+  if (apt == null) return 'None scheduled';
+  final when = TherapistAppointmentUtils.formatUpcomingDateTime(
+    apt.datumRezervacije,
+  );
+  final service = (apt.uslugaNaziv ?? '').trim();
+  if (service.isEmpty) return when;
+  return '$when · $service';
 }
 
-List<String> _completionTips(Zaposlenik z) {
+List<String> _completionTips(Zaposlenik z, {String? loginEmail}) {
   final tips = <String>[];
   if ((z.telefon ?? '').trim().isEmpty) {
     tips.add('Add a phone number for client follow-ups.');
@@ -141,14 +146,14 @@ List<String> _completionTips(Zaposlenik z) {
   if ((z.jezici ?? '').trim().isEmpty) {
     tips.add('List the languages you offer sessions in.');
   }
-  if ((z.email ?? '').trim().isEmpty) {
+  if ((z.bio ?? '').trim().isEmpty) {
+    tips.add('Write a short About Me so clients can get to know you.');
+  }
+  if ((z.email ?? '').trim().isEmpty && (loginEmail ?? '').trim().isEmpty) {
     tips.add('Ask your administrator to link an email to your account.');
   }
-  if (z.specijalizacija.trim().isEmpty) {
-    tips.add('Your specialization is set by your spa administrator.');
-  }
   if (tips.isEmpty) {
-    tips.add('Your profile is complete — keep your schedule up to date.');
+    tips.add('Your profile looks great — keep your schedule up to date.');
   }
   return tips;
 }
@@ -176,12 +181,25 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   final _api = ApiService();
   final _telefon = TextEditingController();
   final _jezici = TextEditingController();
+  final _bio = TextEditingController();
   final _scrollCtrl = ScrollController();
   Future<_ProfileData?>? _future;
   Zaposlenik? _loadedProfile;
+  String? _loadedLoginEmail;
+  String _originalTelefon = '';
+  String _originalJezici = '';
+  String _originalBio = '';
+  int _lastRefreshToken = -1;
+  String? _loadError;
   bool _saving = false;
+  bool _uploadingAvatar = false;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
+
+  bool get _isDirty =>
+      _telefon.text.trim() != _originalTelefon ||
+      _jezici.text.trim() != _originalJezici ||
+      _bio.text.trim() != _originalBio;
 
   @override
   void initState() {
@@ -191,84 +209,205 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
       duration: const Duration(milliseconds: 320),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
+    _telefon.addListener(_onFieldChanged);
+    _jezici.addListener(_onFieldChanged);
+    _bio.addListener(_onFieldChanged);
     _reload();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final token = context.read<DesktopNav>().therapistProfileRefresh;
+    if (token != _lastRefreshToken) {
+      _lastRefreshToken = token;
+      if (token > 0) _reload();
+    }
+  }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _telefon.removeListener(_onFieldChanged);
+    _jezici.removeListener(_onFieldChanged);
+    _bio.removeListener(_onFieldChanged);
     _telefon.dispose();
     _jezici.dispose();
+    _bio.dispose();
     _scrollCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
   }
 
-  void _bind(Zaposlenik z) {
+  void _bind(Zaposlenik z, {String? loginEmail}) {
     _telefon.text = z.telefon ?? '';
     _jezici.text = z.jezici ?? '';
+    _bio.text = z.bio ?? '';
+    _originalTelefon = _telefon.text.trim();
+    _originalJezici = _jezici.text.trim();
+    _originalBio = _bio.text.trim();
+    _loadedProfile = z;
+    _loadedLoginEmail = loginEmail;
+  }
+
+  void _updateHeader(Zaposlenik z, int completeness) {
+    if (!mounted) return;
+    context.read<DesktopNav>().setTherapistProfileHeader(
+      title: 'My Profile',
+      subtitle:
+          '${z.fullName} · $completeness% complete · Manage your professional identity',
+    );
   }
 
   Future<void> _reload() async {
+    final auth = context.read<AuthProvider>();
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
+      setState(() {
+        _loadError = 'You do not have permission to view this profile.';
+        _future = Future.value(null);
+      });
+      return;
+    }
     setState(() {
-      _future = () async {
-        final result = await _api.getTherapistMyServices();
-        final me = result.therapist;
-        if (me == null) return null;
-
-        final reviewsResult = await _api.getTherapistMyReviewsSummary();
-        final (completedList, _) = await _api.getTherapistAppointments(
-          tab: 'completed',
-          page: 1,
-          pageSize: 1,
-        );
-        final (upcomingList, _) = await _api.getTherapistAppointments(
-          tab: 'upcoming',
-          page: 1,
-          pageSize: 1,
-        );
-
-        final insights = _ProfileInsights(
-          certifiedServices: result.services.length,
-          averageRating: reviewsResult.summary?.averageRating ?? 0,
-          completedSessions: completedList?.completedCount ?? 0,
-          memberSince: me.datumZaposlenja,
-          nextAppointment: upcomingList?.nextAppointment,
-        );
-
-        _bind(me);
-        _loadedProfile = me;
-        return _ProfileData(profile: me, insights: insights);
-      }();
+      _loadError = null;
+      _future = _loadProfile();
     });
+  }
+
+  Future<_ProfileData?> _loadProfile() async {
+    final result = await _api.getTherapistMyProfile();
+    if (!mounted) return null;
+
+    if (result.accountNotLinked) {
+      _loadError = result.error;
+      return null;
+    }
+    final bundle = result.profile;
+    if (bundle == null) {
+      _loadError = result.error ?? 'Could not load your therapist profile.';
+      return null;
+    }
+
+    final me = bundle.profile;
+    final insights = _ProfileInsights(
+      eligibleServices: bundle.eligibleServicesCount,
+      averageRating: bundle.averageRating,
+      reviewCount: bundle.reviewCount,
+      allTimeCompletedSessions: bundle.allTimeCompletedSessions,
+      completedSessionsThisMonth: bundle.completedSessionsThisMonth,
+      memberSince: me.datumZaposlenja,
+      accountLinkedAt: bundle.accountLinkedAt,
+      nextAppointment: bundle.nextAppointment,
+    );
+
+    _bind(me, loginEmail: bundle.loginEmail);
+    final completeness = _profileCompleteness(me, loginEmail: bundle.loginEmail);
+    _updateHeader(me, completeness);
+
+    return _ProfileData(
+      profile: me,
+      insights: insights,
+      loginEmail: bundle.loginEmail,
+      loadError: result.error,
+    );
   }
 
   void _cancelEdits() {
     final original = _loadedProfile;
     if (original == null) return;
-    _bind(original);
+    _bind(original, loginEmail: _loadedLoginEmail);
     setState(() {});
   }
 
-  void _showAvatarHint() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile photo upload will be available soon.'),
-        behavior: SnackBarBehavior.floating,
-      ),
+  Future<void> _pickAndUploadAvatar() async {
+    if (_uploadingAvatar) return;
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: false,
     );
+    final path = picked?.files.single.path;
+    if (path == null || path.trim().isEmpty) return;
+
+    setState(() => _uploadingAvatar = true);
+    final updated = await _api.uploadTherapistAvatar(path);
+    if (!mounted) return;
+    setState(() => _uploadingAvatar = false);
+
+    if (updated != null) {
+      _bind(updated, loginEmail: _loadedLoginEmail);
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile photo updated.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not upload profile photo.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
+    final phone = _telefon.text.trim();
+    final langs = _jezici.text.trim();
+    final bio = _bio.text.trim();
+
+    if (phone.isNotEmpty && !_phonePattern.hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a valid phone number.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (langs.length > 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Languages must be 200 characters or fewer.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (bio.length > 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('About Me must be 2000 characters or fewer.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
-    final updated = await _api.patchTherapistMe(
-      telefon: _telefon.text.trim().isEmpty ? '' : _telefon.text.trim(),
-      jezici: _jezici.text.trim().isEmpty ? '' : _jezici.text.trim(),
+    final result = await _api.patchTherapistMe(
+      telefon: phone.isEmpty ? '' : phone,
+      jezici: langs.isEmpty ? '' : langs,
+      bio: bio.isEmpty ? '' : bio,
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    if (updated != null) {
-      _bind(updated);
-      await _reload();
+
+    if (result.profile != null) {
+      _bind(result.profile!, loginEmail: _loadedLoginEmail);
+      _updateHeader(
+        result.profile!,
+        _profileCompleteness(
+          result.profile!,
+          loginEmail: _loadedLoginEmail,
+        ),
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -277,10 +416,11 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
         ),
       );
       _fadeCtrl.forward(from: 0);
+      setState(() {});
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not save profile.'),
+        SnackBar(
+          content: Text(result.error ?? 'Could not save profile.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -290,7 +430,7 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    if (!AppPermissions.of(auth).has(AppPermission.updateOwnTherapistProfile)) {
+    if (!AppPermissions.of(auth).has(AppPermission.viewOwnTherapistData)) {
       return const _ProfileShell(
         child: TherapistEmptyState(message: 'Therapist login required.'),
       );
@@ -309,16 +449,24 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
               ),
             );
           }
+          if (snap.hasError) {
+            return _ProfileEmptyCard(
+              message: 'Something went wrong while loading your profile.',
+              onRetry: _reload,
+            );
+          }
           final data = snap.data;
           if (data == null) {
             return _ProfileEmptyCard(
+              message: _loadError ?? 'Profile not found.',
               onRetry: _reload,
             );
           }
 
           final z = data.profile;
           final insights = data.insights;
-          final completeness = _profileCompleteness(z);
+          final loginEmail = data.loginEmail;
+          final completeness = _profileCompleteness(z, loginEmail: loginEmail);
           final tags = z.specijalizacija
               .split(RegExp(r'[,;/]'))
               .map((e) => e.trim())
@@ -330,16 +478,18 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
             children: [
               _HeroProfileCard(
                 initials: therapistInitials(z),
+                imageUrl: z.slikaUrl,
+                uploadingAvatar: _uploadingAvatar,
                 name: z.fullName,
                 specialization: z.specijalizacija.trim().isEmpty
                     ? 'Therapist'
                     : z.specijalizacija,
                 status: z.status,
                 insights: insights,
-                onAvatarTap: _showAvatarHint,
+                onAvatarTap: _pickAndUploadAvatar,
               ),
               const SizedBox(height: 16),
-              _AboutMeCard(bio: _therapistBio(z)),
+              _AboutMeCard(controller: _bio),
               const SizedBox(height: _ProfUi.gap),
               _ProfGlass(
                 child: Column(
@@ -406,8 +556,8 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
                     ),
                     const SizedBox(height: 18),
                     _EditableField(
-                      label: 'Email',
-                      hint: 'Managed by your spa administrator',
+                      label: 'Staff email',
+                      hint: 'On your spa record',
                       child: _ReadOnlyInputShell(
                         icon: Icons.mail_outline_rounded,
                         value: (z.email ?? '').trim().isEmpty
@@ -416,9 +566,22 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
                         locked: true,
                       ),
                     ),
+                    if ((loginEmail ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      _EditableField(
+                        label: 'Login email',
+                        hint: 'Used to sign in to NuaSpa',
+                        child: _ReadOnlyInputShell(
+                          icon: Icons.alternate_email_rounded,
+                          value: loginEmail!,
+                          locked: true,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     _ProfileActionBar(
                       saving: _saving,
+                      canSave: _isDirty,
                       onCancel: _cancelEdits,
                       onSave: _save,
                     ),
@@ -511,7 +674,7 @@ class _TherapistProfileScreenState extends State<TherapistProfileScreen>
             status: z.status,
             insights: insights,
             category: z.kategorijaUslugaNaziv,
-            tips: _completionTips(z),
+            tips: _completionTips(z, loginEmail: loginEmail),
             onRefresh: _reload,
           );
 
@@ -715,9 +878,13 @@ class _HeroProfileCard extends StatelessWidget {
     required this.status,
     required this.insights,
     required this.onAvatarTap,
+    this.imageUrl,
+    this.uploadingAvatar = false,
   });
 
   final String initials;
+  final String? imageUrl;
+  final bool uploadingAvatar;
   final String name;
   final String specialization;
   final ZaposlenikStatus status;
@@ -738,6 +905,8 @@ class _HeroProfileCard extends StatelessWidget {
             children: [
               _AvatarWithEdit(
                 initials: initials,
+                imageUrl: imageUrl,
+                uploading: uploadingAvatar,
                 onTap: onAvatarTap,
               ),
               const SizedBox(width: 24),
@@ -792,8 +961,8 @@ class _HeroProfileCard extends StatelessWidget {
               final stats = [
                 _HeroStatCard(
                   icon: Icons.spa_outlined,
-                  value: '${insights.certifiedServices}',
-                  label: 'Certified Services',
+                  value: '${insights.eligibleServices}',
+                  label: 'Eligible Services',
                   accent: _ProfUi.lavender,
                 ),
                 _HeroStatCard(
@@ -804,14 +973,14 @@ class _HeroProfileCard extends StatelessWidget {
                 ),
                 _HeroStatCard(
                   icon: Icons.check_circle_outline_rounded,
-                  value: '${insights.completedSessions}',
-                  label: 'Completed Sessions',
+                  value: '${insights.allTimeCompletedSessions}',
+                  label: 'All-time Completed',
                   accent: _ProfUi.teal,
                 ),
                 _HeroStatCard(
                   icon: Icons.calendar_month_outlined,
                   value: _formatMemberSince(insights.memberSince),
-                  label: 'Member Since',
+                  label: 'Employed Since',
                   accent: _ProfUi.purple,
                 ),
               ];
@@ -845,9 +1014,13 @@ class _AvatarWithEdit extends StatefulWidget {
   const _AvatarWithEdit({
     required this.initials,
     required this.onTap,
+    this.imageUrl,
+    this.uploading = false,
   });
 
   final String initials;
+  final String? imageUrl;
+  final bool uploading;
   final VoidCallback onTap;
 
   @override
@@ -859,11 +1032,13 @@ class _AvatarWithEditState extends State<_AvatarWithEdit> {
 
   @override
   Widget build(BuildContext context) {
+    final resolved = resolveMediaUrl(widget.imageUrl);
+    final hasImage = resolved.isNotEmpty;
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: widget.uploading ? null : widget.onTap,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -874,9 +1049,17 @@ class _AvatarWithEditState extends State<_AvatarWithEdit> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                gradient: const LinearGradient(
-                  colors: [_ProfUi.purple, _ProfUi.lavender],
-                ),
+                gradient: hasImage
+                    ? null
+                    : const LinearGradient(
+                        colors: [_ProfUi.purple, _ProfUi.lavender],
+                      ),
+                image: hasImage
+                    ? DecorationImage(
+                        image: NetworkImage(resolved),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
                 boxShadow: [
                   BoxShadow(
                     color: _ProfUi.purple.withValues(alpha: _hover ? 0.6 : 0.45),
@@ -885,14 +1068,25 @@ class _AvatarWithEditState extends State<_AvatarWithEdit> {
                   ),
                 ],
               ),
-              child: Text(
-                widget.initials,
-                style: GoogleFonts.inter(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
+              child: widget.uploading
+                  ? const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : hasImage
+                  ? null
+                  : Text(
+                      widget.initials,
+                      style: GoogleFonts.inter(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
             ),
             Positioned(
               right: -2,
@@ -997,59 +1191,59 @@ class _HeroStatCard extends StatelessWidget {
 }
 
 class _AboutMeCard extends StatelessWidget {
-  const _AboutMeCard({required this.bio});
+  const _AboutMeCard({required this.controller});
 
-  final String bio;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
     return _ProfGlass(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: LinearGradient(
-                colors: [
-                  _ProfUi.purple.withValues(alpha: 0.3),
-                  _ProfUi.lavender.withValues(alpha: 0.15),
-                ],
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    colors: [
+                      _ProfUi.purple.withValues(alpha: 0.3),
+                      _ProfUi.lavender.withValues(alpha: 0.15),
+                    ],
+                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: const Icon(
+                  Icons.person_pin_rounded,
+                  color: _ProfUi.lavender,
+                  size: 20,
+                ),
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: const Icon(
-              Icons.person_pin_rounded,
-              color: _ProfUi.lavender,
-              size: 20,
-            ),
+              const SizedBox(width: 14),
+              Text(
+                'About Me',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: _ProfUi.textPrimary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'About Me',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _ProfUi.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  bio,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    height: 1.55,
-                    color: _ProfUi.textSecondary,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 2000,
+            style: LuxuryModalStyle.fieldStyle(context),
+            decoration: LuxuryModalStyle.fieldDecoration(
+              hint:
+                  'Introduce yourself to clients — your approach, experience, and what makes your sessions special.',
             ),
           ),
         ],
@@ -1260,11 +1454,13 @@ class _ReadOnlyInputShell extends StatelessWidget {
 class _ProfileActionBar extends StatelessWidget {
   const _ProfileActionBar({
     required this.saving,
+    required this.canSave,
     required this.onCancel,
     required this.onSave,
   });
 
   final bool saving;
+  final bool canSave;
   final VoidCallback onCancel;
   final VoidCallback onSave;
 
@@ -1280,12 +1476,12 @@ class _ProfileActionBar extends StatelessWidget {
           _ActionButton(
             label: 'Cancel',
             outlined: true,
-            onPressed: saving ? null : onCancel,
+            onPressed: saving || !canSave ? null : onCancel,
           ),
           _ActionButton(
             label: 'Save Changes',
             saving: saving,
-            onPressed: saving ? null : onSave,
+            onPressed: saving || !canSave ? null : onSave,
           ),
         ],
       ),
@@ -1403,11 +1599,7 @@ class _ProfileSidebar extends StatelessWidget {
     final statusColor = _statusColor(status);
     final catLabel =
         (category ?? '').trim().isEmpty ? 'Not assigned' : category!;
-    final nextLabel = insights.nextAppointment == null
-        ? 'None scheduled'
-        : TherapistAppointmentUtils.formatUpcomingDateTime(
-            insights.nextAppointment!.datumRezervacije,
-          );
+    final nextLabel = _nextAppointmentLabel(insights.nextAppointment);
 
     return Column(
       children: [
@@ -1472,24 +1664,19 @@ class _ProfileSidebar extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               _InsightRow(
-                icon: Icons.check_circle_outline_rounded,
-                label: 'Completed Sessions',
-                value: '${insights.completedSessions}',
+                icon: Icons.calendar_today_rounded,
+                label: 'Completed This Month',
+                value: '${insights.completedSessionsThisMonth}',
                 accent: _ProfUi.teal,
               ),
               const SizedBox(height: 10),
               _InsightRow(
-                icon: Icons.star_rounded,
-                label: 'Average Rating',
-                value: _formatRating(insights.averageRating),
+                icon: Icons.reviews_outlined,
+                label: 'Client Reviews',
+                value: insights.reviewCount == 0
+                    ? 'No reviews yet'
+                    : '${insights.reviewCount} · ${_formatRating(insights.averageRating)} avg',
                 accent: _ProfUi.gold,
-              ),
-              const SizedBox(height: 10),
-              _InsightRow(
-                icon: Icons.spa_outlined,
-                label: 'Certified Services',
-                value: '${insights.certifiedServices}',
-                accent: _ProfUi.lavender,
               ),
               const SizedBox(height: 10),
               _InsightRow(
@@ -1498,6 +1685,15 @@ class _ProfileSidebar extends StatelessWidget {
                 value: nextLabel,
                 accent: _ProfUi.purple,
               ),
+              if (insights.accountLinkedAt != null) ...[
+                const SizedBox(height: 10),
+                _InsightRow(
+                  icon: Icons.verified_user_outlined,
+                  label: 'Account Since',
+                  value: _formatMemberSince(insights.accountLinkedAt),
+                  accent: _ProfUi.lavender,
+                ),
+              ],
             ],
           ),
         ),
@@ -1784,9 +1980,13 @@ class _TipRow extends StatelessWidget {
 }
 
 class _ProfileEmptyCard extends StatelessWidget {
-  const _ProfileEmptyCard({required this.onRetry});
+  const _ProfileEmptyCard({
+    required this.onRetry,
+    this.message = 'Profile not found',
+  });
 
   final VoidCallback onRetry;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -1804,7 +2004,7 @@ class _ProfileEmptyCard extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'Profile not found',
+              message,
               style: GoogleFonts.inter(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -1813,7 +2013,7 @@ class _ProfileEmptyCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'We could not load your therapist record. Try refreshing or contact your administrator.',
+              'Try refreshing or contact your spa administrator if the problem continues.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,
