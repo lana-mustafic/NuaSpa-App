@@ -36,6 +36,7 @@ import '../../../models/therapist/therapist_dashboard.dart';
 import '../../../models/therapist/therapist_appointments_list.dart';
 import '../../../models/therapist/therapist_my_reviews_summary.dart';
 import '../../../models/therapist/therapist_my_services_result.dart';
+import '../../../models/therapist/therapist_service_detail.dart';
 import '../../../models/therapist/therapist_schedule.dart';
 import '../../../models/admin/spa_centar.dart';
 import '../../../models/admin/admin_reviews_dashboard.dart';
@@ -346,6 +347,7 @@ class ApiService {
     String statusFilter = 'all',
     int page = 1,
     int pageSize = 100,
+    int? uslugaId,
   }) async {
     try {
       final query = <String, dynamic>{
@@ -354,6 +356,9 @@ class ApiService {
         'page': page,
         'pageSize': pageSize,
       };
+      if (uslugaId != null && uslugaId > 0) {
+        query['uslugaId'] = uslugaId;
+      }
       if (day != null) {
         final d = DateTime(day.year, day.month, day.day);
         query['day'] = d.toIso8601String();
@@ -506,14 +511,65 @@ class ApiService {
     }
   }
 
+  Future<TherapistServiceDetailResult> getTherapistServiceDetail(
+    int uslugaId,
+  ) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Zaposlenik/me/services/$uslugaId',
+      );
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return const TherapistServiceDetailResult(
+          error: 'Unexpected server response.',
+        );
+      }
+      return TherapistServiceDetailResult(
+        detail: TherapistServiceDetail.fromJson(data),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getTherapistServiceDetail: $e');
+      if (e.response?.statusCode == 403) {
+        return const TherapistServiceDetailResult(
+          forbidden: true,
+          error:
+              'You are not authorized to view this service. It may not be on your certified list.',
+        );
+      }
+      if (e.response?.statusCode == 404) {
+        return const TherapistServiceDetailResult(
+          notFound: true,
+          error: 'Service not found.',
+        );
+      }
+      return TherapistServiceDetailResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load service details.',
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getTherapistServiceDetail: $e');
+      return const TherapistServiceDetailResult(
+        error: 'Could not load service details.',
+      );
+    }
+  }
+
   Future<TherapistReviewsPageResult> getTherapistMyReviewsPage({
     int page = 1,
     int pageSize = 20,
+    int? uslugaId,
   }) async {
     try {
+      final query = <String, dynamic>{
+        'page': page,
+        'pageSize': pageSize,
+      };
+      if (uslugaId != null && uslugaId > 0) {
+        query['uslugaId'] = uslugaId;
+      }
       final response = await _dio.get<dynamic>(
         'Zaposlenik/me/reviews',
-        queryParameters: {'page': page, 'pageSize': pageSize},
+        queryParameters: query,
       );
       final data = response.data;
       if (data is! Map) {
