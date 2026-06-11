@@ -9,6 +9,15 @@ enum ZaposlenikStatus {
   final String label;
 
   static ZaposlenikStatus fromApi(dynamic value) {
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      for (final status in ZaposlenikStatus.values) {
+        if (status.label.toLowerCase() == normalized ||
+            status.name.toLowerCase() == normalized) {
+          return status;
+        }
+      }
+    }
     final n = value is int
         ? value
         : value is num

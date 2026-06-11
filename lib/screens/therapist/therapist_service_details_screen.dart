@@ -104,11 +104,28 @@ class _TherapistServiceDetailsScreenState
 
   @override
   void dispose() {
-    if (!nuaspaUseMobileShell()) {
-      context.read<DesktopNav>().setTherapistServicesHeader();
-    }
+    _clearServicesHeader();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _clearServicesHeader() {
+    if (nuaspaUseMobileShell()) return;
+    try {
+      context.read<DesktopNav>().setTherapistServicesHeader();
+    } catch (_) {}
+  }
+
+  void _applyServicesHeader(TherapistServiceDetail detail) {
+    if (nuaspaUseMobileShell()) return;
+    try {
+      context.read<DesktopNav>().setTherapistServicesHeader(
+        title: detail.service.naziv,
+        subtitle:
+            '${detail.service.kategorija} · ${detail.completedBookingsCount} completed booking'
+            '${detail.completedBookingsCount == 1 ? '' : 's'}',
+      );
+    } catch (_) {}
   }
 
   Future<void> _loadAll({bool refresh = false}) async {
@@ -121,44 +138,47 @@ class _TherapistServiceDetailsScreenState
       });
     }
 
-    final detailResult = await _api.getTherapistServiceDetail(widget.serviceId);
-    if (!mounted) return;
+    try {
+      final detailResult =
+          await _api.getTherapistServiceDetail(widget.serviceId);
+      if (!mounted) return;
 
-    if (detailResult.detail == null) {
+      if (detailResult.detail == null) {
+        setState(() {
+          _loading = false;
+          _error = detailResult.error ?? 'Could not load service.';
+          _forbidden = detailResult.forbidden;
+          _notFound = detailResult.notFound;
+        });
+        return;
+      }
+
+      final reviewsResult = await _api.getTherapistMyReviewsPage(
+        page: 1,
+        pageSize: 20,
+        uslugaId: widget.serviceId,
+      );
+      if (!mounted) return;
+
+      final detail = detailResult.detail!;
+      _applyServicesHeader(detail);
+
+      setState(() {
+        _detail = detail;
+        _reviews = reviewsResult.items;
+        _reviewPage = reviewsResult.page;
+        _reviewTotal = reviewsResult.total;
+        _loading = false;
+        _error = reviewsResult.error;
+      });
+    } catch (e, st) {
+      debugPrint('TherapistServiceDetailsScreen._loadAll failed: $e\n$st');
+      if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = detailResult.error ?? 'Could not load service.';
-        _forbidden = detailResult.forbidden;
-        _notFound = detailResult.notFound;
+        _error = 'Could not load service details.';
       });
-      return;
     }
-
-    final reviewsResult = await _api.getTherapistMyReviewsPage(
-      page: 1,
-      pageSize: 20,
-      uslugaId: widget.serviceId,
-    );
-    if (!mounted) return;
-
-    final detail = detailResult.detail!;
-    if (!nuaspaUseMobileShell()) {
-      context.read<DesktopNav>().setTherapistServicesHeader(
-        title: detail.service.naziv,
-        subtitle:
-            '${detail.service.kategorija} · ${detail.completedBookingsCount} completed booking'
-            '${detail.completedBookingsCount == 1 ? '' : 's'}',
-      );
-    }
-
-    setState(() {
-      _detail = detail;
-      _reviews = reviewsResult.items;
-      _reviewPage = reviewsResult.page;
-      _reviewTotal = reviewsResult.total;
-      _loading = false;
-      _error = reviewsResult.error;
-    });
   }
 
   Future<void> _loadMoreReviews() async {
@@ -204,11 +224,13 @@ class _TherapistServiceDetailsScreenState
     }
     final serviceName = _detail?.service.naziv;
     Navigator.of(context).pop();
-    context.read<DesktopNav>().goToTherapistAppointmentsForService(
-      uslugaId: widget.serviceId,
-      initialTab: 'Completed',
-      serviceName: serviceName,
-    );
+    try {
+      context.read<DesktopNav>().goToTherapistAppointmentsForService(
+        uslugaId: widget.serviceId,
+        initialTab: 'Completed',
+        serviceName: serviceName,
+      );
+    } catch (_) {}
   }
 
   void _openSchedule() {
@@ -227,7 +249,9 @@ class _TherapistServiceDetailsScreenState
       );
       return;
     }
-    context.read<DesktopNav>().goTo(DesktopRouteKey.schedule);
+    try {
+      context.read<DesktopNav>().goTo(DesktopRouteKey.schedule);
+    } catch (_) {}
   }
 
   @override
@@ -296,15 +320,18 @@ class _TherapistServiceDetailsScreenState
             ),
           );
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_Ui.bgDeep, _Ui.bgMid],
+    return Scaffold(
+      backgroundColor: _Ui.bgDeep,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_Ui.bgDeep, _Ui.bgMid],
+          ),
         ),
+        child: body,
       ),
-      child: body,
     );
   }
 }

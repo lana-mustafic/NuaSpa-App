@@ -313,11 +313,21 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                     onSearchChanged: _onSearchChanged,
                     onSort: (v) => setState(() => _sortMode = v),
                     onOpenService: (id) {
+                      final desktopNav = nuaspaUseMobileShell()
+                          ? null
+                          : context.read<DesktopNav>();
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => TherapistServiceDetailsScreen(
-                            serviceId: id,
-                          ),
+                          builder: (_) {
+                            final screen = TherapistServiceDetailsScreen(
+                              serviceId: id,
+                            );
+                            if (desktopNav == null) return screen;
+                            return ChangeNotifierProvider<DesktopNav>.value(
+                              value: desktopNav,
+                              child: screen,
+                            );
+                          },
                         ),
                       );
                     },
