@@ -14,7 +14,7 @@ import '../../models/zaposlenik.dart';
 import '../../models/zaposlenik_status.dart';
 import '../../providers/auth_provider.dart';
 import '../../ui/navigation/desktop_nav.dart';
-import '../catalog/service_details_screen.dart';
+import 'therapist_service_details_screen.dart';
 import 'therapist_portal_scaffold.dart';
 import '../../ui/widgets/service_network_image.dart';
 
@@ -315,9 +315,8 @@ class _TherapistServicesScreenState extends State<TherapistServicesScreen>
                     onOpenService: (id) {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => ServiceDetailsScreen(
+                          builder: (_) => TherapistServiceDetailsScreen(
                             serviceId: id,
-                            therapistView: true,
                           ),
                         ),
                       );
