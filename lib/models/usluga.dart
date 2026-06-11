@@ -73,7 +73,7 @@ class Usluga {
     final slika = json['slikaUrl'] as String?;
     final slikaUrl = (slika != null && slika.isNotEmpty)
         ? resolveMediaUrl(slika)
-        : 'https://picsum.photos/seed/${json['id']}/400/300';
+        : '';
 
     final kat = json['kategorijaNaziv'] as String?;
     final katId = (json['kategorijaUslugaId'] as num?)?.toInt() ?? 0;
@@ -84,7 +84,7 @@ class Usluga {
       cijena: (json['cijena'] as num).toDouble(),
       trajanje: trajanje,
       slikaUrl: slikaUrl,
-      kategorija: (kat != null && kat.isNotEmpty) ? kat : 'Nepoznato',
+      kategorija: (kat != null && kat.isNotEmpty) ? kat : 'Unknown',
       trajanjeMinuta: trajanjeMinuta,
       opis: json['opis'] as String? ?? '',
       kategorijaUslugaId: katId,
