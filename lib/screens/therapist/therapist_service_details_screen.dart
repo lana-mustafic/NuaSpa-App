@@ -202,11 +202,12 @@ class _TherapistServiceDetailsScreenState
       );
       return;
     }
-    context.read<DesktopNav>().goTo(DesktopRouteKey.therapistAppointments);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Open the Completed tab to see appointments for this service.'),
-      ),
+    final serviceName = _detail?.service.naziv;
+    Navigator.of(context).pop();
+    context.read<DesktopNav>().goToTherapistAppointmentsForService(
+      uslugaId: widget.serviceId,
+      initialTab: 'Completed',
+      serviceName: serviceName,
     );
   }
 

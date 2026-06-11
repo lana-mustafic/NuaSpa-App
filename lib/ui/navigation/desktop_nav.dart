@@ -58,6 +58,9 @@ class DesktopNav extends ChangeNotifier {
   String? _therapistReviewsSubtitle;
   int _therapistDashboardRefresh = 0;
   int _therapistAppointmentsRefresh = 0;
+  int? _pendingTherapistAppointmentsUslugaId;
+  String? _pendingTherapistAppointmentsTab;
+  String? _pendingTherapistAppointmentsServiceName;
   int _therapistScheduleRefresh = 0;
   String _therapistAppointmentSearchQuery = '';
   String _therapistScheduleSearchQuery = '';
@@ -299,6 +302,41 @@ class DesktopNav extends ChangeNotifier {
       _route = DesktopRouteKey.schedule;
     }
     notifyListeners();
+  }
+
+  /// Deep-link from therapist service details → appointments filtered by service.
+  void goToTherapistAppointmentsForService({
+    required int uslugaId,
+    String initialTab = 'Completed',
+    String? serviceName,
+  }) {
+    if (_route == DesktopRouteKey.adminCalendar) {
+      _calendarSearchCtrl?.clear();
+    }
+    _pendingTherapistAppointmentsUslugaId = uslugaId;
+    _pendingTherapistAppointmentsTab = initialTab;
+    _pendingTherapistAppointmentsServiceName = serviceName?.trim();
+    _route = DesktopRouteKey.therapistAppointments;
+    _therapistAppointmentsRefresh++;
+    notifyListeners();
+  }
+
+  /// One-shot launch options when opening therapist appointments from elsewhere.
+  TherapistAppointmentsLaunchOptions? takeTherapistAppointmentsLaunch() {
+    if (_pendingTherapistAppointmentsUslugaId == null &&
+        (_pendingTherapistAppointmentsTab == null ||
+            _pendingTherapistAppointmentsTab!.isEmpty)) {
+      return null;
+    }
+    final options = TherapistAppointmentsLaunchOptions(
+      uslugaId: _pendingTherapistAppointmentsUslugaId,
+      initialTab: _pendingTherapistAppointmentsTab,
+      serviceName: _pendingTherapistAppointmentsServiceName,
+    );
+    _pendingTherapistAppointmentsUslugaId = null;
+    _pendingTherapistAppointmentsTab = null;
+    _pendingTherapistAppointmentsServiceName = null;
+    return options;
   }
 
   void goToCatalogFavorites() {
@@ -546,4 +584,17 @@ class DesktopNav extends ChangeNotifier {
     _pendingCatalogFavoritesTab = false;
     return pending;
   }
+}
+
+/// Consumed once when [TherapistAppointmentsScreen] mounts or refreshes.
+class TherapistAppointmentsLaunchOptions {
+  const TherapistAppointmentsLaunchOptions({
+    this.uslugaId,
+    this.initialTab,
+    this.serviceName,
+  });
+
+  final int? uslugaId;
+  final String? initialTab;
+  final String? serviceName;
 }

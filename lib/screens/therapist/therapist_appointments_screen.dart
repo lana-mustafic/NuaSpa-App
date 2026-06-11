@@ -54,6 +54,8 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
   bool _initialLoad = true;
   late String _tab;
   String _statusFilter = 'All Status';
+  int? _filterUslugaId;
+  String? _filterServiceName;
   int _lastRefreshToken = -1;
   String _lastSearch = '';
   DateTime? _lastFilterDay;
@@ -71,6 +73,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
     _tab = widget.initialTab;
+    _filterUslugaId = widget.filterUslugaId;
     _lastFilterDay = widget.filterDay;
     _reload();
   }
@@ -86,6 +89,10 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     super.didUpdateWidget(oldWidget);
     if (!_sameDay(oldWidget.filterDay, widget.filterDay)) {
       _lastFilterDay = widget.filterDay;
+      _reload();
+    }
+    if (oldWidget.filterUslugaId != widget.filterUslugaId) {
+      _filterUslugaId = widget.filterUslugaId;
       _reload();
     }
   }
@@ -105,6 +112,21 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
     final search = nav.therapistAppointmentSearchQuery;
     if (search != _lastSearch) {
       _lastSearch = search;
+      needReload = true;
+    }
+
+    final launch = nav.takeTherapistAppointmentsLaunch();
+    if (launch != null) {
+      if (launch.uslugaId != null) {
+        _filterUslugaId = launch.uslugaId;
+      }
+      if (launch.serviceName != null && launch.serviceName!.isNotEmpty) {
+        _filterServiceName = launch.serviceName;
+      }
+      final tab = launch.initialTab?.trim();
+      if (tab != null && tab.isNotEmpty && _tabs.contains(tab)) {
+        _tab = tab;
+      }
       needReload = true;
     }
 
@@ -167,7 +189,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
       day: widget.filterDay,
       search: _lastSearch.isEmpty ? null : _lastSearch,
       statusFilter: _statusApiKey(_statusFilter),
-      uslugaId: widget.filterUslugaId,
+      uslugaId: _filterUslugaId,
     );
 
     if (!mounted) return;
@@ -364,6 +386,19 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
                         counts: counts,
                         onTab: _selectTab,
                       ),
+                      if (_filterUslugaId != null) ...[
+                        const SizedBox(height: 12),
+                        _ServiceFilterChip(
+                          serviceName: _filterServiceName,
+                          onClear: () {
+                            setState(() {
+                              _filterUslugaId = null;
+                              _filterServiceName = null;
+                            });
+                            _reload();
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       _FilterToolbar(
                         statusFilter: _statusFilter,
@@ -528,6 +563,40 @@ class _ApptTabState extends State<_ApptTab> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ServiceFilterChip extends StatelessWidget {
+  const _ServiceFilterChip({
+    required this.serviceName,
+    required this.onClear,
+  });
+
+  final String? serviceName;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = serviceName != null && serviceName!.isNotEmpty
+        ? 'Service: ${serviceName!.trim()}'
+        : 'Filtered by service';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: InputChip(
+        label: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: _ApptUi.textPrimary,
+          ),
+        ),
+        deleteIcon: const Icon(Icons.close_rounded, size: 16),
+        onDeleted: onClear,
+        backgroundColor: _ApptUi.purple.withValues(alpha: 0.14),
+        side: BorderSide(color: _ApptUi.purple.withValues(alpha: 0.35)),
       ),
     );
   }
