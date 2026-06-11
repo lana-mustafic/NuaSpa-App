@@ -1392,31 +1392,21 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                 )
               : widget.centerWidget;
 
+          final centerMaxW =
+              widget.showSearch ? searchMaxW : 520.0;
+
           Widget content;
           if (useWideRow && centerChrome != null) {
             content = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 300),
-                      child: _titleBlock(),
-                    ),
-                  ),
+                Expanded(child: _titleBlock()),
+                const SizedBox(width: _gap),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: centerMaxW),
+                  child: centerChrome,
                 ),
                 const SizedBox(width: _gap),
-                Flexible(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: centerChrome,
-                    ),
-                  ),
-                ),
-                const Spacer(),
                 _controlsRow(showProfileDetails: showProfileDetails),
               ],
             );
@@ -1436,8 +1426,11 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
                   if (showCenter && centerChrome != null) ...[
                     SizedBox(height: LuxuryPageChrome.stackedSearchGap),
                     Align(
-                      alignment: Alignment.centerLeft,
-                      child: centerChrome,
+                      alignment: Alignment.centerRight,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: centerMaxW),
+                        child: centerChrome,
+                      ),
                     ),
                   ],
                 ],
