@@ -571,9 +571,6 @@ class LuxuryDesktopHeader extends StatelessWidget {
         subtitle: nav.therapistProfileSubtitle ??
             'Manage your therapist profile, contact details, and professional identity.',
         showSearch: false,
-        centerWidget: _TherapistProfileSectionNav(
-          onSection: nav.goToTherapistProfileSection,
-        ),
       );
     }
 
@@ -974,90 +971,6 @@ class LuxuryDesktopHeader extends StatelessWidget {
       onPickDate: () => _pickDate(context),
       onNotifications: (bellCtx) => _showNotifications(context, bellCtx),
       onProfile: (ctx) => _showProfileMenu(ctx, auth, nav),
-    );
-  }
-}
-
-class _TherapistProfileSectionNav extends StatelessWidget {
-  const _TherapistProfileSectionNav({required this.onSection});
-
-  final ValueChanged<TherapistProfileSection> onSection;
-
-  static const _items = <(TherapistProfileSection, String)>[
-    (TherapistProfileSection.overview, 'Overview'),
-    (TherapistProfileSection.about, 'About'),
-    (TherapistProfileSection.contact, 'Contact'),
-    (TherapistProfileSection.staffRecord, 'Staff record'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < _items.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            _SectionNavChip(
-              label: _items[i].$2,
-              onTap: () => onSection(_items[i].$1),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionNavChip extends StatefulWidget {
-  const _SectionNavChip({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  State<_SectionNavChip> createState() => _SectionNavChipState();
-}
-
-class _SectionNavChipState extends State<_SectionNavChip> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = _hover
-        ? const Color.fromRGBO(123, 77, 255, 0.18)
-        : const Color.fromRGBO(255, 255, 255, 0.06);
-    final border = _hover
-        ? const Color.fromRGBO(123, 77, 255, 0.42)
-        : const Color.fromRGBO(255, 255, 255, 0.1);
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: border),
-            ),
-            child: Text(
-              widget.label,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFFF5F3FA),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
