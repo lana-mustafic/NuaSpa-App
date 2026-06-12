@@ -111,10 +111,9 @@ String _reviewsHeaderSubtitle(TherapistMyReviewsSummary summary) {
 
 void _applyReviewsHeader(
   BuildContext context, {
-  required String firstName,
   required TherapistMyReviewsSummary summary,
 }) {
-  final title = therapistPortalGreeting(firstName);
+  const title = 'My Reviews';
   final subtitle = _reviewsHeaderSubtitle(summary);
   if (!nuaspaUseMobileShell()) {
     context.read<DesktopNav>().setTherapistReviewsHeader(
@@ -275,15 +274,11 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
     final data = await _future;
     if (!mounted) return;
 
-    final auth = context.read<AuthProvider>();
-    final firstName = auth.displayName?.trim().split(RegExp(r'\s+')).first ??
-        'Therapist';
     final summary = data?.summary ?? const TherapistMyReviewsSummary();
-    final title = therapistPortalGreeting(firstName);
+    const title = 'My Reviews';
     final subtitle = _reviewsHeaderSubtitle(summary);
     _applyReviewsHeader(
       context,
-      firstName: firstName,
       summary: summary,
     );
     if (nuaspaUseMobileShell()) {
