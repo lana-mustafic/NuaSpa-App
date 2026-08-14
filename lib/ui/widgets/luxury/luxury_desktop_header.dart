@@ -443,6 +443,19 @@ class LuxuryDesktopHeader extends StatelessWidget {
           onSearchChanged: nav.setReviewsSearchQuery,
         );
       }
+      if (isRevenue) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Reports & Analytics',
+          subtitle: 'Revenue and client insights.',
+          showSearch: false,
+          centerWidget: _buildReportsHeaderControls(context, nav, range),
+        );
+      }
       if (isSettings) {
         return _buildSpaciousLuxuryHeader(
           context,
@@ -632,7 +645,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                 SizedBox(height: compact ? 2 : 4),
                 Text(
                   isRevenue
-                      ? 'Revenue, service popularity and client insights.'
+                      ? 'Revenue and client insights.'
                       : isCommandCenter
                       ? 'Overview of bookings, revenue and business performance.'
                       : isAppointments
@@ -913,6 +926,38 @@ class LuxuryDesktopHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildReportsHeaderControls(
+    BuildContext context,
+    DesktopNav nav,
+    DateTimeRange range,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _HeaderPill(
+          icon: Icons.date_range_outlined,
+          label: _fmtRange(range),
+          onTap: () async {
+            final picked = await _pickDateRange(context, range);
+            if (picked == null || !context.mounted) return;
+            nav.setHeaderDateRange(picked);
+          },
+        ),
+        const SizedBox(width: 10),
+        _HeaderPill(
+          icon: Icons.tune_rounded,
+          label: 'Filters',
+          onTap: () => _onFiltersTap(context, nav),
+        ),
+        const SizedBox(width: 10),
+        _ReportsPdfExportButton(
+          exporting: nav.reportsPdfExporting,
+          onExport: nav.reportsPdfExport,
+        ),
+      ],
     );
   }
 
