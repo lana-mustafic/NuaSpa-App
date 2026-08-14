@@ -2127,7 +2127,7 @@ class _AppointmentDetailsContent extends StatelessWidget {
             ),
             const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Notes'),
-            _PremiumApptNotesCard(
+            _PremiumApptDetailNotesCard(
               icon: Icons.notes_outlined,
               label: 'Client notes',
               value: notes,
@@ -2135,7 +2135,7 @@ class _AppointmentDetailsContent extends StatelessWidget {
             if (appointment.isOtkazana &&
                 appointment.razlogOtkaza?.trim().isNotEmpty == true) ...[
               const SizedBox(height: _ApptDialogLayout.fieldGap),
-              _PremiumApptNotesCard(
+              _PremiumApptDetailNotesCard(
                 icon: Icons.cancel_outlined,
                 label: 'Cancellation reason',
                 value: appointment.razlogOtkaza!.trim(),
@@ -2206,8 +2206,8 @@ class _DetailsSectionTitle extends StatelessWidget {
   }
 }
 
-class _PremiumApptNotesCard extends StatelessWidget {
-  const _PremiumApptNotesCard({
+class _PremiumApptDetailNotesCard extends StatelessWidget {
+  const _PremiumApptDetailNotesCard({
     required this.icon,
     required this.label,
     required this.value,
