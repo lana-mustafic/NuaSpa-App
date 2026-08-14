@@ -472,7 +472,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           notificationCount: badgeCount,
           title: 'Settings',
           subtitle:
-              'Manage your account, security and workspace preferences.',
+              'Account, security and preferences.',
           searchHint: 'Search across NuaSpa…',
           onSearchSubmitted: nav.performAdminGlobalSearch,
         );
@@ -582,7 +582,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         day: day,
         notificationCount: badgeCount,
         title: 'Settings',
-        subtitle: 'Manage your account, security and workspace preferences.',
+        subtitle: 'Account, security and preferences.',
         searchHint: 'Search clients, services…',
         onSearchSubmitted: nav.goToCatalogWithSearch,
       );
@@ -596,7 +596,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         day: day,
         notificationCount: badgeCount,
         title: 'Settings',
-        subtitle: 'Manage your account, security and workspace preferences.',
+        subtitle: 'Account, security and preferences.',
         searchHint: 'Search services & treatments…',
         onSearchSubmitted: nav.goToCatalogWithSearch,
       );
@@ -676,7 +676,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       ? (nav.therapistProfileSubtitle ??
                           'Manage your therapist profile, contact details, and professional identity.')
                       : isSettings
-                      ? 'Manage your account, security and workspace preferences.'
+                      ? 'Account, security and preferences.'
                       : auth.isAdmin
                       ? 'Here is what is happening at NuaSpa today.'
                       : 'Your calm, polished workspace is ready.',
