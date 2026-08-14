@@ -334,7 +334,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Dashboard',
-          subtitle: 'Welcome back, Admin. Here is today\'s overview.',
+          subtitle: 'Today\'s overview and KPIs.',
           searchHint: 'Search appointments, clients, services…',
           onSearchSubmitted: nav.performAdminGlobalSearch,
         );
