@@ -32,6 +32,7 @@ class _AdminTherapistRosterScreenState
   String _status = 'All Status';
   int _page = 0;
   int _handledTherapistAddRequest = 0;
+  DesktopNav? _nav;
 
   @override
   void initState() {
@@ -40,9 +41,15 @@ class _AdminTherapistRosterScreenState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _nav ??= context.read<DesktopNav>();
+  }
+
+  @override
   void dispose() {
     _specialty.dispose();
-    context.read<DesktopNav>().setTherapistPageSummary(null);
+    _nav?.setTherapistPageSummary(null);
     super.dispose();
   }
 

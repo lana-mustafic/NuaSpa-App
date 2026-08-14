@@ -453,7 +453,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           title: 'Reports & Analytics',
           subtitle: 'Revenue and client insights.',
           showSearch: false,
-          centerWidget: _buildReportsHeaderControls(context, nav, range),
+          showReportsPdfExport: true,
         );
       }
       if (isSettings) {
@@ -929,38 +929,6 @@ class LuxuryDesktopHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildReportsHeaderControls(
-    BuildContext context,
-    DesktopNav nav,
-    DateTimeRange range,
-  ) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _HeaderPill(
-          icon: Icons.date_range_outlined,
-          label: _fmtRange(range),
-          onTap: () async {
-            final picked = await _pickDateRange(context, range);
-            if (picked == null || !context.mounted) return;
-            nav.setHeaderDateRange(picked);
-          },
-        ),
-        const SizedBox(width: 10),
-        _HeaderPill(
-          icon: Icons.tune_rounded,
-          label: 'Filters',
-          onTap: () => _onFiltersTap(context, nav),
-        ),
-        const SizedBox(width: 10),
-        _ReportsPdfExportButton(
-          exporting: nav.reportsPdfExporting,
-          onExport: nav.reportsPdfExport,
-        ),
-      ],
-    );
-  }
-
   Widget _buildSpaciousLuxuryHeader(
     BuildContext context, {
     required AuthProvider auth,
@@ -977,6 +945,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
     String? summaryLine,
     bool showSearch = true,
     Widget? centerWidget,
+    Widget? trailingToolbar,
+    bool showReportsPdfExport = false,
   }) {
     return _SpaciousLuxuryPageHeader(
       title: title,
@@ -989,6 +959,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
       searchController: searchController,
       showSearch: showSearch,
       centerWidget: centerWidget,
+      trailingToolbar: trailingToolbar,
+      showReportsPdfExport: showReportsPdfExport,
       auth: auth,
       day: day,
       notificationCount: notificationCount,
@@ -1024,6 +996,8 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     this.searchController,
     this.showSearch = true,
     this.centerWidget,
+    this.trailingToolbar,
+    this.showReportsPdfExport = false,
   });
 
   final String title;
@@ -1036,6 +1010,8 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   final TextEditingController? searchController;
   final bool showSearch;
   final Widget? centerWidget;
+  final Widget? trailingToolbar;
+  final bool showReportsPdfExport;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -1135,10 +1111,10 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
-                fontSize: 14,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w500,
                 height: 1.2,
-                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.72),
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.58),
               ),
             ),
             if (hasSummary) ...[
@@ -1267,9 +1243,20 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   }
 
   Widget _controlsRow({required bool showProfileDetails}) {
+    final nav = widget.showReportsPdfExport
+        ? context.watch<DesktopNav>()
+        : null;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (widget.showReportsPdfExport && nav != null) ...[
+          _ReportsPdfHeaderButton(
+            exporting: nav.reportsPdfExporting,
+            onExport: nav.reportsPdfExport,
+          ),
+          const SizedBox(width: _gap),
+        ],
         Builder(
           builder: (bellCtx) => SizedBox(
             height: 50,
@@ -1304,12 +1291,16 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
       child: LayoutBuilder(
         builder: (context, c) {
           final w = c.maxWidth;
+          final toolbar = widget.trailingToolbar;
+          final hasToolbar = toolbar != null;
           final hasCenterChrome =
               widget.showSearch || widget.centerWidget != null;
           final showCenter = hasCenterChrome && w >= 720;
           final showProfileDetails = w >= 980;
-          final useWideRow = w >= _wideBreakpoint && showCenter;
-          final contentHeight = useWideRow
+          final useWideRow = hasToolbar
+              ? w >= 900
+              : w >= _wideBreakpoint && showCenter;
+          final contentHeight = hasToolbar || useWideRow
               ? LuxuryPageChrome.headerRowHeight
               : (showCenter
                   ? LuxuryPageChrome.headerStackedHeight
@@ -1331,18 +1322,53 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
               : widget.centerWidget;
 
           final centerMaxW =
-              widget.showSearch ? searchMaxW : 520.0;
+              widget.showSearch ? searchMaxW : 560.0;
 
           Widget content;
-          if (useWideRow && centerChrome != null) {
+          if (hasToolbar && useWideRow) {
+            content = Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: _titleBlock()),
+                toolbar,
+                const SizedBox(width: 20),
+                _controlsRow(showProfileDetails: showProfileDetails),
+              ],
+            );
+          } else if (hasToolbar) {
+            content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(child: _titleBlock()),
+                    _controlsRow(showProfileDetails: showProfileDetails),
+                  ],
+                ),
+                const SizedBox(height: LuxuryPageChrome.stackedSearchGap),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: toolbar,
+                ),
+              ],
+            );
+          } else if (useWideRow && centerChrome != null) {
             content = Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(child: _titleBlock()),
                 const SizedBox(width: _gap),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: centerMaxW),
-                  child: centerChrome,
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: centerMaxW),
+                      child: centerChrome,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: _gap),
                 _controlsRow(showProfileDetails: showProfileDetails),
@@ -1377,7 +1403,9 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
           }
 
           return SizedBox(
-            height: contentHeight,
+            height: hasToolbar && !useWideRow
+                ? LuxuryPageChrome.headerStackedHeight + 8
+                : contentHeight,
             child: Align(
               alignment: Alignment.centerLeft,
               child: content,
@@ -1500,6 +1528,56 @@ class _ProfileMenuRow extends StatelessWidget {
   }
 }
 
+class _ReportsPdfHeaderButton extends StatelessWidget {
+  const _ReportsPdfHeaderButton({
+    required this.exporting,
+    required this.onExport,
+  });
+
+  final bool exporting;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = !exporting && onExport != null;
+
+    return _DashboardHeaderControl(
+      onTap: enabled ? onExport! : () {},
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (exporting)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withValues(alpha: 0.75),
+              ),
+            )
+          else
+            Icon(
+              Icons.picture_as_pdf_outlined,
+              size: 20,
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+            ),
+          const SizedBox(width: 10),
+          Text(
+            exporting ? 'Exporting...' : 'PDF Report',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: enabled
+                  ? const Color(0xFFF5F3FA)
+                  : const Color(0xFFF5F3FA).withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReportsPdfExportButton extends StatelessWidget {
   const _ReportsPdfExportButton({
     required this.exporting,
@@ -1531,8 +1609,9 @@ class _ReportsPdfExportButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: Colors.white.withValues(alpha: 0.82),
         side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        minimumSize: const Size(0, 50),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
@@ -1552,35 +1631,38 @@ class _HeaderPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(NuaLuxuryTokens.radiusMd + 6),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: LuxuryGlassPanel(
         blurSigma: 18,
         opacity: 0.28,
-        borderRadius: NuaLuxuryTokens.radiusMd + 6,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFF5F3FA),
+        borderRadius: 18,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+        child: SizedBox(
+          height: 50,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.expand_more_rounded,
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.expand_more_rounded,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
         ),
       ),
     );

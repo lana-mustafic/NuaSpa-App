@@ -16,6 +16,15 @@ import '../../ui/widgets/luxury/luxury_glass_panel.dart';
 
 enum _ReportPeriod { days7, days30, days90 }
 
+abstract final class _ReportsUi {
+  static const cardRadius = 20.0;
+  static const cardGap = 16.0;
+  static const sectionGap = 24.0;
+  static const labelColor = Color(0x94FFFFFF);
+  static const subtitleColor = Color(0x66FFFFFF);
+  static const titleColor = Color(0xFFF5F3FA);
+}
+
 String _fmtKm(num v) {
   final d = v.toDouble();
   if (d == d.roundToDouble()) return '${d.round()} KM';
@@ -67,7 +76,6 @@ class _AdminRevenueAnalyticsScreenState
   DateTime? _activeTo;
   bool _usingPeriodChips = true;
   DateTimeRange? _syncedHeaderRange;
-  int _lastFiltersPulse = 0;
   DesktopNav? _nav;
 
   @override
@@ -198,9 +206,11 @@ class _AdminRevenueAnalyticsScreenState
     final to = _activeTo;
     if (from == null || to == null) return;
     setState(() => _exporting = true);
+    _nav?.setReportsPdfExporting(true);
     final ok = await _api.downloadReport(from: from, to: to);
     if (!mounted) return;
     setState(() => _exporting = false);
+    _nav?.setReportsPdfExporting(false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -216,23 +226,6 @@ class _AdminRevenueAnalyticsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final nav = context.watch<DesktopNav>();
-    if (nav.headerFiltersPulse != _lastFiltersPulse) {
-      _lastFiltersPulse = nav.headerFiltersPulse;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Use the header date range and period toggles below the chart to refine analytics.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            width: 420,
-          ),
-        );
-      });
-    }
-
     if (_error != null && _data == null && !_loading) {
       return _ReportsError(message: _error!, onRetry: () => _reload());
     }
@@ -270,13 +263,13 @@ class _AdminRevenueAnalyticsScreenState
     return Stack(
       children: [
         SingleChildScrollView(
-          padding: LuxuryPageChrome.bodyPadding.copyWith(top: 8),
+          padding: LuxuryPageChrome.bodyPadding.copyWith(top: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (data.warnings.isNotEmpty) ...[
                 _ReportsWarningBanner(messages: data.warnings),
-                const SizedBox(height: 12),
+                const SizedBox(height: _ReportsUi.sectionGap),
               ],
               _KpiGrid(
                 cards: [
@@ -303,16 +296,16 @@ class _AdminRevenueAnalyticsScreenState
                   ),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: _ReportsUi.sectionGap),
               _RevenueChartCard(
                 points: rev,
                 period: _period,
                 onPeriod: _setPeriod,
                 hasData: hasRevenueData,
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: _ReportsUi.sectionGap),
               _RevenueByServiceSection(services: data.popularity),
-              const SizedBox(height: 28),
+              const SizedBox(height: _ReportsUi.sectionGap),
               _TopClientsSection(spenders: data.spenders),
               const SizedBox(height: 32),
             ],
@@ -343,7 +336,7 @@ class _ReportsWarningBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return LuxuryGlassPanel(
-      borderRadius: 14,
+      borderRadius: _ReportsUi.cardRadius,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,7 +372,7 @@ class _ReportsError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: LuxuryGlassPanel(
-        borderRadius: 24,
+        borderRadius: _ReportsUi.cardRadius,
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -407,45 +400,49 @@ class _AnalyticsEmptyState extends StatelessWidget {
   const _AnalyticsEmptyState({
     required this.title,
     required this.subtitle,
-    this.height = 160,
+    this.expand = false,
   });
 
   final String title;
   final String subtitle;
-  final double height;
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      height: height,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFF5F3FA),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  height: 1.45,
-                ),
-              ),
-            ],
+    final content = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: _ReportsUi.titleColor,
+            ),
           ),
-        ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: _ReportsUi.subtitleColor,
+              height: 1.45,
+            ),
+          ),
+        ],
       ),
+    );
+
+    if (expand) {
+      return Center(child: content);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(child: content),
     );
   }
 }
@@ -459,15 +456,23 @@ class _KpiGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final cols = c.maxWidth >= 1040
-            ? 4
-            : c.maxWidth >= 700
-            ? 2
-            : 1;
-        final width = (c.maxWidth - 12 * (cols - 1)) / cols;
+        if (c.maxWidth >= 1040) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: _ReportsUi.cardGap),
+                Expanded(child: _RevenueKpiCard(spec: cards[i])),
+              ],
+            ],
+          );
+        }
+
+        final cols = c.maxWidth >= 700 ? 2 : 1;
+        final width = (c.maxWidth - _ReportsUi.cardGap * (cols - 1)) / cols;
         return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: _ReportsUi.cardGap,
+          runSpacing: _ReportsUi.cardGap,
           children: [
             for (final card in cards)
               SizedBox(
@@ -490,36 +495,38 @@ class _RevenueKpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return LuxuryGlassPanel(
-      borderRadius: 18,
+      borderRadius: _ReportsUi.cardRadius,
       blurSigma: 22,
       opacity: 0.34,
       borderOpacity: 0.08,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       child: SizedBox(
-        height: 108,
+        height: 112,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               spec.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.55),
+                color: _ReportsUi.labelColor,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.1,
+                letterSpacing: 0.15,
+                fontSize: 12,
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 10),
             Text(
               spec.value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.headlineSmall?.copyWith(
-                color: const Color(0xFFF5F3FA),
+                color: _ReportsUi.titleColor,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
-                fontSize: 24,
+                fontSize: 26,
               ),
             ),
             const SizedBox(height: 4),
@@ -528,8 +535,9 @@ class _RevenueKpiCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.38),
+                color: _ReportsUi.subtitleColor,
                 fontSize: 11,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -565,24 +573,26 @@ class _RevenueChartCard extends StatelessWidget {
     ];
 
     return LuxuryGlassPanel(
-      borderRadius: 18,
+      borderRadius: _ReportsUi.cardRadius,
       blurSigma: 24,
       opacity: 0.34,
       borderOpacity: 0.08,
       padding: const EdgeInsets.all(20),
       child: SizedBox(
-        height: hasData ? 380 : 300,
+        height: hasData ? 380 : 320,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Text(
                     'Revenue Over Time',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFFF5F3FA),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: _ReportsUi.titleColor,
                     ),
                   ),
                 ),
@@ -612,7 +622,7 @@ class _RevenueChartCard extends StatelessWidget {
                       title: 'No revenue data available',
                       subtitle:
                           'Revenue analytics will appear once payments are recorded.',
-                      height: 220,
+                      expand: true,
                     )
                   : LineChart(
                       LineChartData(
@@ -754,7 +764,7 @@ class _RevenueByServiceSection extends StatelessWidget {
     final hasData = services.isNotEmpty && total > 0;
 
     return LuxuryGlassPanel(
-      borderRadius: 18,
+      borderRadius: _ReportsUi.cardRadius,
       blurSigma: 22,
       opacity: 0.34,
       borderOpacity: 0.08,
@@ -765,8 +775,9 @@ class _RevenueByServiceSection extends StatelessWidget {
           Text(
             'Revenue by Service',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFFF5F3FA),
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              color: _ReportsUi.titleColor,
             ),
           ),
           const SizedBox(height: 16),
@@ -775,7 +786,6 @@ class _RevenueByServiceSection extends StatelessWidget {
               title: 'No service revenue yet',
               subtitle:
                   'Revenue by service will appear once paid bookings exist.',
-              height: 140,
             )
           else ...[
             const _BreakdownHeader(),
@@ -804,7 +814,7 @@ class _TopClientsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LuxuryGlassPanel(
-      borderRadius: 18,
+      borderRadius: _ReportsUi.cardRadius,
       blurSigma: 22,
       opacity: 0.34,
       borderOpacity: 0.08,
@@ -815,8 +825,9 @@ class _TopClientsSection extends StatelessWidget {
           Text(
             'Top Clients',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFFF5F3FA),
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              color: _ReportsUi.titleColor,
             ),
           ),
           const SizedBox(height: 16),
@@ -825,7 +836,6 @@ class _TopClientsSection extends StatelessWidget {
               title: 'No client payments yet',
               subtitle:
                   'Top clients will appear once payments are recorded.',
-              height: 140,
             )
           else ...[
             const _TopClientsHeader(),
@@ -844,9 +854,10 @@ class _TopClientsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: Colors.white.withValues(alpha: 0.45),
+      color: _ReportsUi.labelColor,
       fontWeight: FontWeight.w700,
       letterSpacing: 0.4,
+      fontSize: 11,
     );
     return Row(
       children: [
@@ -931,9 +942,10 @@ class _BreakdownHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.54),
-      fontWeight: FontWeight.w900,
-      letterSpacing: 0.6,
+      color: _ReportsUi.labelColor,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.4,
+      fontSize: 11,
     );
     return Row(
       children: [
