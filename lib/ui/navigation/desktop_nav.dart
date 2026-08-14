@@ -103,13 +103,20 @@ class DesktopNav extends ChangeNotifier {
 
   VoidCallback? _reportsPdfExport;
   bool _reportsPdfExporting = false;
+  VoidCallback? _reviewsCsvExport;
 
   VoidCallback? get reportsPdfExport => _reportsPdfExport;
 
   bool get reportsPdfExporting => _reportsPdfExporting;
 
+  VoidCallback? get reviewsCsvExport => _reviewsCsvExport;
+
   void setReportsPdfExport(VoidCallback? handler) {
     _reportsPdfExport = handler;
+  }
+
+  void setReviewsCsvExport(VoidCallback? handler) {
+    _reviewsCsvExport = handler;
   }
 
   void setReportsPdfExporting(bool exporting) {

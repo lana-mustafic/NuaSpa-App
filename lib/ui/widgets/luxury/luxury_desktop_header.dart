@@ -437,10 +437,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
           notificationCount: badgeCount,
           title: 'Reviews',
           subtitle: 'Monitor ratings and guest feedback.',
-          searchHint: 'Search across NuaSpa...',
+          searchHint: 'Search...',
           initialSearchQuery: nav.reviewsSearchQuery,
           onSearchSubmitted: nav.setReviewsSearchQuery,
           onSearchChanged: nav.setReviewsSearchQuery,
+          showReviewsCsvExport: true,
+          useHeaderDateRange: true,
         );
       }
       if (isRevenue) {
@@ -947,6 +949,8 @@ class LuxuryDesktopHeader extends StatelessWidget {
     Widget? centerWidget,
     Widget? trailingToolbar,
     bool showReportsPdfExport = false,
+    bool showReviewsCsvExport = false,
+    bool useHeaderDateRange = false,
   }) {
     return _SpaciousLuxuryPageHeader(
       title: title,
@@ -961,6 +965,15 @@ class LuxuryDesktopHeader extends StatelessWidget {
       centerWidget: centerWidget,
       trailingToolbar: trailingToolbar,
       showReportsPdfExport: showReportsPdfExport,
+      showReviewsCsvExport: showReviewsCsvExport,
+      useHeaderDateRange: useHeaderDateRange,
+      fmtRange: _fmtRange,
+      onPickDateRange: () async {
+        final picked = await _pickDateRange(context, nav.headerDateRange);
+        if (picked != null) {
+          nav.setHeaderDateRange(picked);
+        }
+      },
       auth: auth,
       day: day,
       notificationCount: notificationCount,
@@ -998,6 +1011,10 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     this.centerWidget,
     this.trailingToolbar,
     this.showReportsPdfExport = false,
+    this.showReviewsCsvExport = false,
+    this.useHeaderDateRange = false,
+    this.fmtRange,
+    this.onPickDateRange,
   });
 
   final String title;
@@ -1012,6 +1029,10 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   final Widget? centerWidget;
   final Widget? trailingToolbar;
   final bool showReportsPdfExport;
+  final bool showReviewsCsvExport;
+  final bool useHeaderDateRange;
+  final String Function(DateTimeRange)? fmtRange;
+  final VoidCallback? onPickDateRange;
   final AuthProvider auth;
   final DateTime day;
   final int notificationCount;
@@ -1138,6 +1159,43 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   }
 
   Widget _dateButton() {
+    if (widget.useHeaderDateRange && widget.fmtRange != null) {
+      final range = context.watch<DesktopNav>().headerDateRange;
+      return _DashboardHeaderControl(
+        onTap: widget.onPickDateRange ?? onPickDate,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_month_outlined,
+              size: 20,
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(
+                widget.fmtRange!(range),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFF5F3FA),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 20,
+              color: Colors.white.withValues(alpha: 0.45),
+            ),
+          ],
+        ),
+      );
+    }
+
     return _DashboardHeaderControl(
       onTap: onPickDate,
       child: Row(
@@ -1243,9 +1301,10 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   }
 
   Widget _controlsRow({required bool showProfileDetails}) {
-    final nav = widget.showReportsPdfExport
-        ? context.watch<DesktopNav>()
-        : null;
+    final needsNav = widget.showReportsPdfExport ||
+        widget.showReviewsCsvExport ||
+        widget.useHeaderDateRange;
+    final nav = needsNav ? context.watch<DesktopNav>() : null;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1255,6 +1314,10 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
             exporting: nav.reportsPdfExporting,
             onExport: nav.reportsPdfExport,
           ),
+          const SizedBox(width: _gap),
+        ],
+        if (widget.showReviewsCsvExport && nav != null) ...[
+          _ReviewsCsvHeaderButton(onExport: nav.reviewsCsvExport),
           const SizedBox(width: _gap),
         ],
         Builder(
@@ -1524,6 +1587,42 @@ class _ProfileMenuRow extends StatelessWidget {
         const SizedBox(width: 12),
         Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+class _ReviewsCsvHeaderButton extends StatelessWidget {
+  const _ReviewsCsvHeaderButton({required this.onExport});
+
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onExport != null;
+
+    return _DashboardHeaderControl(
+      onTap: enabled ? onExport! : () {},
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.download_outlined,
+            size: 20,
+            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Export',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: enabled
+                  ? const Color(0xFFF5F3FA)
+                  : const Color(0xFFF5F3FA).withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

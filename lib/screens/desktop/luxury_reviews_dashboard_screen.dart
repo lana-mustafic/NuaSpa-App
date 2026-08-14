@@ -10,6 +10,7 @@ import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/theme/nua_luxury_tokens.dart';
+import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 /// Premium dark-mode Reviews & Feedback dashboard (desktop), backed by
 /// `GET /api/Recenzija/admin-dashboard` and CSV export.
@@ -28,7 +29,6 @@ class LuxuryReviewsDashboardScreen extends StatefulWidget {
 class _LuxuryReviewsDashboardScreenState
     extends State<LuxuryReviewsDashboardScreen> {
   final ApiService _api = ApiService();
-  final TextEditingController _tableSearch = TextEditingController();
 
   AdminReviewsDashboard? _data;
   bool _loading = true;
@@ -50,6 +50,7 @@ class _LuxuryReviewsDashboardScreenState
   Timer? _searchDebounce;
   DesktopNav? _nav;
   String _syncedReviewsQuery = '';
+  DateTimeRange? _syncedHeaderRange;
 
   final ScrollController _mainScrollController = ScrollController();
 
@@ -59,32 +60,61 @@ class _LuxuryReviewsDashboardScreenState
     final n = DateTime.now();
     _rangeTo = DateTime(n.year, n.month, n.day);
     _rangeFrom = _rangeTo.subtract(const Duration(days: 6));
-    _tableSearch.addListener(_onSearchChanged);
     _bootstrap();
   }
+
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final nav = context.read<DesktopNav>();
     if (_nav != nav) {
-      _nav?.removeListener(_onNavSearchChanged);
+      _nav?.removeListener(_onNavChanged);
       _nav = nav;
-      _nav!.addListener(_onNavSearchChanged);
-      _onNavSearchChanged();
+      _nav!.addListener(_onNavChanged);
+      _nav!.setHeaderDateRange(DateTimeRange(start: _rangeFrom, end: _rangeTo));
+      _syncedHeaderRange = DateTimeRange(start: _rangeFrom, end: _rangeTo);
+      _syncedReviewsQuery = _nav!.reviewsSearchQuery;
     }
+    _nav!.setReviewsCsvExport(_exportCsv);
   }
 
-  void _onNavSearchChanged() {
+  void _onNavChanged() {
     if (!mounted || _nav == null) return;
+    _handleHeaderRangeChange();
+    _handleSearchChange();
+  }
+
+  void _handleHeaderRangeChange() {
+    final headerRange = _nav!.headerDateRange;
+    if (_syncedHeaderRange != null &&
+        _sameDay(_syncedHeaderRange!.start, headerRange.start) &&
+        _sameDay(_syncedHeaderRange!.end, headerRange.end)) {
+      return;
+    }
+    _syncedHeaderRange = headerRange;
+    setState(() {
+      _rangeFrom = _dayOnly(headerRange.start);
+      _rangeTo = _dayOnly(headerRange.end);
+      _page = 1;
+    });
+    _load();
+  }
+
+  void _handleSearchChange() {
     final q = _nav!.reviewsSearchQuery;
     if (q == _syncedReviewsQuery) return;
-    _syncedReviewsQuery = q;
-    if (_tableSearch.text != q) {
-      _tableSearch.text = q;
-    }
-    _page = 1;
-    _load();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _syncedReviewsQuery = q;
+      _page = 1;
+      _load();
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -100,28 +130,18 @@ class _LuxuryReviewsDashboardScreenState
     await _load();
   }
 
-  void _onSearchChanged() {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
-      final q = _tableSearch.text.trim();
-      _syncedReviewsQuery = q;
-      _nav?.setReviewsSearchQuery(q);
-      _page = 1;
-      _load();
-    });
-  }
-
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
+    final search = _syncedReviewsQuery.trim();
     final result = await _api.getAdminReviewsDashboardResult(
       from: _rangeFrom,
       toInclusive: _rangeTo,
       page: _page,
       pageSize: _pageSize,
-      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text,
+      search: search.isEmpty ? null : search,
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
@@ -142,49 +162,12 @@ class _LuxuryReviewsDashboardScreenState
     });
   }
 
-  Future<void> _pickRange() async {
-    final initial = DateTimeRange(start: _rangeFrom, end: _rangeTo);
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: initial,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: NuaLuxuryTokens.softPurpleGlow,
-              surface: NuaLuxuryTokens.voidViolet,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _rangeFrom = DateTime(
-          picked.start.year,
-          picked.start.month,
-          picked.start.day,
-        );
-        _rangeTo = DateTime(
-          picked.end.year,
-          picked.end.month,
-          picked.end.day,
-        );
-        _page = 1;
-      });
-      await _load();
-    }
-  }
-
   Future<void> _exportCsv() async {
+    final search = _syncedReviewsQuery.trim();
     final result = await _api.downloadAdminReviewsCsvResult(
       from: _rangeFrom,
       toInclusive: _rangeTo,
-      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text,
+      search: search.isEmpty ? null : search,
       minOcjena: _minOcjena,
       maxOcjena: _maxOcjena,
       uslugaId: _filterUslugaId,
@@ -237,23 +220,10 @@ class _LuxuryReviewsDashboardScreenState
   @override
   void dispose() {
     _searchDebounce?.cancel();
-    _nav?.removeListener(_onNavSearchChanged);
-    _tableSearch.removeListener(_onSearchChanged);
-    _tableSearch.dispose();
+    _nav?.removeListener(_onNavChanged);
+    _nav?.setReviewsCsvExport(null);
     _mainScrollController.dispose();
     super.dispose();
-  }
-
-  String _rangeLabel() {
-    String f(DateTime d) {
-      const m = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-      ];
-      return '${m[d.month - 1]} ${d.day}, ${d.year}';
-    }
-
-    return '${f(_rangeFrom)} – ${f(_rangeTo)}';
   }
 
   @override
@@ -261,8 +231,7 @@ class _LuxuryReviewsDashboardScreenState
     final theme = Theme.of(context);
     final mq = MediaQuery.sizeOf(context);
     final tightHeight = mq.height < 720;
-    final pad = tightHeight ? 12.0 : 16.0;
-    final gap = tightHeight ? 8.0 : 10.0;
+    final gap = tightHeight ? 10.0 : 12.0;
 
     if (_error != null && _data == null && !_loading) {
       return Center(
@@ -305,7 +274,7 @@ class _LuxuryReviewsDashboardScreenState
       children: [
         Positioned.fill(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(pad, tightHeight ? 6 : 8, pad, pad),
+            padding: LuxuryPageChrome.bodyPadding,
             child: Scrollbar(
               controller: _mainScrollController,
               thumbVisibility: true,
@@ -318,12 +287,6 @@ class _LuxuryReviewsDashboardScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ReviewsActionsBar(
-                      rangeLabel: _rangeLabel(),
-                      onPickRange: _pickRange,
-                      onExport: _exportCsv,
-                    ),
-                    SizedBox(height: gap),
                     _KpiRow(dash: dash, compact: tightHeight),
                     if (dash?.istaknutaRecenzija != null) ...[
                       SizedBox(height: gap),
@@ -341,9 +304,25 @@ class _LuxuryReviewsDashboardScreenState
                       onViewAllServices: _goToServicesCatalog,
                     ),
                     SizedBox(height: gap),
-                    _FilterBar(
-                      controller: _tableSearch,
+                    _RecentReviewsSection(
+                      rows: dash?.redovi ?? const [],
                       compact: tightHeight,
+                      onViewReview: _openReviewDetail,
+                      onViewServices: _goToServicesCatalog,
+                      page: _page,
+                      pageSize: _pageSize,
+                      total: dash?.ukupno ?? 0,
+                      onPage: (p) {
+                        setState(() => _page = p);
+                        _load();
+                      },
+                      onPageSize: (s) {
+                        setState(() {
+                          _pageSize = s;
+                          _page = 1;
+                        });
+                        _load();
+                      },
                       usluge: _usluge,
                       therapists: _therapists,
                       filterUslugaId: _filterUslugaId,
@@ -368,27 +347,6 @@ class _LuxuryReviewsDashboardScreenState
                       onTherapistChanged: (id) {
                         setState(() {
                           _filterZaposlenikId = id;
-                          _page = 1;
-                        });
-                        _load();
-                      },
-                    ),
-                    SizedBox(height: gap),
-                    _RecentReviewsSection(
-                      rows: dash?.redovi ?? const [],
-                      compact: tightHeight,
-                      onViewReview: _openReviewDetail,
-                      onViewServices: _goToServicesCatalog,
-                      page: _page,
-                      pageSize: _pageSize,
-                      total: dash?.ukupno ?? 0,
-                      onPage: (p) {
-                        setState(() => _page = p);
-                        _load();
-                      },
-                      onPageSize: (s) {
-                        setState(() {
-                          _pageSize = s;
                           _page = 1;
                         });
                         _load();
@@ -436,7 +394,7 @@ class _LuxuryReviewsDashboardScreenState
 
 Widget _glassCard({
   required Widget child,
-  double radius = 22,
+  double radius = 20,
   double borderOpacity = 0.08,
   List<BoxShadow>? extraShadow,
 }) {
@@ -467,57 +425,6 @@ Widget _glassCard({
   );
 }
 
-class _ReviewsActionsBar extends StatelessWidget {
-  const _ReviewsActionsBar({
-    required this.rangeLabel,
-    required this.onPickRange,
-    required this.onExport,
-  });
-
-  final String rangeLabel;
-  final VoidCallback onPickRange;
-  final VoidCallback onExport;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stacked = constraints.maxWidth < 520;
-        final dateButton = _HeaderDateRangeButton(
-          label: rangeLabel,
-          height: 40,
-          compact: true,
-          onTap: onPickRange,
-        );
-        final exportButton =
-            _HeaderExportButton(height: 40, compact: true, onTap: onExport);
-
-        if (stacked) {
-          return Row(
-            children: [
-              Expanded(child: dateButton),
-              const SizedBox(width: 10),
-              exportButton,
-            ],
-          );
-        }
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300),
-              child: dateButton,
-            ),
-            const SizedBox(width: 10),
-            exportButton,
-          ],
-        );
-      },
-    );
-  }
-}
-
 class _FeaturedQuoteCard extends StatelessWidget {
   const _FeaturedQuoteCard({
     required this.quote,
@@ -532,7 +439,6 @@ class _FeaturedQuoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _glassCard(
-      radius: 18,
       child: Padding(
         padding: EdgeInsets.all(compact ? 16 : 20),
         child: Column(
@@ -630,144 +536,6 @@ class _InsightsRow extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _HeaderDateRangeButton extends StatefulWidget {
-  const _HeaderDateRangeButton({
-    required this.label,
-    required this.height,
-    required this.compact,
-    required this.onTap,
-  });
-
-  final String label;
-  final double height;
-  final bool compact;
-  final VoidCallback onTap;
-
-  @override
-  State<_HeaderDateRangeButton> createState() => _HeaderDateRangeButtonState();
-}
-
-class _HeaderDateRangeButtonState extends State<_HeaderDateRangeButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          height: widget.height,
-          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 16 : 24),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: _hover ? 0.05 : 0.03),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _hover
-                  ? const Color(0xFF7B4DFF).withValues(alpha: 0.4)
-                  : Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: widget.compact ? 16 : 18,
-                color: LuxuryReviewsDashboardScreen.secondaryPurple
-                    .withValues(alpha: 0.95),
-              ),
-              SizedBox(width: widget.compact ? 10 : 14),
-              Expanded(
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: LuxuryReviewsDashboardScreen.textPrimary,
-                        fontSize: widget.compact ? 13 : 15,
-                      ),
-                ),
-              ),
-              Icon(
-                Icons.expand_more_rounded,
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderExportButton extends StatefulWidget {
-  const _HeaderExportButton({
-    required this.height,
-    required this.compact,
-    required this.onTap,
-  });
-
-  final double height;
-  final bool compact;
-  final VoidCallback onTap;
-
-  @override
-  State<_HeaderExportButton> createState() => _HeaderExportButtonState();
-}
-
-class _HeaderExportButtonState extends State<_HeaderExportButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          height: widget.height,
-          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 14 : 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withValues(alpha: _hover ? 0.06 : 0.03),
-            border: Border.all(
-              color: _hover
-                  ? Colors.white.withValues(alpha: 0.16)
-                  : Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.download_outlined,
-                size: widget.compact ? 16 : 18,
-                color: Colors.white.withValues(alpha: _hover ? 0.9 : 0.7),
-              ),
-              SizedBox(width: widget.compact ? 6 : 8),
-              Text(
-                'Export',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: _hover ? 0.92 : 0.75),
-                      fontSize: widget.compact ? 13 : 14,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -975,7 +743,6 @@ class _KpiCard extends StatelessWidget {
     return SizedBox(
       height: compact ? 100 : 112,
       child: _glassCard(
-        radius: 18,
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 14 : 16,
@@ -1072,10 +839,8 @@ String _lookupTherapistName(List<Zaposlenik> list, int id) {
   return 'Therapist';
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.controller,
-    required this.compact,
+class _RecentReviewsFilters extends StatelessWidget {
+  const _RecentReviewsFilters({
     required this.usluge,
     required this.therapists,
     required this.filterUslugaId,
@@ -1087,8 +852,6 @@ class _FilterBar extends StatelessWidget {
     required this.onTherapistChanged,
   });
 
-  final TextEditingController controller;
-  final bool compact;
   final List<Usluga> usluge;
   final List<Zaposlenik> therapists;
   final int? filterUslugaId;
@@ -1110,6 +873,8 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const gap = 8.0;
+
     final ratingMenu = PopupMenuButton<String>(
       onSelected: (v) {
         switch (v) {
@@ -1175,51 +940,15 @@ class _FilterBar extends StatelessWidget {
       ),
     );
 
-    final toolbarHeight = compact ? 48.0 : 50.0;
-    final toolbarGap = compact ? 12.0 : 14.0;
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final narrow = c.maxWidth < 760;
-        if (narrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _FilterSearchField(
-                controller: controller,
-                height: toolbarHeight,
-              ),
-              SizedBox(height: toolbarGap),
-              Row(
-                children: [
-                  Expanded(child: ratingMenu),
-                  SizedBox(width: toolbarGap),
-                  Expanded(child: serviceMenu),
-                  SizedBox(width: toolbarGap),
-                  Expanded(child: therapistMenu),
-                ],
-              ),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(
-              flex: 5,
-              child: _FilterSearchField(
-                controller: controller,
-                height: toolbarHeight,
-              ),
-            ),
-            SizedBox(width: toolbarGap),
-            SizedBox(width: 128, child: ratingMenu),
-            SizedBox(width: toolbarGap),
-            SizedBox(width: 148, child: serviceMenu),
-            SizedBox(width: toolbarGap),
-            SizedBox(width: 148, child: therapistMenu),
-          ],
-        );
-      },
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(width: 112, child: ratingMenu),
+        const SizedBox(width: gap),
+        SizedBox(width: 128, child: serviceMenu),
+        const SizedBox(width: gap),
+        SizedBox(width: 128, child: therapistMenu),
+      ],
     );
   }
 }
@@ -1234,7 +963,7 @@ class _FilterDropdownPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      height: compact ? 48 : 50,
+      height: compact ? 36 : 38,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
@@ -1266,49 +995,6 @@ class _FilterDropdownPill extends StatelessWidget {
   }
 }
 
-class _FilterSearchField extends StatelessWidget {
-  const _FilterSearchField({
-    required this.controller,
-    this.height = 50,
-  });
-
-  final TextEditingController controller;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      height: height,
-      child: _glassCard(
-        radius: 14,
-        child: TextField(
-          controller: controller,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: LuxuryReviewsDashboardScreen.textPrimary,
-            fontSize: 14,
-          ),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: 'Search reviews...',
-            hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.38),
-              fontSize: 14,
-            ),
-            prefixIcon: Icon(
-              Icons.search_rounded,
-              size: 18,
-              color: Colors.white.withValues(alpha: 0.4),
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 abstract final class _ReviewsTableStyle {
   static const gold = Color(0xFFF5B942);
 }
@@ -1334,6 +1020,15 @@ class _RecentReviewsSection extends StatelessWidget {
     required this.total,
     required this.onPage,
     required this.onPageSize,
+    required this.usluge,
+    required this.therapists,
+    required this.filterUslugaId,
+    required this.filterZaposlenikId,
+    required this.minOcjena,
+    required this.maxOcjena,
+    required this.onRatingChanged,
+    required this.onServiceChanged,
+    required this.onTherapistChanged,
   });
 
   final List<AdminReviewRow> rows;
@@ -1345,29 +1040,85 @@ class _RecentReviewsSection extends StatelessWidget {
   final int total;
   final ValueChanged<int> onPage;
   final ValueChanged<int> onPageSize;
+  final List<Usluga> usluge;
+  final List<Zaposlenik> therapists;
+  final int? filterUslugaId;
+  final int? filterZaposlenikId;
+  final int? minOcjena;
+  final int? maxOcjena;
+  final void Function(int? min, int? max) onRatingChanged;
+  final void Function(int?) onServiceChanged;
+  final void Function(int?) onTherapistChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return _glassCard(
-      radius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(
               compact ? 16 : 20,
-              compact ? 14 : 18,
+              compact ? 14 : 16,
               compact ? 16 : 20,
               compact ? 10 : 12,
             ),
-            child: Text(
-              'Recent Reviews',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: LuxuryReviewsDashboardScreen.textPrimary,
-              ),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final stacked = c.maxWidth < 640;
+                final filters = _RecentReviewsFilters(
+                  usluge: usluge,
+                  therapists: therapists,
+                  filterUslugaId: filterUslugaId,
+                  filterZaposlenikId: filterZaposlenikId,
+                  minOcjena: minOcjena,
+                  maxOcjena: maxOcjena,
+                  onRatingChanged: onRatingChanged,
+                  onServiceChanged: onServiceChanged,
+                  onTherapistChanged: onTherapistChanged,
+                );
+
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Recent Reviews',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: LuxuryReviewsDashboardScreen.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: filters,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Recent Reviews',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: LuxuryReviewsDashboardScreen.textPrimary,
+                        ),
+                      ),
+                    ),
+                    filters,
+                  ],
+                );
+              },
             ),
           ),
           if (rows.isEmpty)
@@ -1945,7 +1696,6 @@ class _RatingDistributionCard extends StatelessWidget {
     return SizedBox(
       height: cardHeight,
       child: _glassCard(
-        radius: 18,
         child: Padding(
           padding: EdgeInsets.all(compact ? 14 : 16),
           child: Column(
@@ -2045,7 +1795,6 @@ class _TopServicesCard extends StatelessWidget {
     return SizedBox(
       height: cardHeight,
       child: _glassCard(
-        radius: 18,
         child: Padding(
           padding: EdgeInsets.all(compact ? 14 : 16),
           child: Column(
