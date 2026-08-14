@@ -347,7 +347,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Appointments',
-          subtitle: 'Manage, view and organize all spa appointments.',
+          subtitle: 'Manage all spa appointments.',
           searchHint: 'Search clients, appointments…',
           initialSearchQuery: nav.appointmentSearchQuery,
           onSearchSubmitted: nav.setAppointmentSearchQuery,
@@ -636,7 +636,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isCommandCenter
                       ? 'Overview of bookings, revenue and business performance.'
                       : isAppointments
-                      ? 'Manage, view and organize all spa appointments.'
+                      ? 'Manage all spa appointments.'
                       : isCalendar
                       ? 'Manage your spa schedule and appointments.'
                       : isTherapists
