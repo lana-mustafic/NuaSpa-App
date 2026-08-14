@@ -9,6 +9,7 @@ import '../../../screens/admin/admin_suite_route.dart';
 import '../../navigation/desktop_nav.dart';
 import '../desk_global_search_bar.dart';
 import '../../theme/nua_luxury_tokens.dart';
+import 'luxury_confirm_dialog.dart';
 import 'luxury_glass_panel.dart';
 
 /// Shared vertical rhythm between shell header and page body (Dashboard baseline).
@@ -170,34 +171,13 @@ class LuxuryDesktopHeader extends StatelessWidget {
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: NuaLuxuryTokens.voidViolet,
-        title: const Text(
-          'Sign out?',
-          style: TextStyle(color: Color(0xFFF5F3FA), fontWeight: FontWeight.w800),
-        ),
-        content: Text(
-          'You will return to the sign-in screen.',
-          style: TextStyle(
-            color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.75),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFEC4899),
-            ),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+    final ok = await showLuxuryConfirmDialog(
+      context,
+      title: 'Sign out?',
+      message: 'You will return to the sign-in screen.',
+      confirmLabel: 'Sign out',
+      icon: Icons.logout_rounded,
+      destructive: true,
     );
     if (ok == true && context.mounted) {
       final serverOk = await context.read<AuthProvider>().logout();

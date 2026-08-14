@@ -14,6 +14,7 @@ import '../../models/account_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
+import '../../ui/widgets/luxury/luxury_confirm_dialog.dart';
 import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 abstract final class _SetUi {
@@ -206,37 +207,13 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
   }
 
   Future<void> _confirmSignOut(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _SetUi.bgBottom,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text(
-          'Sign out?',
-          style: GoogleFonts.inter(
-            color: _SetUi.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        content: Text(
-          'You will need to sign in again to access appointments, clients, and reports.',
-          style: GoogleFonts.inter(
-            color: _SetUi.textSecondary,
-            height: 1.45,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: _SetUi.pink),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+    final ok = await showLuxuryConfirmDialog(
+      context,
+      title: 'Sign out?',
+      message: 'You will need to sign in again to access your workspace.',
+      confirmLabel: 'Sign out',
+      icon: Icons.logout_rounded,
+      destructive: true,
     );
     if (ok == true && context.mounted) {
       final serverOk = await context.read<AuthProvider>().logout();
