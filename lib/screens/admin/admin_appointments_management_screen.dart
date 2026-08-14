@@ -18,6 +18,33 @@ import '../../ui/widgets/luxury/luxury_desktop_header.dart';
 
 enum _AppointmentView { day, week, month }
 
+Widget _apptDialogOverlay({
+  required Animation<double> animation,
+  required Widget dialog,
+}) {
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: const SizedBox.expand(),
+      ),
+      FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+            child: dialog,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 class AdminAppointmentsManagementScreen extends StatefulWidget {
   const AdminAppointmentsManagementScreen({super.key});
 
@@ -342,33 +369,6 @@ class _AdminAppointmentsManagementScreenState
   final Map<int, String> _lastServices = {};
   final Map<int, String> _lastTherapists = {};
 
-  Widget _appointmentDialogOverlay({
-    required Animation<double> animation,
-    required Widget dialog,
-  }) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: const SizedBox.expand(),
-        ),
-        FadeTransition(
-          opacity: CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          ),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
-              child: dialog,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Future<void> _openCreate(_AppointmentsData data) async {
     final prefillZaposlenikId =
         context.read<DesktopNav>().takeAppointmentPrefillZaposlenikId();
@@ -379,7 +379,7 @@ class _AdminAppointmentsManagementScreenState
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return _appointmentDialogOverlay(
+        return _apptDialogOverlay(
           animation: animation,
           dialog: _AdminAppointmentCreateDialog(
             data: data,
@@ -454,7 +454,7 @@ class _AdminAppointmentsManagementScreenState
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return _appointmentDialogOverlay(
+        return _apptDialogOverlay(
           animation: animation,
           dialog: _CancelAppointmentDialog(appointment: r),
         );
@@ -501,7 +501,7 @@ class _AdminAppointmentsManagementScreenState
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return _appointmentDialogOverlay(
+        return _apptDialogOverlay(
           animation: animation,
           dialog: _AdminAppointmentCreateDialog(
             data: data,
@@ -538,30 +538,38 @@ class _AdminAppointmentsManagementScreenState
     List<Usluga> services,
     List<AdminClientRow> clients,
   ) {
-    showDialog<void>(
+    showGeneralDialog<void>(
       context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (dialogContext) => _AppointmentDetailsModal(
-        appointment: r,
-        services: services,
-        clients: clients,
-        onEdit: () {
-          Navigator.pop(dialogContext);
-          _edit(r);
-        },
-        onConfirmToggle: (appt) {
-          Navigator.pop(dialogContext);
-          _toggleConfirmed(appt);
-        },
-        onComplete: (appt) {
-          Navigator.pop(dialogContext);
-          _complete(appt);
-        },
-        onCancel: (appt) {
-          Navigator.pop(dialogContext);
-          _cancel(appt);
-        },
-      ),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return _apptDialogOverlay(
+          animation: animation,
+          dialog: _AppointmentDetailsModal(
+            appointment: r,
+            services: services,
+            clients: clients,
+            onEdit: () {
+              Navigator.pop(dialogContext);
+              _edit(r);
+            },
+            onConfirmToggle: (appt) {
+              Navigator.pop(dialogContext);
+              _toggleConfirmed(appt);
+            },
+            onComplete: (appt) {
+              Navigator.pop(dialogContext);
+              _complete(appt);
+            },
+            onCancel: (appt) {
+              Navigator.pop(dialogContext);
+              _cancel(appt);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -598,6 +606,7 @@ abstract final class _ApptUi {
 /// Compact appointment create/edit modal (fits without scrolling).
 abstract final class _ApptDialogLayout {
   static const double maxWidth = 500;
+  static const double detailsMaxWidth = 560;
   static const double minWidth = 400;
   static const EdgeInsets padding = EdgeInsets.fromLTRB(20, 18, 20, 18);
   static const double borderRadius = 20;
@@ -1722,107 +1731,131 @@ class _AppointmentDetailsModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxH = MediaQuery.sizeOf(context).height * 0.8;
+    final maxH = MediaQuery.sizeOf(context).height * 0.88;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFA120A24),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            boxShadow: [
-              BoxShadow(
-                color: _ApptUi.purple.withValues(alpha: 0.22),
-                blurRadius: 48,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 80,
-                offset: const Offset(0, 24),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Appointment Details',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: _ApptUi.textPrimary,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: _ApptDialogLayout.minWidth,
+        maxWidth: _ApptDialogLayout.detailsMaxWidth,
+        maxHeight: maxH,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xEB120A24),
+              borderRadius:
+                  BorderRadius.circular(_ApptDialogLayout.borderRadius),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              boxShadow: [
+                BoxShadow(
+                  color: _ApptUi.purple.withValues(alpha: 0.22),
+                  blurRadius: 48,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: _ApptDialogLayout.padding.copyWith(bottom: 0),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: const LinearGradient(
+                            colors: [_ApptUi.purple, _ApptUi.purple2],
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.event_note_rounded,
+                          color: Colors.white,
+                          size: 22,
                         ),
                       ),
-                    ),
-                    _DetailsModalMoreMenu(
-                      appointment: appointment,
-                      onConfirmToggle: onConfirmToggle,
-                      onComplete: onComplete,
-                      onCancel: onCancel,
-                    ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: Colors.white.withValues(alpha: 0.7),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Appointment Details',
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ApptUi.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'View booking information and client history',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withValues(alpha: 0.55),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      _DetailsModalMoreMenu(
+                        appointment: appointment,
+                        onConfirmToggle: onConfirmToggle,
+                        onComplete: onComplete,
+                        onCancel: onCancel,
+                      ),
+                      const SizedBox(width: 4),
+                      _PremiumModalCloseButton(
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxH - 140),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                    child: _AppointmentDetailsContent(
-                      appointment: appointment,
-                      services: services,
-                      clients: clients,
+                Flexible(
+                  child: _ApptScrollbarTheme(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        _ApptDialogLayout.padding.left,
+                        _ApptDialogLayout.sectionGap,
+                        _ApptDialogLayout.padding.right,
+                        8,
+                      ),
+                      child: _AppointmentDetailsContent(
+                        appointment: appointment,
+                        services: services,
+                        clients: clients,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Edit Appointment'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _ApptUi.purple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                Padding(
+                  padding: _ApptDialogLayout.padding,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _PremiumModalCancelButton(
+                        label: 'Close',
+                        onPressed: () => Navigator.pop(context),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      _PremiumModalCreateButton(
+                        label: 'Edit Appointment',
+                        icon: Icons.edit_outlined,
+                        enabled: true,
+                        onPressed: onEdit,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1924,6 +1957,8 @@ class _AppointmentDetailsContent extends StatelessWidget {
   final List<Usluga> services;
   final List<AdminClientRow> clients;
 
+  static const _readOnlyTrailing = SizedBox(width: 4);
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<RezervacijaPovijestItem>>(
@@ -1947,121 +1982,166 @@ class _AppointmentDetailsContent extends StatelessWidget {
             (appointment.isPlacena ? appointment.uslugaCijena : 0.0);
         final phone = appointment.korisnikTelefon?.trim();
         final email = appointment.korisnikEmail?.trim();
+        final clientName = appointment.korisnikIme?.trim().isNotEmpty == true
+            ? appointment.korisnikIme!.trim()
+            : 'Guest';
+        final category = _AppointmentsTable.serviceCategoryLabel(
+          services,
+          appointment,
+        );
+        final durationMinutes = appointment.uslugaTrajanjeMinuta > 0
+            ? appointment.uslugaTrajanjeMinuta
+            : 60;
+        final notes = appointment.napomenaZaTerapeuta?.trim().isNotEmpty == true
+            ? appointment.napomenaZaTerapeuta!.trim()
+            : 'No notes on file.';
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _PremiumApptStatusRow(
+              status: _AppointmentsTable.statusLabel(appointment),
+              confirmed: appointment.isPotvrdjena,
+              paid: appointment.isPlacena,
+            ),
+            const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Client information'),
-            _DetailRow(
-              icon: Icons.person_outline,
+            _PremiumApptFieldCard(
+              icon: Icons.person_outline_rounded,
               label: 'Name',
-              value: appointment.korisnikIme?.trim().isNotEmpty == true
-                  ? appointment.korisnikIme!.trim()
-                  : 'Guest',
+              value: clientName,
+              trailing: _readOnlyTrailing,
+              enabled: false,
             ),
-            _DetailRow(
-              icon: Icons.phone_outlined,
-              label: 'Phone',
-              value: phone != null && phone.isNotEmpty ? phone : '—',
-            ),
-            _DetailRow(
-              icon: Icons.email_outlined,
-              label: 'Email',
-              value: email != null && email.isNotEmpty ? email : '—',
-            ),
-            if (appointment.isVip || appointment.premiumKlijent)
-              Padding(
-                padding: const EdgeInsets.only(left: 30, bottom: 8),
-                child: Wrap(
-                  spacing: 6,
-                  children: [
-                    if (appointment.isVip)
-                      const _StatusBadge(
-                        label: 'VIP',
-                        color: NuaLuxuryTokens.champagneGold,
-                      ),
-                    if (appointment.premiumKlijent)
-                      const _StatusBadge(
-                        label: 'Loyal client',
-                        color: NuaLuxuryTokens.champagneGold,
-                      ),
-                  ],
+            const SizedBox(height: _ApptDialogLayout.fieldGap),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.phone_outlined,
+                    label: 'Phone',
+                    value: phone != null && phone.isNotEmpty ? phone : '—',
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.email_outlined,
+                    label: 'Email',
+                    value: email != null && email.isNotEmpty ? email : '—',
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
+                ),
+              ],
+            ),
+            if (appointment.isVip || appointment.premiumKlijent) ...[
+              const SizedBox(height: _ApptDialogLayout.fieldGap),
+              Wrap(
+                spacing: 6,
+                children: [
+                  if (appointment.isVip)
+                    const _StatusBadge(
+                      label: 'VIP',
+                      color: NuaLuxuryTokens.champagneGold,
+                    ),
+                  if (appointment.premiumKlijent)
+                    const _StatusBadge(
+                      label: 'Loyal client',
+                      color: NuaLuxuryTokens.champagneGold,
+                    ),
+                ],
               ),
-            const SizedBox(height: 8),
+            ],
+            const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Appointment information'),
-            _DetailRow(
+            _PremiumApptFieldCard(
               icon: Icons.event_outlined,
               label: 'Date & time',
               value:
                   '${_date(appointment.datumRezervacije)} at ${_AppointmentsTable.timeLabel(appointment.datumRezervacije)}',
+              trailing: _readOnlyTrailing,
+              enabled: false,
             ),
-            _DetailRow(
-              icon: Icons.spa_outlined,
-              label: 'Service',
-              value: appointment.uslugaNaziv ?? 'Spa Ritual',
+            const SizedBox(height: _ApptDialogLayout.fieldGap),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.spa_outlined,
+                    label: 'Service',
+                    value: appointment.uslugaNaziv ?? 'Spa Ritual',
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.category_outlined,
+                    label: 'Category',
+                    value: category,
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
+                ),
+              ],
             ),
-            _DetailRow(
-              icon: Icons.category_outlined,
-              label: 'Category',
-              value: _AppointmentsTable.serviceCategoryLabel(
-                services,
-                appointment,
-              ),
+            const SizedBox(height: _ApptDialogLayout.fieldGap),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.timer_outlined,
+                    label: 'Duration',
+                    value: '$durationMinutes min',
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PremiumApptFieldCard(
+                    icon: Icons.sell_outlined,
+                    label: 'Price',
+                    value: formatKm(appointment.uslugaCijena),
+                    trailing: _readOnlyTrailing,
+                    enabled: false,
+                  ),
+                ),
+              ],
             ),
-            _DetailRow(
-              icon: Icons.timer_outlined,
-              label: 'Duration',
-              value:
-                  '${appointment.uslugaTrajanjeMinuta > 0 ? appointment.uslugaTrajanjeMinuta : 60} min',
-            ),
-            _DetailRow(
-              icon: Icons.verified_outlined,
-              label: 'Status',
-              customValue: _StatusBadge(
-                label: _AppointmentsTable.statusLabel(appointment),
-                color: _AppointmentsTable.statusColor(appointment),
-              ),
-            ),
-            _DetailRow(
-              icon: Icons.payments_outlined,
-              label: 'Payment',
-              customValue: _StatusBadge(
-                label: appointment.isPlacena ? 'Paid' : 'Unpaid',
-                color: appointment.isPlacena
-                    ? const Color(0xFF2DD4BF)
-                    : const Color(0xFFF5B942),
-              ),
-            ),
-            _DetailRow(
-              icon: Icons.sell_outlined,
-              label: 'Price',
-              value: formatKm(appointment.uslugaCijena),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Therapist'),
-            _DetailRow(
+            _PremiumApptFieldCard(
               icon: Icons.badge_outlined,
               label: 'Assigned therapist',
               value: _therapistDetailLabel(appointment),
+              trailing: _readOnlyTrailing,
+              enabled: false,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Notes'),
-            _DetailRow(
+            _PremiumApptNotesCard(
               icon: Icons.notes_outlined,
               label: 'Client notes',
-              value: appointment.napomenaZaTerapeuta?.trim().isNotEmpty == true
-                  ? appointment.napomenaZaTerapeuta!.trim()
-                  : 'No notes on file.',
+              value: notes,
             ),
             if (appointment.isOtkazana &&
-                appointment.razlogOtkaza?.trim().isNotEmpty == true)
-              _DetailRow(
+                appointment.razlogOtkaza?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: _ApptDialogLayout.fieldGap),
+              _PremiumApptNotesCard(
                 icon: Icons.cancel_outlined,
                 label: 'Cancellation reason',
                 value: appointment.razlogOtkaza!.trim(),
               ),
-            const SizedBox(height: 12),
+            ],
+            const SizedBox(height: _ApptDialogLayout.sectionGap),
             _DetailsSectionTitle(title: 'Client history'),
             _ClientHistoryCard(
               total: history.length + 1,
@@ -2112,15 +2192,79 @@ class _DetailsSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title,
         style: GoogleFonts.inter(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-          color: Colors.white.withValues(alpha: 0.52),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+          color: _ApptUi.lavender.withValues(alpha: 0.75),
         ),
+      ),
+    );
+  }
+}
+
+class _PremiumApptNotesCard extends StatelessWidget {
+  const _PremiumApptNotesCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: _ApptUi.purple.withValues(alpha: 0.18),
+            ),
+            child: Icon(icon, size: 20, color: _ApptUi.purple2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _ApptUi.lavender.withValues(alpha: 0.75),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    height: 1.45,
+                    color: _ApptUi.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2451,65 +2595,6 @@ class _StatusBadge extends StatelessWidget {
       );
 }
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    this.value,
-    this.helper,
-    this.customValue,
-  });
-  final IconData icon;
-  final String label;
-  final String? value, helper;
-  final Widget? customValue;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    decoration: BoxDecoration(
-      border: Border(
-        top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: NuaLuxuryTokens.lavenderWhisper),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.46),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              customValue ??
-                  Text(
-                    value ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-              if (helper != null)
-                Text(
-                  helper!,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.46),
-                    fontSize: 12,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 class _ClientHistoryCard extends StatelessWidget {
   const _ClientHistoryCard({
     required this.total,
@@ -2524,15 +2609,23 @@ class _ClientHistoryCard extends StatelessWidget {
   final List<RezervacijaPovijestItem> history;
 
   void _showHistory(BuildContext context) {
-    showDialog<void>(
+    showGeneralDialog<void>(
       context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (ctx) => _ClientHistoryModal(
-        total: total,
-        spent: spent,
-        last: last,
-        history: history,
-      ),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return _apptDialogOverlay(
+          animation: animation,
+          dialog: _ClientHistoryModal(
+            total: total,
+            spent: spent,
+            last: last,
+            history: history,
+          ),
+        );
+      },
     );
   }
 
@@ -2695,177 +2788,187 @@ class _ClientHistoryModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxH = MediaQuery.sizeOf(context).height * 0.82;
+    final maxH = MediaQuery.sizeOf(context).height * 0.88;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFA120A24),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            boxShadow: [
-              BoxShadow(
-                color: _ApptUi.purple.withValues(alpha: 0.22),
-                blurRadius: 48,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 80,
-                offset: const Offset(0, 24),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 12, 0),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _ApptUi.purple.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: _ApptUi.purple.withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.history_rounded,
-                        color: Color(0xFFB388FF),
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Client History',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: _ApptUi.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Previous appointments for this client',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _PremiumModalCloseButton(
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: _ApptDialogLayout.minWidth,
+        maxWidth: _ApptDialogLayout.detailsMaxWidth,
+        maxHeight: maxH,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_ApptDialogLayout.borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xEB120A24),
+              borderRadius:
+                  BorderRadius.circular(_ApptDialogLayout.borderRadius),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              boxShadow: [
+                BoxShadow(
+                  color: _ApptUi.purple.withValues(alpha: 0.22),
+                  blurRadius: 48,
+                  offset: const Offset(0, 16),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _ClientHistoryMetricChip(
-                        label: 'Total appointments',
-                        value: '$total',
-                        icon: Icons.event_available_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _ClientHistoryMetricChip(
-                        label: 'Total spent',
-                        value: '${spent.toStringAsFixed(0)} KM',
-                        icon: Icons.payments_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _ClientHistoryMetricChip(
-                        label: 'Last appointment',
-                        value: last,
-                        icon: Icons.schedule_outlined,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxH - 220),
-                  child: history.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _ApptEmptyIllustration(
-                                icon: Icons.history_rounded,
-                                compact: true,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No previous appointments',
-                                style: GoogleFonts.inter(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: _ApptUi.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'This client has no earlier visits on record.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: Colors.white.withValues(alpha: 0.52),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : Scrollbar(
-                          thumbVisibility: true,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
-                            itemCount: history.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (_, i) => _ClientHistoryListTile(
-                              item: history[i],
-                            ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: _ApptDialogLayout.padding.copyWith(bottom: 0),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: const LinearGradient(
+                            colors: [_ApptUi.purple, _ApptUi.purple2],
                           ),
                         ),
+                        child: const Icon(
+                          Icons.history_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Client History',
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ApptUi.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Previous appointments for this client',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withValues(alpha: 0.55),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _PremiumModalCloseButton(
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 8, 22, 20),
-                child: Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    _ApptDialogLayout.padding.left,
+                    _ApptDialogLayout.sectionGap,
+                    _ApptDialogLayout.padding.right,
+                    0,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _ClientHistoryMetricChip(
+                          label: 'Total appointments',
+                          value: '$total',
+                          icon: Icons.event_available_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ClientHistoryMetricChip(
+                          label: 'Total spent',
+                          value: '${spent.toStringAsFixed(0)} KM',
+                          icon: Icons.payments_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ClientHistoryMetricChip(
+                          label: 'Last appointment',
+                          value: last,
+                          icon: Icons.schedule_outlined,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxH - 220),
+                    child: history.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const _ApptEmptyIllustration(
+                                  icon: Icons.history_rounded,
+                                  compact: true,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No previous appointments',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ApptUi.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'This client has no earlier visits on record.',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.white.withValues(alpha: 0.52),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _ApptScrollbarTheme(
+                            child: ListView.separated(
+                              padding: EdgeInsets.fromLTRB(
+                                _ApptDialogLayout.padding.left,
+                                16,
+                                _ApptDialogLayout.padding.right,
+                                8,
+                              ),
+                              itemCount: history.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (_, i) => _ClientHistoryListTile(
+                                item: history[i],
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                Padding(
+                  padding: _ApptDialogLayout.padding,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _PremiumModalCancelButton(
+                        label: 'Close',
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
