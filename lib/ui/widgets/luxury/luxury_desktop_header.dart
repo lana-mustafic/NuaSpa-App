@@ -376,7 +376,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
           day: day,
           notificationCount: badgeCount,
           title: 'Therapists',
-          subtitle: 'Manage your spa therapists, specialties and schedules.',
+          subtitle: 'Manage therapists and schedules.',
           summaryLine: nav.therapistPageSummary,
           searchHint: 'Search therapists…',
           onSearchSubmitted: nav.setTherapistSearchQuery,
@@ -640,7 +640,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isCalendar
                       ? 'Manage your spa schedule and appointments.'
                       : isTherapists
-                      ? 'Manage your spa therapists, specialties and schedules.'
+                      ? 'Manage therapists and schedules.'
                       : isTherapistDash
                       ? (nav.therapistDashboardSubtitle ??
                           'Your schedule, clients and appointments for today.')
