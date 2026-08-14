@@ -100,7 +100,7 @@ List<TherapistReviewRow> _sortReviews(
 
 String _reviewsHeaderSubtitle(TherapistMyReviewsSummary summary) {
   if (summary.totalCount == 0) {
-    return 'Client feedback from appointments you performed.';
+    return 'Feedback from your appointments.';
   }
   final avg = summary.averageRating.toStringAsFixed(1);
   if (summary.totalCount == 1) {
@@ -180,7 +180,7 @@ class _TherapistReviewsScreenState extends State<TherapistReviewsScreen>
   String _lastNavSearch = '';
   String _headerTitle = 'My Reviews';
   String _headerSubtitle =
-      'Client feedback from appointments you performed.';
+      'Feedback from your appointments.';
   Timer? _searchDebounce;
   bool _loadingMore = false;
   late final AnimationController _fadeCtrl;

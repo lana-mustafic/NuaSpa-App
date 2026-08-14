@@ -552,7 +552,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
         notificationCount: badgeCount,
         title: nav.therapistReviewsTitle ?? 'My Reviews',
         subtitle: nav.therapistReviewsSubtitle ??
-            'Client feedback from appointments you performed.',
+            'Feedback from your appointments.',
         searchHint: 'Search client, service, or comment…',
         initialSearchQuery: nav.therapistReviewsSearchQuery,
         onSearchSubmitted: nav.setTherapistReviewsSearchQuery,
@@ -671,7 +671,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
                       : isTherapistServices
                       ? 'View treatments you are certified to perform at NuaSpa.'
                       : isTherapistReviews
-                      ? 'Client feedback from appointments you performed.'
+                      ? 'Feedback from your appointments.'
                       : isTherapistProfile
                       ? (nav.therapistProfileSubtitle ??
                           'Manage your therapist profile, contact details, and professional identity.')
