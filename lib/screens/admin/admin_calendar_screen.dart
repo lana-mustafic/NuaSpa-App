@@ -1129,7 +1129,7 @@ class _WeekTimeline extends StatelessWidget {
                     selected: selected,
                     onSelect: onSelect,
                     isDayView: isDay,
-                    showColumnEmpty: isDay,
+                    showColumnEmpty: false,
                   ),
                 ),
             ],
