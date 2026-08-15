@@ -104,6 +104,8 @@ class DesktopNav extends ChangeNotifier {
   VoidCallback? _reportsPdfExport;
   bool _reportsPdfExporting = false;
   VoidCallback? _reviewsCsvExport;
+  VoidCallback? _paymentsCsvExport;
+  bool _paymentsCsvExporting = false;
 
   VoidCallback? get reportsPdfExport => _reportsPdfExport;
 
@@ -111,12 +113,26 @@ class DesktopNav extends ChangeNotifier {
 
   VoidCallback? get reviewsCsvExport => _reviewsCsvExport;
 
+  VoidCallback? get paymentsCsvExport => _paymentsCsvExport;
+
+  bool get paymentsCsvExporting => _paymentsCsvExporting;
+
   void setReportsPdfExport(VoidCallback? handler) {
     _reportsPdfExport = handler;
   }
 
   void setReviewsCsvExport(VoidCallback? handler) {
     _reviewsCsvExport = handler;
+  }
+
+  void setPaymentsCsvExport(VoidCallback? handler) {
+    _paymentsCsvExport = handler;
+  }
+
+  void setPaymentsCsvExporting(bool exporting) {
+    if (_paymentsCsvExporting == exporting) return;
+    _paymentsCsvExporting = exporting;
+    notifyListeners();
   }
 
   void setReportsPdfExporting(bool exporting) {

@@ -407,10 +407,12 @@ class LuxuryDesktopHeader extends StatelessWidget {
           notificationCount: badgeCount,
           title: 'Payments',
           subtitle: 'Track revenue, refunds, and payment activity.',
-          searchHint: 'Search across NuaSpa...',
+          searchHint: 'Search...',
           initialSearchQuery: nav.paymentSearchQuery,
           onSearchSubmitted: nav.setPaymentSearchQuery,
           onSearchChanged: nav.setPaymentSearchQuery,
+          showPaymentsCsvExport: true,
+          useHeaderDateRange: true,
         );
       }
       if (isCatalog) {
@@ -950,6 +952,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
     Widget? trailingToolbar,
     bool showReportsPdfExport = false,
     bool showReviewsCsvExport = false,
+    bool showPaymentsCsvExport = false,
     bool useHeaderDateRange = false,
   }) {
     return _SpaciousLuxuryPageHeader(
@@ -966,6 +969,7 @@ class LuxuryDesktopHeader extends StatelessWidget {
       trailingToolbar: trailingToolbar,
       showReportsPdfExport: showReportsPdfExport,
       showReviewsCsvExport: showReviewsCsvExport,
+      showPaymentsCsvExport: showPaymentsCsvExport,
       useHeaderDateRange: useHeaderDateRange,
       fmtRange: _fmtRange,
       onPickDateRange: () async {
@@ -1012,6 +1016,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
     this.trailingToolbar,
     this.showReportsPdfExport = false,
     this.showReviewsCsvExport = false,
+    this.showPaymentsCsvExport = false,
     this.useHeaderDateRange = false,
     this.fmtRange,
     this.onPickDateRange,
@@ -1030,6 +1035,7 @@ class _SpaciousLuxuryPageHeader extends StatefulWidget {
   final Widget? trailingToolbar;
   final bool showReportsPdfExport;
   final bool showReviewsCsvExport;
+  final bool showPaymentsCsvExport;
   final bool useHeaderDateRange;
   final String Function(DateTimeRange)? fmtRange;
   final VoidCallback? onPickDateRange;
@@ -1303,6 +1309,7 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
   Widget _controlsRow({required bool showProfileDetails}) {
     final needsNav = widget.showReportsPdfExport ||
         widget.showReviewsCsvExport ||
+        widget.showPaymentsCsvExport ||
         widget.useHeaderDateRange;
     final nav = needsNav ? context.watch<DesktopNav>() : null;
 
@@ -1318,6 +1325,13 @@ class _SpaciousLuxuryPageHeaderState extends State<_SpaciousLuxuryPageHeader> {
         ],
         if (widget.showReviewsCsvExport && nav != null) ...[
           _ReviewsCsvHeaderButton(onExport: nav.reviewsCsvExport),
+          const SizedBox(width: _gap),
+        ],
+        if (widget.showPaymentsCsvExport && nav != null) ...[
+          _PaymentsCsvHeaderButton(
+            exporting: nav.paymentsCsvExporting,
+            onExport: nav.paymentsCsvExport,
+          ),
           const SizedBox(width: _gap),
         ],
         Builder(
@@ -1587,6 +1601,56 @@ class _ProfileMenuRow extends StatelessWidget {
         const SizedBox(width: 12),
         Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+class _PaymentsCsvHeaderButton extends StatelessWidget {
+  const _PaymentsCsvHeaderButton({
+    required this.exporting,
+    required this.onExport,
+  });
+
+  final bool exporting;
+  final VoidCallback? onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = !exporting && onExport != null;
+
+    return _DashboardHeaderControl(
+      onTap: enabled ? onExport! : () {},
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (exporting)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withValues(alpha: 0.75),
+              ),
+            )
+          else
+            Icon(
+              Icons.download_outlined,
+              size: 20,
+              color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.9),
+            ),
+          const SizedBox(width: 10),
+          Text(
+            exporting ? 'Exporting...' : 'Export',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: enabled
+                  ? const Color(0xFFF5F3FA)
+                  : const Color(0xFFF5F3FA).withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

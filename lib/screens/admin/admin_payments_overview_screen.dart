@@ -61,7 +61,6 @@ class _AdminPaymentsOverviewScreenState
   String _methodFilter = 'all';
   String _statusFilter = 'all';
   String _serviceFilter = 'all';
-  final TextEditingController _tableSearch = TextEditingController();
   int _page = 1;
   int _pageSize = 10;
 
@@ -71,22 +70,80 @@ class _AdminPaymentsOverviewScreenState
   bool _exporting = false;
   String? _error;
   Timer? _searchDebounce;
-  String? _lastNavSearch;
+  DesktopNav? _nav;
+  String _syncedPaymentQuery = '';
+  DateTimeRange? _syncedHeaderRange;
 
   @override
   void initState() {
     super.initState();
     _range = DesktopNav.defaultHeaderDateRange();
-    _tableSearch.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final nav = Provider.of<DesktopNav>(context, listen: false);
-      setState(() => _range = nav.headerDateRange);
-      final q = nav.takePendingPaymentSearch();
-      if (q != null && q.isNotEmpty) {
-        _tableSearch.text = q;
-      }
       await _bootstrap();
+    });
+  }
+
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<DesktopNav>();
+    if (_nav != nav) {
+      _nav?.removeListener(_onNavChanged);
+      _nav = nav;
+      _nav!.addListener(_onNavChanged);
+      _range = nav.headerDateRange;
+      _syncedHeaderRange = _range;
+      final pending = nav.takePendingPaymentSearch();
+      if (pending != null && pending.isNotEmpty) {
+        nav.setPaymentSearchQuery(pending);
+        _syncedPaymentQuery = pending.trim();
+      } else {
+        _syncedPaymentQuery = nav.paymentSearchQuery;
+      }
+    }
+    _nav!.setPaymentsCsvExport(_exportReport);
+    _nav!.setPaymentsCsvExporting(_exporting);
+  }
+
+  void _onNavChanged() {
+    if (!mounted || _nav == null) return;
+    _handleHeaderRangeChange();
+    _handleSearchChange();
+  }
+
+  void _handleHeaderRangeChange() {
+    final headerRange = _nav!.headerDateRange;
+    if (_syncedHeaderRange != null &&
+        _sameDay(_syncedHeaderRange!.start, headerRange.start) &&
+        _sameDay(_syncedHeaderRange!.end, headerRange.end)) {
+      return;
+    }
+    _syncedHeaderRange = headerRange;
+    setState(() {
+      _range = DateTimeRange(
+        start: _dayOnly(headerRange.start),
+        end: _dayOnly(headerRange.end),
+      );
+      _page = 1;
+    });
+    unawaited(_load());
+  }
+
+  void _handleSearchChange() {
+    final q = _nav!.paymentSearchQuery;
+    if (q == _syncedPaymentQuery) return;
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _syncedPaymentQuery = q;
+      setState(() => _page = 1);
+      unawaited(_load());
     });
   }
 
@@ -97,26 +154,18 @@ class _AdminPaymentsOverviewScreenState
     await _load();
   }
 
-  void _onSearchChanged() {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 450), () {
-      if (!mounted) return;
-      setState(() => _page = 1);
-      _load();
-    });
-  }
-
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
+    final search = _syncedPaymentQuery.trim();
     final dash = await _api.getAdminFinanceDashboard(
       from: _range.start,
       toInclusive: _range.end,
       page: _page,
       pageSize: _pageSize,
-      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text.trim(),
+      search: search.isEmpty ? null : search,
       status: _statusFilter == 'all' ? null : _statusFilter,
       methodCategory: _methodFilter == 'all' ? null : _methodFilter,
       uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
@@ -149,65 +198,11 @@ class _AdminPaymentsOverviewScreenState
   @override
   void dispose() {
     _searchDebounce?.cancel();
-    _tableSearch.removeListener(_onSearchChanged);
+    _nav?.removeListener(_onNavChanged);
+    _nav?.setPaymentsCsvExport(null);
+    _nav?.setPaymentsCsvExporting(false);
     _scroll.dispose();
-    _tableSearch.dispose();
     super.dispose();
-  }
-
-  String _fmtRange() {
-    String f(DateTime d) {
-      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    }
-
-    return '${f(_range.start)} – ${f(_range.end)}';
-  }
-
-  Future<void> _pickRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: _range,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: NuaLuxuryTokens.softPurpleGlow,
-              surface: NuaLuxuryTokens.voidViolet,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _range = DateTimeRange(
-          start: DateTime(picked.start.year, picked.start.month, picked.start.day),
-          end: DateTime(picked.end.year, picked.end.month, picked.end.day),
-        );
-        _page = 1;
-      });
-      Provider.of<DesktopNav>(context, listen: false).setHeaderDateRange(_range);
-      await _load();
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final nav = Provider.of<DesktopNav>(context);
-    final q = nav.paymentSearchQuery;
-    if (q != _lastNavSearch) {
-      _lastNavSearch = q;
-      if (_tableSearch.text != q) {
-        _tableSearch.text = q;
-        _page = 1;
-        unawaited(_load());
-      }
-    }
   }
 
   Future<void> _clearFilters() async {
@@ -217,7 +212,8 @@ class _AdminPaymentsOverviewScreenState
       _serviceFilter = 'all';
       _page = 1;
     });
-    _tableSearch.clear();
+    _syncedPaymentQuery = '';
+    _nav?.setPaymentSearchQuery('');
     await _load();
   }
 
@@ -256,16 +252,19 @@ class _AdminPaymentsOverviewScreenState
   Future<void> _exportReport() async {
     if (_exporting) return;
     setState(() => _exporting = true);
+    _nav?.setPaymentsCsvExporting(true);
+    final search = _syncedPaymentQuery.trim();
     final result = await _api.downloadAdminFinanceCsv(
       from: _range.start,
       toInclusive: _range.end,
-      search: _tableSearch.text.trim().isEmpty ? null : _tableSearch.text.trim(),
+      search: search.isEmpty ? null : search,
       status: _statusFilter == 'all' ? null : _statusFilter,
       methodCategory: _methodFilter == 'all' ? null : _methodFilter,
       uslugaId: _serviceFilter == 'all' ? null : int.tryParse(_serviceFilter),
     );
     if (!mounted) return;
     setState(() => _exporting = false);
+    _nav?.setPaymentsCsvExporting(false);
     var msg = result.ok
         ? 'CSV report saved and opened.'
         : (result.errorMessage ?? 'CSV export failed.');
@@ -288,8 +287,7 @@ class _AdminPaymentsOverviewScreenState
     final mq = MediaQuery.sizeOf(context);
     final w = mq.width;
     final tight = mq.height < 760 || w < 1200;
-    final gap = tight ? 8.0 : 10.0;
-    final pad = tight ? 12.0 : 16.0;
+    final gap = tight ? 10.0 : 12.0;
 
     if (_error != null && _dash == null && !_loading) {
       return Material(
@@ -354,32 +352,18 @@ class _AdminPaymentsOverviewScreenState
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: ClampingScrollPhysics(),
                   ),
-                  padding: LuxuryPageChrome.bodyPadding.copyWith(
-                    left: pad,
-                    right: pad,
-                    top: 8,
-                    bottom: pad + 8,
-                  ),
+                  padding: LuxuryPageChrome.bodyPadding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _PaymentsActionsBar(
-                        theme: theme,
-                        compact: tight,
-                        rangeLabel: _fmtRange(),
-                        exporting: _exporting,
-                        onPickRange: _pickRange,
-                        onExport: _exportReport,
-                      ),
                       if (_loading && _dash != null) ...[
-                        const SizedBox(height: 6),
                         const LinearProgressIndicator(
                           minHeight: 2,
                           color: NuaLuxuryTokens.softPurpleGlow,
                           backgroundColor: Colors.transparent,
                         ),
+                        SizedBox(height: gap),
                       ],
-                      SizedBox(height: gap),
                       _KpiStrip(compact: tight, width: w, kpi: _dash?.kpi),
                       SizedBox(height: gap),
                       _RevenueTrendCard(
@@ -390,7 +374,7 @@ class _AdminPaymentsOverviewScreenState
                       if (_dash != null &&
                           (_dash!.metodePostotak.isNotEmpty ||
                               _dash!.nedavnaAktivnost.isNotEmpty)) ...[
-                        SizedBox(height: gap - 2),
+                        SizedBox(height: gap),
                         _FinanceInsightsRow(
                           theme: theme,
                           compact: tight,
@@ -398,11 +382,14 @@ class _AdminPaymentsOverviewScreenState
                           activity: _dash!.nedavnaAktivnost,
                         ),
                       ],
-                      SizedBox(height: gap - 2),
-                      _FilterStrip(
+                      SizedBox(height: gap),
+                      _PaymentsTableBlock(
                         theme: theme,
                         compact: tight,
-                        tableSearch: _tableSearch,
+                        rows: _dash?.redovi ?? const [],
+                        page: _page,
+                        pageSize: _pageSize,
+                        total: _dash?.ukupno ?? 0,
                         usluge: _usluge,
                         method: _methodFilter,
                         status: _statusFilter,
@@ -428,16 +415,6 @@ class _AdminPaymentsOverviewScreenState
                           });
                           await _load();
                         },
-                        onClearFilters: _clearFilters,
-                      ),
-                      SizedBox(height: gap - 2),
-                      _PaymentsTableBlock(
-                        theme: theme,
-                        compact: tight,
-                        rows: _dash?.redovi ?? const [],
-                        page: _page,
-                        pageSize: _pageSize,
-                        total: _dash?.ukupno ?? 0,
                         onPage: (p) async {
                           setState(() => _page = p);
                           await _load();
@@ -479,7 +456,7 @@ class _AdminPaymentsOverviewScreenState
 
 Widget _pgGlass({
   required Widget child,
-  double radius = 22,
+  double radius = 20,
   double borderOpacity = 0.08,
 }) {
   return ClipRRect(
@@ -506,108 +483,6 @@ Widget _pgGlass({
       ),
     ),
   );
-}
-
-// --- Page actions (date range + export; title lives in app chrome) -----------
-
-class _PaymentsActionsBar extends StatelessWidget {
-  const _PaymentsActionsBar({
-    required this.theme,
-    required this.compact,
-    required this.rangeLabel,
-    required this.exporting,
-    required this.onPickRange,
-    required this.onExport,
-  });
-
-  final ThemeData theme;
-  final bool compact;
-  final String rangeLabel;
-  final bool exporting;
-  final VoidCallback onPickRange;
-  final VoidCallback onExport;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _rangePill(theme, rangeLabel, onPickRange),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: exporting ? null : onExport,
-          icon: exporting
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white.withValues(alpha: 0.7),
-                  ),
-                )
-              : Icon(
-                  Icons.ios_share_rounded,
-                  size: 17,
-                  color: Colors.white.withValues(alpha: 0.75),
-                ),
-          label: Text(exporting ? 'Exporting...' : 'Export'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white.withValues(alpha: 0.88),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 14 : 16,
-              vertical: compact ? 10 : 11,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _rangePill(ThemeData theme, String label, VoidCallback onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withValues(alpha: 0.04),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.date_range_rounded,
-                size: 17,
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AdminPaymentsOverviewScreen.textPrimary,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                Icons.expand_more_rounded,
-                size: 18,
-                color: Colors.white.withValues(alpha: 0.4),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // --- KPI --------------------------------------------------------------------
@@ -670,7 +545,7 @@ class _KpiStrip extends StatelessWidget {
       return Row(
         children: [
           for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) SizedBox(width: compact ? 8 : 10),
+            if (i > 0) SizedBox(width: compact ? 10 : 12),
             Expanded(child: cards[i]),
           ],
         ],
@@ -678,8 +553,8 @@ class _KpiStrip extends StatelessWidget {
     }
 
     return Wrap(
-      spacing: compact ? 8 : 10,
-      runSpacing: compact ? 8 : 10,
+      spacing: compact ? 10 : 12,
+      runSpacing: compact ? 10 : 12,
       children: [
         for (final c in cards)
           SizedBox(
@@ -719,21 +594,21 @@ class _KpiCard extends StatelessWidget {
         : Colors.white.withValues(alpha: 0.45);
 
     return _pgGlass(
-      radius: 18,
       child: SizedBox(
         height: 104,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,
                 style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   color: accent,
                   letterSpacing: -0.3,
                   height: 1.1,
+                  fontSize: 22,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -744,6 +619,7 @@ class _KpiCard extends StatelessWidget {
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: Colors.white.withValues(alpha: 0.48),
+                  fontSize: 12,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -767,13 +643,10 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-// --- Filters ----------------------------------------------------------------
+// --- Table filters (in card header) -----------------------------------------
 
-class _FilterStrip extends StatelessWidget {
-  const _FilterStrip({
-    required this.theme,
-    required this.compact,
-    required this.tableSearch,
+class _PaymentsTableFilters extends StatelessWidget {
+  const _PaymentsTableFilters({
     required this.usluge,
     required this.method,
     required this.status,
@@ -784,9 +657,6 @@ class _FilterStrip extends StatelessWidget {
     required this.onClearFilters,
   });
 
-  final ThemeData theme;
-  final bool compact;
-  final TextEditingController tableSearch;
   final List<Usluga> usluge;
   final String method;
   final String status;
@@ -806,171 +676,81 @@ class _FilterStrip extends StatelessWidget {
     return items;
   }
 
-  InputDecoration _dec(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      isDense: true,
-      filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.05),
-      hintStyle: TextStyle(
-        color: Colors.white.withValues(alpha: 0.38),
-        fontSize: 13,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: NuaLuxuryTokens.softPurpleGlow,
-          width: 1.2,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    const h = 50.0;
-    const gap = 12.0;
+    const gap = 8.0;
 
-    Widget toolbarRow({required bool scrollable, required double maxW}) {
-      final children = <Widget>[
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         SizedBox(
-          width: scrollable ? math.max(220, maxW * 0.34) : null,
-          child: SizedBox(
-            height: h,
-            child: TextField(
-              controller: tableSearch,
-              style: const TextStyle(
-                color: AdminPaymentsOverviewScreen.textPrimary,
-                fontSize: 13,
-              ),
-              decoration: _dec('Search transactions...').copyWith(
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: Colors.white.withValues(alpha: 0.38),
-                ),
-                prefixIconConstraints: const BoxConstraints(minWidth: 40),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(
-          width: scrollable ? 148 : null,
-          child: SizedBox(
-            height: h,
-            child: _MiniDropdown(
-              value: method,
-              hint: 'Method',
-              items: const [
-                MapEntry('all', 'All methods'),
-                MapEntry('card', 'Card'),
-                MapEntry('cash', 'Cash'),
-                MapEntry('digital', 'Digital'),
-              ],
-              onChanged: onMethod,
-            ),
-          ),
-        ),
-        SizedBox(
-          width: scrollable ? 132 : null,
-          child: SizedBox(
-            height: h,
-            child: _MiniDropdown(
-              value: status,
-              hint: 'Status',
-              items: const [
-                MapEntry('all', 'All status'),
-                MapEntry('paid', 'Paid'),
-                MapEntry('unpaid', 'Pending'),
-                MapEntry('failed', 'Failed'),
-                MapEntry('refunded', 'Refunded'),
-              ],
-              onChanged: onStatus,
-            ),
-          ),
-        ),
-        SizedBox(
-          width: scrollable ? 148 : null,
-          child: SizedBox(
-            height: h,
-            child: _MiniDropdown(
-              value: service,
-              hint: 'Service',
-              items: _serviceItems(),
-              onChanged: onService,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: h,
-          child: PopupMenuButton<String>(
-            tooltip: 'Filters',
-            color: NuaLuxuryTokens.voidViolet,
-            onSelected: (_) => unawaited(onClearFilters()),
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'clear',
-                child: Text('Clear all filters'),
-              ),
+          width: 128,
+          child: _MiniDropdown(
+            value: method,
+            hint: 'Method',
+            compact: true,
+            items: const [
+              MapEntry('all', 'All methods'),
+              MapEntry('card', 'Card'),
+              MapEntry('cash', 'Cash'),
+              MapEntry('digital', 'Digital'),
             ],
-            child: const IgnorePointer(
-              child: _ToolbarFilterButton(onPressed: null),
-            ),
+            onChanged: onMethod,
           ),
         ),
-      ];
-
-      if (scrollable) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) const SizedBox(width: gap),
-                children[i],
-              ],
+        const SizedBox(width: gap),
+        SizedBox(
+          width: 120,
+          child: _MiniDropdown(
+            value: status,
+            hint: 'Status',
+            compact: true,
+            items: const [
+              MapEntry('all', 'All status'),
+              MapEntry('paid', 'Paid'),
+              MapEntry('unpaid', 'Pending'),
+              MapEntry('failed', 'Failed'),
+              MapEntry('refunded', 'Refunded'),
             ],
+            onChanged: onStatus,
           ),
-        );
-      }
-
-      return Row(
-        children: [
-          Expanded(flex: 34, child: children[0]),
-          const SizedBox(width: gap),
-          Expanded(flex: 14, child: children[1]),
-          const SizedBox(width: gap),
-          Expanded(flex: 12, child: children[2]),
-          const SizedBox(width: gap),
-          Expanded(flex: 14, child: children[3]),
-          const SizedBox(width: gap),
-          children[4],
-        ],
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final scrollable = c.maxWidth < 980;
-        return toolbarRow(scrollable: scrollable, maxW: c.maxWidth);
-      },
+        ),
+        const SizedBox(width: gap),
+        SizedBox(
+          width: 128,
+          child: _MiniDropdown(
+            value: service,
+            hint: 'Service',
+            compact: true,
+            items: _serviceItems(),
+            onChanged: onService,
+          ),
+        ),
+        const SizedBox(width: gap),
+        PopupMenuButton<String>(
+          tooltip: 'Filters',
+          color: NuaLuxuryTokens.voidViolet,
+          onSelected: (_) => unawaited(onClearFilters()),
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'clear',
+              child: Text('Clear all filters'),
+            ),
+          ],
+          child: const IgnorePointer(
+            child: _ToolbarFilterButton(compact: true, onPressed: null),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _ToolbarFilterButton extends StatelessWidget {
-  const _ToolbarFilterButton({this.onPressed});
+  const _ToolbarFilterButton({this.onPressed, this.compact = false});
 
   final VoidCallback? onPressed;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -978,13 +758,13 @@ class _ToolbarFilterButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          height: compact ? 36 : 50,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
           ),
           child: Row(
@@ -1018,58 +798,66 @@ class _MiniDropdown extends StatelessWidget {
     required this.hint,
     required this.items,
     required this.onChanged,
+    this.compact = false,
   });
 
   final String value;
   final String hint;
   final List<MapEntry<String, String>> items;
   final Future<void> Function(String) onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      // ignore: deprecated_member_use — controlled selection
-      value: value,
-      isDense: true,
-      isExpanded: true,
-      dropdownColor: NuaLuxuryTokens.voidViolet,
-      style: const TextStyle(
-        color: AdminPaymentsOverviewScreen.textPrimary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+    return SizedBox(
+      height: compact ? 36 : 50,
+      child: DropdownButtonFormField<String>(
+        // ignore: deprecated_member_use — controlled selection
+        value: value,
+        isDense: true,
+        isExpanded: true,
+        dropdownColor: NuaLuxuryTokens.voidViolet,
+        style: const TextStyle(
+          color: AdminPaymentsOverviewScreen.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
-            color: NuaLuxuryTokens.softPurpleGlow,
-            width: 1.2,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.05),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: compact ? 6 : 8,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(
+              color: NuaLuxuryTokens.softPurpleGlow,
+              width: 1.2,
+            ),
           ),
         ),
+        hint: Text(hint, style: TextStyle(color: Colors.white.withValues(alpha: 0.4))),
+        items: items
+            .map(
+              (e) => DropdownMenuItem(
+                value: e.key,
+                child: Text(e.value, overflow: TextOverflow.ellipsis),
+              ),
+            )
+            .toList(),
+        onChanged: (v) {
+          if (v != null) unawaited(onChanged(v));
+        },
       ),
-      hint: Text(hint, style: TextStyle(color: Colors.white.withValues(alpha: 0.4))),
-      items: items
-          .map(
-            (e) => DropdownMenuItem(
-              value: e.key,
-              child: Text(e.value, overflow: TextOverflow.ellipsis),
-            ),
-          )
-          .toList(),
-      onChanged: (v) {
-        if (v != null) unawaited(onChanged(v));
-      },
     );
   }
 }
@@ -1084,6 +872,13 @@ class _PaymentsTableBlock extends StatelessWidget {
     required this.page,
     required this.pageSize,
     required this.total,
+    required this.usluge,
+    required this.method,
+    required this.status,
+    required this.service,
+    required this.onMethod,
+    required this.onStatus,
+    required this.onService,
     required this.onPage,
     required this.onViewRow,
     required this.onClearFilters,
@@ -1096,6 +891,13 @@ class _PaymentsTableBlock extends StatelessWidget {
   final int page;
   final int pageSize;
   final int total;
+  final List<Usluga> usluge;
+  final String method;
+  final String status;
+  final String service;
+  final Future<void> Function(String) onMethod;
+  final Future<void> Function(String) onStatus;
+  final Future<void> Function(String) onService;
   final Future<void> Function(int) onPage;
   final Future<void> Function(AdminFinanceTransactionRow) onViewRow;
   final Future<void> Function() onClearFilters;
@@ -1120,62 +922,118 @@ class _PaymentsTableBlock extends StatelessWidget {
     final toIdx = ((page - 1) * pageSize + pageSize).clamp(0, total);
 
     return _pgGlass(
-      radius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 14, compact ? 14 : 18, 0),
-            child: Text(
-              'Transactions',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AdminPaymentsOverviewScreen.textPrimary,
-              ),
+            padding: EdgeInsets.fromLTRB(
+              compact ? 16 : 20,
+              compact ? 14 : 16,
+              compact ? 16 : 20,
+              compact ? 10 : 12,
             ),
-          ),
-          const SizedBox(height: 8),
-          if (rows.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-                    size: 36,
-                    color: Colors.white.withValues(alpha: 0.22),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'No payments found',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white.withValues(alpha: 0.82),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No transactions match the selected filters or date range.\n'
-                    'Try changing filters or selecting a different period.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.48),
-                      height: 1.45,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  OutlinedButton(
-                    onPressed: () => unawaited(onClearFilters()),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white.withValues(alpha: 0.82),
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final stacked = c.maxWidth < 720;
+                final filters = _PaymentsTableFilters(
+                  usluge: usluge,
+                  method: method,
+                  status: status,
+                  service: service,
+                  onMethod: onMethod,
+                  onStatus: onStatus,
+                  onService: onService,
+                  onClearFilters: onClearFilters,
+                );
+
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Transactions',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AdminPaymentsOverviewScreen.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: filters,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Transactions',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AdminPaymentsOverviewScreen.textPrimary,
+                        ),
                       ),
                     ),
-                    child: const Text('Clear filters'),
+                    filters,
+                  ],
+                );
+              },
+            ),
+          ),
+          if (rows.isEmpty)
+            SizedBox(
+              height: compact ? 220 : 260,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.receipt_long_outlined,
+                        size: 36,
+                        color: Colors.white.withValues(alpha: 0.22),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'No payments found',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withValues(alpha: 0.82),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No transactions match the selected filters or date range.\n'
+                        'Try changing filters or selecting a different period.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.48),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      OutlinedButton(
+                        onPressed: () => unawaited(onClearFilters()),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white.withValues(alpha: 0.82),
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Clear filters'),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             )
           else
@@ -1670,55 +1528,58 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
     final pts = widget.points;
     if (!_hasRevenueData(pts)) {
       return _pgGlass(
-        radius: 18,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            widget.compact ? 14 : 16,
-            widget.compact ? 12 : 14,
-            widget.compact ? 14 : 16,
-            widget.compact ? 18 : 22,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Revenue Trend',
-                style: widget.theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: AdminPaymentsOverviewScreen.textPrimary,
+        child: SizedBox(
+          height: widget.compact ? 220 : 260,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.compact ? 16 : 20,
+              widget.compact ? 14 : 16,
+              widget.compact ? 16 : 20,
+              widget.compact ? 16 : 20,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Revenue Trend',
+                  style: widget.theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AdminPaymentsOverviewScreen.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.show_chart_rounded,
-                      size: 32,
-                      color: Colors.white.withValues(alpha: 0.2),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.show_chart_rounded,
+                          size: 32,
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No revenue data available',
+                          style: widget.theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.72),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Revenue trends will appear once payments are recorded.',
+                          textAlign: TextAlign.center,
+                          style: widget.theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.42),
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No revenue data available',
-                      style: widget.theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Revenue trends will appear once payments are recorded.',
-                      textAlign: TextAlign.center,
-                      style: widget.theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.42),
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -1736,16 +1597,15 @@ class _RevenueTrendCardState extends State<_RevenueTrendCard> {
     }
 
     return _pgGlass(
-      radius: 18,
       child: Padding(
-        padding: EdgeInsets.all(widget.compact ? 14 : 16),
+        padding: EdgeInsets.all(widget.compact ? 16 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Revenue Trend',
-              style: widget.theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
+              style: widget.theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
                 color: AdminPaymentsOverviewScreen.textPrimary,
               ),
             ),
@@ -1972,126 +1832,162 @@ class _FinanceInsightsRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final stacked = c.maxWidth < 900;
-        final methodCard = _pgGlass(
-          radius: 18,
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 14 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Payment methods',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AdminPaymentsOverviewScreen.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (methods.isEmpty)
+        Widget methodCard({required bool stretch}) {
+          return _pgGlass(
+            child: Padding(
+              padding: EdgeInsets.all(compact ? 16 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
+                children: [
                   Text(
-                    'No method data for this period.',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
+                    'Payment methods',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AdminPaymentsOverviewScreen.textPrimary,
                     ),
-                  )
-                else
-                  for (final m in methods)
-                    if (m.postotak > 0)
+                  ),
+                  const SizedBox(height: 12),
+                  if (methods.isEmpty)
+                    stretch
+                        ? Expanded(
+                            child: Center(
+                              child: Text(
+                                'No method data for this period.',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Text(
+                            'No method data for this period.',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.45),
+                            ),
+                          )
+                  else ...[
+                    for (final m in methods)
+                      if (m.postotak > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  m.label,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.62),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${m.postotak.toStringAsFixed(0)}%',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AdminPaymentsOverviewScreen.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    if (stretch) const Spacer(),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+
+        Widget activityCard({required bool stretch}) {
+          return _pgGlass(
+            child: Padding(
+              padding: EdgeInsets.all(compact ? 16 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
+                children: [
+                  Text(
+                    'Recent activity',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AdminPaymentsOverviewScreen.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (activity.isEmpty)
+                    stretch
+                        ? Expanded(
+                            child: Center(
+                              child: Text(
+                                'No recent transactions in the selected period.',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Text(
+                            'No recent transactions in the selected period.',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.45),
+                            ),
+                          )
+                  else ...[
+                    for (final a in activity.take(6))
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
-                                m.label,
+                                '${a.opis} · ${a.klijent}',
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.62),
+                                  color: Colors.white.withValues(alpha: 0.72),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Text(
-                              '${m.postotak.toStringAsFixed(0)}%',
+                              _formatKm(a.iznos),
                               style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: AdminPaymentsOverviewScreen.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.55),
                               ),
                             ),
                           ],
                         ),
                       ),
-              ],
+                    if (stretch) const Spacer(),
+                  ],
+                ],
+              ),
             ),
-          ),
-        );
-        final activityCard = _pgGlass(
-          radius: 18,
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 14 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Recent activity',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AdminPaymentsOverviewScreen.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (activity.isEmpty)
-                  Text(
-                    'No recent transactions in the selected period.',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.45),
-                    ),
-                  )
-                else
-                  for (final a in activity.take(6))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${a.opis} · ${a.klijent}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.72),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            _formatKm(a.iznos),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-              ],
-            ),
-          ),
-        );
+          );
+        }
 
         if (stacked) {
           return Column(
             children: [
-              methodCard,
-              const SizedBox(height: 10),
-              activityCard,
+              methodCard(stretch: false),
+              const SizedBox(height: 12),
+              activityCard(stretch: false),
             ],
           );
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: methodCard),
-            const SizedBox(width: 12),
-            Expanded(child: activityCard),
-          ],
+
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: methodCard(stretch: true)),
+              const SizedBox(width: 12),
+              Expanded(child: activityCard(stretch: true)),
+            ],
+          ),
         );
       },
     );
