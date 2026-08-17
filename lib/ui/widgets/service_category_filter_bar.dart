@@ -107,29 +107,32 @@ class ServiceCategoryFilterBar extends StatelessWidget {
         overflow.any((c) => c.id == selectedCategoryId);
 
     if (variant == ServiceCategoryFilterVariant.mobile) {
-      return SizedBox(
-        height: 48,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          itemCount: sorted.length + 1,
-          separatorBuilder: (_, _) => const SizedBox(width: 10),
-          itemBuilder: (context, index) {
-            if (index == 0) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: sorted.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _MobilePill(
+                  label: 'All services',
+                  selected: selectedCategoryId == null,
+                  onTap: () => onSelected(null),
+                );
+              }
+              final cat = sorted[index - 1];
               return _MobilePill(
-                label: 'All services',
-                selected: selectedCategoryId == null,
-                onTap: () => onSelected(null),
+                label: labels[cat.id]!,
+                selected: selectedCategoryId == cat.id,
+                onTap: () => onSelected(cat.id),
               );
-            }
-            final cat = sorted[index - 1];
-            return _MobilePill(
-              label: labels[cat.id]!,
-              selected: selectedCategoryId == cat.id,
-              onTap: () => onSelected(cat.id),
-            );
-          },
+            },
+          ),
         ),
       );
     }
@@ -310,7 +313,7 @@ class _MobilePill extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
           color: selected
               ? MobileSpaColors.royalPurple

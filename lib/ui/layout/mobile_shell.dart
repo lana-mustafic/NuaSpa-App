@@ -18,6 +18,12 @@ import '../../screens/therapist/therapist_reviews_screen.dart';
 import '../../screens/therapist/therapist_services_screen.dart';
 import '../theme/mobile_spa_theme.dart';
 
+/// Bottom padding so tab scroll content clears the floating glass nav bar.
+const double kMobileBottomBarClearance = 120;
+
+double mobileTabBottomPadding(BuildContext context) =>
+    kMobileBottomBarClearance + MediaQuery.paddingOf(context).bottom;
+
 /// Floating glass bottom navigation with a raised center "Book Now" action.
 class MobileShell extends StatefulWidget {
   const MobileShell({super.key});

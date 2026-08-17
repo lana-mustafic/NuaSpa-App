@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../ui/layout/mobile_shell.dart';
 import '../../ui/widgets/notifications_panel.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/load_retry_panel.dart';
@@ -123,7 +124,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
   Widget build(BuildContext context) {
     final sp = context.watch<ServiceProvider>();
     final tt = Theme.of(context).textTheme;
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = mobileTabBottomPadding(context);
     final visible = sp.services;
     final auth = context.watch<AuthProvider>();
     final isAdmin = auth.isAdmin;
@@ -151,7 +152,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
         if (canFavorite)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
               child: SegmentedButton<ServiceCatalogTab>(
                 showSelectedIcon: false,
                 segments: [
@@ -172,7 +173,10 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                 onSelectionChanged: (value) =>
                     sp.setCatalogTab(value.first),
                 style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
+                  minimumSize: const WidgetStatePropertyAll(
+                    Size(0, 44),
+                  ),
+                  visualDensity: VisualDensity.standard,
                   foregroundColor: WidgetStateProperty.resolveWith((states) {
                     return states.contains(WidgetState.selected)
                         ? Colors.white
@@ -199,7 +203,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
         if (visible.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 120),
+              padding: EdgeInsets.fromLTRB(24, 48, 24, bottomInset),
               child: Column(
                 children: [
                   if (sp.isFavoritesTab &&

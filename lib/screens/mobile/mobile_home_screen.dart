@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 import '../catalog/service_details_screen.dart';
+import '../../ui/layout/mobile_shell.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
 import '../../ui/widgets/service_network_image.dart';
@@ -57,7 +58,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final bottom = MediaQuery.paddingOf(context).bottom;
+    final bottom = mobileTabBottomPadding(context);
     final auth = context.watch<AuthProvider>();
     final favorites = context.watch<ServiceProvider>().favoriteServices;
 
@@ -209,7 +210,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(24, 28, 24, 32 + bottom),
+            padding: EdgeInsets.fromLTRB(24, 28, 24, bottom),
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: MobileSpaColors.royalPurple,
