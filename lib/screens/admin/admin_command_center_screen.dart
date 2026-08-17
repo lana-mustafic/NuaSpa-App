@@ -647,15 +647,14 @@ class _DashGlass extends StatelessWidget {
   const _DashGlass({
     required this.child,
     this.padding,
-    this.radius = _DashUi.cardRadius,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
-  final double radius;
 
   @override
   Widget build(BuildContext context) {
+    const radius = _DashUi.cardRadius;
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Container(

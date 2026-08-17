@@ -438,7 +438,6 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
             final therapists = _therapists;
 
-            final serviceIds = services.map((s) => s.id).toSet();
             final needsDefaults = services.isNotEmpty && _selectedServiceId == null;
             if (needsDefaults && !_defaultsPostFramePending) {
               _defaultsPostFramePending = true;

@@ -55,11 +55,9 @@ abstract final class _AdminStyle {
 class _AdminTabScroll extends StatefulWidget {
   const _AdminTabScroll({
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(28, 8, 28, 28),
   });
 
   final Widget child;
-  final EdgeInsets padding;
 
   @override
   State<_AdminTabScroll> createState() => _AdminTabScrollState();
@@ -88,7 +86,7 @@ class _AdminTabScrollState extends State<_AdminTabScroll> {
       child: SingleChildScrollView(
         controller: _controller,
         primary: false,
-        padding: widget.padding,
+        padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
         child: widget.child,
       ),
     );
@@ -1110,7 +1108,7 @@ class _SectionCard extends StatelessWidget {
                     Flexible(
                       child: Text(title, style: _AdminStyle.sectionTitle(context)),
                     ),
-                    if (trailing != null) trailing!,
+                    ?trailing,
                   ],
                 ),
                 const SizedBox(height: 12),

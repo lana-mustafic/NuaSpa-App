@@ -620,7 +620,7 @@ class _HeroCard extends StatelessWidget {
 
     final metaParts = <String>[
       if (contactEmail != '—') contactEmail,
-      if (loc != null) loc,
+      ?loc,
     ];
     final metaLine = metaParts.isEmpty ? '—' : metaParts.join(' · ');
 
@@ -1974,7 +1974,7 @@ class _PerfMetricBar extends StatelessWidget {
                 style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
               ),
             ),
-            if (trailing != null) trailing!,
+            ?trailing,
             if (badge != null) ...[
               const SizedBox(width: 6),
               _TrendBadge(text: badge!, positive: badgePositive),
@@ -2272,12 +2272,10 @@ class _GlassCard extends StatelessWidget {
 class _ProfileTabHeader extends StatelessWidget {
   const _ProfileTabHeader({
     required this.title,
-    this.subtitle,
     this.trailing,
   });
 
   final String title;
-  final String? subtitle;
   final Widget? trailing;
 
   @override
@@ -2298,17 +2296,10 @@ class _ProfileTabHeader extends StatelessWidget {
                   color: _ProfileUi.textPrimary,
                 ),
               ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle!,
-                  style: _ProfileUi.bodyMuted(context).copyWith(fontSize: 12),
-                ),
-              ],
             ],
           ),
         ),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }
@@ -2772,7 +2763,7 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
                 ),
                 _ProfileSummaryMetric(
                   label: 'Category',
-                  value: hasCategory ? (katName ?? '—') : '—',
+                  value: hasCategory ? katName! : '—',
                   accent: _ProfileUi.accentSecondary,
                 ),
               ],
