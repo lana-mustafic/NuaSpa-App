@@ -9,7 +9,6 @@ import '../../screens/admin/admin_dashboard_screen.dart';
 import '../../screens/admin/admin_payments_overview_screen.dart';
 import '../../screens/catalog/mobile_service_catalog_screen.dart';
 import '../../screens/mobile/mobile_home_screen.dart';
-import '../../screens/mobile/mobile_packages_placeholder_screen.dart';
 import '../../screens/mobile/mobile_profile_screen.dart';
 import '../../screens/reservations/reservation_create_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
@@ -59,7 +58,6 @@ class _MobileShellState extends State<MobileShell> {
                 MobileServiceCatalogScreen(
                   onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
-                const MobilePackagesPlaceholderScreen(),
                 const MobileProfileScreen(),
               ],
             ),
@@ -154,16 +152,10 @@ class _GlassBottomBar extends StatelessWidget {
               ),
               _CenterFab(label: bookLabel, onTap: onBook),
               _NavSide(
-                icon: Icons.auto_awesome_outlined,
-                label: 'Packages',
-                selected: tabIndex == 2,
-                onTap: () => onSelect(2),
-              ),
-              _NavSide(
                 icon: Icons.person_outline_rounded,
                 label: 'Profile',
-                selected: tabIndex == 3,
-                onTap: () => onSelect(3),
+                selected: tabIndex == 2,
+                onTap: () => onSelect(2),
               ),
             ],
           ),
