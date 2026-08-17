@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import '../../models/kategorija_usluga.dart';
 import '../../models/usluga.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_provider.dart';
@@ -51,6 +52,25 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     _scroll.dispose();
     _search.dispose();
     super.dispose();
+  }
+
+  Future<void> _openFiltersSheet(BuildContext context, {required bool canFavorite}) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: MobileSpaColors.softWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => _MobileServiceFiltersSheet(
+        canFavorite: canFavorite,
+        onClearFilters: () {
+          _search.clear();
+          context.read<ServiceProvider>().clearCatalogFilters();
+          setState(() {});
+        },
+      ),
+    );
   }
 
   Future<void> _openServiceEditor(Usluga? existing) async {
@@ -148,7 +168,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
       physics: const BouncingScrollPhysics(),
       slivers: [
         SliverToBoxAdapter(child: _buildHeader(context, tt, isAdmin)),
-        SliverToBoxAdapter(child: _buildSearchRow(context)),
+        SliverToBoxAdapter(child: _buildSearchRow(context, canFavorite: canFavorite)),
         if (canFavorite)
           SliverToBoxAdapter(
             child: Padding(
@@ -411,7 +431,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
     );
   }
 
-  Widget _buildSearchRow(BuildContext context) {
+  Widget _buildSearchRow(BuildContext context, {required bool canFavorite}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Row(
@@ -472,34 +492,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
             elevation: 0,
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: () {
-                showModalBottomSheet<void>(
-                  context: context,
-                  backgroundColor: MobileSpaColors.softWhite,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  builder: (ctx) => Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Filters',
-                          style: Theme.of(ctx).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'More sorting and filter options will appear here.',
-                          style: Theme.of(ctx).textTheme.bodyMedium,
-                        ),
-                        SizedBox(height: MediaQuery.paddingOf(ctx).bottom + 8),
-                      ],
-                    ),
-                  ),
-                );
-              },
+              onTap: () => _openFiltersSheet(context, canFavorite: canFavorite),
               child: const SizedBox(
                 width: 52,
                 height: 52,
@@ -803,6 +796,223 @@ class _ServiceCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MobileServiceFiltersSheet extends StatelessWidget {
+  const _MobileServiceFiltersSheet({
+    required this.canFavorite,
+    required this.onClearFilters,
+  });
+
+  final bool canFavorite;
+  final VoidCallback onClearFilters;
+
+  bool _hasActiveFilters(ServiceProvider sp) {
+    return sp.selectedCategoryId != null ||
+        sp.sortMode != ServiceCatalogSort.nameAsc ||
+        sp.searchQuery.isNotEmpty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sp = context.watch<ServiceProvider>();
+    final tt = Theme.of(context).textTheme;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final labels = ServiceCategoryFilterBar.displayLabelsFor(sp.categories);
+    final sortedCategories = List<KategorijaUsluga>.from(sp.categories)
+      ..sort((a, b) => a.naziv.compareTo(b.naziv));
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 12, 24, 16 + bottom),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: MobileSpaColors.lavender.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Filters', style: tt.titleLarge),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                    if (canFavorite) ...[
+                      Text(
+                        'Show',
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SegmentedButton<ServiceCatalogTab>(
+                        showSelectedIcon: false,
+                        segments: [
+                          const ButtonSegment(
+                            value: ServiceCatalogTab.all,
+                            label: Text('All services'),
+                          ),
+                          ButtonSegment(
+                            value: ServiceCatalogTab.favorites,
+                            label: Text(
+                              sp.favoriteIds.isEmpty
+                                  ? 'Favorites'
+                                  : 'Favorites (${sp.favoriteIds.length})',
+                            ),
+                          ),
+                        ],
+                        selected: {sp.catalogTab},
+                        onSelectionChanged: (value) =>
+                            sp.setCatalogTab(value.first),
+                        style: ButtonStyle(
+                          minimumSize: const WidgetStatePropertyAll(
+                            Size(0, 44),
+                          ),
+                          visualDensity: VisualDensity.standard,
+                          foregroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.selected)
+                                ? Colors.white
+                                : MobileSpaColors.royalPurple
+                                    .withValues(alpha: 0.75),
+                          ),
+                          backgroundColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.selected)
+                                ? MobileSpaColors.royalPurple
+                                : MobileSpaColors.lavender
+                                    .withValues(alpha: 0.35),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    if (sortedCategories.isNotEmpty) ...[
+                      Text(
+                        'Category',
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _FilterChip(
+                            label: 'All categories',
+                            selected: sp.selectedCategoryId == null,
+                            onTap: () => sp.setCategoryFilter(null),
+                          ),
+                          for (final cat in sortedCategories)
+                            _FilterChip(
+                              label: labels[cat.id] ?? cat.naziv,
+                              selected: sp.selectedCategoryId == cat.id,
+                              onTap: () => sp.setCategoryFilter(cat.id),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    Text(
+                      'Sort by',
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...ServiceCatalogSort.values.map(
+                      (mode) => RadioListTile<ServiceCatalogSort>(
+                        value: mode,
+                        groupValue: sp.sortMode,
+                        onChanged: (value) {
+                          if (value != null) sp.setSortMode(value);
+                        },
+                        title: Text(mode.label, style: tt.bodyMedium),
+                        activeColor: MobileSpaColors.royalPurple,
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_hasActiveFilters(sp))
+                OutlinedButton(
+                  onPressed: () {
+                    onClearFilters();
+                    Navigator.pop(context);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: MobileSpaColors.royalPurple,
+                    side: BorderSide(
+                      color: MobileSpaColors.lavender.withValues(alpha: 0.6),
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text('Clear all filters'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      showCheckmark: false,
+      labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: selected
+                ? Colors.white
+                : MobileSpaColors.royalPurple.withValues(alpha: 0.9),
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+      selectedColor: MobileSpaColors.royalPurple,
+      backgroundColor: MobileSpaColors.lavender.withValues(alpha: 0.35),
+      side: BorderSide(
+        color: selected
+            ? MobileSpaColors.royalPurple
+            : MobileSpaColors.lavender.withValues(alpha: 0.5),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
     );
   }
 }

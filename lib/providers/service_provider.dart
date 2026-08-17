@@ -7,6 +7,24 @@ import '../core/preporuka/preporuka_tracker.dart';
 
 enum ServiceCatalogTab { all, favorites }
 
+enum ServiceCatalogSort {
+  nameAsc,
+  nameDesc,
+  priceAsc,
+  priceDesc,
+  durationDesc,
+}
+
+extension ServiceCatalogSortLabels on ServiceCatalogSort {
+  String get label => switch (this) {
+        ServiceCatalogSort.nameAsc => 'A to Z',
+        ServiceCatalogSort.nameDesc => 'Z to A',
+        ServiceCatalogSort.priceAsc => 'Price: low to high',
+        ServiceCatalogSort.priceDesc => 'Price: high to low',
+        ServiceCatalogSort.durationDesc => 'Duration: longest first',
+      };
+}
+
 class ServiceProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
 
@@ -22,6 +40,7 @@ class ServiceProvider with ChangeNotifier {
   String _searchQuery = '';
   int? _selectedCategoryId;
   ServiceCatalogTab _catalogTab = ServiceCatalogTab.all;
+  ServiceCatalogSort _sortMode = ServiceCatalogSort.nameAsc;
 
   List<Usluga> get services => _filteredServices;
 
@@ -36,6 +55,8 @@ class ServiceProvider with ChangeNotifier {
   String get searchQuery => _searchQuery;
 
   ServiceCatalogTab get catalogTab => _catalogTab;
+
+  ServiceCatalogSort get sortMode => _sortMode;
 
   bool get isFavoritesTab => _catalogTab == ServiceCatalogTab.favorites;
 
@@ -198,6 +219,13 @@ class ServiceProvider with ChangeNotifier {
   void clearCatalogFilters() {
     _searchQuery = '';
     _selectedCategoryId = null;
+    _sortMode = ServiceCatalogSort.nameAsc;
+    _applyFilters();
+  }
+
+  void setSortMode(ServiceCatalogSort mode) {
+    if (_sortMode == mode) return;
+    _sortMode = mode;
     _applyFilters();
   }
 
@@ -228,7 +256,24 @@ class ServiceProvider with ChangeNotifier {
           )
           .toList();
     }
-    _filteredServices = list;
+    _filteredServices = _sortServices(list);
     notifyListeners();
+  }
+
+  List<Usluga> _sortServices(List<Usluga> list) {
+    final copy = List<Usluga>.from(list);
+    switch (_sortMode) {
+      case ServiceCatalogSort.nameDesc:
+        copy.sort((a, b) => b.naziv.compareTo(a.naziv));
+      case ServiceCatalogSort.priceAsc:
+        copy.sort((a, b) => a.cijena.compareTo(b.cijena));
+      case ServiceCatalogSort.priceDesc:
+        copy.sort((a, b) => b.cijena.compareTo(a.cijena));
+      case ServiceCatalogSort.durationDesc:
+        copy.sort((a, b) => b.trajanjeMinuta.compareTo(a.trajanjeMinuta));
+      case ServiceCatalogSort.nameAsc:
+        copy.sort((a, b) => a.naziv.compareTo(b.naziv));
+    }
+    return copy;
   }
 }
