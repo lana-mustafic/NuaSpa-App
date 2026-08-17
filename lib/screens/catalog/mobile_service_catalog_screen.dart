@@ -934,24 +934,23 @@ class _MobileServiceFiltersSheet extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ...ServiceCatalogSort.values.map(
-                      (mode) => RadioListTile<ServiceCatalogSort>(
-                        value: mode,
-                        groupValue: sp.sortMode,
-                        onChanged: (value) {
-                          if (value != null) sp.setSortMode(value);
-                        },
-                        title: Text(mode.label, style: tt.bodyMedium),
-                        activeColor: MobileSpaColors.royalPurple,
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                      ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final mode in ServiceCatalogSort.values)
+                          _FilterChip(
+                            label: mode.label,
+                            selected: sp.sortMode == mode,
+                            onTap: () => sp.setSortMode(mode),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
+            ),
               const SizedBox(height: 16),
               if (_hasActiveFilters(sp))
                 OutlinedButton(
