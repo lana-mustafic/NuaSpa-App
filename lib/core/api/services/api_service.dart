@@ -149,8 +149,8 @@ class ApiService {
         'Preporuka/aktivnost',
         data: {
           'tip': tip,
-          if (uslugaId != null) 'uslugaId': uslugaId,
-          if (kategorijaUslugaId != null) 'kategorijaUslugaId': kategorijaUslugaId,
+          'uslugaId': ?uslugaId,
+          'kategorijaUslugaId': ?kategorijaUslugaId,
           if (searchTerm != null && searchTerm.trim().isNotEmpty)
             'searchTerm': searchTerm.trim(),
         },
@@ -362,9 +362,9 @@ class ApiService {
       final response = await _dio.patch<dynamic>(
         'Zaposlenik/me',
         data: {
-          if (telefon != null) 'telefon': telefon,
-          if (jezici != null) 'jezici': jezici,
-          if (bio != null) 'bio': bio,
+          'telefon': ?telefon,
+          'jezici': ?jezici,
+          'bio': ?bio,
         },
       );
       final data = response.data;
@@ -2911,8 +2911,8 @@ class ApiService {
       final query = <String, dynamic>{
         'from': _apiDateOnly(from),
         'to': _apiDateOnly(to),
-        if (zaposlenikId != null) 'zaposlenikId': zaposlenikId,
-        if (uslugaId != null) 'uslugaId': uslugaId,
+        'zaposlenikId': ?zaposlenikId,
+        'uslugaId': ?uslugaId,
         if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
         if (includeOtkazane) 'includeOtkazane': true,
       };

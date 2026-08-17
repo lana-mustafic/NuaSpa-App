@@ -712,7 +712,7 @@ class _RevenueChartCard extends StatelessWidget {
                             isStrokeCapRound: true,
                             dotData: FlDotData(
                               show: points.length <= 31,
-                              getDotPainter: (_, __, ___, ____) =>
+                              getDotPainter: (_, _, _, _) =>
                                   FlDotCirclePainter(
                                     radius: 3.2,
                                     color: Colors.white.withValues(

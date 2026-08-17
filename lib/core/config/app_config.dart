@@ -5,6 +5,8 @@
 ///
 /// Ili učitaj iz `.env` datoteke:
 /// `flutter run --dart-define-from-file=.env`
+library;
+
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';

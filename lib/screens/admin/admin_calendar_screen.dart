@@ -715,7 +715,7 @@ class _CalendarToolbar extends StatelessWidget {
           SizedBox(
             width: 168,
             child: DropdownButtonFormField<int?>(
-              value: filterZaposlenikId,
+              initialValue: filterZaposlenikId,
               isExpanded: true,
               dropdownColor: const Color(0xFF1A1228),
               style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -739,7 +739,7 @@ class _CalendarToolbar extends StatelessWidget {
           SizedBox(
             width: 168,
             child: DropdownButtonFormField<int?>(
-              value: filterUslugaId,
+              initialValue: filterUslugaId,
               isExpanded: true,
               dropdownColor: const Color(0xFF1A1228),
               style: const TextStyle(color: Colors.white, fontSize: 13),

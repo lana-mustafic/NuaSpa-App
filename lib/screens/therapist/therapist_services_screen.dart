@@ -26,7 +26,6 @@ abstract final class _SvcUi {
   static const purple = Color(0xFF7B4DFF);
   static const lavender = Color(0xFF9D6BFF);
   static const green = Color(0xFF22C55E);
-  static const gold = Color(0xFFF5B942);
   static const orange = Color(0xFFF97316);
   static const cardRadius = 24.0;
   static const gap = 24.0;
