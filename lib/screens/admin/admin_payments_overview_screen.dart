@@ -200,7 +200,7 @@ class _AdminPaymentsOverviewScreenState
     _searchDebounce?.cancel();
     _nav?.removeListener(_onNavChanged);
     _nav?.setPaymentsCsvExport(null);
-    _nav?.setPaymentsCsvExporting(false);
+    _nav?.setPaymentsCsvExporting(false, notify: false);
     _scroll.dispose();
     super.dispose();
   }

@@ -1,6 +1,5 @@
 import '../../models/usluga.dart';
 import '../../models/zaposlenik.dart';
-import '../../models/zaposlenik_status.dart';
 
 /// Filters therapists eligible for a service (client-side fallback).
 List<Zaposlenik> filterTherapistsForService(

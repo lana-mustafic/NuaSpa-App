@@ -129,16 +129,16 @@ class DesktopNav extends ChangeNotifier {
     _paymentsCsvExport = handler;
   }
 
-  void setPaymentsCsvExporting(bool exporting) {
+  void setPaymentsCsvExporting(bool exporting, {bool notify = true}) {
     if (_paymentsCsvExporting == exporting) return;
     _paymentsCsvExporting = exporting;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
-  void setReportsPdfExporting(bool exporting) {
+  void setReportsPdfExporting(bool exporting, {bool notify = true}) {
     if (_reportsPdfExporting == exporting) return;
     _reportsPdfExporting = exporting;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   void setHeaderDateRange(DateTimeRange range) {
@@ -174,10 +174,10 @@ class DesktopNav extends ChangeNotifier {
   /// One-line roster stats shown under the Therapists page subtitle.
   String? get therapistPageSummary => _therapistPageSummary;
 
-  void setTherapistPageSummary(String? summary) {
+  void setTherapistPageSummary(String? summary, {bool notify = true}) {
     if (_therapistPageSummary == summary) return;
     _therapistPageSummary = summary;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   String? get therapistDashboardTitle => _therapistDashboardTitle;

@@ -49,7 +49,7 @@ class _AdminTherapistRosterScreenState
   @override
   void dispose() {
     _specialty.dispose();
-    _nav?.setTherapistPageSummary(null);
+    _nav?.setTherapistPageSummary(null, notify: false);
     super.dispose();
   }
 
@@ -110,7 +110,7 @@ class _AdminTherapistRosterScreenState
           final summary = _buildPageSummary(therapists);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            context.read<DesktopNav>().setTherapistPageSummary(summary);
+            _nav?.setTherapistPageSummary(summary);
           });
         }
 

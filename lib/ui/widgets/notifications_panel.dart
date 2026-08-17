@@ -755,7 +755,7 @@ abstract final class NotificationsPanel {
       return const NotificationVisual(Icons.person_add_alt_1_outlined, _blue);
     }
     if (tip == '2' || tip == 'RezervacijaOtkazana' || title.contains('cancel')) {
-      return const NotificationVisual(Icons.cancel_outlined, const Color(0xFFEC4899));
+      return const NotificationVisual(Icons.cancel_outlined, Color(0xFFEC4899));
     }
     return const NotificationVisual(Icons.event_available_outlined, _purple);
   }

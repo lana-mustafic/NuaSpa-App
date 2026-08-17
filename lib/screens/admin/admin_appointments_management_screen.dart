@@ -139,7 +139,7 @@ class _AdminAppointmentsManagementScreenState
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<int?>(
-                      value: therapistId,
+                      initialValue: therapistId,
                       decoration: const InputDecoration(labelText: 'Therapist'),
                       items: [
                         const DropdownMenuItem(
@@ -156,7 +156,7 @@ class _AdminAppointmentsManagementScreenState
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int?>(
-                      value: serviceId,
+                      initialValue: serviceId,
                       decoration: const InputDecoration(labelText: 'Service'),
                       items: [
                         const DropdownMenuItem(
@@ -173,7 +173,7 @@ class _AdminAppointmentsManagementScreenState
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: status,
+                      initialValue: status,
                       decoration: const InputDecoration(labelText: 'Status'),
                       items: const [
                         DropdownMenuItem(
@@ -1114,21 +1114,6 @@ class _AppointmentsTable extends StatelessWidget {
     return 'Pending';
   }
 
-  static Color statusColor(Rezervacija r) {
-    switch (statusLabel(r)) {
-      case 'Pending':
-        return const Color(0xFFF5B942);
-      case 'Confirmed':
-        return const Color(0xFF2DD4BF);
-      case 'Cancelled':
-        return const Color(0xFFE87997);
-      case 'Completed':
-        return const Color(0xFFC8B6E8);
-      default:
-        return _ApptUi.lavender;
-    }
-  }
-
   static String categoryLabel(String? service) =>
       (service ?? '').toLowerCase().contains('massage')
       ? 'Relaxation'
@@ -1389,7 +1374,7 @@ class _CancelAppointmentDialogState extends State<_CancelAppointmentDialog> {
     final name = widget.appointment.uslugaNaziv?.trim();
     final label = (name != null && name.isNotEmpty) ? name : 'Spa service';
     final mins = widget.appointment.uslugaTrajanjeMinuta;
-    if (mins > 0) return '$label • ${mins} min';
+    if (mins > 0) return '$label • $mins min';
     return label;
   }
 
@@ -2478,20 +2463,16 @@ class _GradientButton extends StatefulWidget {
   const _GradientButton({
     required this.label,
     required this.onTap,
-    this.compact = false,
     this.primary = false,
     this.height = _ApptUi.filterControlHeight,
     this.borderRadius = 18,
-    this.showIcon = true,
   });
 
   final String label;
   final VoidCallback onTap;
-  final bool compact;
   final bool primary;
   final double height;
   final double borderRadius;
-  final bool showIcon;
 
   @override
   State<_GradientButton> createState() => _GradientButtonState();
@@ -2515,7 +2496,7 @@ class _GradientButtonState extends State<_GradientButton> {
             duration: const Duration(milliseconds: 200),
             height: widget.height,
             padding: EdgeInsets.symmetric(
-              horizontal: widget.primary ? 18 : (widget.compact ? 14 : 16),
+              horizontal: widget.primary ? 18 : 16,
             ),
             transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
             decoration: BoxDecoration(
@@ -2537,14 +2518,12 @@ class _GradientButtonState extends State<_GradientButton> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (widget.showIcon) ...[
-                  Icon(
-                    Icons.add_rounded,
-                    color: Colors.white,
-                    size: widget.primary ? 18 : 16,
-                  ),
-                  SizedBox(width: widget.primary ? 8 : 6),
-                ],
+                Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: widget.primary ? 18 : 16,
+                ),
+                SizedBox(width: widget.primary ? 8 : 6),
                 Flexible(
                   child: Text(
                     widget.label,

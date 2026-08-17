@@ -30,8 +30,6 @@ class _AdminClientsDesktopScreenState extends State<AdminClientsDesktopScreen> {
   static const Color _textPrimary = Color(0xFFF5F3FA);
   static const Color _purple = Color(0xFF7B4DFF);
   static const Color _purple2 = Color(0xFF9D6BFF);
-  static const Color _gold = Color(0xFFD4AF7A);
-  static const Color _success = Color(0xFF4ADE80);
 
   final TextEditingController _apiSearch = TextEditingController();
   Timer? _searchDebounce;
@@ -605,48 +603,6 @@ class _ClientsLoadBanner extends StatelessWidget {
               if (onRetry != null)
                 TextButton(onPressed: onRetry, child: const Text('Retry')),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Glass extends StatelessWidget {
-  const _Glass({
-    required this.child,
-    this.radius = 20,
-    this.padding,
-    this.borderAlpha = 0.06,
-  });
-
-  final Widget child;
-  final double radius;
-  final EdgeInsetsGeometry? padding;
-  final double borderAlpha;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withValues(alpha: borderAlpha)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF7B4DFF).withValues(alpha: 0.10),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: padding ?? EdgeInsets.zero,
-            child: child,
           ),
         ),
       ),
@@ -1745,48 +1701,6 @@ class _ClientInfoRow extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerRight,
               child: right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VipBadge extends StatelessWidget {
-  static const Color _vipGreen = Color(0xFF22C55E);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: _vipGreen.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _vipGreen.withValues(alpha: 0.45)),
-        boxShadow: [
-          BoxShadow(
-            color: _vipGreen.withValues(alpha: 0.25),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.workspace_premium_rounded,
-            size: 13,
-            color: _vipGreen.withValues(alpha: 0.95),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            'VIP',
-            style: GoogleFonts.inter(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              color: _vipGreen,
-              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -2991,11 +2905,9 @@ class _ManualVipEditor extends StatelessWidget {
 class _ClientEditCancelButton extends StatefulWidget {
   const _ClientEditCancelButton({
     required this.onPressed,
-    this.label = 'Cancel',
   });
 
   final VoidCallback onPressed;
-  final String label;
 
   @override
   State<_ClientEditCancelButton> createState() => _ClientEditCancelButtonState();
@@ -3026,7 +2938,7 @@ class _ClientEditCancelButtonState extends State<_ClientEditCancelButton> {
             onTap: widget.onPressed,
             child: Center(
               child: Text(
-                widget.label,
+                'Cancel',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -3621,7 +3533,7 @@ class _ClientRowMoreMenu extends StatelessWidget {
         const PopupMenuDivider(height: 8),
         PopupMenuItem<String>(
           value: 'vip',
-          height: vipSubtitle != null ? 52 : 44,
+          height: 52,
           child: _ClientMenuRow(
             icon: Icons.workspace_premium_outlined,
             label: client.isVipKlijent ? 'Remove manual VIP' : 'Set manual VIP',

@@ -135,7 +135,7 @@ class _AdminRevenueAnalyticsScreenState
   void dispose() {
     _nav?.removeListener(_onHeaderRangeChanged);
     _nav?.setReportsPdfExport(null);
-    _nav?.setReportsPdfExporting(false);
+    _nav?.setReportsPdfExporting(false, notify: false);
     super.dispose();
   }
 
