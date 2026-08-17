@@ -50,7 +50,7 @@ Future<void> showLuxuryNotificationsDropdown(
     barrierLabel: 'Dismiss notifications',
     barrierColor: Colors.black.withValues(alpha: 0.25),
     transitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (dialogContext, _, __) {
+    pageBuilder: (dialogContext, _, _) {
       return Stack(
         children: [
           Positioned(
@@ -354,7 +354,7 @@ class NotificationListBody extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       shrinkWrap: shrinkWrap,
       itemCount: items.length,
-      separatorBuilder: (_, __) => Divider(
+      separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
         color: Colors.white.withValues(alpha: 0.06),
@@ -596,12 +596,12 @@ class _NotificationSkeletonList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: 4,
-      separatorBuilder: (_, __) => Divider(
+      separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
         color: Colors.white.withValues(alpha: 0.06),
       ),
-      itemBuilder: (_, __) => const _NotificationSkeletonRow(),
+      itemBuilder: (_, _) => const _NotificationSkeletonRow(),
     );
   }
 }

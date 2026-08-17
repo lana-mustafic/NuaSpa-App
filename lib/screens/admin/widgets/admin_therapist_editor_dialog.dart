@@ -752,7 +752,7 @@ class _AdminTherapistEditorDialogState extends State<AdminTherapistEditorDialog>
                                         icon: Icons.badge_outlined,
                                         child: DropdownButtonFormField<
                                             ZaposlenikStatus>(
-                                          value: _status,
+                                          initialValue: _status,
                                           dropdownColor:
                                               NuaLuxuryTokens.voidViolet,
                                           decoration:

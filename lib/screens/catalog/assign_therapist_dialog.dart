@@ -197,7 +197,7 @@ class _AssignTherapistPickerDialog extends StatelessWidget {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: candidates.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final z = candidates[index];
                   return Material(
