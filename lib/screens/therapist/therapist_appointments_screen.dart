@@ -413,7 +413,7 @@ class _TherapistAppointmentsScreenState extends State<TherapistAppointmentsScree
                         completed: counts['Completed'] ?? 0,
                         cancelled: counts['Cancelled'] ?? 0,
                       ),
-                      if (truncated && data != null) ...[
+                      if (truncated) ...[
                         const SizedBox(height: 10),
                         _TruncatedBanner(
                           shown: data.items.length,
@@ -806,7 +806,7 @@ class _AppointmentListPane extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) => _AppointmentCard(
         row: items[index],
         formatCardDate: formatCardDate,

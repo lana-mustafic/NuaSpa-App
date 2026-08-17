@@ -1250,10 +1250,9 @@ class _ClientAvatar extends StatelessWidget {
 }
 
 class _StarRating extends StatelessWidget {
-  const _StarRating({required this.stars, this.size = 15});
+  const _StarRating({required this.stars});
 
   final int stars;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -1263,7 +1262,7 @@ class _StarRating extends StatelessWidget {
         for (var i = 0; i < 5; i++)
           Icon(
             i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
-            size: size,
+            size: 15,
             color: _RevUi.gold,
           ),
       ],

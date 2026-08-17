@@ -808,7 +808,7 @@ class _MainScheduleCard extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, i) => _ScheduleAppointmentCard(
         r: filtered[i],
         onTap: () => onSelect(filtered[i]),
@@ -1693,13 +1693,11 @@ class _PrimaryGradientButton extends StatefulWidget {
     required this.label,
     required this.icon,
     required this.onTap,
-    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  final bool compact;
 
   @override
   State<_PrimaryGradientButton> createState() => _PrimaryGradientButtonState();
@@ -1720,9 +1718,9 @@ class _PrimaryGradientButtonState extends State<_PrimaryGradientButton> {
           borderRadius: BorderRadius.circular(16),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            height: widget.compact ? 52 : 56,
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 16 : 22,
+            height: 56,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 22,
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),

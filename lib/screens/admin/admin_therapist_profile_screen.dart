@@ -2763,7 +2763,7 @@ class _TherapistServicesPanelState extends State<_TherapistServicesPanel> {
                 ),
                 _ProfileSummaryMetric(
                   label: 'Category',
-                  value: hasCategory ? katName! : '—',
+                  value: hasCategory ? katName : '—',
                   accent: _ProfileUi.accentSecondary,
                 ),
               ],
