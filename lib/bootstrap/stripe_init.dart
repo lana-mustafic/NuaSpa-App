@@ -18,5 +18,12 @@ Future<void> configureStripeIfNeeded() async {
 
   Stripe.publishableKey = kStripePublishableKey;
   Stripe.urlScheme = 'nuaspa';
-  await Stripe.instance.applySettings();
+  try {
+    await Stripe.instance.applySettings();
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint('Stripe: applySettings failed — online payments disabled. $e');
+      debugPrint('$st');
+    }
+  }
 }
