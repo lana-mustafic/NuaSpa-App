@@ -58,6 +58,7 @@ class _MobileShellState extends State<MobileShell> {
                 MobileServiceCatalogScreen(
                   onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
+                const ReservationListScreen(embeddedInShell: true),
                 const MobileProfileScreen(),
               ],
             ),
@@ -69,6 +70,7 @@ class _MobileShellState extends State<MobileShell> {
             child: _GlassBottomBar(
               tabIndex: nav.tabIndex,
               onSelect: nav.setTab,
+              showReservationsTab: !auth.isZaposlenik,
               onBook: () {
                 if (auth.isZaposlenik) {
                   Navigator.push<void>(
@@ -104,12 +106,14 @@ class _GlassBottomBar extends StatelessWidget {
   const _GlassBottomBar({
     required this.tabIndex,
     required this.onSelect,
+    required this.showReservationsTab,
     required this.onBook,
     required this.bookLabel,
   });
 
   final int tabIndex;
   final ValueChanged<int> onSelect;
+  final bool showReservationsTab;
   final VoidCallback onBook;
   final String bookLabel;
 
@@ -151,11 +155,18 @@ class _GlassBottomBar extends StatelessWidget {
                 onTap: () => onSelect(1),
               ),
               _CenterFab(label: bookLabel, onTap: onBook),
+              if (showReservationsTab)
+                _NavSide(
+                  icon: Icons.event_available_outlined,
+                  label: 'Bookings',
+                  selected: tabIndex == 2,
+                  onTap: () => onSelect(2),
+                ),
               _NavSide(
                 icon: Icons.person_outline_rounded,
                 label: 'Profile',
-                selected: tabIndex == 2,
-                onTap: () => onSelect(2),
+                selected: tabIndex == 3,
+                onTap: () => onSelect(3),
               ),
             ],
           ),
@@ -313,12 +324,7 @@ class _MobileDrawer extends StatelessWidget {
                 title: const Text('Reservations'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ReservationListScreen(),
-                    ),
-                  );
+                  context.read<MobileNavProvider>().setTab(2);
                 },
               ),
             if (auth.isZaposlenik) ...[

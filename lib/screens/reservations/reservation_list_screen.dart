@@ -12,13 +12,17 @@ import '../../core/reservations/cancel_rezervacija_messages.dart';
 import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/primary_button.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
+import '../../ui/layout/mobile_shell.dart';
 import '../catalog/service_details_screen.dart';
 
 bool _isCompletedReservation(Rezervacija r) =>
     !r.isOtkazana && r.status.toLowerCase() == 'completed';
 
 class ReservationListScreen extends StatefulWidget {
-  const ReservationListScreen({super.key});
+  const ReservationListScreen({super.key, this.embeddedInShell = false});
+
+  /// When true, hides the book FAB and adds bottom padding for [MobileShell].
+  final bool embeddedInShell;
 
   @override
   State<ReservationListScreen> createState() => _ReservationListScreenState();
@@ -173,8 +177,12 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   }
 
   Widget _buildMobile(BuildContext context) {
-    final hideFab = context.watch<AuthProvider>().isZaposlenik;
+    final hideFab =
+        context.watch<AuthProvider>().isZaposlenik || widget.embeddedInShell;
     final tt = Theme.of(context).textTheme;
+    final listBottomPad = widget.embeddedInShell
+        ? mobileTabBottomPadding(context)
+        : 100.0;
 
     return Scaffold(
       backgroundColor: MobileSpaColors.softWhite,
@@ -299,7 +307,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                   onRefresh: _refresh,
                   color: MobileSpaColors.royalPurple,
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, listBottomPad),
                     itemCount: data.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {

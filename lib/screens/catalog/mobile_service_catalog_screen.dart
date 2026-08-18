@@ -404,7 +404,7 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
                     _GlassCircleButton(
                       icon: Icons.person_outline_rounded,
                       onTap: () =>
-                          context.read<MobileNavProvider>().setTab(2),
+                          context.read<MobileNavProvider>().setTab(3),
                     ),
                   ],
                 ),

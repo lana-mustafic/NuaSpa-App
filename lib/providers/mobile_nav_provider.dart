@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// Bottom shell: [Home, Services, Profile] — index 0–2.
+/// Bottom shell: [Home, Services, Reservations, Profile] — index 0–3.
 /// Center "Book Now" FAB is handled in [MobileShell], not as a page index.
 class MobileNavProvider extends ChangeNotifier {
   int _tabIndex = 0;
@@ -8,7 +8,7 @@ class MobileNavProvider extends ChangeNotifier {
   int get tabIndex => _tabIndex;
 
   void setTab(int index) {
-    if (index < 0 || index > 2) return;
+    if (index < 0 || index > 3) return;
     if (_tabIndex == index) return;
     _tabIndex = index;
     notifyListeners();
