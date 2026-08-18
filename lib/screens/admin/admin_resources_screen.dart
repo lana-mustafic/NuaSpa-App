@@ -40,8 +40,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         PageHeader(
-          title: 'Resursi objekta',
-          subtitle: 'Spa centar i radno vrijeme.',
+          title: 'Facility resources',
+          subtitle: 'Spa center and working hours.',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -49,12 +49,12 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                 segments: const [
                   ButtonSegment(
                     value: _ResTab.spa,
-                    label: Text('Spa centar'),
+                    label: Text('Spa center'),
                     icon: Icon(Icons.apartment_outlined),
                   ),
                   ButtonSegment(
                     value: _ResTab.workingHours,
-                    label: Text('Radno vrijeme'),
+                    label: Text('Working hours'),
                     icon: Icon(Icons.schedule_outlined),
                   ),
                 ],
@@ -65,7 +65,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
               FilledButton.icon(
                 onPressed: _reloadAll,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Osvježi'),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -145,7 +145,7 @@ class _SpaCentarTabState extends State<_SpaCentarTab> {
     final saved = await widget.api.updateSpaCentar(dto);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(saved != null ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+      SnackBar(content: Text(saved != null ? 'Saved.' : 'Error while saving.')),
     );
     if (saved != null) widget.onSaved();
   }
@@ -159,7 +159,9 @@ class _SpaCentarTabState extends State<_SpaCentarTab> {
           return const Center(child: CircularProgressIndicator());
         }
         final s = snap.data;
-        if (s == null) return const Center(child: Text('Nije moguće učitati Spa centar.'));
+        if (s == null) {
+          return const Center(child: Text('Unable to load spa center.'));
+        }
         _fill(s);
 
         return Card(
@@ -172,13 +174,14 @@ class _SpaCentarTabState extends State<_SpaCentarTab> {
                 children: [
                   TextFormField(
                     controller: _naziv,
-                    decoration: const InputDecoration(labelText: 'Naziv'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Obavezno' : null,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _adresa,
-                    decoration: const InputDecoration(labelText: 'Adresa'),
+                    decoration: const InputDecoration(labelText: 'Address'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -188,14 +191,14 @@ class _SpaCentarTabState extends State<_SpaCentarTab> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _telefon,
-                    decoration: const InputDecoration(labelText: 'Telefon'),
+                    decoration: const InputDecoration(labelText: 'Phone'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _opis,
                     minLines: 3,
                     maxLines: 6,
-                    decoration: const InputDecoration(labelText: 'Opis'),
+                    decoration: const InputDecoration(labelText: 'Description'),
                   ),
                   const SizedBox(height: 16),
                   Align(
@@ -203,7 +206,7 @@ class _SpaCentarTabState extends State<_SpaCentarTab> {
                     child: FilledButton.icon(
                       onPressed: _save,
                       icon: const Icon(Icons.save_outlined),
-                      label: const Text('Sačuvaj'),
+                      label: const Text('Save'),
                     ),
                   ),
                 ],
@@ -235,8 +238,16 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
   final Map<int, RadnoVrijeme> _draft = {};
 
   String _dayName(int d) {
-    const names = {1: 'Ponedjeljak', 2: 'Utorak', 3: 'Srijeda', 4: 'Četvrtak', 5: 'Petak', 6: 'Subota', 7: 'Nedjelja'};
-    return names[d] ?? 'Dan $d';
+    const names = {
+      1: 'Monday',
+      2: 'Tuesday',
+      3: 'Wednesday',
+      4: 'Thursday',
+      5: 'Friday',
+      6: 'Saturday',
+      7: 'Sunday',
+    };
+    return names[d] ?? 'Day $d';
   }
 
   String _fmtMin(int? m) {
@@ -249,7 +260,10 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
   Future<void> _pickTime(int day, {required bool isOpen}) async {
     final current = _draft[day];
     final baseMin = isOpen ? current?.otvaraMin : current?.zatvaraMin;
-    final base = TimeOfDay(hour: (baseMin ?? 540) ~/ 60, minute: (baseMin ?? 540) % 60);
+    final base = TimeOfDay(
+      hour: (baseMin ?? 540) ~/ 60,
+      minute: (baseMin ?? 540) % 60,
+    );
     final t = await showTimePicker(context: context, initialTime: base);
     if (t == null) return;
     setState(() {
@@ -267,11 +281,14 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
   }
 
   Future<void> _save() async {
-    final items = _draft.values.toList()..sort((a, b) => a.danUSedmici.compareTo(b.danUSedmici));
+    final items = _draft.values.toList()
+      ..sort((a, b) => a.danUSedmici.compareTo(b.danUSedmici));
     final saved = await widget.api.updateRadnoVrijeme(items);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(saved.isNotEmpty ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+      SnackBar(
+        content: Text(saved.isNotEmpty ? 'Saved.' : 'Error while saving.'),
+      ),
     );
     if (saved.isNotEmpty) widget.onSaved();
   }
@@ -285,7 +302,9 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
           return const Center(child: CircularProgressIndicator());
         }
         final list = snap.data ?? [];
-        if (list.isEmpty) return const Center(child: Text('Nema radnog vremena.'));
+        if (list.isEmpty) {
+          return const Center(child: Text('No working hours configured.'));
+        }
         if (_draft.isEmpty) {
           for (final it in list) {
             _draft[it.danUSedmici] = it;
@@ -330,7 +349,7 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
                   child: FilledButton.icon(
                     onPressed: _save,
                     icon: const Icon(Icons.save_outlined),
-                    label: const Text('Sačuvaj radno vrijeme'),
+                    label: const Text('Save working hours'),
                   ),
                 ),
               ],
@@ -370,19 +389,19 @@ class _WorkingHourRow extends StatelessWidget {
           Expanded(child: Text(dayLabel)),
           const SizedBox(width: 12),
           FilterChip(
-            label: const Text('Zatvoreno'),
+            label: const Text('Closed'),
             selected: value.isClosed,
             onSelected: onToggleClosed,
           ),
           const SizedBox(width: 12),
           OutlinedButton(
             onPressed: value.isClosed ? null : onPickOpen,
-            child: Text('Otvara: $openLabel'),
+            child: Text('Opens: $openLabel'),
           ),
           const SizedBox(width: 12),
           OutlinedButton(
             onPressed: value.isClosed ? null : onPickClose,
-            child: Text('Zatvara: $closeLabel'),
+            child: Text('Closes: $closeLabel'),
           ),
         ],
       ),

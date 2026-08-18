@@ -254,7 +254,7 @@ class TherapistDayTimeline extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      r.uslugaNaziv ?? 'Usluga',
+                                      r.uslugaNaziv ?? 'Service',
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
@@ -266,7 +266,7 @@ class TherapistDayTimeline extends StatelessWidget {
                                     ),
                                     if (bc.maxHeight > 52)
                                       Text(
-                                        r.korisnikIme ?? 'Klijent',
+                                        r.korisnikIme ?? 'Client',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: Theme.of(context)

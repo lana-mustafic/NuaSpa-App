@@ -29,13 +29,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: [
           PageHeader(
             title: 'Admin panel',
-            subtitle: 'Upravljanje kategorijama, uslugama, rezervacijama i izvještajima.',
+            subtitle: 'Manage categories, services, bookings, and reports.',
             trailing: SegmentedButton<int>(
               segments: const [
-                ButtonSegment(value: 0, label: Text('Kategorije'), icon: Icon(Icons.category_outlined)),
-                ButtonSegment(value: 1, label: Text('Usluge'), icon: Icon(Icons.spa_outlined)),
-                ButtonSegment(value: 2, label: Text('Rezervacije'), icon: Icon(Icons.event_note_outlined)),
-                ButtonSegment(value: 3, label: Text('Izvještaj'), icon: Icon(Icons.picture_as_pdf_outlined)),
+                ButtonSegment(value: 0, label: Text('Categories'), icon: Icon(Icons.category_outlined)),
+                ButtonSegment(value: 1, label: Text('Services'), icon: Icon(Icons.spa_outlined)),
+                ButtonSegment(value: 2, label: Text('Bookings'), icon: Icon(Icons.event_note_outlined)),
+                ButtonSegment(value: 3, label: Text('Report'), icon: Icon(Icons.picture_as_pdf_outlined)),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
@@ -109,16 +109,16 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje usluge'),
-        content: Text('Obrisati „${u.naziv}“?'),
+        title: const Text('Delete service'),
+        content: Text('Delete "${u.naziv}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Ne'),
+            child: const Text('No'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Obriši'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -131,7 +131,7 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usluga obrisana.')),
+        const SnackBar(content: Text('Service deleted.')),
       );
       _reloadAll();
     }
@@ -168,14 +168,14 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
                             TextStyle(color: Colors.white.withValues(alpha: 0.70)),
                       ),
                       trailing: PopupMenuButton<String>(
-                        tooltip: 'Akcije za uslugu',
+                        tooltip: 'Service actions',
                         onSelected: (v) {
                           if (v == 'edit') _editService(u);
                           if (v == 'delete') _delete(u);
                         },
                         itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Uredi')),
-                          PopupMenuItem(value: 'delete', child: Text('Obriši')),
+                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete')),
                         ],
                       ),
                       onTap: () => _editService(u),
@@ -188,7 +188,7 @@ class _AdminServicesPageState extends State<_AdminServicesPage> {
               right: 0,
               bottom: 0,
               child: FloatingActionButton(
-                tooltip: 'Nova usluga',
+                tooltip: 'New service',
                 onPressed: () => _editService(null),
                 child: const Icon(Icons.add),
               ),
@@ -237,12 +237,12 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Otkazivanje rezervacije'),
+        title: const Text('Cancel booking'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(r.uslugaNaziv ?? 'Usluga'),
+            Text(r.uslugaNaziv ?? 'Service'),
             const SizedBox(height: 6),
             Text(
               r.datumRezervacije.toLocal().toString().split('.').first,
@@ -251,7 +251,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
             if (r.isPlacena) ...[
               const SizedBox(height: 10),
               Text(
-                'Plaćena rezervacija — otkazivanje uključuje Stripe refund.',
+                'Paid booking — cancellation includes a Stripe refund.',
                 style: TextStyle(color: Colors.amber.shade200),
               ),
             ],
@@ -262,7 +262,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
               minLines: 2,
               maxLines: 4,
               decoration: const InputDecoration(
-                labelText: 'Razlog otkaza (opcionalno)',
+                labelText: 'Cancellation reason (optional)',
               ),
             ),
           ],
@@ -270,12 +270,12 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Nazad'),
+            child: const Text('Back'),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.cancel_outlined),
-            label: Text(r.isPlacena ? 'Otkaži i refundiraj' : 'Otkaži'),
+            label: Text(r.isPlacena ? 'Cancel & refund' : 'Cancel'),
           ),
         ],
       ),
@@ -292,7 +292,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
         content: Text(
           result?.otkazana == true
               ? cancelRezervacijaSuccessMessage(result!)
-              : 'Neuspjelo otkazivanje.',
+              : 'Cancellation failed.',
         ),
       ),
     );
@@ -359,7 +359,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Uredi rezervaciju'),
+        title: const Text('Edit booking'),
         content: SizedBox(
           width: 720,
           child: StatefulBuilder(
@@ -403,14 +403,14 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                   const SizedBox(height: 12),
                   InputDecorator(
                     decoration: const InputDecoration(
-                      labelText: 'Usluga',
+                      labelText: 'Service',
                       border: OutlineInputBorder(),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         isExpanded: true,
                         value: serviceCtrl.value,
-                        hint: const Text('Odaberite uslugu'),
+                        hint: const Text('Select service'),
                         items: services
                             .map(
                               (s) => DropdownMenuItem(
@@ -441,7 +441,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                   const SizedBox(height: 12),
                   InputDecorator(
                     decoration: const InputDecoration(
-                      labelText: 'Terapeut',
+                      labelText: 'Therapist',
                       border: OutlineInputBorder(),
                     ),
                     child: DropdownButtonHideUnderline(
@@ -450,8 +450,8 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                         value: therapistCtrl.value,
                         hint: Text(
                           eligibleTherapists.isEmpty
-                              ? 'Nema terapeuta za uslugu'
-                              : 'Odaberite terapeuta',
+                              ? 'No therapists for this service'
+                              : 'Select therapist',
                         ),
                         items: eligibleTherapists
                             .map(
@@ -469,7 +469,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('VIP termin'),
+                    title: const Text('VIP appointment'),
                     value: vipCtrl.value,
                     onChanged: (v) => setLocal(() => vipCtrl.value = v),
                   ),
@@ -479,8 +479,8 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Otkaži')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sačuvaj')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
         ],
       ),
     );
@@ -488,7 +488,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
     if (ok != true || !mounted) return;
     if (therapistCtrl.value == null || serviceCtrl.value == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Terapeut i usluga su obavezni.')),
+        const SnackBar(content: Text('Therapist and service are required.')),
       );
       return;
     }
@@ -503,7 +503,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(updated != null ? 'Sačuvano.' : 'Greška pri čuvanju.')),
+      SnackBar(content: Text(updated != null ? 'Saved.' : 'Error while saving.')),
     );
     _reload();
   }
@@ -541,7 +541,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
           child: Column(
             children: [
               SwitchListTile(
-                title: const Text('Prikaži otkazane'),
+                title: const Text('Show cancelled'),
                 value: _includeOtkazane,
                 onChanged: (v) {
                   setState(() => _includeOtkazane = v);
@@ -572,11 +572,11 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                         leading: Icon(statusIcon, color: statusColor),
                         title: Row(
                           children: [
-                            Expanded(child: Text(r.uslugaNaziv ?? 'Usluga')),
+                            Expanded(child: Text(r.uslugaNaziv ?? 'Service')),
                             if (r.isOtkazana)
                               const Padding(
                                 padding: EdgeInsets.only(left: 10),
-                                child: Chip(label: Text('Otkazana')),
+                                child: Chip(label: Text('Cancelled')),
                               ),
                           ],
                         ),
@@ -593,7 +593,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                           children: [
                             if (!r.isOtkazana)
                               Tooltip(
-                                message: 'Uredi',
+                                message: 'Edit',
                                 child: IconButton(
                                   onPressed: r.isPlacena ? null : () => _edit(r),
                                   icon: const Icon(Icons.edit_outlined),
@@ -601,14 +601,14 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                               ),
                             if (!r.isOtkazana)
                               Tooltip(
-                                message: 'Otkazivanje',
+                                message: 'Cancel',
                                 child: IconButton(
                                   onPressed: r.isOtkazana ? null : () => _cancel(r),
                                   icon: const Icon(Icons.cancel_outlined),
                                 ),
                               ),
                             Tooltip(
-                              message: 'Potvrdi/odbij',
+                              message: 'Confirm/deny',
                               child: Switch(
                                 value: r.isPotvrdjena,
                                 onChanged: (r.isOtkazana)
@@ -620,7 +620,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                                         if (!ok) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Nije moguće ažurirati rezervaciju.'),
+                                              content: Text('Unable to update booking.'),
                                             ),
                                           );
                                         }
@@ -638,12 +638,12 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
                           showDialog<void>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Razlog otkaza'),
+                              title: const Text('Cancellation reason'),
                               content: Text(reason),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Zatvori'),
+                                  child: const Text('Close'),
                                 ),
                               ],
                             ),
@@ -674,17 +674,17 @@ class _AdminReportPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Izvještaji',
+            'Reports',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Preuzmite PDF sa top uslugama (isti endpoint kao na backendu).',
+            'Download a PDF with top services (same backend endpoint).',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
           ),
           const SizedBox(height: 24),
           Tooltip(
-            message: 'Preuzmi PDF izvještaj (top usluge)',
+            message: 'Download PDF report (top services)',
             child: FilledButton.icon(
               onPressed: () async {
                 final now = DateTime.now();
@@ -704,7 +704,7 @@ class _AdminReportPage extends StatelessWidget {
                 }
               },
               icon: const Icon(Icons.download),
-              label: const Text('Preuzmi Top usluge (PDF)'),
+              label: const Text('Download top services (PDF)'),
             ),
           ),
         ],

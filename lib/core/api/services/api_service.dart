@@ -1248,20 +1248,20 @@ class ApiService {
       );
       final data = response.data;
       final msg = data is Map
-          ? (data['message'] as String? ?? 'Uspješno ste se odjavili.')
-          : 'Uspješno ste se odjavili.';
+          ? (data['message'] as String? ?? 'Signed out successfully.')
+          : 'Signed out successfully.';
       return (success: true, message: msg);
     } on DioException catch (e) {
       return (
         success: false,
         message: ApiErrorMessages.fromDio(e) ??
-            'Odjava nije uspjela. Lokalna sesija će biti obrisana.',
+            'Server sign-out failed. Your local session was cleared.',
       );
     } catch (e) {
       debugPrint('Greška u ApiService.logout: $e');
       return (
         success: false,
-        message: 'Odjava nije uspjela. Lokalna sesija će biti obrisana.',
+        message: 'Server sign-out failed. Your local session was cleared.',
       );
     }
   }
@@ -1863,7 +1863,7 @@ class ApiService {
       );
       final data = response.data;
       if (data is! Map<String, dynamic>) {
-        return (null, 'Neočekivan odgovor servera.');
+        return (null, 'Unexpected server response.');
       }
       return (Recenzija.fromJson(data), null);
     } on DioException catch (e) {

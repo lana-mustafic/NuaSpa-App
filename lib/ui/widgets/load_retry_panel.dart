@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Prikaz greške pri učitavanju s mreže / API-ja i akcija „Ponovi”.
+/// Error state when loading from the network/API, with a retry action.
 class LoadRetryPanel extends StatelessWidget {
   const LoadRetryPanel({
     super.key,
     required this.message,
     required this.onRetry,
-    this.title = 'Ne možemo učitati podatke',
+    this.title = 'Unable to load data',
   });
 
   final String title;
@@ -51,7 +51,7 @@ class LoadRetryPanel extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh, size: 20),
-                label: const Text('Ponovi'),
+                label: const Text('Retry'),
               ),
             ],
           ),

@@ -67,7 +67,7 @@ abstract final class LoginMessages {
 
     final fallback = ApiErrorMessages.fromDio(error);
     if (error.response?.statusCode == 401 &&
-        fallback == 'Niste prijavljeni ili sesija je istekla.') {
+        fallback == 'You are not signed in or your session has expired.') {
       return en('Invalid username or password.');
     }
 

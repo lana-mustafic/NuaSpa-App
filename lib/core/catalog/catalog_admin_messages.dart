@@ -1,3 +1,5 @@
+import '../api/api_error_messages.dart';
+
 /// Maps backend catalog admin errors into actionable English copy.
 abstract final class CatalogAdminMessages {
   static String serviceDeleteError(String? raw) {
@@ -18,7 +20,7 @@ abstract final class CatalogAdminMessages {
     if (lower.contains('ne postoji') || lower.contains('not exist')) {
       return 'This service no longer exists. Refresh the catalog and try again.';
     }
-    return raw;
+    return ApiErrorMessages.humanize(raw);
   }
 
   static String categoryDeleteError(String? raw) {
@@ -36,6 +38,6 @@ abstract final class CatalogAdminMessages {
     if (lower.contains('ne postoji') || lower.contains('not exist')) {
       return 'This category no longer exists. Refresh and try again.';
     }
-    return raw;
+    return ApiErrorMessages.humanize(raw);
   }
 }

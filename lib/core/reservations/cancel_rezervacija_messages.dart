@@ -3,10 +3,10 @@ import '../../models/cancel_rezervacija_result.dart';
 String cancelRezervacijaSuccessMessage(CancelRezervacijaResult result) {
   if (result.refundIzvrsen && result.refundiraniIznos != null) {
     final amount = result.refundiraniIznos!.toStringAsFixed(2);
-    return 'Rezervacija otkazana. Povrat $amount KM je pokrenut.';
+    return 'Booking cancelled. A refund of $amount KM has been initiated.';
   }
   if (result.refundIzvrsen) {
-    return 'Rezervacija otkazana. Povrat sredstava je pokrenut.';
+    return 'Booking cancelled. A refund has been initiated.';
   }
-  return 'Rezervacija otkazana.';
+  return 'Booking cancelled.';
 }

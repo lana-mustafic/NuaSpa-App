@@ -33,7 +33,7 @@ class AdminSuiteScreen extends StatefulWidget {
 enum _TherapistsView { availability, calendar }
 
 String _calendarDialogDayCaption(DateTime day) {
-  const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+  const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   final loc = day.toLocal();
   final w = names[(loc.weekday - 1).clamp(0, 6)];
   final dd = loc.day.toString().padLeft(2, '0');
@@ -67,11 +67,11 @@ String _rezCalBookingStatsLine(List<RezervacijaCalendarItem> xs) {
   final plac = xs.where((x) => x.isPlacena && !x.isOtkazana).length;
   final tot = xs.length;
   final parts = <String>[
-    'Ukupno $tot',
-    'Potvrđene $pot',
-    if (cek > 0) 'Čekanje $cek',
-    'Plaćene $plac',
-    if (otk > 0) 'Otkazane $otk',
+    'Total $tot',
+    'Confirmed $pot',
+    if (cek > 0) 'Pending $cek',
+    'Paid $plac',
+    if (otk > 0) 'Cancelled $otk',
   ];
   return parts.join(' · ');
 }
@@ -141,7 +141,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
     final statsLine = _rezCalBookingStatsLine(visible);
     final titleExtra = [
       if (qq.isNotEmpty && visible.length != widget.items.length)
-        'pretraga: ${visible.length}/${widget.items.length}',
+        'search: ${visible.length}/${widget.items.length}',
     ].join(', ');
 
     return AlertDialog(
@@ -182,7 +182,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$baseCount termina za odabrani dan'
+            '$baseCount appointments for selected day'
             '${titleExtra.isEmpty ? '' : ' · $titleExtra'}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
@@ -202,14 +202,14 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText:
-                    'Pretraži: klijent, telefon, email, usluga, terapeut, ID…',
+                    'Search: client, phone, email, service, therapist, ID…',
                 prefixIcon: const Icon(Icons.search, size: 22),
                 isDense: true,
                 filled: true,
                 suffixIcon: qq.isEmpty
                     ? null
                     : IconButton(
-                        tooltip: 'Očisti pretragu',
+                        tooltip: 'Clear search',
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _query.clear();
@@ -247,9 +247,9 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                           Text(
                             () {
                               if (qq.isNotEmpty) {
-                                return 'Nema pogodaka za ovaj upit pretrage.';
+                                return 'No matches for this search query.';
                               }
-                              return 'Nema rezervacija za ovaj prikaz.';
+                              return 'No bookings for this view.';
                             }(),
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium?.copyWith(
@@ -311,7 +311,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                 Chip(
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
-                                  label: const Text('Plaćeno'),
+                                  label: const Text('Paid'),
                                   backgroundColor: Colors.green.withValues(
                                     alpha: 0.22,
                                   ),
@@ -320,7 +320,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                 Chip(
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
-                                  label: const Text('Otkazana'),
+                                  label: const Text('Cancelled'),
                                   backgroundColor: Colors.redAccent.withValues(
                                     alpha: 0.22,
                                   ),
@@ -329,7 +329,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                 Chip(
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
-                                  label: const Text('Potvrđena'),
+                                  label: const Text('Confirmed'),
                                   backgroundColor: Colors.green.withValues(
                                     alpha: 0.14,
                                   ),
@@ -338,21 +338,21 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                 Chip(
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
-                                  label: const Text('Čekanje'),
+                                  label: const Text('Pending'),
                                   backgroundColor: Colors.orange.withValues(
                                     alpha: 0.18,
                                   ),
                                 ),
                               IconButton(
                                 tooltip:
-                                    'Kopiraj ID rezervacije u međuspremnik',
+                                    'Copy booking ID to clipboard',
                                 icon: const Icon(Icons.copy_outlined, size: 18),
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () async {
                                   await Clipboard.setData(
                                     ClipboardData(text: '${r.id}'),
                                   );
-                                  _toast('Kopiran ID rezervacije ${r.id}');
+                                  _toast('Copied booking ID ${r.id}');
                                 },
                               ),
                             ],
@@ -372,8 +372,8 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                 Tooltip(
                                   message:
                                       dur > 0
-                                          ? 'Početak $timeHm (trajanje $dur min)'
-                                          : 'Početak termina $timeHm',
+                                          ? 'Starts $timeHm (duration $dur min)'
+                                          : 'Appointment starts $timeHm',
                                   child: Padding(
                                     padding: const EdgeInsets.only(top: 2),
                                     child: CircleAvatar(
@@ -402,7 +402,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        r.uslugaNaziv ?? 'Usluga',
+                                        r.uslugaNaziv ?? 'Service',
                                         style: titleStyle,
                                         maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
@@ -430,9 +430,9 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                       chips,
                                       const SizedBox(height: 6),
                                       Text(
-                                        'Klijent: $klijentLabel\n'
-                                        'Tel: $telLabel · Mail: $mailLabel\n'
-                                        'Terapeut: $terLabel',
+                                        'Client: $klijentLabel\n'
+                                        'Phone: $telLabel · Email: $mailLabel\n'
+                                        'Therapist: $terLabel',
                                         style: subMuted,
                                       ),
                                       if (r.isOtkazana &&
@@ -444,7 +444,7 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                                           padding:
                                               const EdgeInsets.only(top: 6),
                                           child: Text(
-                                            'Razlog otkaza: ${r.razlogOtkaza}',
+                                            'Cancellation reason: ${r.razlogOtkaza}',
                                             style: subMuted?.copyWith(
                                               color: theme.colorScheme.error
                                                   .withValues(alpha: 0.92),
@@ -476,9 +476,9 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                         final s = r.datumRezervacije.toLocal();
                         final tl = _formatTimeHm(s);
                         final st = r.isOtkazana
-                            ? 'otk'
-                            : (r.isPotvrdjena ? 'potvrd' : 'ček');
-                        final plac = r.isPlacena ? ' plaćeno' : '';
+                            ? 'cancelled'
+                            : (r.isPotvrdjena ? 'confirmed' : 'pending');
+                        final plac = r.isPlacena ? ' paid' : '';
                         final tel = r.korisnikTelefon ?? '—';
                         final em = r.korisnikEmail ?? '—';
                         final rz = r.isOtkazana
@@ -493,11 +493,11 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                             : '—';
                         return '$tl–$end | ${r.uslugaTrajanjeMinuta} min | '
                             '${r.uslugaCijena.toStringAsFixed(2)} KM | '
-                            '${r.uslugaNaziv ?? "usluga"} | '
+                            '${r.uslugaNaziv ?? "service"} | '
                             '${r.korisnikIme ?? "—"} | tel $tel | mail $em | '
                             '${r.zaposlenikIme ?? "—"} | '
                             '$st$plac'
-                            '${rz.isEmpty ? "" : " | razlog: $rz"}';
+                            '${rz.isEmpty ? "" : " | reason: $rz"}';
                       })
                       .join('\n');
                   final header =
@@ -506,16 +506,15 @@ class _CalendarDayBookingDialogState extends State<_CalendarDayBookingDialog> {
                       '---\n';
                   await Clipboard.setData(ClipboardData(text: '$header$lines'));
                   _toast(
-                    'U međuspremnik je kopirano ${visible.length} '
-                    'stavki (tekstualna lista).',
+                    'Copied ${visible.length} items to clipboard (text list).',
                   );
                 },
           icon: const Icon(Icons.content_copy_outlined, size: 18),
-          label: Text('Kopiraj listu (${visible.length})'),
+          label: Text('Copy list (${visible.length})'),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Zatvori'),
+          child: const Text('Close'),
         ),
       ],
     );
@@ -745,7 +744,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
       children: [
         PageHeader(
           title: 'Dashboard',
-          subtitle: 'KPIs, promet i aktivnost (plaćene rezervacije).',
+          subtitle: 'KPIs, revenue, and activity (paid bookings).',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -761,7 +760,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               FilledButton.icon(
                 onPressed: _reloadOverview,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Osvježi'),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -776,7 +775,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               }
               final data = snap.data;
               if (data == null) {
-                return const Center(child: Text('Nema podataka.'));
+                return const Center(child: Text('No data.'));
               }
 
               return LayoutBuilder(
@@ -834,10 +833,10 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         PageHeader(
-          title: 'Terapeuti i raspored',
+          title: 'Therapists & schedule',
           subtitle: _therapistsView == _TherapistsView.availability
-              ? 'Kartice terapeuta + sedmična dostupnost (slobodni slotovi).'
-              : 'Kalendar zauzetosti (rezervisani termini) u realnom vremenu.',
+              ? 'Therapist cards + weekly availability (open slots).'
+              : 'Real-time occupancy calendar (booked appointments).',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -845,12 +844,12 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                 segments: const [
                   ButtonSegment(
                     value: _TherapistsView.availability,
-                    label: Text('Dostupnost'),
+                    label: Text('Availability'),
                     icon: Icon(Icons.grid_view_rounded),
                   ),
                   ButtonSegment(
                     value: _TherapistsView.calendar,
-                    label: Text('Kalendar'),
+                    label: Text('Calendar'),
                     icon: Icon(Icons.calendar_month_outlined),
                   ),
                 ],
@@ -870,7 +869,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _reloadCalendar();
                 }),
                 icon: const Icon(Icons.chevron_left_rounded),
-                label: const Text('Prethodna'),
+                label: const Text('Previous'),
               ),
               const SizedBox(width: 10),
               OutlinedButton.icon(
@@ -879,7 +878,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _reloadCalendar();
                 }),
                 icon: const Icon(Icons.chevron_right_rounded),
-                label: const Text('Sljedeća'),
+                label: const Text('Next'),
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
@@ -889,7 +888,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                   _reloadCalendar();
                 },
                 icon: const Icon(Icons.refresh),
-                label: const Text('Osvježi'),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -904,7 +903,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
               }
               final list = snap.data ?? [];
               if (list.isEmpty) {
-                return const Center(child: Text('Nema terapeuta.'));
+                return const Center(child: Text('No therapists.'));
               }
 
               if (_therapistsView == _TherapistsView.calendar) {
@@ -959,7 +958,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                               content: SizedBox(
                                 width: 520,
                                 child: slots.isEmpty
-                                    ? const Text('Nema slobodnih termina.')
+                                    ? const Text('No open slots.')
                                     : Wrap(
                                         spacing: 8,
                                         runSpacing: 8,
@@ -982,7 +981,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Zatvori'),
+                                  child: const Text('Close'),
                                 ),
                               ],
                             ),
@@ -1062,7 +1061,7 @@ class _TherapistCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Tooltip(
-                        message: 'Otvori profil terapeuta',
+                        message: 'Open therapist profile',
                         child: IconButton(
                           onPressed: () {
                             Navigator.push<void>(
@@ -1136,7 +1135,7 @@ class _TherapistCard extends StatelessWidget {
                         ),
                       if (tags.isEmpty)
                         Text(
-                          'Specijalizacija nije postavljena.',
+                          'Specialization not set.',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.65),
                             fontSize: 12,
@@ -1150,7 +1149,7 @@ class _TherapistCard extends StatelessWidget {
                       const Icon(Icons.calendar_month_outlined, size: 18),
                       const SizedBox(width: 8),
                       Text(
-                        'Dostupnost (sedmica)',
+                        'Availability (week)',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.75),
                         ),
@@ -1188,7 +1187,7 @@ class _MiniWeekGrid extends StatelessWidget {
   final Future<void> Function(DateTime day) onOpenDay;
 
   String _dayLabel(DateTime d) {
-    const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return names[(d.weekday - 1).clamp(0, 6)];
   }
 
@@ -1281,7 +1280,7 @@ class _AdminCalendarView extends StatelessWidget {
   final ValueChanged<bool> onToggleAutoRefresh;
 
   String _dayHeader(DateTime d) {
-    const names = ['Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub', 'Ned'];
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return '${names[(d.weekday - 1).clamp(0, 6)]}\n${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
   }
 
@@ -1292,7 +1291,7 @@ class _AdminCalendarView extends StatelessWidget {
         Row(
           children: [
             FilterChip(
-              label: const Text('Uključi otkazane'),
+              label: const Text('Include cancelled'),
               selected: includeCancelled,
               onSelected: onToggleCancelled,
             ),
@@ -1328,7 +1327,7 @@ class _AdminCalendarView extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Ne možemo učitati kalendar',
+                          'Unable to load calendar',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                           textAlign: TextAlign.center,
@@ -1361,7 +1360,7 @@ class _AdminCalendarView extends StatelessWidget {
                   child: DataTable(
                     columnSpacing: 18,
                     columns: [
-                      const DataColumn(label: Text('Terapeut')),
+                      const DataColumn(label: Text('Therapist')),
                       for (final d in days)
                         DataColumn(
                           label: Text(
@@ -1430,15 +1429,15 @@ class _AdminCalendarView extends StatelessWidget {
     return DataCell(
       Tooltip(
         message: count == 0
-            ? 'Nema termina za $dayCap'
-            : '$count termina za $dayCap — klik za detalje, pretragu i izvoz',
+            ? 'No appointments for $dayCap'
+            : '$count appointments for $dayCap — click for details, search, and export',
         waitDuration: const Duration(milliseconds: 400),
         child: Semantics(
           button: true,
           enabled: count > 0,
           label: count == 0
-              ? 'Ćelija kalendara, nema termina'
-              : '$count termina, $rowLabel, $dayCap',
+              ? 'Calendar cell, no appointments'
+              : '$count appointments, $rowLabel, $dayCap',
           child: InkWell(
             onTap: count == 0
                 ? null
@@ -1483,27 +1482,27 @@ class _KpiRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _KpiTile(
-        label: 'Rezervacije (ukupno)',
+        label: 'Bookings (total)',
         value: '${kpi?.ukupnoRezervacija ?? '—'}',
         icon: Icons.event_note_outlined,
       ),
       _KpiTile(
-        label: 'Rezervacije (danas)',
+        label: 'Bookings (today)',
         value: '${kpi?.rezervacijeDanas ?? '—'}',
         icon: Icons.today_outlined,
       ),
       _KpiTile(
-        label: 'Prihod (danas)',
+        label: 'Revenue (today)',
         value: kpi == null ? '—' : '${kpi!.prihodDanas.toStringAsFixed(0)} KM',
         icon: Icons.payments_outlined,
       ),
       _KpiTile(
-        label: 'Aktivni terapeuti',
+        label: 'Active therapists',
         value: '${kpi?.aktivniTerapeuti ?? '—'}',
         icon: Icons.groups_2_outlined,
       ),
       _KpiTile(
-        label: 'Ocjena zadovoljstva',
+        label: 'Satisfaction rating',
         value: kpi == null ? '—' : kpi!.prosjecnaOcjena.toStringAsFixed(2),
         icon: Icons.star_border_rounded,
       ),
@@ -1597,17 +1596,17 @@ class _RevenueCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Prihod kroz vrijeme', style: theme.textTheme.titleLarge),
+            Text('Revenue over time', style: theme.textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
-              'Plaćene rezervacije (KM)',
+              'Paid bookings (KM)',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
             const SizedBox(height: 14),
             SizedBox(
               height: 260,
               child: data.isEmpty
-                  ? const Center(child: Text('Nema podataka za period.'))
+                  ? const Center(child: Text('No data for this period.'))
                   : LineChart(
                       LineChartData(
                         gridData: const FlGridData(show: true),
@@ -1662,12 +1661,12 @@ class _PopularityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Popularnost usluga', style: theme.textTheme.titleLarge),
+            Text('Service popularity', style: theme.textTheme.titleLarge),
             const SizedBox(height: 14),
             SizedBox(
               height: 180,
               child: items.isEmpty
-                  ? const Center(child: Text('Nema podataka.'))
+                  ? const Center(child: Text('No data.'))
                   : PieChart(
                       PieChartData(
                         sectionsSpace: 2,
@@ -1707,7 +1706,7 @@ class _PopularityCard extends StatelessWidget {
             Text('Top Spenders', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             if (topSpenders.isEmpty)
-              const Text('Nema podataka.')
+              const Text('No data.')
             else
               ...topSpenders
                   .take(6)

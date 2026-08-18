@@ -81,10 +81,13 @@ class AdminNotificationsScreen extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.06),
               ),
               Expanded(
-                child: NotificationListBody(
-                  provider: provider,
-                  items: provider.notifikacije,
-                  shrinkWrap: false,
+                child: NotificationListTheme(
+                  colors: NotificationListColors.dark,
+                  child: NotificationListBody(
+                    provider: provider,
+                    items: provider.notifikacije,
+                    shrinkWrap: false,
+                  ),
                 ),
               ),
             ],

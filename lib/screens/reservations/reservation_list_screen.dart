@@ -349,21 +349,21 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
           PageHeader(
-            title: 'Moje rezervacije',
-            subtitle: 'Pregled vaših rezervacija, statusa i plaćanja.',
+            title: 'My bookings',
+            subtitle: 'View your bookings, status, and payment details.',
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Osvježi',
+                  tooltip: 'Refresh',
                   onPressed: _refresh,
                   icon: const Icon(Icons.refresh),
                 ),
                 const SizedBox(width: 6),
                 Tooltip(
-                  message: 'Prikaži otkazane',
+                  message: 'Show cancelled',
                   child: FilterChip(
-                    label: const Text('Otkazane'),
+                    label: const Text('Cancelled'),
                     selected: _includeOtkazane,
                     onSelected: (v) {
                       setState(() => _includeOtkazane = v);
@@ -374,9 +374,9 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                 if (!hideFab) ...[
                   const SizedBox(width: 8),
                   PrimaryButton(
-                    label: 'Nova rezervacija',
+                    label: 'New booking',
                     icon: Icons.add,
-                    tooltip: 'Kreiraj novu rezervaciju',
+                    tooltip: 'Create a new booking',
                     onPressed: () async {
                       final created = await Navigator.push<bool>(
                         context,
@@ -404,7 +404,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                 if (data.isEmpty) {
                   return Center(
                     child: Text(
-                      'Trenutno nema rezervacija.',
+                      'No bookings yet.',
                       style:
                           TextStyle(color: Colors.white.withValues(alpha: 0.75)),
                     ),
@@ -423,19 +423,19 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                         dataRowMinHeight: 54,
                         dataRowMaxHeight: 66,
                         columns: const [
-                          DataColumn(label: Text('Usluga')),
-                          DataColumn(label: Text('Datum & vrijeme')),
-                          DataColumn(label: Text('Terapeut')),
+                          DataColumn(label: Text('Service')),
+                          DataColumn(label: Text('Date & time')),
+                          DataColumn(label: Text('Therapist')),
                           DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Plaćanje')),
-                          DataColumn(label: Text('Akcije')),
+                          DataColumn(label: Text('Payment')),
+                          DataColumn(label: Text('Actions')),
                         ],
                         rows: [
                           for (final r in data)
                             DataRow(
                               onSelectChanged: (_) {},
                               cells: [
-                                DataCell(Text(r.uslugaNaziv ?? 'Usluga')),
+                                DataCell(Text(r.uslugaNaziv ?? 'Service')),
                                 DataCell(Text(
                                   r.datumRezervacije
                                       .toLocal()
@@ -448,12 +448,12 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                   Chip(
                                     label: Text(
                                       r.isOtkazana
-                                          ? 'Otkazana'
+                                          ? 'Cancelled'
                                           : (_isCompletedReservation(r)
-                                              ? 'Završena'
+                                              ? 'Completed'
                                               : (r.isPotvrdjena
-                                                  ? 'Potvrđena'
-                                                  : 'Na čekanju')),
+                                                  ? 'Confirmed'
+                                                  : 'Pending')),
                                     ),
                                   ),
                                 ),
@@ -463,7 +463,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                     children: [
                                       if (r.isPlacena)
                                         const Text(
-                                          'Plaćeno',
+                                          'Paid',
                                           style: TextStyle(color: Colors.green),
                                         )
                                       else if (r.isOtkazana)
@@ -476,10 +476,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                           height: 34,
                                           child: Tooltip(
                                             message:
-                                                'Plati Online (Stripe, Android/iOS)',
+                                                'Pay online (Stripe, Android/iOS)',
                                             child: FilledButton(
                                             onPressed: () => _handlePayOnline(r),
-                                            child: const Text('Plati'),
+                                            child: const Text('Pay'),
                                             ),
                                           ),
                                         ),
@@ -493,7 +493,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                       if (!hideFab && _isCompletedReservation(r))
                                         Tooltip(
                                           message:
-                                              'Ocijeni uslugu nakon završenog termina',
+                                              'Leave a review after a completed appointment',
                                           child: IconButton(
                                             onPressed: () {
                                               Navigator.push(
@@ -514,12 +514,12 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                         ),
                                       Tooltip(
                                         message: r.isOtkazana
-                                            ? 'Već otkazana'
+                                            ? 'Already cancelled'
                                             : (_isCompletedReservation(r)
-                                                ? 'Završene rezervacije se ne mogu otkazati'
+                                                ? 'Completed bookings cannot be cancelled'
                                                 : (r.isPlacena
-                                                    ? 'Otkaži i refundiraj plaćenu rezervaciju'
-                                                    : 'Otkaži rezervaciju')),
+                                                    ? 'Cancel and refund paid booking'
+                                                    : 'Cancel booking')),
                                         child: IconButton(
                                           onPressed: r.isOtkazana ||
                                                   _isCompletedReservation(r)
@@ -740,13 +740,13 @@ class _CancelReservationDialogState extends State<_CancelReservationDialog> {
 
     return AlertDialog(
       backgroundColor: mobile ? MobileSpaColors.softWhite : null,
-      title: Text(mobile ? 'Cancel booking?' : 'Otkazati rezervaciju?'),
+      title: const Text('Cancel booking?'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(r.uslugaNaziv ?? (mobile ? 'Service' : 'Usluga')),
+            Text(r.uslugaNaziv ?? 'Service'),
             const SizedBox(height: 6),
             Text(
               when,
@@ -759,9 +759,7 @@ class _CancelReservationDialogState extends State<_CancelReservationDialog> {
             if (r.isPlacena) ...[
               const SizedBox(height: 10),
               Text(
-                mobile
-                    ? 'This booking is paid. Cancelling will start a card refund.'
-                    : 'Rezervacija je plaćena. Otkazivanje uključuje povrat sredstava na karticu.',
+                'This booking is paid. Cancelling will start a card refund.',
                 style: TextStyle(
                   color: mobile
                       ? const Color(0xFFB45309)
@@ -777,7 +775,7 @@ class _CancelReservationDialogState extends State<_CancelReservationDialog> {
               maxLines: 4,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: mobile ? 'Reason (required)' : 'Razlog (obavezno)',
+                labelText: 'Reason (required)',
                 errorText: _formError,
               ),
               onChanged: (_) {
@@ -792,15 +790,13 @@ class _CancelReservationDialogState extends State<_CancelReservationDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(mobile ? 'Back' : 'Nazad'),
+          child: const Text('Back'),
         ),
         FilledButton.icon(
           onPressed: _submit,
           icon: const Icon(Icons.cancel_outlined),
           label: Text(
-            r.isPlacena
-                ? (mobile ? 'Cancel & refund' : 'Otkaži i refundiraj')
-                : (mobile ? 'Cancel' : 'Otkaži'),
+            r.isPlacena ? 'Cancel & refund' : 'Cancel',
           ),
         ),
       ],

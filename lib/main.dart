@@ -189,7 +189,7 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Pregled dana',
+                  'Today\'s overview',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -219,7 +219,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Pregled dana — Overview',
+                  'Today\'s overview',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -245,28 +245,28 @@ class _HomePageState extends State<HomePage> {
                 final cards = <Widget>[
                   OverviewStatCard(
                     icon: Icons.event_available_rounded,
-                    label: 'Današnje aktivne rezervacije',
+                    label: 'Today\'s active bookings',
                     value: '${active.length}',
                     subtitle: active.isEmpty
-                        ? 'Za danas još nema aktivnih termina.'
-                        : 'Ukupno u vašoj roli vidljivih termina.',
+                        ? 'No active appointments scheduled for today yet.'
+                        : 'Total visible appointments in your role for today.',
                     accent: Theme.of(context).colorScheme.primary,
                   ),
                   OverviewStatCard(
                     icon: Icons.person_add_alt_1_outlined,
-                    label: 'Novi klijenti',
+                    label: 'New clients',
                     value: novi == null ? '—' : '$novi',
                     subtitle: novi == null
-                        ? 'Broj novih registracija (7 dana) vidi samo administrator.'
-                        : 'Nove registracije u zadnjih 7 dana (cijeli spa).',
+                        ? 'New registrations (7 days) are visible to administrators only.'
+                        : 'New registrations in the last 7 days (entire spa).',
                     accent: Theme.of(context).colorScheme.tertiary,
                   ),
                   OverviewStatCard(
                     icon: Icons.payments_outlined,
-                    label: 'Očekivani prihod (procjena)',
+                    label: 'Expected revenue (estimate)',
                     value: overview == null ? '— $valuta' : prihodTxt,
                     subtitle:
-                        'Suma cijena neotkanih termina za danas u okviru vaše uloge.',
+                        'Sum of prices for today\'s uncancelled appointments visible in your role.',
                     accent: Theme.of(context).colorScheme.secondary,
                   ),
                 ];
@@ -319,7 +319,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Preporučeno za vas',
+              'Recommended for you',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -368,10 +368,10 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Dobrodošli', style: Theme.of(context).textTheme.titleLarge),
+            Text('Welcome', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
-              'Upravljajte katalogom, rezervacijama i rasporedom terapeuta.',
+              'Manage the catalog, bookings, and therapist schedule.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
             const SizedBox(height: 28),
@@ -388,7 +388,7 @@ class _HomePageState extends State<HomePage> {
 
                 final actions = <Widget>[
                   HoverCard(
-                    tooltip: 'Otvori katalog usluga',
+                    tooltip: 'Open service catalog',
                     onTap: () => nav.goTo(DesktopRouteKey.catalog),
                     child: Row(
                       children: [
@@ -396,7 +396,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Katalog usluga',
+                            'Service catalog',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),
@@ -412,7 +412,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Moje rezervacije',
+                              'My bookings',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
@@ -421,7 +421,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (!context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
-                      tooltip: 'Lista favorita',
+                      tooltip: 'Favorites list',
                       onTap: () => nav.goTo(DesktopRouteKey.favorites),
                       child: Row(
                         children: [
@@ -429,7 +429,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Favoriti',
+                              'Favorites',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
@@ -438,7 +438,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
-                      tooltip: 'Raspored terapeuta',
+                      tooltip: 'Therapist schedule',
                       onTap: () => nav.goTo(DesktopRouteKey.schedule),
                       child: Row(
                         children: [
@@ -446,7 +446,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Raspored terapeuta',
+                              'Therapist schedule',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
@@ -455,7 +455,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   if (context.watch<AuthProvider>().isAdmin)
                     HoverCard(
-                      tooltip: 'Administracija',
+                      tooltip: 'Administration',
                       onTap: () => nav.goTo(DesktopRouteKey.admin),
                       child: Row(
                         children: [

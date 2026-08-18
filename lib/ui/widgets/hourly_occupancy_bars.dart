@@ -49,7 +49,7 @@ class HourlyOccupancyBars extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              'Zauzetost termina po satima (danas)',
+              'Hourly occupancy (today)',
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -99,7 +99,7 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) {
     final h = max == 0 ? 0.0 : value / max;
     return Tooltip(
-      message: '$label:00 — $value termina',
+      message: '$label:00 — $value appointments',
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [

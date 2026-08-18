@@ -155,7 +155,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     if (_selectedServiceId == null || _selectedTherapistId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Odaberi uslugu i terapeuta.'),
+          content: Text('Select a service and therapist.'),
         ),
       );
       return;
@@ -163,7 +163,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     if (_selectedSlot == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Odaberi jedan od dostupnih termina.'),
+          content: Text('Select one of the available time slots.'),
         ),
       );
       return;
@@ -172,7 +172,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    final created = await _apiService.createRezervacija(
+    final created = await _apiService.createRezervacijaWithMessage(
       datumRezervacije: _selectedSlot!,
       uslugaId: _selectedServiceId!,
       zaposlenikId: _selectedTherapistId!,
@@ -180,10 +180,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
     if (!mounted) return;
 
-    if (created == null) {
+    if (created.data == null) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Neuspjela kreacija rezervacije.'),
+        SnackBar(
+          content: Text(created.error ?? 'Could not create the booking.'),
         ),
       );
       return;
@@ -210,15 +210,15 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       children: [
         InputDecorator(
           decoration: const InputDecoration(
-            labelText: 'Usluga',
+            labelText: 'Service',
             border: OutlineInputBorder(),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
               hint: services.isEmpty
-                  ? const Text('Nema učitanih usluga')
-                  : const Text('Odaberite uslugu'),
+                  ? const Text('No services loaded')
+                  : const Text('Select a service'),
               value: _effectiveDropdownValue(_selectedServiceId, serviceIds),
               items: services
                   .map(
@@ -244,17 +244,17 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         const SizedBox(height: 16),
         InputDecorator(
           decoration: const InputDecoration(
-            labelText: 'Terapeut',
+            labelText: 'Therapist',
             border: OutlineInputBorder(),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
               hint: _loadingTherapists
-                  ? const Text('Učitavanje terapeuta…')
+                  ? const Text('Loading therapists…')
                   : therapists.isEmpty
-                      ? const Text('Nema dostupnih terapeuta za uslugu')
-                      : const Text('Odaberite terapeuta'),
+                      ? const Text('No therapists available for this service')
+                      : const Text('Select a therapist'),
               value: _effectiveDropdownValue(_selectedTherapistId, therapistIds),
               items: therapists
                   .map(
@@ -285,16 +285,16 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Datum: ${_selectedDate.toLocal().toString().split(".").first}',
+          'Date: ${_selectedDate.toLocal().toString().split(".").first}',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
         Tooltip(
-          message: 'Odaberi datum rezervacije',
+          message: 'Choose booking date',
           child: OutlinedButton.icon(
             onPressed: _pickDate,
             icon: const Icon(Icons.calendar_today),
-            label: const Text('Odaberi datum'),
+            label: const Text('Choose date'),
           ),
         ),
       ],
@@ -303,7 +303,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
   Widget _buildSlotsSection({bool forWidePanel = false}) {
     final title = Text(
-      'Dostupni termini',
+      'Available times',
       style: Theme.of(context).textTheme.titleSmall,
     );
 
@@ -320,7 +320,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         return Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'Odaberi terapeuta.',
+            'Select a therapist.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
           ),
         );
@@ -329,7 +329,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         return Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'Nema slobodnih termina za ovaj datum (možda je spa zatvoren ili je van radnog vremena).',
+            'No available times for this date (the spa may be closed or outside working hours).',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
           ),
         );
@@ -384,7 +384,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             _selectedSlot!.minute == slot.minute;
         final label = _formatSlot(slot);
         return Tooltip(
-          message: 'Termin $label',
+          message: 'Time $label',
           child: FilterChip(
             label: Text(label),
             selected: selected,
@@ -399,11 +399,11 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
   Widget _buildSubmitButton() {
     return Tooltip(
-      message: 'Potvrdi rezervaciju',
+      message: 'Confirm booking',
       child: FilledButton.icon(
         onPressed: _submit,
         icon: const Icon(Icons.check_circle_outline),
-        label: const Text('Rezerviši'),
+        label: const Text('Book'),
       ),
     );
   }
@@ -417,7 +417,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     Widget? leading;
     if (Navigator.canPop(context)) {
       leading = Tooltip(
-        message: 'Nazad',
+        message: 'Back',
         child: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back),
@@ -463,9 +463,9 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   PageHeader(
-                    title: 'Nova rezervacija',
+                    title: 'New booking',
                     subtitle:
-                        'Odaberite uslugu, terapeuta i jedan od slobodnih termina.',
+                        'Choose a service, therapist, and an available time slot.',
                     trailing: leading,
                   ),
                   const SizedBox(height: 20),

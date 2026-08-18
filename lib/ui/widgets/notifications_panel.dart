@@ -17,6 +17,73 @@ const _purple = Color(0xFF7B4DFF);
 const _green = Color(0xFF22C55E);
 const _blue = Color(0xFF3B82F6);
 const _gold = Color(0xFFD4AF7A);
+const _mobilePurple = Color(0xFF2A1244);
+
+/// List/row colors — dark luxury dropdown vs light mobile bottom sheet.
+class NotificationListColors {
+  const NotificationListColors({
+    required this.title,
+    required this.titleMuted,
+    required this.body,
+    required this.timestamp,
+    required this.divider,
+    required this.emptyIcon,
+    required this.skeleton,
+    required this.subtitle,
+  });
+
+  final Color title;
+  final Color titleMuted;
+  final Color body;
+  final Color timestamp;
+  final Color divider;
+  final Color emptyIcon;
+  final Color skeleton;
+  final Color subtitle;
+
+  static const dark = NotificationListColors(
+    title: _textPrimary,
+    titleMuted: Color(0xC7F5F3FA),
+    body: Color(0x94FFFFFF),
+    timestamp: Color(0x61FFFFFF),
+    divider: Color(0x0FFFFFFF),
+    emptyIcon: Color(0x47FFFFFF),
+    skeleton: Color(0x0FFFFFFF),
+    subtitle: Color(0x99E8E4F0),
+  );
+
+  static const light = NotificationListColors(
+    title: _mobilePurple,
+    titleMuted: Color(0xCC2A1244),
+    body: Color(0x992A1244),
+    timestamp: Color(0x662A1244),
+    divider: Color(0x1A2A1244),
+    emptyIcon: Color(0x402A1244),
+    skeleton: Color(0x142A1244),
+    subtitle: Color(0x8C2A1244),
+  );
+}
+
+class NotificationListTheme extends InheritedWidget {
+  const NotificationListTheme({
+    super.key,
+    required this.colors,
+    required super.child,
+  });
+
+  final NotificationListColors colors;
+
+  static NotificationListColors of(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<NotificationListTheme>()
+            ?.colors ??
+        NotificationListColors.dark;
+  }
+
+  @override
+  bool updateShouldNotify(NotificationListTheme oldWidget) =>
+      colors != oldWidget.colors;
+}
 
 /// Opens a bell-anchored notification dropdown (desktop admin header).
 Future<void> showLuxuryNotificationsDropdown(
@@ -220,9 +287,12 @@ class NotificationsDropdownPanel extends StatelessWidget {
               : null,
         ),
         Flexible(
-          child: NotificationListBody(
-            provider: provider,
-            items: items,
+          child: NotificationListTheme(
+            colors: NotificationListColors.dark,
+            child: NotificationListBody(
+              provider: provider,
+              items: items,
+            ),
           ),
         ),
         _DropdownFooter(
@@ -350,6 +420,7 @@ class NotificationListBody extends StatelessWidget {
     if (items.isEmpty) {
       return const _NotificationEmptyState();
     }
+    final dividerColor = NotificationListTheme.of(context).divider;
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
       shrinkWrap: shrinkWrap,
@@ -357,7 +428,7 @@ class NotificationListBody extends StatelessWidget {
       separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
-        color: Colors.white.withValues(alpha: 0.06),
+        color: dividerColor,
       ),
       itemBuilder: (context, i) => LuxuryNotificationRow(item: items[i]),
     );
@@ -444,6 +515,7 @@ class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
     final visual = NotificationsPanel.visualFor(widget.item);
     final title = NotificationLocalization.title(widget.item.naslov);
     final body = NotificationLocalization.body(widget.item.tekst);
+    final colors = NotificationListTheme.of(context);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -492,9 +564,7 @@ class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
                           fontSize: 14,
                           fontWeight:
                               unread ? FontWeight.w700 : FontWeight.w600,
-                          color: unread
-                              ? _textPrimary
-                              : _textPrimary.withValues(alpha: 0.78),
+                          color: unread ? colors.title : colors.titleMuted,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -506,9 +576,7 @@ class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
                           fontSize: 13,
                           height: 1.35,
                           fontWeight: FontWeight.w400,
-                          color: Colors.white.withValues(
-                            alpha: unread ? 0.58 : 0.42,
-                          ),
+                          color: colors.body,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -517,7 +585,7 @@ class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.38),
+                          color: colors.timestamp,
                         ),
                       ),
                     ],
@@ -553,6 +621,7 @@ class _NotificationEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = NotificationListTheme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Column(
@@ -561,7 +630,7 @@ class _NotificationEmptyState extends StatelessWidget {
           Icon(
             Icons.notifications_none_rounded,
             size: 36,
-            color: Colors.white.withValues(alpha: 0.28),
+            color: colors.emptyIcon,
           ),
           const SizedBox(height: 14),
           Text(
@@ -569,7 +638,7 @@ class _NotificationEmptyState extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: _textPrimary.withValues(alpha: 0.85),
+              color: colors.title,
             ),
           ),
           const SizedBox(height: 6),
@@ -577,7 +646,7 @@ class _NotificationEmptyState extends StatelessWidget {
             'You\'re all caught up.',
             style: GoogleFonts.inter(
               fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.45),
+              color: colors.subtitle,
             ),
           ),
         ],
@@ -591,6 +660,7 @@ class _NotificationSkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = NotificationListTheme.of(context);
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       shrinkWrap: true,
@@ -599,15 +669,17 @@ class _NotificationSkeletonList extends StatelessWidget {
       separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
-        color: Colors.white.withValues(alpha: 0.06),
+        color: colors.divider,
       ),
-      itemBuilder: (_, _) => const _NotificationSkeletonRow(),
+      itemBuilder: (_, _) => _NotificationSkeletonRow(colors: colors),
     );
   }
 }
 
 class _NotificationSkeletonRow extends StatelessWidget {
-  const _NotificationSkeletonRow();
+  const _NotificationSkeletonRow({required this.colors});
+
+  final NotificationListColors colors;
 
   @override
   Widget build(BuildContext context) {
@@ -616,7 +688,7 @@ class _NotificationSkeletonRow extends StatelessWidget {
         width: w,
         height: h,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: colors.skeleton,
           borderRadius: BorderRadius.circular(radius),
         ),
       );
@@ -662,62 +734,75 @@ class NotificationsBottomSheet extends StatelessWidget {
     final provider = context.watch<NotificationProvider>();
     final sheetHeight = MediaQuery.sizeOf(context).height * maxHeightFactor;
 
-    return SafeArea(
-      child: Padding(
-        padding: padding,
-        child: SizedBox(
-          height: sheetHeight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: _textPrimary,
+    return NotificationListTheme(
+      colors: NotificationListColors.light,
+      child: SafeArea(
+        child: Padding(
+          padding: padding,
+          child: SizedBox(
+            height: sheetHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Notifications',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: NotificationListColors.light.title,
+                        ),
                       ),
                     ),
+                    if (provider.unreadCount > 0)
+                      TextButton(
+                        onPressed: () => provider.markAllRead(),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _mobilePurple,
+                        ),
+                        child: const Text('Mark all as read'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Bookings, payments, and account activity.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: NotificationListColors.light.subtitle,
                   ),
-                  if (provider.unreadCount > 0)
-                    TextButton(
-                      onPressed: () => provider.markAllRead(),
-                      child: const Text('Mark all as read'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Bookings, payments, and account activity.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: NuaLuxuryTokens.lavenderWhisper.withValues(alpha: 0.6),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: NotificationListBody(
-                  provider: provider,
-                  items: provider.notifikacije,
+                const SizedBox(height: 12),
+                Expanded(
+                  child: NotificationListBody(
+                    provider: provider,
+                    items: provider.notifikacije,
+                    shrinkWrap: false,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push<void>(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const AdminNotificationsScreen(),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _mobilePurple,
+                    side: BorderSide(
+                      color: _mobilePurple.withValues(alpha: 0.35),
                     ),
-                  );
-                },
-                child: const Text('View all notifications'),
-              ),
-            ],
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AdminNotificationsScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('View all notifications'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
