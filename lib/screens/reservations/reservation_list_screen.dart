@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/api/api_error_messages.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/api/services/api_service.dart';
@@ -50,69 +52,41 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   }
 
   Future<void> _cancelReservation(Rezervacija r) async {
-    final reasonCtrl = TextEditingController();
-    final yes = await showDialog<bool>(
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Otkazati rezervaciju?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(r.uslugaNaziv ?? 'Usluga'),
-            const SizedBox(height: 6),
-            Text(
-              r.datumRezervacije.toLocal().toString().split('.').first,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
-            ),
-            if (r.isPlacena) ...[
-              const SizedBox(height: 10),
-              Text(
-                'Rezervacija je plaćena. Otkazivanje uključuje povrat sredstava na karticu.',
-                style: TextStyle(color: Colors.amber.shade200),
-              ),
-            ],
-            const SizedBox(height: 14),
-            TextField(
-              controller: reasonCtrl,
-              maxLength: 400,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Razlog (opcionalno)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Nazad'),
+      builder: (ctx) => _CancelReservationDialog(reservation: r),
+    );
+    if (reason == null || reason.trim().isEmpty || !mounted) return;
+
+    try {
+      final result = await _apiService.cancelRezervacija(
+        r.id,
+        razlogOtkaza: reason.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result?.otkazana == true
+                ? cancelRezervacijaSuccessMessage(result!)
+                : 'Cancellation failed.',
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.cancel_outlined),
-            label: Text(r.isPlacena ? 'Otkaži i refundiraj' : 'Otkaži'),
-          ),
-        ],
-      ),
-    );
-    if (yes != true || !mounted) return;
-    final result = await _apiService.cancelRezervacija(
-      r.id,
-      razlogOtkaza: reasonCtrl.text,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result?.otkazana == true
-              ? cancelRezervacijaSuccessMessage(result!)
-              : 'Neuspjelo otkazivanje.',
         ),
-      ),
-    );
-    if (result?.otkazana == true) _refresh();
+      );
+      if (result?.otkazana == true) _refresh();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ApiErrorMessages.fromObject(
+              e,
+              fallback: 'Cancellation failed.',
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   String _statusLabel(Rezervacija r) {
@@ -706,6 +680,111 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CancelReservationDialog extends StatefulWidget {
+  const _CancelReservationDialog({required this.reservation});
+
+  final Rezervacija reservation;
+
+  @override
+  State<_CancelReservationDialog> createState() =>
+      _CancelReservationDialogState();
+}
+
+class _CancelReservationDialogState extends State<_CancelReservationDialog> {
+  final TextEditingController _reasonCtrl = TextEditingController();
+  String? _formError;
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final reason = _reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      setState(() => _formError = 'Cancellation reason is required.');
+      return;
+    }
+    Navigator.pop(context, reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mobile = nuaspaUseMobileShell();
+    final r = widget.reservation;
+    final when = r.datumRezervacije.toLocal().toString().split('.').first;
+
+    return AlertDialog(
+      backgroundColor: mobile ? MobileSpaColors.softWhite : null,
+      title: Text(mobile ? 'Cancel booking?' : 'Otkazati rezervaciju?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(r.uslugaNaziv ?? (mobile ? 'Service' : 'Usluga')),
+            const SizedBox(height: 6),
+            Text(
+              when,
+              style: TextStyle(
+                color: mobile
+                    ? MobileSpaColors.royalPurple.withValues(alpha: 0.65)
+                    : Colors.white.withValues(alpha: 0.70),
+              ),
+            ),
+            if (r.isPlacena) ...[
+              const SizedBox(height: 10),
+              Text(
+                mobile
+                    ? 'This booking is paid. Cancelling will start a card refund.'
+                    : 'Rezervacija je plaćena. Otkazivanje uključuje povrat sredstava na karticu.',
+                style: TextStyle(
+                  color: mobile
+                      ? const Color(0xFFB45309)
+                      : Colors.amber.shade200,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            TextField(
+              controller: _reasonCtrl,
+              maxLength: 400,
+              minLines: 2,
+              maxLines: 4,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: mobile ? 'Reason (required)' : 'Razlog (obavezno)',
+                errorText: _formError,
+              ),
+              onChanged: (_) {
+                if (_formError != null) {
+                  setState(() => _formError = null);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(mobile ? 'Back' : 'Nazad'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.cancel_outlined),
+          label: Text(
+            r.isPlacena
+                ? (mobile ? 'Cancel & refund' : 'Otkaži i refundiraj')
+                : (mobile ? 'Cancel' : 'Otkaži'),
+          ),
+        ),
+      ],
     );
   }
 }

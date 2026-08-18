@@ -1552,6 +1552,7 @@ class ApiService {
       return CancelRezervacijaResult.fromJson(data);
     } catch (e) {
       debugPrint('Greška u ApiService.cancelRezervacija: $e');
+      if (e is DioException) rethrow;
       return null;
     }
   }
