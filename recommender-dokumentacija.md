@@ -1,6 +1,6 @@
-# NuaSpa — opis sistema i modula preporuke
+# NuaSpa - opis sistema i modula preporuke
 
-**Seminarski rad — Razvoj softvera II**  
+**Seminarski rad - Razvoj softvera II**  
 **Autor:** Lana Mustafić  
 **Verzija:** 9.2 (finalna priprema)  
 **Datum:** 18.08.2026.
