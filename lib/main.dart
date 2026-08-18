@@ -22,12 +22,14 @@ import 'ui/widgets/hourly_occupancy_bars.dart';
 import 'ui/behavior/app_scroll_behavior.dart';
 import 'ui/navigation/desktop_nav.dart';
 import 'bootstrap/desktop_window.dart';
+import 'bootstrap/stripe_init.dart';
 import 'core/config/app_config.dart';
 import 'core/platform/nua_spa_platform.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await configureDesktopWindowIfNeeded();
+  await configureStripeIfNeeded();
   if (kDebugMode) {
     debugPrint('NuaSpa API base URL: ${AppConfig.apiBaseUrl}');
   }

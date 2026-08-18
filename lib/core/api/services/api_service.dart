@@ -2146,6 +2146,8 @@ class ApiService {
       final data = response.data;
       if (data is! Map<String, dynamic>) return null;
       return PaymentIntentResponse.fromJson(data);
+    } on DioException {
+      rethrow;
     } catch (e) {
       debugPrint('Greška u ApiService.createPaymentIntent: $e');
       return null;

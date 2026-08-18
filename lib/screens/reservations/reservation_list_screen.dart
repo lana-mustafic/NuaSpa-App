@@ -106,6 +106,72 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
     if (created == true && mounted) _refresh();
   }
 
+  Future<void> _handlePayOnline(Rezervacija r) async {
+    final preflight = StripePaymentService.preflight();
+    if (preflight != null) {
+      await _showPaymentMessage(preflight.message);
+      return;
+    }
+
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(strokeWidth: 2),
+                  SizedBox(height: 16),
+                  Text('Opening payment…'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final result = await _stripe.payForReservation(r.id);
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    if (!mounted) return;
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      _refresh();
+      return;
+    }
+
+    if (!result.cancelled) {
+      await _showPaymentMessage(result.message);
+    }
+  }
+
+  Future<void> _showPaymentMessage(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Payment'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMobile(BuildContext context) {
     final hideFab = context.watch<AuthProvider>().isZaposlenik;
     final tt = Theme.of(context).textTheme;
@@ -254,29 +320,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                             ),
                           );
                         },
-                        onPay: () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          if (!StripePaymentService.paymentSheetSupported) {
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Online payment is available on Android and iOS only.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          final ok = await _stripe.payForReservation(r.id);
-                          if (!mounted) return;
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                ok ? 'Payment completed' : 'Payment was not completed.',
-                              ),
-                            ),
-                          );
-                          if (ok) _refresh();
-                        },
+                        onPay: () => _handlePayOnline(r),
                       );
                     },
                   ),
@@ -434,32 +478,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                             message:
                                                 'Plati Online (Stripe, Android/iOS)',
                                             child: FilledButton(
-                                            onPressed: () async {
-                                              final messenger =
-                                                  ScaffoldMessenger.of(context);
-                                              if (!StripePaymentService
-                                                  .paymentSheetSupported) {
-                                                messenger.showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Online plaćanje (Stripe) dostupno je samo na Android i iOS uređajima.',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              final ok = await _stripe
-                                                  .payForReservation(r.id);
-                                              if (!mounted) return;
-                                              messenger.showSnackBar(
-                                                SnackBar(
-                                                  content: Text(ok
-                                                      ? 'Plaćeno'
-                                                      : 'Plaćanje nije završeno.'),
-                                                ),
-                                              );
-                                              if (ok) _refresh();
-                                            },
+                                            onPressed: () => _handlePayOnline(r),
                                             child: const Text('Plati'),
                                             ),
                                           ),

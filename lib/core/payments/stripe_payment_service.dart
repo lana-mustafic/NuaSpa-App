@@ -1,7 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:flutter/foundation.dart';
+
+import '../api/api_error_messages.dart';
 import '../api/services/api_service.dart';
 import '../stripe_publishable_key.dart';
+import 'payment_result.dart';
 
 class StripePaymentService {
   final ApiService _api = ApiService();
@@ -12,31 +16,36 @@ class StripePaymentService {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
 
-  /// Vraća true tek nakon server-side potvrde (confirm API), ne nakon PaymentSheet-a.
-  Future<bool> payForReservation(int rezervacijaId) async {
+  static PaymentResult? preflight() {
     if (!paymentSheetSupported) {
-      debugPrint(
-        'Stripe: plaćanje putem Payment Sheet-a nije podržano na ovoj platformi (koristi Android/iOS).',
+      return PaymentResult.failure(
+        'Online payment is available on Android and iOS only.',
       );
-      return false;
     }
+    if (kStripePublishableKey.isEmpty) {
+      return PaymentResult.failure(
+        'Stripe is not configured in the app. Add STRIPE_PUBLISHABLE_KEY to .env and restart.',
+      );
+    }
+    return null;
+  }
+
+  /// Vraća uspjeh tek nakon server-side potvrde (confirm API), ne nakon PaymentSheet-a.
+  Future<PaymentResult> payForReservation(int rezervacijaId) async {
+    final blocked = preflight();
+    if (blocked != null) return blocked;
 
     try {
       final intent = await _api.createPaymentIntent(rezervacijaId);
-      if (intent == null || intent.clientSecret.isEmpty) return false;
-
-      if (kStripePublishableKey.isEmpty) {
-        debugPrint(
-          'Stripe: postavi STRIPE_PUBLISHABLE_KEY (dart-define). Publishable key se ne šalje s API-ja.',
-        );
-        return false;
+      if (intent == null || intent.clientSecret.isEmpty) {
+        return PaymentResult.failure('Could not start payment. Please try again.');
       }
-      Stripe.publishableKey = kStripePublishableKey;
 
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: intent.clientSecret,
           merchantDisplayName: 'NuaSpa',
+          returnURL: 'nuaspa://redirect',
         ),
       );
 
@@ -44,18 +53,36 @@ class StripePaymentService {
 
       final paymentIntentId = intent.paymentIntentId;
       if (paymentIntentId.isEmpty) {
-        debugPrint('Stripe: nedostaje paymentIntentId za server-side confirm.');
-        return false;
+        return PaymentResult.failure(
+          'Payment started but confirmation data is missing.',
+        );
       }
 
       final confirmed = await _api.confirmPayment(paymentIntentId);
-      return confirmed?.isPaid ?? false;
+      if (confirmed?.isPaid ?? false) {
+        return PaymentResult.success();
+      }
+      return PaymentResult.failure('Payment was not confirmed by the server.');
+    } on DioException catch (e) {
+      return PaymentResult.failure(
+        ApiErrorMessages.fromObject(
+          e,
+          fallback: 'Could not start payment.',
+        ),
+      );
     } on StripeException catch (e) {
-      debugPrint('StripeException: $e');
-      return false;
+      if (e.error.code == FailureCode.Canceled) {
+        return PaymentResult.cancelled();
+      }
+      final message = e.error.localizedMessage ?? e.error.message;
+      return PaymentResult.failure(
+        message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'Stripe payment failed.',
+      );
     } catch (e) {
       debugPrint('Payment error: $e');
-      return false;
+      return PaymentResult.failure('Payment failed: $e');
     }
   }
 }
