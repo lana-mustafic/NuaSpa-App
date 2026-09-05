@@ -110,16 +110,16 @@ class ServiceProvider with ChangeNotifier {
       _allServices = servicesAndCategories[0] as List<Usluga>;
       _categories = servicesAndCategories[1] as List<KategorijaUsluga>;
 
-      var favoriteIds = <int>{};
-      try {
-        favoriteIds = await _apiService.getMyFavoriteIds();
-      } catch (e, st) {
-        debugPrint('Greška pri dohvatu favorita: $e\n$st');
+      final favoriteIdsResult = await _apiService.getMyFavoriteIds();
+      if (favoriteIdsResult.hasError) {
+        _favoritesError = favoriteIdsResult.error;
+      } else {
+        _favoriteIds = favoriteIdsResult.value ?? {};
+        _favoriteServices = _allServices
+            .where((u) => _favoriteIds.contains(u.id))
+            .toList();
+        _favoritesError = null;
       }
-      _favoriteIds = favoriteIds;
-      _favoriteServices = _allServices
-          .where((u) => _favoriteIds.contains(u.id))
-          .toList();
       if (_selectedCategoryId != null &&
           !_categories.any((c) => c.id == _selectedCategoryId)) {
         _selectedCategoryId = null;
@@ -146,9 +146,13 @@ class ServiceProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final list = await _apiService.getMyFavorites();
-      _applyFavoriteList(list);
-      _favoritesError = null;
+      final result = await _apiService.getMyFavorites();
+      if (result.hasError) {
+        _favoritesError = result.error;
+      } else {
+        _applyFavoriteList(result.items);
+        _favoritesError = null;
+      }
     } catch (e, st) {
       debugPrint('Greška pri dohvatu favorita: $e\n$st');
       _favoritesError = _mapLoadError(e);

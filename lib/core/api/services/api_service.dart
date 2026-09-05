@@ -15,6 +15,7 @@ import '../../../models/desktop_home_overview.dart';
 import '../../../models/rezervacija_povijest_item.dart';
 import '../../../models/recenzija.dart';
 import '../../../models/reviewable_visit.dart';
+import '../../../models/api_read_result.dart';
 import '../../../models/service_load_result.dart';
 import '../../../models/zaposlenici_load_result.dart';
 import '../../../models/payment_intent_response.dart';
@@ -1657,7 +1658,7 @@ class ApiService {
     }
   }
 
-  Future<List<DateTime>> getDostupniTermini({
+  Future<ApiListResult<DateTime>> getDostupniTermini({
     required int zaposlenikId,
     required DateTime datum,
     int? uslugaId,
@@ -1676,16 +1677,28 @@ class ApiService {
         queryParameters: query,
       );
       final data = response.data;
-      if (data is! List) return [];
+      if (data is! List) {
+        return const ApiListResult(
+          error: 'Unexpected server response while loading available times.',
+        );
+      }
       final list = data.map((e) {
         if (e is String) return DateTime.parse(e);
         return DateTime.parse(e.toString());
       }).toList();
       list.sort();
-      return list;
+      return ApiListResult(items: list);
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getDostupniTermini: $e');
+      return ApiListResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load available times. Check your connection.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getDostupniTermini: $e');
-      return [];
+      return const ApiListResult(
+        error: 'Could not load available times. Check your connection.',
+      );
     }
   }
 
@@ -1930,15 +1943,29 @@ class ApiService {
     }
   }
 
-  Future<Set<int>> getMyFavoriteIds() async {
+  Future<ApiValueResult<Set<int>>> getMyFavoriteIds() async {
     try {
       final response = await _dio.get<dynamic>('Favorit/ids');
       final data = response.data;
-      if (data is! List) return {};
-      return data.map((e) => (e as num).toInt()).toSet();
+      if (data is! List) {
+        return const ApiValueResult(
+          error: 'Unexpected server response while loading favorites.',
+        );
+      }
+      return ApiValueResult(
+        value: data.map((e) => (e as num).toInt()).toSet(),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getMyFavoriteIds: $e');
+      return ApiValueResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load favorites. Check your connection.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getMyFavoriteIds: $e');
-      return {};
+      return const ApiValueResult(
+        error: 'Could not load favorites. Check your connection.',
+      );
     }
   }
 
@@ -1962,19 +1989,29 @@ class ApiService {
     }
   }
 
-  Future<List<Usluga>> getMyFavorites() async {
+  Future<ApiListResult<Usluga>> getMyFavorites() async {
     try {
       final response = await _dio.get<dynamic>(
         'Favorit',
         queryParameters: {'pageSize': 100},
       );
-      return parsePagedItems(
-        response.data,
-        (json) => Usluga.fromJson(json),
+      return ApiListResult(
+        items: parsePagedItems(
+          response.data,
+          (json) => Usluga.fromJson(json),
+        ),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getMyFavorites: $e');
+      return ApiListResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load favorites. Check your connection.',
       );
     } catch (e) {
       debugPrint('Greška u ApiService.getMyFavorites: $e');
-      return [];
+      return const ApiListResult(
+        error: 'Could not load favorites. Check your connection.',
+      );
     }
   }
 
@@ -3165,18 +3202,32 @@ class ApiService {
     }
   }
 
-  Future<List<RadnoVrijeme>> getRadnoVrijeme() async {
+  Future<ApiListResult<RadnoVrijeme>> getRadnoVrijeme() async {
     try {
       final response = await _dio.get<dynamic>('Resursi/radno-vrijeme');
       final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => RadnoVrijeme.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      if (data is! List) {
+        return const ApiListResult(
+          error: 'Unexpected server response while loading working hours.',
+        );
+      }
+      return ApiListResult(
+        items: data
+            .whereType<Map>()
+            .map((e) => RadnoVrijeme.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getRadnoVrijeme: $e');
+      return ApiListResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load working hours. Check your connection.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getRadnoVrijeme: $e');
-      return [];
+      return const ApiListResult(
+        error: 'Could not load working hours. Check your connection.',
+      );
     }
   }
 
@@ -3200,33 +3251,68 @@ class ApiService {
     }
   }
 
-  Future<List<SistemskaNotifikacija>> getSistemskaNotifikacije({int take = 50}) async {
+  Future<ApiListResult<SistemskaNotifikacija>> getSistemskaNotifikacije({
+    int take = 50,
+  }) async {
     try {
       final response = await _dio.get<dynamic>(
         'SistemskaNotifikacija',
         queryParameters: {'take': take},
       );
       final data = response.data;
-      if (data is! List) return [];
-      return data
-          .whereType<Map>()
-          .map((e) => SistemskaNotifikacija.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      if (data is! List) {
+        return const ApiListResult(
+          error: 'Unexpected server response while loading notifications.',
+        );
+      }
+      return ApiListResult(
+        items: data
+            .whereType<Map>()
+            .map(
+              (e) => SistemskaNotifikacija.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList(),
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getSistemskaNotifikacije: $e');
+      return ApiListResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load notifications. Check your connection.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getSistemskaNotifikacije: $e');
-      return [];
+      return const ApiListResult(
+        error: 'Could not load notifications. Check your connection.',
+      );
     }
   }
 
-  Future<int> getSistemskaNotifikacijeUnreadCount() async {
+  Future<ApiValueResult<int>> getSistemskaNotifikacijeUnreadCount() async {
     try {
-      final response = await _dio.get<dynamic>('SistemskaNotifikacija/unread-count');
+      final response =
+          await _dio.get<dynamic>('SistemskaNotifikacija/unread-count');
       final data = response.data;
-      if (data is! Map<String, dynamic>) return 0;
-      return (data['brojNeprocitanih'] as num?)?.toInt() ?? 0;
+      if (data is! Map<String, dynamic>) {
+        return const ApiValueResult(
+          error: 'Unexpected server response while loading unread count.',
+        );
+      }
+      return ApiValueResult(
+        value: (data['brojNeprocitanih'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      debugPrint('Greška u ApiService.getSistemskaNotifikacijeUnreadCount: $e');
+      return ApiValueResult(
+        error: ApiErrorMessages.fromDio(e) ??
+            'Could not load unread notification count.',
+      );
     } catch (e) {
       debugPrint('Greška u ApiService.getSistemskaNotifikacijeUnreadCount: $e');
-      return 0;
+      return const ApiValueResult(
+        error: 'Could not load unread notification count.',
+      );
     }
   }
 

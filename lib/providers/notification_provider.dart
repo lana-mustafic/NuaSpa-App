@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../core/api/services/api_service.dart';
+import '../models/api_read_result.dart';
 import '../models/sistemska_notifikacija.dart';
 
 /// Auto-refresh notifikacija (polling svakih 15s) — bez ručnog refresha.
@@ -14,6 +15,8 @@ class NotificationProvider extends ChangeNotifier {
   Timer? _pollTimer;
   bool _pollingActive = false;
   bool _loading = false;
+  bool _hasLoadedOnce = false;
+  String? _loadError;
 
   List<SistemskaNotifikacija> _notifikacije = [];
   int _unreadCount = 0;
@@ -21,6 +24,8 @@ class NotificationProvider extends ChangeNotifier {
   List<SistemskaNotifikacija> get notifikacije => _notifikacije;
   int get unreadCount => _unreadCount;
   bool get loading => _loading;
+  bool get hasLoadedOnce => _hasLoadedOnce;
+  String? get loadError => _loadError;
 
   void setPollingActive(bool active) {
     if (_pollingActive == active) return;
@@ -31,6 +36,8 @@ class NotificationProvider extends ChangeNotifier {
       _stopPolling();
       _notifikacije = [];
       _unreadCount = 0;
+      _hasLoadedOnce = false;
+      _loadError = null;
       notifyListeners();
     }
   }
@@ -49,18 +56,28 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> _refresh() async {
     if (!_pollingActive || _loading) return;
     _loading = true;
+    if (!_hasLoadedOnce) notifyListeners();
     try {
       final results = await Future.wait([
         _api.getSistemskaNotifikacije(take: 100),
         _api.getSistemskaNotifikacijeUnreadCount(),
       ]);
-      _notifikacije = results[0] as List<SistemskaNotifikacija>;
-      _unreadCount = results[1] as int;
-      notifyListeners();
+      final list = results[0] as ApiListResult<SistemskaNotifikacija>;
+      final count = results[1] as ApiValueResult<int>;
+      if (list.hasError || count.hasError) {
+        _loadError = list.error ?? count.error;
+        return;
+      }
+      _hasLoadedOnce = true;
+      _loadError = null;
+      _notifikacije = list.items;
+      _unreadCount = count.value ?? 0;
     } catch (e) {
       debugPrint('NotificationProvider refresh: $e');
+      _loadError = 'Could not load notifications. Check your connection.';
     } finally {
       _loading = false;
+      notifyListeners();
     }
   }
 

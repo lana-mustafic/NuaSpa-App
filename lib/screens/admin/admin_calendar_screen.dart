@@ -265,16 +265,16 @@ class _AdminCalendarScreenState extends State<AdminCalendarScreen> {
   }
 
   Future<void> _bootstrapLists() async {
-    final results = await Future.wait([
-      _api.getZaposlenici(),
-      _api.getUsluge(),
-      _api.getRadnoVrijeme(),
-    ]);
+    final therapists = await _api.getZaposlenici();
+    final usluge = await _api.getUsluge();
+    final hours = await _api.getRadnoVrijeme();
     if (!mounted) return;
     setState(() {
-      _therapists = results[0] as List<Zaposlenik>;
-      _usluge = results[1] as List<Usluga>;
-      _radnoVrijeme = results[2] as List<RadnoVrijeme>;
+      _therapists = therapists;
+      _usluge = usluge;
+      if (!hours.hasError) {
+        _radnoVrijeme = hours.items;
+      }
     });
   }
 

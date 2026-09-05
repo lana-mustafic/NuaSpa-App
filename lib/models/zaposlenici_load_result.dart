@@ -8,4 +8,6 @@ class ZaposleniciLoadResult {
 
   final List<Zaposlenik> items;
   final String? error;
+
+  bool get hasError => error != null && error!.isNotEmpty;
 }

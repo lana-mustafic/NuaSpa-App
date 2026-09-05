@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/admin/radno_vrijeme.dart';
 import '../../models/admin/spa_centar.dart';
+import '../../models/api_read_result.dart';
+import '../../ui/widgets/load_retry_panel.dart';
 import '../../ui/widgets/page_header.dart';
 
 class AdminResourcesScreen extends StatefulWidget {
@@ -19,7 +21,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   _ResTab _tab = _ResTab.spa;
 
   Future<SpaCentar?>? _spaFuture;
-  Future<List<RadnoVrijeme>>? _hoursFuture;
+  Future<ApiListResult<RadnoVrijeme>>? _hoursFuture;
 
   @override
   void initState() {
@@ -227,7 +229,7 @@ class _WorkingHoursTab extends StatefulWidget {
   });
 
   final ApiService api;
-  final Future<List<RadnoVrijeme>>? future;
+  final Future<ApiListResult<RadnoVrijeme>>? future;
   final VoidCallback onSaved;
 
   @override
@@ -295,13 +297,21 @@ class _WorkingHoursTabState extends State<_WorkingHoursTab> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<RadnoVrijeme>>(
+    return FutureBuilder<ApiListResult<RadnoVrijeme>>(
       future: widget.future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final list = snap.data ?? [];
+        final result = snap.data;
+        if (result == null || result.hasError) {
+          return LoadRetryPanel(
+            title: 'Unable to load working hours',
+            message: result?.error ?? 'Could not load working hours.',
+            onRetry: widget.onSaved,
+          );
+        }
+        final list = result.items;
         if (list.isEmpty) {
           return const Center(child: Text('No working hours configured.'));
         }

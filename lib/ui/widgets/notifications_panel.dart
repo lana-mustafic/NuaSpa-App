@@ -414,14 +414,19 @@ class NotificationListBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (provider.loading && items.isEmpty) {
+    if (provider.loading && items.isEmpty && !provider.hasLoadedOnce) {
       return const _NotificationSkeletonList();
+    }
+    if (items.isEmpty &&
+        provider.loadError != null &&
+        !provider.hasLoadedOnce) {
+      return _NotificationErrorState(message: provider.loadError!);
     }
     if (items.isEmpty) {
       return const _NotificationEmptyState();
     }
     final dividerColor = NotificationListTheme.of(context).divider;
-    return ListView.separated(
+    final list = ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
       shrinkWrap: shrinkWrap,
       itemCount: items.length,
@@ -431,6 +436,33 @@ class NotificationListBody extends StatelessWidget {
         color: dividerColor,
       ),
       itemBuilder: (context, i) => LuxuryNotificationRow(item: items[i]),
+    );
+    final staleError = provider.loadError;
+    if (staleError == null) return list;
+
+    final banner = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Text(
+        staleError,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          color: const Color(0xFFFF6B8A),
+        ),
+      ),
+    );
+    if (shrinkWrap) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [banner, list],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        banner,
+        Expanded(child: list),
+      ],
     );
   }
 }
@@ -611,6 +643,48 @@ class _LuxuryNotificationRowState extends State<LuxuryNotificationRow> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationErrorState extends StatelessWidget {
+  const _NotificationErrorState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = NotificationListTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 36,
+            color: colors.emptyIcon,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Unable to load notifications',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: colors.title,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: colors.subtitle,
+            ),
+          ),
+        ],
       ),
     );
   }

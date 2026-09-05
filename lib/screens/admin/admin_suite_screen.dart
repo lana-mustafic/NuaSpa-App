@@ -550,7 +550,7 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   _TherapistsView _therapistsView = _TherapistsView.availability;
   Future<List<Zaposlenik>>? _therapistsFuture;
   DateTime _weekStart = _startOfWeek(DateTime.now());
-  final Map<String, Future<int>> _freeCountCache = {};
+  final Map<String, Future<int?>> _freeCountCache = {};
 
   // Calendar (admin)
   Future<CalendarFetchResult>? _calendarFuture;
@@ -678,16 +678,17 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
   String _freeKey(int therapistId, DateTime day) =>
       '$therapistId-${day.year}-${day.month}-${day.day}';
 
-  Future<int> _getFreeSlotsCount(int therapistId, DateTime day) {
+  Future<int?> _getFreeSlotsCount(int therapistId, DateTime day) {
     final key = _freeKey(therapistId, day);
     final cached = _freeCountCache[key];
     if (cached != null) return cached;
     final fut = () async {
-      final slots = await _api.getDostupniTermini(
+      final result = await _api.getDostupniTermini(
         zaposlenikId: therapistId,
         datum: day,
       );
-      return slots.length;
+      if (result.hasError) return null;
+      return result.items.length;
     }();
     _freeCountCache[key] = fut;
     return fut;
@@ -949,11 +950,12 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                         days: days,
                         getFreeSlotsCount: _getFreeSlotsCount,
                         onOpenDay: (t, d) async {
-                          final slots = await _api.getDostupniTermini(
+                          final result = await _api.getDostupniTermini(
                             zaposlenikId: t.id,
                             datum: d,
                           );
                           if (!context.mounted) return;
+                          final slots = result.items;
                           showDialog<void>(
                             context: context,
                             builder: (ctx) => AlertDialog(
@@ -963,7 +965,12 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
                               ),
                               content: SizedBox(
                                 width: 520,
-                                child: slots.isEmpty
+                                child: result.hasError
+                                    ? Text(
+                                        result.error ??
+                                            'Could not load available times.',
+                                      )
+                                    : slots.isEmpty
                                     ? const Text('No open slots.')
                                     : Wrap(
                                         spacing: 8,
@@ -1016,7 +1023,7 @@ class _TherapistCard extends StatelessWidget {
 
   final Zaposlenik therapist;
   final List<DateTime> days;
-  final Future<int> Function(int therapistId, DateTime day) getFreeSlotsCount;
+  final Future<int?> Function(int therapistId, DateTime day) getFreeSlotsCount;
   final Future<void> Function(Zaposlenik therapist, DateTime day) onOpenDay;
 
   List<String> _tags(String raw) {
@@ -1189,7 +1196,7 @@ class _MiniWeekGrid extends StatelessWidget {
 
   final int therapistId;
   final List<DateTime> days;
-  final Future<int> Function(int therapistId, DateTime day) getFreeSlotsCount;
+  final Future<int?> Function(int therapistId, DateTime day) getFreeSlotsCount;
   final Future<void> Function(DateTime day) onOpenDay;
 
   String _dayLabel(DateTime d) {
@@ -1227,7 +1234,7 @@ class _MiniWeekGrid extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      FutureBuilder<int>(
+                      FutureBuilder<int?>(
                         future: getFreeSlotsCount(therapistId, d),
                         builder: (context, snap) {
                           final v = snap.data;

@@ -220,7 +220,19 @@ class _MobileServiceCatalogScreenState extends State<MobileServiceCatalogScreen>
               variant: ServiceCategoryFilterVariant.mobile,
             ),
           ),
-        if (visible.isEmpty)
+        if (sp.isFavoritesTab && sp.favoritesError != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset),
+              child: LoadRetryPanel(
+                title: 'Unable to load favorites',
+                message: sp.favoritesError ??
+                    'Could not load favorites. Check your connection.',
+                onRetry: () => sp.fetchFavorites(),
+              ),
+            ),
+          )
+        else if (visible.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(24, 48, 24, bottomInset),

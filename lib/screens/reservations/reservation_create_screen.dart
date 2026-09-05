@@ -41,6 +41,11 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   List<DateTime> _availableSlots = [];
   bool _loadingSlots = false;
   bool _loadingTherapists = false;
+  String? _therapistsLoadError;
+  String? _slotsLoadError;
+  String? _serviceValidationError;
+  String? _therapistValidationError;
+  String? _slotValidationError;
 
   Future<_ReservationBootstrap>? _bootstrapFuture;
   bool _bootstrapStarted = false;
@@ -82,19 +87,37 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         _therapists = [];
         _selectedTherapistId = null;
         _selectedSlot = null;
+        _therapistsLoadError = null;
+        _slotsLoadError = null;
+        _availableSlots = [];
       });
       return;
     }
     setState(() {
       _loadingTherapists = true;
       _selectedSlot = null;
+      _therapistsLoadError = null;
+      _therapistValidationError = null;
+      _slotsLoadError = null;
+      _slotValidationError = null;
     });
     final result = await _apiService.getZaposleniciForService(serviceId);
-    final list = result.items;
     if (!mounted) return;
+    if (result.hasError) {
+      setState(() {
+        _therapists = [];
+        _selectedTherapistId = null;
+        _loadingTherapists = false;
+        _therapistsLoadError = result.error;
+        _availableSlots = [];
+      });
+      return;
+    }
+    final list = result.items;
     setState(() {
       _therapists = list;
       _loadingTherapists = false;
+      _therapistsLoadError = null;
       if (list.isEmpty) {
         _selectedTherapistId = null;
       } else if (_selectedTherapistId == null ||
@@ -137,9 +160,11 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     setState(() {
       _loadingSlots = true;
       _selectedSlot = null;
+      _slotsLoadError = null;
+      _slotValidationError = null;
     });
 
-    final slots = await _apiService.getDostupniTermini(
+    final result = await _apiService.getDostupniTermini(
       zaposlenikId: tid,
       datum: day,
       uslugaId: _selectedServiceId,
@@ -147,8 +172,14 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
 
     if (!mounted) return;
     setState(() {
-      _availableSlots = slots;
       _loadingSlots = false;
+      if (result.hasError) {
+        _availableSlots = [];
+        _slotsLoadError = result.error;
+      } else {
+        _availableSlots = result.items;
+        _slotsLoadError = null;
+      }
     });
   }
 
@@ -160,20 +191,17 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   }
 
   Future<void> _submit() async {
-    if (_selectedServiceId == null || _selectedTherapistId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select a service and therapist.'),
-        ),
-      );
-      return;
-    }
-    if (_selectedSlot == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select one of the available time slots.'),
-        ),
-      );
+    setState(() {
+      _serviceValidationError =
+          _selectedServiceId == null ? 'Select a service.' : null;
+      _therapistValidationError =
+          _selectedTherapistId == null ? 'Select a therapist.' : null;
+      _slotValidationError =
+          _selectedSlot == null ? 'Select an available time.' : null;
+    });
+    if (_selectedServiceId == null ||
+        _selectedTherapistId == null ||
+        _selectedSlot == null) {
       return;
     }
 
@@ -210,6 +238,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     List<Usluga> services,
     List<Zaposlenik> therapists,
   ) {
+    final serviceProvider = context.watch<ServiceProvider>();
     final serviceIds = services.map((s) => s.id).toList();
     final therapistIds = therapists.map((t) => t.id).toList();
 
@@ -217,9 +246,13 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InputDecorator(
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Service',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            errorText: _serviceValidationError ??
+                (serviceProvider.loadFailed
+                    ? serviceProvider.loadError
+                    : null),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
@@ -243,6 +276,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                         _selectedServiceId = value;
                         _selectedTherapistId = null;
                         _selectedSlot = null;
+                        _serviceValidationError = null;
                       });
                       await _loadTherapistsForService(value);
                     },
@@ -251,18 +285,23 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         ),
         const SizedBox(height: 16),
         InputDecorator(
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Therapist',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            errorText: _therapistValidationError ?? _therapistsLoadError,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               isExpanded: true,
               hint: _loadingTherapists
                   ? const Text('Loading therapists…')
-                  : therapists.isEmpty
-                      ? const Text('No therapists available for this service')
-                      : const Text('Select a therapist'),
+                  : _therapistsLoadError != null
+                      ? const Text('Could not load therapists')
+                      : therapists.isEmpty
+                          ? const Text(
+                              'No therapists available for this service',
+                            )
+                          : const Text('Select a therapist'),
               value: _effectiveDropdownValue(_selectedTherapistId, therapistIds),
               items: therapists
                   .map(
@@ -278,12 +317,21 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
                       setState(() {
                         _selectedTherapistId = value;
                         _selectedSlot = null;
+                        _therapistValidationError = null;
                       });
                       await _loadSlots();
                     },
             ),
           ),
         ),
+        if (_therapistsLoadError != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => _loadTherapistsForService(_selectedServiceId),
+              child: const Text('Retry'),
+            ),
+          ),
       ],
     );
   }
@@ -324,12 +372,36 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           ),
         );
       }
+      if (_slotsLoadError != null) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _slotsLoadError!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              TextButton(
+                onPressed: _loadSlots,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        );
+      }
       if (_selectedTherapistId == null) {
         return Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'Select a therapist.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
+            _slotValidationError ?? 'Select a therapist.',
+            style: TextStyle(
+              color: _slotValidationError != null
+                  ? Theme.of(context).colorScheme.error
+                  : Colors.white.withValues(alpha: 0.65),
+            ),
           ),
         );
       }
@@ -337,8 +409,13 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         return Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'No available times for this date (the spa may be closed or outside working hours).',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.65)),
+            _slotValidationError ??
+                'No available times for this date (the spa may be closed or outside working hours).',
+            style: TextStyle(
+              color: _slotValidationError != null
+                  ? Theme.of(context).colorScheme.error
+                  : Colors.white.withValues(alpha: 0.65),
+            ),
           ),
         );
       }
@@ -358,6 +435,19 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       return _buildSlotChips();
     }
 
+    Widget? slotError;
+    if (_slotValidationError != null &&
+        _slotsLoadError == null &&
+        _availableSlots.isNotEmpty) {
+      slotError = Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          _slotValidationError!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      );
+    }
+
     if (!forWidePanel) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,6 +455,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
           title,
           const SizedBox(height: 8),
           slotBody(),
+          ?slotError,
         ],
       );
     }
@@ -375,6 +466,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
         title,
         const SizedBox(height: 8),
         Expanded(child: slotBody()),
+        ?slotError,
       ],
     );
   }
@@ -397,7 +489,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             label: Text(label),
             selected: selected,
             onSelected: (_) async {
-              setState(() => _selectedSlot = slot);
+              setState(() {
+                _selectedSlot = slot;
+                _slotValidationError = null;
+              });
             },
           ),
         );

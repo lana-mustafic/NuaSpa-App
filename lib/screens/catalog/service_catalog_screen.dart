@@ -295,6 +295,15 @@ class _ServiceCatalogScreenState extends State<ServiceCatalogScreen> {
         onRetry: () => serviceProvider.fetchServices(),
       );
     }
+    if (serviceProvider.isFavoritesTab &&
+        serviceProvider.favoritesError != null) {
+      return _CatalogErrorState(
+        title: 'Unable to load favorites',
+        message: serviceProvider.favoritesError ??
+            'Could not load favorites. Check your connection.',
+        onRetry: () => serviceProvider.fetchFavorites(),
+      );
+    }
     if (serviceProvider.services.isEmpty) {
       final hasFilters = serviceProvider.selectedCategoryId != null ||
           serviceProvider.searchQuery.isNotEmpty;
@@ -1289,9 +1298,15 @@ class _CatalogEmptyState extends StatelessWidget {
 }
 
 class _CatalogErrorState extends StatelessWidget {
-  const _CatalogErrorState({required this.onRetry});
+  const _CatalogErrorState({
+    required this.onRetry,
+    this.title,
+    this.message,
+  });
 
   final VoidCallback onRetry;
+  final String? title;
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -1308,7 +1323,7 @@ class _CatalogErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Couldn\'t load services',
+              title ?? 'Couldn\'t load services',
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1317,7 +1332,7 @@ class _CatalogErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Check your connection and try again.',
+              message ?? 'Check your connection and try again.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,

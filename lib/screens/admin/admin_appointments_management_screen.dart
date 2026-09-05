@@ -3102,6 +3102,12 @@ class _AdminAppointmentCreateDialogState
   late bool _isVip;
   late bool _confirmOnCreate;
   String? _formError;
+  String? _clientError;
+  String? _serviceError;
+  String? _therapistError;
+  String? _slotError;
+  String? _therapistsLoadError;
+  String? _slotsLoadError;
 
   List<Zaposlenik> _eligibleTherapists = [];
   bool _loadingTherapists = false;
@@ -3197,13 +3203,30 @@ class _AdminAppointmentCreateDialogState
         _loadingTherapists = false;
         _availableSlots = [];
         _selectedSlot = null;
+        _therapistsLoadError = null;
+        _slotsLoadError = null;
       });
       return;
     }
 
-    setState(() => _loadingTherapists = true);
-    final list = (await _api.getZaposleniciForService(serviceId)).items;
+    setState(() {
+      _loadingTherapists = true;
+      _therapistsLoadError = null;
+    });
+    final result = await _api.getZaposleniciForService(serviceId);
     if (!mounted) return;
+    if (result.hasError) {
+      setState(() {
+        _eligibleTherapists = [];
+        _therapistId = null;
+        _loadingTherapists = false;
+        _therapistsLoadError = result.error;
+        _availableSlots = [];
+        _slotsLoadError = null;
+      });
+      return;
+    }
+    final list = result.items;
 
     int? nextTherapist = preserveTherapistId;
     if (nextTherapist != null &&
@@ -3229,6 +3252,7 @@ class _AdminAppointmentCreateDialogState
       setState(() {
         _availableSlots = [];
         _loadingSlots = false;
+        _slotsLoadError = null;
         if (!preserveSelection) _selectedSlot = null;
       });
       return;
@@ -3240,7 +3264,7 @@ class _AdminAppointmentCreateDialogState
       if (!preserveSelection) _selectedSlot = null;
     });
 
-    final slots = await _api.getDostupniTermini(
+    final result = await _api.getDostupniTermini(
       zaposlenikId: tid,
       datum: _selectedDay,
       uslugaId: sid,
@@ -3248,7 +3272,17 @@ class _AdminAppointmentCreateDialogState
 
     if (!mounted) return;
 
-    var merged = List<DateTime>.from(slots)..sort();
+    if (result.hasError) {
+      setState(() {
+        _availableSlots = [];
+        _loadingSlots = false;
+        _slotsLoadError = result.error;
+        if (!preserveSelection) _selectedSlot = null;
+      });
+      return;
+    }
+
+    var merged = List<DateTime>.from(result.items)..sort();
     if (_isEdit && previous != null && _isSameDay(previous, _selectedDay)) {
       final kept = previous.toLocal();
       final exists = merged.any((t) => _isSameSlot(t, kept));
@@ -3274,6 +3308,7 @@ class _AdminAppointmentCreateDialogState
     setState(() {
       _availableSlots = merged;
       _loadingSlots = false;
+      _slotsLoadError = null;
       if (preserveSelection && previous != null) {
         _selectedSlot = nextSlot;
       }
@@ -3408,6 +3443,7 @@ class _AdminAppointmentCreateDialogState
 
   String _therapistLabel() {
     if (_loadingTherapists) return 'Loading therapists…';
+    if (_therapistsLoadError != null) return 'Could not load therapists';
     if (_therapistId == null) {
       return _eligibleTherapists.isEmpty
           ? 'No therapists for this service'
@@ -3500,23 +3536,41 @@ class _AdminAppointmentCreateDialogState
         ),
       );
     }
+    if (_slotsLoadError != null) {
+      return Text(
+        _slotsLoadError!,
+        style: const TextStyle(
+          fontSize: 12,
+          height: 1.35,
+          color: Color(0xFFFF6B8A),
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
     if (_therapistId == null) {
       return Text(
-        'Select a therapist to see available times.',
+        _slotError ?? 'Select a therapist to see available times.',
         style: TextStyle(
           fontSize: 12,
           height: 1.35,
-          color: _ApptUi.lavender.withValues(alpha: 0.55),
+          color: _slotError != null
+              ? const Color(0xFFFF6B8A)
+              : _ApptUi.lavender.withValues(alpha: 0.55),
+          fontWeight: _slotError != null ? FontWeight.w500 : FontWeight.w400,
         ),
       );
     }
     if (_availableSlots.isEmpty) {
       return Text(
-        'No available times for this date (spa may be closed or fully booked).',
+        _slotError ??
+            'No available times for this date (spa may be closed or fully booked).',
         style: TextStyle(
           fontSize: 12,
           height: 1.35,
-          color: _ApptUi.lavender.withValues(alpha: 0.55),
+          color: _slotError != null
+              ? const Color(0xFFFF6B8A)
+              : _ApptUi.lavender.withValues(alpha: 0.55),
+          fontWeight: _slotError != null ? FontWeight.w500 : FontWeight.w400,
         ),
       );
     }
@@ -3532,6 +3586,7 @@ class _AdminAppointmentCreateDialogState
             onTap: () => setState(() {
               _selectedSlot = slot;
               _formError = null;
+              _slotError = null;
             }),
           ),
       ],
@@ -3636,6 +3691,7 @@ class _AdminAppointmentCreateDialogState
                       _PremiumApptFieldCard(
                         icon: Icons.person_outline_rounded,
                         label: 'Client',
+                        errorText: _clientError,
                         value: _clientLabel(),
                         trailing: _isEdit
                             ? Icon(
@@ -3669,6 +3725,7 @@ class _AdminAppointmentCreateDialogState
                                   onPick: (id) => setState(() {
                                     _clientId = id;
                                     _formError = null;
+                                    _clientError = null;
                                   }),
                                 ),
                       ),
@@ -3680,6 +3737,7 @@ class _AdminAppointmentCreateDialogState
                           child: _PremiumApptFieldCard(
                             icon: Icons.spa_outlined,
                             label: 'Service',
+                            errorText: _serviceError,
                             value: _serviceLabel(),
                             trailing: const Icon(
                               Icons.expand_more_rounded,
@@ -3711,6 +3769,8 @@ class _AdminAppointmentCreateDialogState
                                           _serviceId = id;
                                           _therapistId = null;
                                           _formError = null;
+                                          _serviceError = null;
+                                          _therapistError = null;
                                         });
                                         _loadEligibleTherapists();
                                       },
@@ -3722,6 +3782,7 @@ class _AdminAppointmentCreateDialogState
                           child: _PremiumApptFieldCard(
                             icon: Icons.badge_outlined,
                             label: 'Therapist',
+                            errorText: _therapistError ?? _therapistsLoadError,
                             value: _therapistLabel(),
                             trailing: const Icon(
                               Icons.expand_more_rounded,
@@ -3730,14 +3791,16 @@ class _AdminAppointmentCreateDialogState
                             ),
                             enabled: !_isLockedEdit &&
                                 !_loadingTherapists &&
+                                _therapistsLoadError == null &&
                                 _eligibleTherapists.isNotEmpty,
                             disabledReason: _isLockedEdit
                                 ? 'This appointment cannot be edited.'
                                 : _loadingTherapists
                                     ? 'Loading therapists for this service…'
-                                    : _eligibleTherapists.isEmpty
-                                        ? 'No therapists are assigned to perform this service.'
-                                        : null,
+                                    : _therapistsLoadError ??
+                                        (_eligibleTherapists.isEmpty
+                                            ? 'No therapists are assigned to perform this service.'
+                                            : null),
                             onTap: _isLockedEdit ||
                                     _loadingTherapists ||
                                     _eligibleTherapists.isEmpty
@@ -3757,6 +3820,7 @@ class _AdminAppointmentCreateDialogState
                                         setState(() {
                                           _therapistId = id;
                                           _formError = null;
+                                          _therapistError = null;
                                         });
                                         _loadSlots();
                                       },
@@ -3801,6 +3865,20 @@ class _AdminAppointmentCreateDialogState
                     ),
                     const SizedBox(height: 6),
                     _buildSlotsSection(),
+                    if (_slotError != null &&
+                        _slotsLoadError == null &&
+                        _availableSlots.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _slotError!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: Color(0xFFFF6B8A),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                     if (_isEdit &&
                         apptNotes != null &&
                         apptNotes.isNotEmpty) ...[
@@ -3871,9 +3949,20 @@ class _AdminAppointmentCreateDialogState
                               : () {
                                   if (!_canSubmit) {
                                     setState(() {
-                                      _formError = _isEdit
-                                          ? 'Select a service, therapist, and available time.'
-                                          : 'Select a client, service, therapist, and available time.';
+                                      _clientError = !_isEdit &&
+                                              _clientId == null
+                                          ? 'Select a client.'
+                                          : null;
+                                      _serviceError = _serviceId == null
+                                          ? 'Select a service.'
+                                          : null;
+                                      _therapistError = _therapistId == null
+                                          ? 'Select a therapist.'
+                                          : null;
+                                      _slotError = _selectedSlot == null
+                                          ? 'Select an available time.'
+                                          : null;
+                                      _formError = null;
                                     });
                                     return;
                                   }
@@ -3913,6 +4002,7 @@ class _PremiumApptFieldCard extends StatefulWidget {
     this.onTap,
     this.enabled = true,
     this.disabledReason,
+    this.errorText,
   });
 
   final IconData icon;
@@ -3922,6 +4012,7 @@ class _PremiumApptFieldCard extends StatefulWidget {
   final VoidCallback? onTap;
   final bool enabled;
   final String? disabledReason;
+  final String? errorText;
 
   @override
   State<_PremiumApptFieldCard> createState() => _PremiumApptFieldCardState();
@@ -4017,10 +4108,31 @@ class _PremiumApptFieldCardState extends State<_PremiumApptFieldCard> {
       ),
     );
     final reason = widget.disabledReason?.trim();
+    Widget result = card;
     if (!widget.enabled && reason != null && reason.isNotEmpty) {
-      return Tooltip(message: reason, child: card);
+      result = Tooltip(message: reason, child: card);
     }
-    return card;
+    final error = widget.errorText?.trim();
+    if (error != null && error.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          result,
+          const SizedBox(height: 4),
+          Text(
+            error,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.3,
+              color: Color(0xFFFF6B8A),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+    return result;
   }
 }
 
