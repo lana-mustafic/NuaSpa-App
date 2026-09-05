@@ -35,7 +35,7 @@ class AuthProvider extends ChangeNotifier {
     _authEventsSub = AuthEvents.instance.stream.listen((event) async {
       if (event is AuthEventForceLogout) {
         _infoMessage = event.message ?? 'Please sign in again.';
-        await logout();
+        await _clearLocalSession();
       }
     });
   }
@@ -193,26 +193,30 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns `true` when the server acknowledged logout.
+  /// Tries to revoke the refresh token on the server, then always
+  /// clears the local session — even if the API call fails or 401s.
   Future<bool> logout() async {
     var serverOk = false;
-    final refresh = await _storage.read(key: AuthStorageKeys.refreshToken);
     try {
+      final refresh = await _storage.read(key: AuthStorageKeys.refreshToken);
       final result = await ApiService().logout(
         refreshToken: refresh,
       );
       serverOk = result.success;
     } catch (_) {
       serverOk = false;
+    } finally {
+      await _clearLocalSession();
     }
-    await _storage.delete(key: AuthStorageKeys.accessToken);
-    await _storage.delete(key: AuthStorageKeys.refreshToken);
-    _roles = [];
-    _zaposlenikId = null;
-    _loggedInUsername = null;
+    return serverOk;
+  }
+
+  /// Local-only sign-out used after a terminal 401. Does not call the API,
+  /// so a failed server logout cannot re-enter the interceptor loop.
+  Future<void> _clearLocalSession() async {
+    await _clearSessionState();
     _status = AuthStatus.unauthenticated;
     notifyListeners();
-    return serverOk;
   }
 
   Future<void> _persistSession({

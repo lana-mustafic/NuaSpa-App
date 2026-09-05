@@ -13,6 +13,7 @@ class AuthInterceptor extends QueuedInterceptor {
     final path = options.path.toLowerCase();
     return path.contains('account/login') ||
         path.contains('account/refresh') ||
+        path.contains('account/logout') ||
         path.contains('account/forgot-password') ||
         path.contains('account/reset-password') ||
         path.contains('account/accept-invite') ||
@@ -47,40 +48,54 @@ class AuthInterceptor extends QueuedInterceptor {
     ErrorInterceptorHandler handler,
   ) async {
     final status = err.response?.statusCode;
+    if (status != 401 || _isAuthExempt(err.requestOptions)) {
+      handler.next(err);
+      return;
+    }
+
     final alreadyRetried = err.requestOptions.extra['retried'] == true;
+    if (alreadyRetried) {
+      await _clearTokensAndForceLogout();
+      handler.next(err);
+      return;
+    }
 
-    if (status == 401 &&
-        !_isAuthExempt(err.requestOptions) &&
-        !alreadyRetried) {
-      final refreshed = await TokenRefreshService.instance.tryRefresh();
-      if (refreshed) {
-        try {
-          final token = await _storage.read(key: AuthStorageKeys.accessToken);
-          final requestOptions = err.requestOptions;
-          requestOptions.extra['retried'] = true;
-          if (token != null && token.isNotEmpty) {
-            requestOptions.headers['Authorization'] = 'Bearer $token';
-          }
-          final response = await ApiClient().dio.fetch<dynamic>(requestOptions);
-          handler.resolve(response);
-          return;
-        } catch (retryError) {
-          if (retryError is DioException) {
-            handler.next(retryError);
-            return;
-          }
+    final refreshed = await TokenRefreshService.instance.tryRefresh();
+    if (refreshed) {
+      try {
+        final token = await _storage.read(key: AuthStorageKeys.accessToken);
+        final requestOptions = err.requestOptions;
+        requestOptions.extra['retried'] = true;
+        if (token != null && token.isNotEmpty) {
+          requestOptions.headers['Authorization'] = 'Bearer $token';
         }
+        final response = await ApiClient().dio.fetch<dynamic>(requestOptions);
+        handler.resolve(response);
+        return;
+      } catch (retryError) {
+        if (retryError is DioException) {
+          if (retryError.response?.statusCode == 401) {
+            await _clearTokensAndForceLogout();
+          }
+          handler.next(retryError);
+          return;
+        }
+        await _clearTokensAndForceLogout();
       }
-
-      await _storage.delete(key: AuthStorageKeys.accessToken);
-      await _storage.delete(key: AuthStorageKeys.refreshToken);
-      AuthEvents.instance.emit(
-        const AuthEventForceLogout(
-          message: 'Your session has expired. Please sign in again.',
-        ),
-      );
+    } else {
+      await _clearTokensAndForceLogout();
     }
 
     handler.next(err);
+  }
+
+  Future<void> _clearTokensAndForceLogout() async {
+    await _storage.delete(key: AuthStorageKeys.accessToken);
+    await _storage.delete(key: AuthStorageKeys.refreshToken);
+    AuthEvents.instance.emit(
+      const AuthEventForceLogout(
+        message: 'Your session has expired. Please sign in again.',
+      ),
+    );
   }
 }
