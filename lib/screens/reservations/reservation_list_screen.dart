@@ -110,7 +110,43 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
     if (created == true && mounted) _refresh();
   }
 
+  Future<bool> _confirmPay(Rezervacija r) async {
+    final when = r.datumRezervacije.toLocal().toString().split('.').first;
+    final amount = '${r.uslugaCijena.toStringAsFixed(2)} KM';
+    final service = r.uslugaNaziv ?? 'this booking';
+    final mobile = nuaspaUseMobileShell();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: mobile ? MobileSpaColors.softWhite : null,
+        title: const Text('Confirm payment?'),
+        content: Text(
+          'Pay $amount for $service on $when?\n\n'
+          'This charge cannot be reversed from the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _handlePayOnline(Rezervacija r) async {
+    if (!r.canPayOnline || !StripePaymentService.paymentSheetSupported) {
+      return;
+    }
+
+    final confirmed = await _confirmPay(r);
+    if (!confirmed || !mounted) return;
+
     final preflight = StripePaymentService.preflight();
     if (preflight != null) {
       await _showPaymentMessage(preflight.message);
@@ -328,7 +364,11 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                             ),
                           );
                         },
-                        onPay: () => _handlePayOnline(r),
+                        onPay: !hideFab &&
+                                r.canPayOnline &&
+                                StripePaymentService.paymentSheetSupported
+                            ? () => _handlePayOnline(r)
+                            : null,
                       );
                     },
                   ),
@@ -466,32 +506,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                                   ),
                                 ),
                                 DataCell(
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (r.isPlacena)
-                                        const Text(
-                                          'Paid',
-                                          style: TextStyle(color: Colors.green),
-                                        )
-                                      else if (r.isOtkazana)
-                                        const Text(
-                                          '—',
-                                          style: TextStyle(color: Colors.white70),
-                                        )
-                                      else
-                                        SizedBox(
-                                          height: 34,
-                                          child: Tooltip(
-                                            message:
-                                                'Pay online (Stripe, Android/iOS)',
-                                            child: FilledButton(
-                                            onPressed: () => _handlePayOnline(r),
-                                            child: const Text('Pay'),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                                  _DesktopPaymentCell(
+                                    reservation: r,
+                                    canAct: !hideFab,
+                                    onPay: () => _handlePayOnline(r),
                                   ),
                                 ),
                                 DataCell(
@@ -556,6 +574,51 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   }
 }
 
+class _DesktopPaymentCell extends StatelessWidget {
+  const _DesktopPaymentCell({
+    required this.reservation,
+    required this.canAct,
+    required this.onPay,
+  });
+
+  final Rezervacija reservation;
+  final bool canAct;
+  final VoidCallback onPay;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = reservation;
+    if (r.isPlacena) {
+      return const Text('Paid', style: TextStyle(color: Colors.green));
+    }
+    if (r.isOtkazana) {
+      return const Text('—', style: TextStyle(color: Colors.white70));
+    }
+    if (!r.canPayOnline) {
+      return const Text(
+        'Unpaid · awaiting confirmation',
+        style: TextStyle(color: Colors.white70),
+      );
+    }
+    if (!canAct || !StripePaymentService.paymentSheetSupported) {
+      return const Tooltip(
+        message: 'Online card payment is available on Android and iOS only.',
+        child: Text(
+          'Pay in the mobile app',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 34,
+      child: FilledButton(
+        onPressed: onPay,
+        child: const Text('Pay'),
+      ),
+    );
+  }
+}
+
 class _MobileReservationCard extends StatelessWidget {
   const _MobileReservationCard({
     required this.reservation,
@@ -571,7 +634,7 @@ class _MobileReservationCard extends StatelessWidget {
   final bool hideClientActions;
   final VoidCallback onCancel;
   final VoidCallback onReview;
-  final VoidCallback onPay;
+  final VoidCallback? onPay;
 
   @override
   Widget build(BuildContext context) {
@@ -622,10 +685,24 @@ class _MobileReservationCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   )
-                else if (!r.isOtkazana)
+                else if (onPay != null)
                   TextButton(
                     onPressed: onPay,
                     child: const Text('Pay online'),
+                  )
+                else if (!hideClientActions && r.canPayOnline)
+                  Text(
+                    'Pay on Android or iOS',
+                    style: tt.labelMedium?.copyWith(
+                      color: MobileSpaColors.royalPurple.withValues(alpha: 0.55),
+                    ),
+                  )
+                else if (!r.isOtkazana)
+                  Text(
+                    'Unpaid',
+                    style: tt.labelMedium?.copyWith(
+                      color: MobileSpaColors.royalPurple.withValues(alpha: 0.55),
+                    ),
                   ),
                 const Spacer(),
                 if (!hideClientActions && completed)

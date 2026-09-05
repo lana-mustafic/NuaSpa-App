@@ -53,6 +53,8 @@ class AdminFinanceKpi {
     required this.postotakPromjeneProsjecnaVrijednost,
     required this.neplaceneRezervacije,
     required this.postotakPromjeneNeplaceneRezervacije,
+    required this.pendingPaymentPokusaji,
+    required this.postotakPromjenePendingPaymentPokusaji,
     required this.iznosRefundacija,
     required this.postotakPromjeneRefundacija,
   });
@@ -65,6 +67,8 @@ class AdminFinanceKpi {
   final double? postotakPromjeneProsjecnaVrijednost;
   final int neplaceneRezervacije;
   final double? postotakPromjeneNeplaceneRezervacije;
+  final int pendingPaymentPokusaji;
+  final double? postotakPromjenePendingPaymentPokusaji;
   final double iznosRefundacija;
   final double? postotakPromjeneRefundacija;
 
@@ -81,6 +85,9 @@ class AdminFinanceKpi {
       postotakPromjeneProsjecnaVrijednost: dn(json['postotakPromjeneProsjecnaVrijednost']),
       neplaceneRezervacije: i(json['neplaceneRezervacije']),
       postotakPromjeneNeplaceneRezervacije: dn(json['postotakPromjeneNeplaceneRezervacije']),
+      pendingPaymentPokusaji: i(json['pendingPaymentPokusaji']),
+      postotakPromjenePendingPaymentPokusaji:
+          dn(json['postotakPromjenePendingPaymentPokusaji']),
       iznosRefundacija: d(json['iznosRefundacija']),
       postotakPromjeneRefundacija: dn(json['postotakPromjeneRefundacija']),
     );

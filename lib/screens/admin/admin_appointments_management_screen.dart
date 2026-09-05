@@ -3282,11 +3282,18 @@ class _AdminAppointmentCreateDialogState
 
   Future<void> _pickDay() async {
     if (_isLockedEdit) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var initial = _selectedDay;
+    if (initial.isBefore(today)) {
+      initial = today;
+    }
+
     final date = await showDatePicker(
       context: context,
-      initialDate: _selectedDay,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      initialDate: initial,
+      firstDate: today,
+      lastDate: now.add(const Duration(days: 365 * 3)),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: ColorScheme.dark(

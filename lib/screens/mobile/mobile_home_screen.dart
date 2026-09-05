@@ -6,11 +6,14 @@ import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/usluga.dart';
 import '../../models/preporucena_usluga.dart';
+import '../../models/obavijest.dart';
 import '../../ui/widgets/preporuka_service_card.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 import '../catalog/service_details_screen.dart';
+import '../news/news_detail_screen.dart';
+import '../news/news_list_screen.dart';
 import '../../ui/layout/mobile_shell.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/widgets/favorites_quick_link.dart';
@@ -27,6 +30,7 @@ class MobileHomeScreen extends StatefulWidget {
 class _MobileHomeScreenState extends State<MobileHomeScreen> {
   final ApiService _api = ApiService();
   List<PreporucenaUsluga>? _preporuke;
+  List<Obavijest> _news = const [];
   bool _loading = true;
 
   @override
@@ -38,18 +42,17 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (context.read<AuthProvider>().isZaposlenik) {
-        setState(() => _loading = false);
-        return;
-      }
       _load();
     });
   }
 
   Future<void> _load() async {
-    final list = await _api.getPreporuke(take: 8);
+    final isStaff = context.read<AuthProvider>().isZaposlenik;
+    final news = await _api.getObavijesti(pageSize: 6);
+    final list = isStaff ? const <PreporucenaUsluga>[] : await _api.getPreporuke(take: 8);
     if (!mounted) return;
     setState(() {
+      _news = news;
       _preporuke = list;
       _loading = false;
     });
@@ -126,6 +129,53 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             ),
           ),
         ),
+        if (_news.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+              child: Row(
+                children: [
+                  Text('Spa news', style: tt.titleLarge),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NewsListScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('See all'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (_news.isNotEmpty)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 168,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                scrollDirection: Axis.horizontal,
+                itemCount: _news.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                itemBuilder: (context, i) {
+                  final item = _news[i];
+                  return _NewsPreviewCard(
+                    item: item,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => NewsDetailScreen(item: item),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
         if (!auth.isZaposlenik)
           SliverToBoxAdapter(
             child: FavoritesQuickLink(count: favorites.length),
@@ -152,6 +202,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               ),
             ),
           ),
+        if (!auth.isZaposlenik)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
@@ -162,14 +213,14 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             ),
           ),
         ),
-        if (_loading)
+        if (!auth.isZaposlenik && _loading)
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(48),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
           )
-        else if ((_preporuke ?? []).isEmpty)
+        else if (!auth.isZaposlenik && (_preporuke ?? []).isEmpty)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -179,7 +230,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               ),
             ),
           )
-        else
+        else if (!auth.isZaposlenik)
           SliverToBoxAdapter(
             child: SizedBox(
               height: 248,
@@ -228,6 +279,72 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _NewsPreviewCard extends StatelessWidget {
+  const _NewsPreviewCard({required this.item, required this.onTap});
+
+  final Obavijest item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return SizedBox(
+      width: 220,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.8),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(
+            color: MobileSpaColors.lavender.withValues(alpha: 0.3),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: item.slikaUrl == null || item.slikaUrl!.isEmpty
+                    ? ColoredBox(
+                        color: MobileSpaColors.lavender.withValues(alpha: 0.2),
+                        child: Icon(
+                          Icons.campaign_outlined,
+                          color: MobileSpaColors.royalPurple.withValues(alpha: 0.35),
+                        ),
+                      )
+                    : ServiceNetworkImage(imageUrl: item.slikaUrl!),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.naslov,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.titleSmall?.copyWith(fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.publishedLabel,
+                      style: tt.bodySmall?.copyWith(
+                        color: MobileSpaColors.royalPurple.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

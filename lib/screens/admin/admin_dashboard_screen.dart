@@ -7,6 +7,7 @@ import '../../models/zaposlenik.dart';
 import '../../ui/widgets/page_header.dart';
 import '../catalog/service_category_manager_panel.dart';
 import '../catalog/service_editor_dialog.dart';
+import 'report_pdf_actions.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -679,33 +680,39 @@ class _AdminReportPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Download a PDF with top services (same backend endpoint).',
+            'Download or print the Top 5 services and revenue PDFs for the last 30 days.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
           ),
           const SizedBox(height: 24),
-          Tooltip(
-            message: 'Download PDF report (top services)',
-            child: FilledButton.icon(
-              onPressed: () async {
-                final now = DateTime.now();
-                final end = DateTime(now.year, now.month, now.day);
-                final start = end.subtract(const Duration(days: 29));
-                final ok = await api.downloadReport(from: start, to: end);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        ok
-                            ? 'PDF report downloaded.'
-                            : 'PDF export failed.',
-                      ),
+          FilledButton.icon(
+            onPressed: () async {
+              final choice = await showReportPdfActionDialog(context);
+              if (choice == null || !context.mounted) return;
+              final now = DateTime.now();
+              final end = DateTime(now.year, now.month, now.day);
+              final start = end.subtract(const Duration(days: 29));
+              final ok = await runReportPdfAction(
+                api: api,
+                from: start,
+                to: end,
+                kind: choice.kind,
+                action: choice.action,
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    reportPdfResultMessage(
+                      ok: ok,
+                      kind: choice.kind,
+                      action: choice.action,
                     ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.download),
-              label: const Text('Download top services (PDF)'),
-            ),
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('PDF reports'),
           ),
         ],
       ),

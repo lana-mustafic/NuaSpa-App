@@ -6,5 +6,7 @@ enum AdminSuiteRoute {
   finance,
   clients,
   resources,
+  locations,
+  news,
   manage,
 }

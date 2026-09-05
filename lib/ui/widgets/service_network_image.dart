@@ -14,7 +14,9 @@ bool _isAppHostedServiceImage(String url) {
     return false;
   }
   return parsed.path.contains('/api/files/usluge') ||
-      parsed.path.contains('/uploads/usluge');
+      parsed.path.contains('/api/files/obavijesti') ||
+      parsed.path.contains('/uploads/usluge') ||
+      parsed.path.contains('/uploads/obavijesti');
 }
 
 /// Učitava slike usluga preko Dio (JWT) ili javnog URL-a; keš u memoriji.

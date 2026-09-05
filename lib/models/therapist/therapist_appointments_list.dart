@@ -1,4 +1,5 @@
 import '../rezervacija.dart';
+import '../../core/reservations/rezervacija_status_flags.dart';
 
 class TherapistAppointmentRow {
   final int id;
@@ -46,15 +47,16 @@ class TherapistAppointmentRow {
   });
 
   factory TherapistAppointmentRow.fromJson(Map<String, dynamic> json) {
+    final status = (json['status'] as String?) ?? 'Pending';
     return TherapistAppointmentRow(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
-      status: (json['status'] as String?) ?? 'Pending',
-      isPotvrdjena: json['isPotvrdjena'] as bool? ?? false,
+      status: status,
+      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(status),
       isPlacena: (json['isPlacena'] as bool?) ??
           (json['isPaid'] as bool?) ??
           false,
-      isOtkazana: json['isOtkazana'] as bool? ?? false,
+      isOtkazana: RezervacijaStatusFlags.isCancelled(status),
       razlogOtkaza: json['razlogOtkaza'] as String?,
       otkazanaAt: (json['otkazanaAt'] as String?) == null
           ? null

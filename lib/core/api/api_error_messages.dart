@@ -74,6 +74,19 @@ abstract final class ApiErrorMessages {
       'Korisničko ime je zauzeto.': 'This username is already taken.',
       'Username is already taken.': 'This username is already taken.',
       'Email ne može biti prazan.': 'Email cannot be empty.',
+      'Ime je obavezno.': 'First name is required.',
+      'Prezime je obavezno.': 'Last name is required.',
+      'E-mail adresa je obavezna.': 'Email address is required.',
+      'Ime može imati najviše 50 znakova.':
+          'First name can have at most 50 characters.',
+      'Prezime može imati najviše 50 znakova.':
+          'Last name can have at most 50 characters.',
+      'E-mail adresa može imati najviše 256 znakova.':
+          'Email can have at most 256 characters.',
+      'Unesite ispravnu e-mail adresu u formatu: ime@domena.ba':
+          'Enter a valid email address, e.g. name@domain.com',
+      'Unesite ispravan broj telefona u formatu: +387 61 123 456 ili samo cifre (8–15 znamenki).':
+          'Enter a valid phone number, e.g. +387 61 123 456 or digits only (8–15 digits).',
 
       // Auth
       'Korisnik nije pronađen.': 'User not found.',
@@ -125,6 +138,8 @@ abstract final class ApiErrorMessages {
           'No charged amount available for refund.',
       'Nemate dozvolu za kreiranje plaćanja za ovu rezervaciju.':
           'You do not have permission to create payment for this booking.',
+      'Online payment is only available for confirmed reservations.':
+          'Online payment is only available for confirmed reservations.',
       'Otkazana rezervacija se ne može platiti.':
           'Cancelled bookings cannot be paid.',
       'PaymentIntentId je obavezan.': 'PaymentIntentId is required.',
@@ -148,6 +163,39 @@ abstract final class ApiErrorMessages {
       'Spa centar nije pronađen.': 'Spa center not found.',
       'Prostorija nije pronađena.': 'Room not found.',
       'Oprema nije pronađena.': 'Equipment not found.',
+
+      // Location catalogs
+      'Država nije pronađena.': 'Country not found.',
+      'Grad nije pronađen.': 'City not found.',
+      'Naziv države je obavezan.': 'Country name is required.',
+      'Naziv grada je obavezan.': 'City name is required.',
+      'Pozivni broj je obavezan.': 'Calling code is required.',
+      'Poštanski broj je obavezan.': 'Postal code is required.',
+      'Država s tim nazivom već postoji.':
+          'A country with that name already exists.',
+      'Grad s tim nazivom već postoji u odabranoj državi.':
+          'A city with that name already exists in the selected country.',
+      'Država ima gradove i ne može biti obrisana. Prvo uklonite ili premjestite gradove.':
+          'This country has cities and cannot be deleted. Remove or move the cities first.',
+      'Državu koriste korisnički profili i ne može biti obrisana.':
+          'This country is used on user profiles and cannot be deleted.',
+      'Grad je već dodijeljen korisnicima i ne može biti obrisan. Promijenite grad na profilima prije brisanja.':
+          'This city is assigned to users and cannot be deleted. Change those profiles first.',
+      'Odabrana država nije pronađena.': 'The selected country was not found.',
+
+      // News / announcements
+      'Naslov obavijesti je obavezan.': 'News title is required.',
+      'Tekst obavijesti je obavezan.': 'News text is required.',
+      'Datoteka nije poslana.': 'No file was sent.',
+      'Datoteka je prevelika (maks. 5 MB).': 'The file is too large (max 5 MB).',
+      'Dopušteni formati: JPG, PNG, WEBP, GIF.':
+          'Allowed formats: JPG, PNG, WEBP, GIF.',
+      'MIME tip datoteke nije dopušten za upload slike.':
+          'The file MIME type is not allowed for image upload.',
+      'Datoteka se ne može pročitati.': 'The file cannot be read.',
+      'Datoteka je prazna ili oštećena.': 'The file is empty or damaged.',
+      'Sadržaj datoteke ne odgovara navedenom formatu slike.':
+          'The file content does not match the declared image format.',
     };
     return replacements[raw] ?? raw;
   }

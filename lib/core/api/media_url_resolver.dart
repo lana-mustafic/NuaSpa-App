@@ -26,8 +26,10 @@ String resolveMediaUrl(String? pathOrUrl) {
 
   final isOurImage = parsed.path.contains('/api/files/usluge') ||
       parsed.path.contains('/api/files/terapeuti') ||
+      parsed.path.contains('/api/files/obavijesti') ||
       parsed.path.contains('/uploads/usluge') ||
-      parsed.path.contains('/uploads/terapeuti');
+      parsed.path.contains('/uploads/terapeuti') ||
+      parsed.path.contains('/uploads/obavijesti');
   if (isOurImage) {
     final imageHost = parsed.host;
     final apiHost = apiUri.host;

@@ -13,6 +13,19 @@ abstract final class NuaValidators {
     return null;
   }
 
+  static String? personName(
+    String? value, {
+    required String fieldLabel,
+    int maxLength = 50,
+  }) {
+    final err = requiredText(value, fieldLabel: fieldLabel);
+    if (err != null) return err;
+    if (value!.trim().length > maxLength) {
+      return '$fieldLabel can have at most $maxLength characters.';
+    }
+    return null;
+  }
+
   static String? email(String? value, {bool required = true}) {
     final t = value?.trim() ?? '';
     if (t.isEmpty) {

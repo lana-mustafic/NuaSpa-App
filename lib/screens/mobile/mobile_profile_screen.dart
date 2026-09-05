@@ -7,6 +7,7 @@ import '../../core/api/services/api_service.dart';
 import '../../core/settings/settings_messages.dart';
 import '../../models/account_profile.dart';
 import '../../providers/auth_provider.dart';
+import '../account/edit_account_profile_form.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../therapist/therapist_schedule_screen.dart';
 import '../../providers/mobile_nav_provider.dart';
@@ -47,6 +48,20 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
           ? 'Could not load your account details. Pull to refresh.'
           : null;
     });
+  }
+
+  Future<void> _openEditProfile() async {
+    final profile = _profile;
+    if (profile == null) return;
+    final updated = await showEditAccountProfileSheet(
+      context,
+      profile: profile,
+    );
+    if (updated == null || !mounted) return;
+    setState(() => _profile = updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile updated.')),
+    );
   }
 
   Future<void> _openChangePassword() async {
@@ -220,7 +235,22 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
               ],
             ],
           ],
-          const SizedBox(height: 28),
+          if (profile != null) ...[
+            const SizedBox(height: 28),
+            _SectionTitle(title: 'Account settings'),
+            _GlassTile(
+              icon: Icons.edit_outlined,
+              label: 'Edit profile',
+              onTap: _openEditProfile,
+            ),
+            if (profile.hasPassword)
+              _GlassTile(
+                icon: Icons.lock_outline_rounded,
+                label: 'Change password',
+                onTap: _openChangePassword,
+              ),
+          ],
+          const SizedBox(height: 16),
           _SectionTitle(title: 'Shortcuts'),
           _GlassTile(
             icon: Icons.event_available_outlined,
@@ -268,14 +298,6 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
             },
             visible: auth.isAdmin,
           ),
-          if (profile?.hasPassword ?? true) ...[
-            const SizedBox(height: 8),
-            _GlassTile(
-              icon: Icons.lock_outline_rounded,
-              label: 'Change password',
-              onTap: _openChangePassword,
-            ),
-          ],
           const SizedBox(height: 32),
           FilledButton.icon(
             style: FilledButton.styleFrom(

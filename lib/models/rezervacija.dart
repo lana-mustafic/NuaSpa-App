@@ -1,3 +1,5 @@
+import '../core/reservations/rezervacija_status_flags.dart';
+
 class Rezervacija {
   final int id;
   final DateTime datumRezervacije;
@@ -49,15 +51,16 @@ class Rezervacija {
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
+    final status = (json['status'] as String?) ?? 'Pending';
     return Rezervacija(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
-      status: (json['status'] as String?) ?? 'Pending',
-      isPotvrdjena: json['isPotvrdjena'] as bool,
+      status: status,
+      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(status),
       isPlacena: (json['isPaid'] as bool?) ??
           (json['isPlacena'] as bool?) ??
           false,
-      isOtkazana: (json['isOtkazana'] as bool?) ?? false,
+      isOtkazana: RezervacijaStatusFlags.isCancelled(status),
       razlogOtkaza: json['razlogOtkaza'] as String?,
       otkazanaAt: (json['otkazanaAt'] as String?) == null
           ? null
@@ -79,4 +82,8 @@ class Rezervacija {
       isVip: json['isVip'] as bool? ?? false,
     );
   }
+
+  /// Online Stripe pay is allowed only for confirmed, unpaid bookings.
+  bool get canPayOnline =>
+      RezervacijaStatusFlags.isOnlinePayable(status, isPaid: isPlacena);
 }

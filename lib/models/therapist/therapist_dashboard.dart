@@ -1,4 +1,5 @@
 import '../admin/therapist_admin_profile.dart';
+import '../../core/reservations/rezervacija_status_flags.dart';
 
 class TherapistDashboardAppointmentRow {
   final int id;
@@ -26,12 +27,13 @@ class TherapistDashboardAppointmentRow {
   });
 
   factory TherapistDashboardAppointmentRow.fromJson(Map<String, dynamic> json) {
+    final status = (json['status'] as String?) ?? 'Pending';
     return TherapistDashboardAppointmentRow(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
-      status: (json['status'] as String?) ?? 'Pending',
-      isPotvrdjena: json['isPotvrdjena'] as bool? ?? false,
-      isOtkazana: json['isOtkazana'] as bool? ?? false,
+      status: status,
+      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(status),
+      isOtkazana: RezervacijaStatusFlags.isCancelled(status),
       korisnikIme: json['korisnikIme'] as String?,
       uslugaNaziv: json['uslugaNaziv'] as String?,
       uslugaTrajanjeMinuta:

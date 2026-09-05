@@ -16,6 +16,8 @@ import '../../ui/widgets/page_header.dart';
 import 'admin_clients_desktop_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_payments_overview_screen.dart';
+import 'admin_locations_screen.dart';
+import 'admin_news_screen.dart';
 import 'admin_resources_screen.dart';
 import 'admin_therapist_profile_screen.dart';
 import 'admin_suite_route.dart';
@@ -733,6 +735,10 @@ class _AdminSuiteScreenState extends State<AdminSuiteScreen> {
         return AdminClientsDesktopScreen(api: _api);
       case AdminSuiteRoute.resources:
         return const AdminResourcesScreen();
+      case AdminSuiteRoute.locations:
+        return const AdminLocationsScreen();
+      case AdminSuiteRoute.news:
+        return const AdminNewsScreen();
       case AdminSuiteRoute.manage:
         return const AdminDashboardScreen();
     }

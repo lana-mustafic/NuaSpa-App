@@ -43,6 +43,7 @@ class AdminPaymentsOverviewScreen extends StatefulWidget {
   static const Color successGreen = Color(0xFF4ADE80);
   static const Color revenueTeal = Color(0xFF2DD4BF);
   static const Color unpaidAmber = Color(0xFFFBBF24);
+  static const Color pendingOrange = Color(0xFFFB923C);
   static const Color errorRed = Color(0xFFFF5E7A);
   static const Color refundMuted = Color(0xFFE879A8);
   static const Color bgDeep = Color(0xFF090613);
@@ -532,6 +533,14 @@ class _KpiStrip extends StatelessWidget {
         invertDeltaColor: true,
       ),
       _KpiCard(
+        label: 'Pending Payments',
+        value: k == null ? '—' : '${k.pendingPaymentPokusaji}',
+        delta: _formatGrowthLine(k?.postotakPromjenePendingPaymentPokusaji),
+        deltaUp: (k?.postotakPromjenePendingPaymentPokusaji ?? 0) < 0,
+        accent: AdminPaymentsOverviewScreen.pendingOrange,
+        invertDeltaColor: true,
+      ),
+      _KpiCard(
         label: 'Refunds',
         value: k == null ? '—' : _formatKm(k.iznosRefundacija),
         delta: _formatGrowthLine(k?.postotakPromjeneRefundacija),
@@ -541,7 +550,7 @@ class _KpiStrip extends StatelessWidget {
       ),
     ];
 
-    if (width >= 1180) {
+    if (width >= 1360) {
       return Row(
         children: [
           for (var i = 0; i < cards.length; i++) ...[

@@ -12,6 +12,7 @@ import '../../core/jwt_roles.dart';
 import '../../core/settings/settings_messages.dart';
 import '../../models/account_profile.dart';
 import '../../providers/auth_provider.dart';
+import '../account/edit_account_profile_form.dart';
 import '../../screens/admin/admin_suite_route.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../ui/widgets/luxury/luxury_confirm_dialog.dart';
@@ -164,7 +165,11 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
     );
   }
 
-  void _onEditProfile(AuthProvider auth, DesktopNav nav, AccountProfile? profile) {
+  Future<void> _onEditProfile(
+    AuthProvider auth,
+    DesktopNav nav,
+    AccountProfile? profile,
+  ) async {
     if (auth.isZaposlenik && auth.zaposlenikId != null) {
       nav.goTo(DesktopRouteKey.therapistProfile);
       return;
@@ -181,25 +186,16 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
       );
       return;
     }
-    if (auth.isAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Administrator account details are managed by your system operator.',
-          ),
-          behavior: SnackBarBehavior.floating,
-          width: 420,
-        ),
-      );
-      return;
-    }
+    if (profile == null) return;
+    final updated = await showEditAccountProfileDialog(
+      context,
+      profile: profile,
+    );
+    if (updated == null || !mounted) return;
+    setState(() => _profile = updated);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          profile?.email != null
-              ? 'Contact NuaSpa to update your client profile details.'
-              : 'Profile editing is not available for your account yet.',
-        ),
+      const SnackBar(
+        content: Text('Profile updated.'),
         behavior: SnackBarBehavior.floating,
         width: 420,
       ),
@@ -298,6 +294,18 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
           onTap: () => nav.goTo(DesktopRouteKey.revenueAnalytics),
         ),
         _WorkspaceLink(
+          icon: Icons.public_outlined,
+          label: 'Locations',
+          subtitle: 'Countries and cities catalog',
+          onTap: () => nav.goToAdminSuite(AdminSuiteRoute.locations),
+        ),
+        _WorkspaceLink(
+          icon: Icons.campaign_outlined,
+          label: 'News',
+          subtitle: 'Spa announcements for the app',
+          onTap: () => nav.goToAdminSuite(AdminSuiteRoute.news),
+        ),
+        _WorkspaceLink(
           icon: Icons.reviews_outlined,
           label: 'Reviews',
           subtitle: 'Client feedback hub',
@@ -338,6 +346,12 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
           onTap: () => nav.goTo(DesktopRouteKey.therapistReviews),
         ),
         _WorkspaceLink(
+          icon: Icons.campaign_outlined,
+          label: 'News',
+          subtitle: 'Spa announcements and updates',
+          onTap: () => nav.goTo(DesktopRouteKey.news),
+        ),
+        _WorkspaceLink(
           icon: Icons.person_outline_rounded,
           label: 'Profile',
           subtitle: 'Contact and profile details',
@@ -351,6 +365,12 @@ class _LuxurySettingsScreenState extends State<LuxurySettingsScreen>
         label: 'Services',
         subtitle: 'Browse treatments',
         onTap: () => nav.goTo(DesktopRouteKey.catalog),
+      ),
+      _WorkspaceLink(
+        icon: Icons.campaign_outlined,
+        label: 'News',
+        subtitle: 'Spa announcements and updates',
+        onTap: () => nav.goTo(DesktopRouteKey.news),
       ),
       _WorkspaceLink(
         icon: Icons.event_available_outlined,

@@ -11,6 +11,7 @@ enum DesktopRouteKey {
   settings,
   home,
   catalog,
+  news,
   reservations,
   adminCalendar,
   favorites,

@@ -16,6 +16,7 @@ dependencies:
   provider: ^6.1.5+1
   path_provider: ^2.1.5
   open_file: ^3.5.11
+  printing: ^5.14.2
   flutter_stripe: ^11.0.0
   window_manager: ^0.5.1
   google_fonts: ^6.2.1

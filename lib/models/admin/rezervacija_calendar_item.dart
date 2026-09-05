@@ -1,3 +1,5 @@
+import '../../core/reservations/rezervacija_status_flags.dart';
+
 class RezervacijaCalendarItem {
   final int id;
   final DateTime datumRezervacije;
@@ -51,13 +53,14 @@ class RezervacijaCalendarItem {
   bool get isCompleted => status == 'Completed';
 
   factory RezervacijaCalendarItem.fromJson(Map<String, dynamic> json) {
+    final status = (json['status'] as String?) ?? 'Pending';
     return RezervacijaCalendarItem(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
-      status: (json['status'] as String?) ?? 'Pending',
-      isPotvrdjena: (json['isPotvrdjena'] as bool?) ?? false,
+      status: status,
+      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(status),
       isPlacena: (json['isPlacena'] as bool?) ?? false,
-      isOtkazana: (json['isOtkazana'] as bool?) ?? false,
+      isOtkazana: RezervacijaStatusFlags.isCancelled(status),
       isVip: (json['isVip'] as bool?) ?? (json['vip'] as bool?) ?? false,
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt() ?? 0,
       zaposlenikIme: json['zaposlenikIme'] as String?,
@@ -83,13 +86,14 @@ class RezervacijaCalendarItem {
     bool? isPlacena,
     bool? isOtkazana,
   }) {
+    final nextStatus = status ?? this.status;
     return RezervacijaCalendarItem(
       id: id,
       datumRezervacije: datumRezervacije,
-      status: status ?? this.status,
-      isPotvrdjena: isPotvrdjena ?? this.isPotvrdjena,
+      status: nextStatus,
+      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(nextStatus),
       isPlacena: isPlacena ?? this.isPlacena,
-      isOtkazana: isOtkazana ?? this.isOtkazana,
+      isOtkazana: RezervacijaStatusFlags.isCancelled(nextStatus),
       isVip: isVip ?? this.isVip,
       zaposlenikId: zaposlenikId,
       zaposlenikIme: zaposlenikIme,

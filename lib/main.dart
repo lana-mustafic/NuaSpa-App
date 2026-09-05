@@ -403,6 +403,22 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
+                  HoverCard(
+                    tooltip: 'Spa news',
+                    onTap: () => nav.goTo(DesktopRouteKey.news),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.campaign_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Spa news',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (!context.watch<AuthProvider>().isZaposlenik)
                     HoverCard(
                       onTap: () => nav.goTo(DesktopRouteKey.reservations),

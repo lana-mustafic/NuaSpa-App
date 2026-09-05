@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api/services/api_service.dart';
+import 'report_pdf_actions.dart';
 import '../../ui/navigation/desktop_nav.dart';
 import '../../models/admin/admin_kpi.dart';
 import '../../models/admin/revenue_point.dart';
@@ -205,18 +206,28 @@ class _AdminRevenueAnalyticsScreenState
     final from = _activeFrom;
     final to = _activeTo;
     if (from == null || to == null) return;
+    final choice = await showReportPdfActionDialog(context);
+    if (choice == null || !mounted) return;
     setState(() => _exporting = true);
     _nav?.setReportsPdfExporting(true);
-    final ok = await _api.downloadReport(from: from, to: to);
+    final ok = await runReportPdfAction(
+      api: _api,
+      from: from,
+      to: to,
+      kind: choice.kind,
+      action: choice.action,
+    );
     if (!mounted) return;
     setState(() => _exporting = false);
     _nav?.setReportsPdfExporting(false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          ok
-              ? 'PDF report (Top 5 services) downloaded and opened.'
-              : 'PDF export failed. Check backend connection and sign-in.',
+          reportPdfResultMessage(
+            ok: ok,
+            kind: choice.kind,
+            action: choice.action,
+          ),
         ),
         behavior: SnackBarBehavior.floating,
         width: 420,

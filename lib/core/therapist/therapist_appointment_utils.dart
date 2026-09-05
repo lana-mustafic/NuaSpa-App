@@ -49,13 +49,13 @@ abstract final class TherapistAppointmentUtils {
 
   static ({String label, Color color}) statusOfRezervacija(Rezervacija r) {
     final normalized = r.status.trim().toLowerCase();
-    if (r.isOtkazana || normalized == 'cancelled') {
+    if (normalized == 'cancelled') {
       return (label: 'Cancelled', color: const Color(0xFFEF4444));
     }
     if (normalized == 'completed') {
       return (label: 'Completed', color: const Color(0xFF6366F1));
     }
-    if (r.isPotvrdjena || normalized == 'confirmed') {
+    if (normalized == 'confirmed') {
       return (label: 'Confirmed', color: const Color(0xFF2DD4BF));
     }
     return (label: 'Pending', color: const Color(0xFFF59E0B));
@@ -65,13 +65,13 @@ abstract final class TherapistAppointmentUtils {
     TherapistDashboardAppointmentRow r,
   ) {
     final normalized = r.status.trim().toLowerCase();
-    if (r.isOtkazana || normalized == 'cancelled') {
+    if (normalized == 'cancelled') {
       return (label: 'Cancelled', color: const Color(0xFFEF4444));
     }
     if (normalized == 'completed') {
       return (label: 'Completed', color: const Color(0xFF6366F1));
     }
-    if (r.isPotvrdjena || normalized == 'confirmed') {
+    if (normalized == 'confirmed') {
       return (label: 'Confirmed', color: const Color(0xFF2DD4BF));
     }
     return (label: 'Pending', color: const Color(0xFFF59E0B));

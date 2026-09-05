@@ -10,6 +10,7 @@ import '../../screens/admin/admin_payments_overview_screen.dart';
 import '../../screens/catalog/mobile_service_catalog_screen.dart';
 import '../../screens/mobile/mobile_home_screen.dart';
 import '../../screens/mobile/mobile_profile_screen.dart';
+import '../../screens/news/news_list_screen.dart';
 import '../../screens/reservations/reservation_create_screen.dart';
 import '../../screens/reservations/reservation_list_screen.dart';
 import '../../screens/therapist/therapist_schedule_screen.dart';
@@ -318,6 +319,19 @@ class _MobileDrawer extends StatelessWidget {
               ),
             ),
             const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.campaign_outlined),
+              title: const Text('News'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const NewsListScreen(),
+                  ),
+                );
+              },
+            ),
             if (!auth.isZaposlenik)
               ListTile(
                 leading: const Icon(Icons.event_note_outlined),

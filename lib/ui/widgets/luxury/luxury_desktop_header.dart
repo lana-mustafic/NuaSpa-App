@@ -313,6 +313,11 @@ class LuxuryDesktopHeader extends StatelessWidget {
         nav.adminSuiteTarget == AdminSuiteRoute.clients;
     final isAdminPayments = nav.route == DesktopRouteKey.admin &&
         nav.adminSuiteTarget == AdminSuiteRoute.finance;
+    final isAdminLocations = nav.route == DesktopRouteKey.admin &&
+        nav.adminSuiteTarget == AdminSuiteRoute.locations;
+    final isAdminNews = nav.route == DesktopRouteKey.admin &&
+        nav.adminSuiteTarget == AdminSuiteRoute.news;
+    final isNews = nav.route == DesktopRouteKey.news || isAdminNews;
     final isCatalog = nav.route == DesktopRouteKey.catalog;
     final compact = compactChrome;
     final showRangePills = isRevenue || isCommandCenter;
@@ -413,6 +418,32 @@ class LuxuryDesktopHeader extends StatelessWidget {
           onSearchChanged: nav.setPaymentSearchQuery,
           showPaymentsCsvExport: true,
           useHeaderDateRange: true,
+        );
+      }
+      if (isAdminLocations) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'Locations',
+          subtitle: 'Countries and cities used on client profiles.',
+          searchHint: 'Search across NuaSpa…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
+        );
+      }
+      if (isAdminNews) {
+        return _buildSpaciousLuxuryHeader(
+          context,
+          auth: auth,
+          nav: nav,
+          day: day,
+          notificationCount: badgeCount,
+          title: 'News',
+          subtitle: 'Publish spa announcements for the mobile and desktop apps.',
+          searchHint: 'Search across NuaSpa…',
+          onSearchSubmitted: nav.performAdminGlobalSearch,
         );
       }
       if (isCatalog) {
@@ -585,6 +616,19 @@ class LuxuryDesktopHeader extends StatelessWidget {
       );
     }
 
+    if (isNews) {
+      return _buildSpaciousLuxuryHeader(
+        context,
+        auth: auth,
+        nav: nav,
+        day: day,
+        notificationCount: badgeCount,
+        title: 'News',
+        subtitle: 'Spa announcements and updates.',
+        showSearch: false,
+      );
+    }
+
     if (isSettings) {
       return _buildSpaciousLuxuryHeader(
         context,
@@ -694,6 +738,9 @@ class LuxuryDesktopHeader extends StatelessWidget {
           if (!isRevenue &&
               !isCommandCenter &&
               !isSettings &&
+              !isAdminLocations &&
+              !isAdminNews &&
+              !isNews &&
               !isTherapistProfile) ...[
             ConstrainedBox(
               constraints: BoxConstraints(

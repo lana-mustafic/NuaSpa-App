@@ -10,6 +10,7 @@ class AccountProfile {
     required this.hasPassword,
     this.zaposlenikId,
     this.phone,
+    this.gradId,
     this.cityName,
     this.memberSince,
     this.totalVisits,
@@ -28,6 +29,7 @@ class AccountProfile {
   final bool hasPassword;
   final int? zaposlenikId;
   final String? phone;
+  final int? gradId;
   final String? cityName;
   final DateTime? memberSince;
   final int? totalVisits;
@@ -82,6 +84,7 @@ class AccountProfile {
       hasPassword: json['hasPassword'] as bool? ?? true,
       zaposlenikId: (json['zaposlenikId'] as num?)?.toInt(),
       phone: json['phone'] as String?,
+      gradId: (json['gradId'] as num?)?.toInt(),
       cityName: json['cityName'] as String?,
       memberSince: json['memberSince'] == null
           ? null

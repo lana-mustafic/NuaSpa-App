@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:printing/printing.dart';
 import '../api_client.dart';
 import '../paged_list_parser.dart';
 import '../api_error_messages.dart';
@@ -19,6 +20,7 @@ import '../../../models/zaposlenici_load_result.dart';
 import '../../../models/payment_intent_response.dart';
 import '../../../models/cancel_rezervacija_result.dart';
 import '../../../models/sistemska_notifikacija.dart';
+import '../../../models/obavijest.dart';
 import '../../../models/admin/admin_client_row.dart';
 import '../../../models/admin/admin_client_stats.dart';
 import '../../../models/admin/admin_kpi.dart';
@@ -44,7 +46,35 @@ import '../../../models/admin/admin_reviews_dashboard.dart';
 import '../../../models/admin/admin_finance_dashboard.dart';
 import '../../../models/admin/radno_vrijeme.dart';
 import '../../../models/grad_lookup.dart';
+import '../../../models/drzava_lookup.dart';
 import '../../../models/account_profile.dart';
+
+enum ReportPdfKind {
+  topServices,
+  revenue,
+}
+
+extension ReportPdfKindX on ReportPdfKind {
+  String get apiPath => switch (this) {
+        ReportPdfKind.topServices => 'Izvjestaj/top-usluge',
+        ReportPdfKind.revenue => 'Izvjestaj/prihod',
+      };
+
+  String get fileName => switch (this) {
+        ReportPdfKind.topServices => 'izvjestaj_top_usluge.pdf',
+        ReportPdfKind.revenue => 'izvjestaj_prihod.pdf',
+      };
+
+  String get printTitle => switch (this) {
+        ReportPdfKind.topServices => 'NuaSpa Top 5 Services',
+        ReportPdfKind.revenue => 'NuaSpa Revenue Report',
+      };
+
+  String get label => switch (this) {
+        ReportPdfKind.topServices => 'Top 5 services',
+        ReportPdfKind.revenue => 'Revenue',
+      };
+}
 
 class ApiService {
   final Dio _dio = ApiClient().dio;
@@ -1266,6 +1296,28 @@ class ApiService {
     }
   }
 
+  Future<AccountProfile> updateAccountProfile({
+    required String firstName,
+    required String lastName,
+    required String email,
+    String? phone,
+    int? gradId,
+  }) async {
+    final response = await _dio.put<dynamic>(
+      'Account/me',
+      data: {
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'phone': phone,
+        'gradId': gradId,
+      },
+    );
+    return AccountProfile.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
   Future<AccountProfile?> getAccountProfile() async {
     try {
       final response = await _dio.get<dynamic>('Account/me');
@@ -1646,7 +1698,7 @@ class ApiService {
   }) async {
     try {
       final body = <String, dynamic>{
-        'datumRezervacije': datumRezervacije.toIso8601String(),
+        'datumRezervacije': datumRezervacije.toUtc().toIso8601String(),
         'uslugaId': uslugaId,
         'zaposlenikId': zaposlenikId,
         'isVip': isVip,
@@ -1676,7 +1728,7 @@ class ApiService {
       final response = await _dio.put<dynamic>(
         'Rezervacija/$rezervacijaId',
         data: {
-          'datumRezervacije': datumRezervacije.toIso8601String(),
+          'datumRezervacije': datumRezervacije.toUtc().toIso8601String(),
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
           'isVip': isVip,
@@ -1702,7 +1754,7 @@ class ApiService {
   }) async {
     try {
       final body = <String, dynamic>{
-        'datumRezervacije': datumRezervacije.toIso8601String(),
+        'datumRezervacije': datumRezervacije.toUtc().toIso8601String(),
         'uslugaId': uslugaId,
         'zaposlenikId': zaposlenikId,
         'isVip': isVip,
@@ -1739,7 +1791,7 @@ class ApiService {
       final response = await _dio.put<dynamic>(
         'Rezervacija/$rezervacijaId',
         data: {
-          'datumRezervacije': datumRezervacije.toIso8601String(),
+          'datumRezervacije': datumRezervacije.toUtc().toIso8601String(),
           'uslugaId': uslugaId,
           'zaposlenikId': zaposlenikId,
           'isVip': isVip,
@@ -2454,15 +2506,39 @@ class ApiService {
     }
   }
 
-  Future<bool> downloadReport({
+  Future<Uint8List?> fetchReportPdf({
+    required ReportPdfKind kind,
     required DateTime from,
     required DateTime to,
   }) async {
     try {
+      final response = await _dio.get<List<int>>(
+        kind.apiPath,
+        queryParameters: {
+          'from': _apiDateOnly(from),
+          'to': _apiDateOnly(to),
+        },
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = response.data;
+      if (data == null || data.isEmpty) return null;
+      return Uint8List.fromList(data);
+    } catch (e) {
+      debugPrint('Greška pri dohvatu PDF izvještaja: $e');
+      return null;
+    }
+  }
+
+  Future<bool> downloadReport({
+    required DateTime from,
+    required DateTime to,
+    ReportPdfKind kind = ReportPdfKind.topServices,
+  }) async {
+    try {
       final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/izvjestaj_top_usluge.pdf';
+      final filePath = '${directory.path}/${kind.fileName}';
       await _dio.download(
-        'Izvjestaj/top-usluge',
+        kind.apiPath,
         filePath,
         queryParameters: {
           'from': _apiDateOnly(from),
@@ -2473,6 +2549,24 @@ class ApiService {
       return true;
     } catch (e) {
       debugPrint('Greška pri downloadu: $e');
+      return false;
+    }
+  }
+
+  Future<bool> printReport({
+    required DateTime from,
+    required DateTime to,
+    ReportPdfKind kind = ReportPdfKind.topServices,
+  }) async {
+    try {
+      final bytes = await fetchReportPdf(kind: kind, from: from, to: to);
+      if (bytes == null) return false;
+      return Printing.layoutPdf(
+        name: kind.printTitle,
+        onLayout: (_) async => bytes,
+      );
+    } catch (e) {
+      debugPrint('Greška pri štampi PDF izvještaja: $e');
       return false;
     }
   }
@@ -2807,6 +2901,90 @@ class ApiService {
     }
   }
 
+  Future<List<DrzavaLookup>> getDrzave({String? naziv}) async {
+    try {
+      final query = <String, dynamic>{'pageSize': 100};
+      if (naziv != null && naziv.trim().isNotEmpty) {
+        query['naziv'] = naziv.trim();
+      }
+      final response = await _dio.get<dynamic>(
+        'Lookup/drzave',
+        queryParameters: query,
+      );
+      return parsePagedItems(
+        response.data,
+        (json) => DrzavaLookup.fromJson(json),
+      );
+    } catch (e) {
+      debugPrint('Greška u ApiService.getDrzave: $e');
+      return [];
+    }
+  }
+
+  Future<DrzavaLookup> createDrzava({
+    required String naziv,
+    required String pozivniBroj,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      'Lookup/drzave',
+      data: {'naziv': naziv, 'pozivniBroj': pozivniBroj},
+    );
+    return DrzavaLookup.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<DrzavaLookup> updateDrzava({
+    required int id,
+    required String naziv,
+    required String pozivniBroj,
+  }) async {
+    final response = await _dio.put<dynamic>(
+      'Lookup/drzave/$id',
+      data: {'naziv': naziv, 'pozivniBroj': pozivniBroj},
+    );
+    return DrzavaLookup.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteDrzava(int id) async {
+    await _dio.delete<dynamic>('Lookup/drzave/$id');
+  }
+
+  Future<GradLookup> createGrad({
+    required String naziv,
+    required String postanskiBroj,
+    required int drzavaId,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      'Lookup/gradovi',
+      data: {
+        'naziv': naziv,
+        'postanskiBroj': postanskiBroj,
+        'drzavaId': drzavaId,
+      },
+    );
+    return GradLookup.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<GradLookup> updateGrad({
+    required int id,
+    required String naziv,
+    required String postanskiBroj,
+    required int drzavaId,
+  }) async {
+    final response = await _dio.put<dynamic>(
+      'Lookup/gradovi/$id',
+      data: {
+        'naziv': naziv,
+        'postanskiBroj': postanskiBroj,
+        'drzavaId': drzavaId,
+      },
+    );
+    return GradLookup.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteGrad(int id) async {
+    await _dio.delete<dynamic>('Lookup/gradovi/$id');
+  }
+
   Future<List<GradLookup>> getGradovi({int? drzavaId, String? naziv}) async {
     try {
       final query = <String, dynamic>{'pageSize': 100};
@@ -3070,5 +3248,110 @@ class ApiService {
       debugPrint('Greška u ApiService.markAllSistemskaNotifikacijeRead: $e');
       return false;
     }
+  }
+
+  Future<List<Obavijest>> getObavijesti({
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'Obavijest',
+        queryParameters: {'page': page, 'pageSize': pageSize},
+      );
+      return parsePagedItems(response.data, Obavijest.fromJson);
+    } catch (e) {
+      debugPrint('Greška u ApiService.getObavijesti: $e');
+      return [];
+    }
+  }
+
+  Future<Obavijest> getObavijest(int id) async {
+    final response = await _dio.get<dynamic>('Obavijest/$id');
+    return Obavijest.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
+  Future<Obavijest> createObavijest({
+    required String naslov,
+    required String tekst,
+    String? slikaUrl,
+    bool aktivna = true,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      'Obavijest',
+      data: {
+        'naslov': naslov,
+        'tekst': tekst,
+        'slikaUrl': slikaUrl,
+        'aktivna': aktivna,
+      },
+    );
+    return Obavijest.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
+  Future<Obavijest> updateObavijest({
+    required int id,
+    required String naslov,
+    required String tekst,
+    String? slikaUrl,
+    bool aktivna = true,
+  }) async {
+    final response = await _dio.put<dynamic>(
+      'Obavijest/$id',
+      data: {
+        'naslov': naslov,
+        'tekst': tekst,
+        'slikaUrl': slikaUrl,
+        'aktivna': aktivna,
+      },
+    );
+    return Obavijest.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
+  }
+
+  Future<void> deleteObavijest(int id) async {
+    await _dio.delete<dynamic>('Obavijest/$id');
+  }
+
+  Future<String> uploadObavijestImage(String filePath) async {
+    final normalized = filePath.replaceAll(r'\', '/');
+    final fileName = normalized.contains('/')
+        ? normalized.split('/').last
+        : normalized;
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+    });
+    final response = await _dio.post<dynamic>(
+      'Obavijest/upload-image',
+      data: form,
+    );
+    final url = await _parseUploadedImageUrl(response);
+    if (url == null || url.isEmpty) {
+      throw StateError('Image upload did not return a URL.');
+    }
+    return url;
+  }
+
+  Future<String> uploadObavijestImageBytes(
+    List<int> bytes, {
+    required String fileName,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final response = await _dio.post<dynamic>(
+      'Obavijest/upload-image',
+      data: form,
+    );
+    final url = await _parseUploadedImageUrl(response);
+    if (url == null || url.isEmpty) {
+      throw StateError('Image upload did not return a URL.');
+    }
+    return url;
   }
 }

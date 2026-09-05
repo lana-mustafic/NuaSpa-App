@@ -11,6 +11,7 @@ import '../../screens/admin/admin_command_center_screen.dart';
 import '../../screens/admin/admin_revenue_analytics_screen.dart';
 import '../../screens/admin/admin_suite_screen.dart';
 import '../../screens/admin/admin_suite_route.dart';
+import '../../screens/news/news_list_screen.dart';
 import '../../screens/admin/admin_therapist_roster_screen.dart';
 import '../../screens/catalog/service_catalog_screen.dart';
 import '../../screens/desktop/luxury_placeholder_screen.dart';
@@ -148,6 +149,18 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.area_chart_rounded,
       ),
       LuxurySideItem(
+        route: DesktopRouteKey.admin,
+        suite: AdminSuiteRoute.locations,
+        label: 'Locations',
+        icon: Icons.public_outlined,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.admin,
+        suite: AdminSuiteRoute.news,
+        label: 'News',
+        icon: Icons.campaign_outlined,
+      ),
+      LuxurySideItem(
         route: DesktopRouteKey.settings,
         label: 'Settings',
         icon: Icons.tune_rounded,
@@ -181,6 +194,11 @@ class _DesktopShellState extends State<DesktopShell> {
         icon: Icons.reviews_outlined,
       ),
       LuxurySideItem(
+        route: DesktopRouteKey.news,
+        label: 'News',
+        icon: Icons.campaign_outlined,
+      ),
+      LuxurySideItem(
         route: DesktopRouteKey.therapistProfile,
         label: '',
         icon: Icons.horizontal_rule_rounded,
@@ -203,6 +221,11 @@ class _DesktopShellState extends State<DesktopShell> {
         route: DesktopRouteKey.catalog,
         label: 'Services',
         icon: Icons.grid_view_rounded,
+      ),
+      LuxurySideItem(
+        route: DesktopRouteKey.news,
+        label: 'News',
+        icon: Icons.campaign_outlined,
       ),
       LuxurySideItem(
         route: DesktopRouteKey.reservations,
@@ -257,6 +280,8 @@ class _DesktopShellState extends State<DesktopShell> {
           return widget.home;
         case DesktopRouteKey.catalog:
           return const ServiceCatalogScreen();
+        case DesktopRouteKey.news:
+          return const NewsListScreen(luxury: true, embedded: true);
         case DesktopRouteKey.reservations:
           return auth.isAdmin
               ? const AdminAppointmentsManagementScreen()
