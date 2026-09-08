@@ -13,6 +13,7 @@ import '../../ui/widgets/page_header.dart';
 import '../../ui/widgets/primary_button.dart';
 import '../../ui/theme/mobile_spa_theme.dart';
 import '../../ui/layout/mobile_shell.dart';
+import '../../ui/widgets/load_retry_panel.dart';
 import '../catalog/service_details_screen.dart';
 
 bool _isCompletedReservation(Rezervacija r) =>
@@ -39,7 +40,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   @override
   void initState() {
     super.initState();
-    _futureReservations = _apiService.getRezervacije();
+    _futureReservations = _loadHistory();
   }
 
   @override
@@ -48,10 +49,19 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
     super.dispose();
   }
 
+  Future<List<Rezervacija>> _loadHistory() async {
+    final result = await _apiService.getRezervacijeFilteredAllResult(
+      includeOtkazane: _includeOtkazane,
+    );
+    if (result.error != null) {
+      throw Exception(result.error);
+    }
+    return result.items;
+  }
+
   Future<void> _refresh() async {
     setState(() {
-      _futureReservations =
-          _apiService.getRezervacijeFiltered(includeOtkazane: _includeOtkazane);
+      _futureReservations = _loadHistory();
     });
   }
 
@@ -295,6 +305,16 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   );
                 }
+                if (snapshot.hasError) {
+                  return LoadRetryPanel(
+                    title: 'Unable to load bookings',
+                    message: snapshot.error.toString().replaceFirst(
+                          'Exception: ',
+                          '',
+                        ),
+                    onRetry: _refresh,
+                  );
+                }
 
                 final data = snapshot.data ?? [];
                 if (data.isEmpty) {
@@ -446,6 +466,16 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return LoadRetryPanel(
+                    title: 'Unable to load bookings',
+                    message: snapshot.error.toString().replaceFirst(
+                          'Exception: ',
+                          '',
+                        ),
+                    onRetry: _refresh,
+                  );
                 }
 
                 final data = snapshot.data ?? [];

@@ -22,26 +22,31 @@ Widget _apptDialogOverlay({
   required Animation<double> animation,
   required Widget dialog,
 }) {
-  return Stack(
-    fit: StackFit.expand,
-    children: [
-      BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: const SizedBox.expand(),
-      ),
-      FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
+  // showGeneralDialog does not insert Material; without it, Text falls back to
+  // the yellow double-underline debug style.
+  return Material(
+    type: MaterialType.transparency,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: const SizedBox.expand(),
         ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
-            child: dialog,
+        FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+              child: dialog,
+            ),
           ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 

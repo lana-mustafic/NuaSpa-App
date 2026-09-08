@@ -229,7 +229,7 @@ class _AdminReservationsPageState extends State<_AdminReservationsPage> {
 
   void _reload() {
     setState(() {
-      _future = _api.getRezervacijeFiltered(includeOtkazane: _includeOtkazane);
+      _future = _api.getRezervacijeFilteredAll(includeOtkazane: _includeOtkazane);
     });
   }
 

@@ -28,3 +28,25 @@ int? parsePagedTotal(dynamic data) {
   }
   return null;
 }
+
+/// Walks every page until the server reports no further items.
+Future<List<T>> fetchAllPagedItems<T>({
+  required Future<dynamic> Function(int page, int pageSize) fetchPage,
+  required T Function(Map<String, dynamic> json) fromJson,
+  int pageSize = 100,
+  int maxPages = 50,
+}) async {
+  final all = <T>[];
+  for (var page = 1; page <= maxPages; page++) {
+    final data = await fetchPage(page, pageSize);
+    final items = parsePagedItems(data, fromJson);
+    all.addAll(items);
+    final total = parsePagedTotal(data);
+    if (items.isEmpty ||
+        items.length < pageSize ||
+        (total != null && all.length >= total)) {
+      break;
+    }
+  }
+  return all;
+}

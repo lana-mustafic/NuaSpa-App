@@ -87,14 +87,10 @@ class ApiService {
         '${d.day.toString().padLeft(2, '0')}';
   }
 
-  /// Opcionalni filteri mapiraju na [UslugaSearchObject] na backendu.
+  /// Complete catalog for dropdowns — all pages, not just the first.
   Future<List<Usluga>> getUsluge({String? naziv, double? maxCijena}) async {
     try {
-      return await getUslugePage(
-        page: 1,
-        naziv: naziv,
-        maxCijena: maxCijena,
-      );
+      return await getUslugeAll(naziv: naziv, maxCijena: maxCijena);
     } catch (e) {
       debugPrint('Greška u ApiService.getUsluge: $e');
       return [];
@@ -223,16 +219,20 @@ class ApiService {
 
   Future<ZaposleniciLoadResult> getZaposleniciForService(int uslugaId) async {
     try {
-      final response = await _dio.get<dynamic>(
-        'Zaposlenik/for-service/$uslugaId',
+      final items = await fetchAllPagedItems(
+        fetchPage: (page, pageSize) async {
+          final response = await _dio.get<dynamic>(
+            'Zaposlenik/for-service/$uslugaId',
+            queryParameters: {
+              'bookableOnly': true,
+              'page': page,
+              'pageSize': pageSize,
+            },
+          );
+          return response.data;
+        },
+        fromJson: Zaposlenik.fromJson,
       );
-      final data = response.data;
-      if (data is! List) {
-        return const ZaposleniciLoadResult();
-      }
-      final items = data
-          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
-          .toList();
       return ZaposleniciLoadResult(items: items);
     } on DioException catch (e) {
       debugPrint('Greška u ApiService.getZaposleniciForService: $e');
@@ -255,15 +255,20 @@ class ApiService {
   }) async {
     if (kategorijaUslugaId <= 0) return [];
     try {
-      final response = await _dio.get<dynamic>(
-        'Zaposlenik/for-category/$kategorijaUslugaId',
-        queryParameters: {'bookableOnly': bookableOnly},
+      return await fetchAllPagedItems(
+        fetchPage: (page, pageSize) async {
+          final response = await _dio.get<dynamic>(
+            'Zaposlenik/for-category/$kategorijaUslugaId',
+            queryParameters: {
+              'bookableOnly': bookableOnly,
+              'page': page,
+              'pageSize': pageSize,
+            },
+          );
+          return response.data;
+        },
+        fromJson: Zaposlenik.fromJson,
       );
-      final data = response.data;
-      if (data is! List) return [];
-      return data
-          .map((e) => Zaposlenik.fromJson(e as Map<String, dynamic>))
-          .toList();
     } catch (e) {
       debugPrint('Greška u ApiService.getZaposleniciForCategory: $e');
       return [];
@@ -1387,58 +1392,24 @@ class ApiService {
   }
 
   Future<List<Rezervacija>> getRezervacije() async {
-    try {
-      final response = await _dio.get<dynamic>(
-        'Rezervacija',
-        queryParameters: {'pageSize': 100},
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => Rezervacija.fromJson(json),
-      );
-    } catch (e) {
-      debugPrint('Greška u ApiService.getRezervacije: $e');
-      return [];
-    }
+    return getRezervacijeFilteredAll();
   }
 
   /// `Datum` / `IsPotvrdjena` mapiraju na [RezervacijaSearchObject]
   /// (za terapeuta backend i dalje vraća samo njegove rezervacije).
+  /// Fetches every page — the first page alone is capped at 100.
   Future<List<Rezervacija>> getRezervacijeFiltered({
     DateTime? datum,
     bool? isPotvrdjena,
     bool includeOtkazane = false,
     int? zaposlenikId,
   }) async {
-    try {
-      // Note: backend clamps pageSize to MaxPageSize (currently 100).
-      // This method returns only the first page (for backwards compatibility).
-      final query = <String, dynamic>{'pageSize': 100, 'page': 1};
-      if (datum != null) {
-        query['Datum'] = _apiDateOnly(datum);
-      }
-      if (isPotvrdjena != null) {
-        query['IsPotvrdjena'] = isPotvrdjena;
-      }
-      if (includeOtkazane) {
-        query['IncludeOtkazane'] = true;
-      }
-      if (zaposlenikId != null) {
-        query['ZaposlenikId'] = zaposlenikId;
-      }
-
-      final response = await _dio.get<dynamic>(
-        'Rezervacija',
-        queryParameters: query,
-      );
-      return parsePagedItems(
-        response.data,
-        (json) => Rezervacija.fromJson(json),
-      );
-    } catch (e) {
-      debugPrint('Greška u ApiService.getRezervacijeFiltered: $e');
-      return [];
-    }
+    return getRezervacijeFilteredAll(
+      datum: datum,
+      isPotvrdjena: isPotvrdjena,
+      includeOtkazane: includeOtkazane,
+      zaposlenikId: zaposlenikId,
+    );
   }
 
   /// Admin screens: fetch all pages of reservations (backend enforces max pageSize=100).
@@ -2015,9 +1986,10 @@ class ApiService {
     }
   }
 
+  /// Complete category set for dropdowns — all pages, not just the first.
   Future<List<KategorijaUsluga>> getKategorijeUsluga() async {
     try {
-      return await getKategorijeUslugaPage(page: 1);
+      return await getKategorijeUslugaAll();
     } catch (e) {
       debugPrint('Greška u ApiService.getKategorijeUsluga: $e');
       return [];
