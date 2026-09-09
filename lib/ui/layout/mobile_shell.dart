@@ -86,9 +86,9 @@ class _MobileShellState extends State<MobileShell> {
                     ),
                   );
                 } else {
-                  Navigator.push<void>(
+                  Navigator.push<bool>(
                     context,
-                    MaterialPageRoute<void>(
+                    MaterialPageRoute<bool>(
                       builder: (_) => const ReservationCreateScreen(),
                     ),
                   );

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/api/api_error_messages.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/mobile_nav_provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/rezervacija.dart';
 import 'reservation_create_screen.dart';
@@ -36,11 +37,29 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   late Future<List<Rezervacija>> _futureReservations;
   final ScrollController _scrollController = ScrollController();
   bool _includeOtkazane = false;
+  int _seenBookingsEpoch = -1;
+  int _seenTabIndex = -1;
 
   @override
   void initState() {
     super.initState();
     _futureReservations = _loadHistory();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.embeddedInShell) return;
+    final nav = context.watch<MobileNavProvider>();
+    final epochChanged = nav.bookingsEpoch != _seenBookingsEpoch;
+    final openedBookings = nav.tabIndex == 2 && _seenTabIndex != 2;
+    final firstListen = _seenBookingsEpoch < 0;
+    _seenBookingsEpoch = nav.bookingsEpoch;
+    _seenTabIndex = nav.tabIndex;
+    if (firstListen) return;
+    if (epochChanged || openedBookings) {
+      _futureReservations = _loadHistory();
+    }
   }
 
   @override

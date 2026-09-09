@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/services/api_service.dart';
+import '../../providers/mobile_nav_provider.dart';
 import '../../providers/service_provider.dart';
 
 import '../../models/zaposlenik.dart';
@@ -46,6 +47,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   String? _serviceValidationError;
   String? _therapistValidationError;
   String? _slotValidationError;
+  bool _submitting = false;
 
   Future<_ReservationBootstrap>? _bootstrapFuture;
   bool _bootstrapStarted = false;
@@ -191,6 +193,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     setState(() {
       _serviceValidationError =
           _selectedServiceId == null ? 'Select a service.' : null;
@@ -208,6 +211,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
+    setState(() => _submitting = true);
     final created = await _apiService.createRezervacijaWithMessage(
       datumRezervacije: _selectedSlot!,
       uslugaId: _selectedServiceId!,
@@ -215,6 +219,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     );
 
     if (!mounted) return;
+    setState(() => _submitting = false);
 
     if (created.data == null) {
       messenger.showSnackBar(
@@ -225,6 +230,23 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       return;
     }
 
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Booking created'),
+        content: const Text(
+          'Your appointment is saved. You can find it under Bookings.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    context.read<MobileNavProvider>().notifyBookingCreated();
     navigator.pop(true);
   }
 
@@ -504,9 +526,15 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
     return Tooltip(
       message: 'Confirm booking',
       child: FilledButton.icon(
-        onPressed: _submit,
-        icon: const Icon(Icons.check_circle_outline),
-        label: const Text('Book'),
+        onPressed: _submitting ? null : _submit,
+        icon: _submitting
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.check_circle_outline),
+        label: Text(_submitting ? 'Booking…' : 'Book'),
       ),
     );
   }
@@ -528,8 +556,10 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
       );
     }
 
-    return Scaffold(
-      body: Material(
+    return PopScope(
+      canPop: !_submitting,
+      child: Scaffold(
+        body: Material(
         color: Theme.of(context).colorScheme.surface,
         child: FutureBuilder<_ReservationBootstrap>(
           future: _bootstrapFuture,
@@ -664,6 +694,7 @@ class _ReservationCreateScreenState extends State<ReservationCreateScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

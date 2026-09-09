@@ -39,6 +39,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthState()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => ServiceProvider()),
+        ChangeNotifierProvider(create: (_) => MobileNavProvider()),
       ],
       child: const MyApp(),
     ),
@@ -84,6 +85,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
       context.read<NotificationProvider>().setPollingActive(
             authStatus == AuthStatus.authenticated,
           );
+      if (authStatus != AuthStatus.authenticated) {
+        context.read<MobileNavProvider>().reset();
+      }
     });
 
     if (authStatus == AuthStatus.initializing) {
@@ -97,10 +101,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (kDebugMode) {
           debugPrint('NuaSpa: showing MobileShell (premium bottom nav)');
         }
-        return ChangeNotifierProvider(
-          create: (_) => MobileNavProvider(),
-          child: const MobileShell(),
-        );
+        return const MobileShell();
       }
       return ChangeNotifierProvider(
         create: (_) => DesktopNav(),
