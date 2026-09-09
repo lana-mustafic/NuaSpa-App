@@ -336,8 +336,11 @@ class _ReservationListScreenState extends State<ReservationListScreen>
   }
 
   Widget _buildMobile(BuildContext context) {
-    final hideFab =
-        context.watch<AuthProvider>().isZaposlenik || widget.embeddedInShell;
+    final auth = context.watch<AuthProvider>();
+    // FAB is redundant in the shell (center Book action exists), but clients
+    // must still get Pay / Cancel on cards.
+    final hideFab = auth.isZaposlenik || widget.embeddedInShell;
+    final hideClientActions = auth.isZaposlenik;
     final tt = Theme.of(context).textTheme;
     final listBottomPad = widget.embeddedInShell
         ? mobileTabBottomPadding(context)
@@ -413,7 +416,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
             const LinearProgressIndicator(minHeight: 2),
           Expanded(
             child: _buildReservationsBody(
-              hideFab: hideFab,
+              hideClientActions: hideClientActions,
               listBottomPad: listBottomPad,
               textTheme: tt,
               mobile: true,
@@ -425,7 +428,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
   }
 
   Widget _buildReservationsBody({
-    required bool hideFab,
+    required bool hideClientActions,
     required double listBottomPad,
     required TextTheme textTheme,
     required bool mobile,
@@ -469,7 +472,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
                   style: textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
-                if (!hideFab) ...[
+                if (!hideClientActions) ...[
                   const SizedBox(height: 20),
                   FilledButton(
                     onPressed: _openCreateReservation,
@@ -506,7 +509,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
             return _MobileReservationCard(
               reservation: r,
               statusLabel: _statusLabel(r),
-              hideClientActions: hideFab,
+              hideClientActions: hideClientActions,
               onCancel: () => _cancelReservation(r),
               onReview: () {
                 Navigator.push<void>(
@@ -519,7 +522,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
                   ),
                 );
               },
-              onPay: !hideFab &&
+              onPay: !hideClientActions &&
                       r.canPayOnline &&
                       StripePaymentService.paymentSheetSupported
                   ? () => _handlePayOnline(r)
@@ -571,7 +574,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
                     DataCell(
                       _DesktopPaymentCell(
                         reservation: r,
-                        canAct: !hideFab,
+                        canAct: !hideClientActions,
                         onPay: () => _handlePayOnline(r),
                       ),
                     ),
@@ -579,7 +582,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (!hideFab && _isCompletedReservation(r))
+                          if (!hideClientActions && _isCompletedReservation(r))
                             Tooltip(
                               message:
                                   'Leave a review after a completed appointment',
@@ -691,7 +694,7 @@ class _ReservationListScreenState extends State<ReservationListScreen>
             const LinearProgressIndicator(minHeight: 2),
           Expanded(
             child: _buildReservationsBody(
-              hideFab: hideFab,
+              hideClientActions: hideFab,
               listBottomPad: 0,
               textTheme: Theme.of(context).textTheme,
               mobile: false,
