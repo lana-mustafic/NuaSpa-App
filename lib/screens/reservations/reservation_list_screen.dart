@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +33,8 @@ class ReservationListScreen extends StatefulWidget {
 }
 
 class _ReservationListScreenState extends State<ReservationListScreen> {
+  static const Duration _mobileRefreshInterval = Duration(seconds: 15);
+
   final ApiService _apiService = ApiService();
   final StripePaymentService _stripe = StripePaymentService();
 
@@ -39,6 +43,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   bool _includeOtkazane = false;
   int _seenBookingsEpoch = -1;
   int _seenTabIndex = -1;
+  Timer? _mobileRefreshTimer;
 
   @override
   void initState() {
@@ -53,17 +58,38 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
     final nav = context.watch<MobileNavProvider>();
     final epochChanged = nav.bookingsEpoch != _seenBookingsEpoch;
     final openedBookings = nav.tabIndex == 2 && _seenTabIndex != 2;
+    final closedBookings = nav.tabIndex != 2 && _seenTabIndex == 2;
     final firstListen = _seenBookingsEpoch < 0;
     _seenBookingsEpoch = nav.bookingsEpoch;
     _seenTabIndex = nav.tabIndex;
+    if (nav.tabIndex == 2) {
+      _ensureMobileRefreshTimer();
+    } else if (closedBookings) {
+      _mobileRefreshTimer?.cancel();
+      _mobileRefreshTimer = null;
+    }
     if (firstListen) return;
     if (epochChanged || openedBookings) {
       _futureReservations = _loadHistory();
     }
   }
 
+  void _ensureMobileRefreshTimer() {
+    if (_mobileRefreshTimer != null) return;
+    _mobileRefreshTimer = Timer.periodic(_mobileRefreshInterval, (_) {
+      if (!mounted || !_isBookingsTabVisible()) return;
+      _refresh();
+    });
+  }
+
+  bool _isBookingsTabVisible() {
+    if (!widget.embeddedInShell) return true;
+    return context.read<MobileNavProvider>().tabIndex == 2;
+  }
+
   @override
   void dispose() {
+    _mobileRefreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
