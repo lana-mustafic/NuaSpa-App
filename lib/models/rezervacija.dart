@@ -51,16 +51,22 @@ class Rezervacija {
   });
 
   factory Rezervacija.fromJson(Map<String, dynamic> json) {
-    final status = (json['status'] as String?) ?? 'Pending';
+    final rawStatus = json['status'];
+    final status = rawStatus is String
+        ? rawStatus
+        : (rawStatus?.toString() ?? 'Pending');
+    final confirmedLike = RezervacijaStatusFlags.isConfirmedLike(status);
+    final cancelled = RezervacijaStatusFlags.isCancelled(status);
     return Rezervacija(
       id: (json['id'] as num).toInt(),
       datumRezervacije: DateTime.parse(json['datumRezervacije'] as String),
       status: status,
-      isPotvrdjena: RezervacijaStatusFlags.isConfirmedLike(status),
+      // Prefer API flags; fall back to status string for older payloads.
+      isPotvrdjena: (json['isPotvrdjena'] as bool?) ?? confirmedLike,
       isPlacena: (json['isPaid'] as bool?) ??
           (json['isPlacena'] as bool?) ??
           false,
-      isOtkazana: RezervacijaStatusFlags.isCancelled(status),
+      isOtkazana: (json['isOtkazana'] as bool?) ?? cancelled,
       razlogOtkaza: json['razlogOtkaza'] as String?,
       otkazanaAt: (json['otkazanaAt'] as String?) == null
           ? null
@@ -84,6 +90,10 @@ class Rezervacija {
   }
 
   /// Online Stripe pay is allowed only for confirmed, unpaid bookings.
-  bool get canPayOnline =>
-      RezervacijaStatusFlags.isOnlinePayable(status, isPaid: isPlacena);
+  bool get canPayOnline {
+    if (isPlacena || isOtkazana) return false;
+    final s = status.toLowerCase();
+    if (s == 'completed' || s == 'cancelled') return false;
+    return isPotvrdjena || s == 'confirmed';
+  }
 }

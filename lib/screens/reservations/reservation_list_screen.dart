@@ -7,6 +7,7 @@ import '../../core/api/api_error_messages.dart';
 import '../../core/platform/nua_spa_platform.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/mobile_nav_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../core/api/services/api_service.dart';
 import '../../models/rezervacija.dart';
 import 'reservation_create_screen.dart';
@@ -32,28 +33,50 @@ class ReservationListScreen extends StatefulWidget {
   State<ReservationListScreen> createState() => _ReservationListScreenState();
 }
 
-class _ReservationListScreenState extends State<ReservationListScreen> {
-  static const Duration _mobileRefreshInterval = Duration(seconds: 15);
+class _ReservationListScreenState extends State<ReservationListScreen>
+    with WidgetsBindingObserver {
+  static const Duration _refreshInterval = Duration(seconds: 5);
 
   final ApiService _apiService = ApiService();
   final StripePaymentService _stripe = StripePaymentService();
 
-  late Future<List<Rezervacija>> _futureReservations;
+  List<Rezervacija> _reservations = const [];
+  bool _loading = true;
+  bool _refreshing = false;
+  String? _loadError;
   final ScrollController _scrollController = ScrollController();
   bool _includeOtkazane = false;
   int _seenBookingsEpoch = -1;
   int _seenTabIndex = -1;
-  Timer? _mobileRefreshTimer;
+  int _seenNotificationEpoch = -1;
+  Timer? _refreshTimer;
+  bool _loadInFlight = false;
 
   @override
   void initState() {
     super.initState();
-    _futureReservations = _loadHistory();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_loadHistory(showSpinner: true));
+    if (!widget.embeddedInShell) {
+      _ensureRefreshTimer();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final notifications = context.watch<NotificationProvider>();
+    final notificationEpoch =
+        notifications.unreadCount + (notifications.notifikacije.length * 1000);
+    if (_seenNotificationEpoch < 0) {
+      _seenNotificationEpoch = notificationEpoch;
+    } else if (notificationEpoch != _seenNotificationEpoch) {
+      _seenNotificationEpoch = notificationEpoch;
+      if (_isBookingsTabVisible()) {
+        unawaited(_loadHistory(showSpinner: false));
+      }
+    }
+
     if (!widget.embeddedInShell) return;
     final nav = context.watch<MobileNavProvider>();
     final epochChanged = nav.bookingsEpoch != _seenBookingsEpoch;
@@ -63,22 +86,29 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
     _seenBookingsEpoch = nav.bookingsEpoch;
     _seenTabIndex = nav.tabIndex;
     if (nav.tabIndex == 2) {
-      _ensureMobileRefreshTimer();
+      _ensureRefreshTimer();
     } else if (closedBookings) {
-      _mobileRefreshTimer?.cancel();
-      _mobileRefreshTimer = null;
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
     }
     if (firstListen) return;
     if (epochChanged || openedBookings) {
-      _futureReservations = _loadHistory();
+      unawaited(_loadHistory(showSpinner: _reservations.isEmpty));
     }
   }
 
-  void _ensureMobileRefreshTimer() {
-    if (_mobileRefreshTimer != null) return;
-    _mobileRefreshTimer = Timer.periodic(_mobileRefreshInterval, (_) {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isBookingsTabVisible()) {
+      unawaited(_loadHistory(showSpinner: false));
+    }
+  }
+
+  void _ensureRefreshTimer() {
+    if (_refreshTimer != null) return;
+    _refreshTimer = Timer.periodic(_refreshInterval, (_) {
       if (!mounted || !_isBookingsTabVisible()) return;
-      _refresh();
+      unawaited(_loadHistory(showSpinner: false));
     });
   }
 
@@ -89,26 +119,61 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
 
   @override
   void dispose() {
-    _mobileRefreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<List<Rezervacija>> _loadHistory() async {
-    final result = await _apiService.getRezervacijeFilteredAllResult(
-      includeOtkazane: _includeOtkazane,
-    );
-    if (result.error != null) {
-      throw Exception(result.error);
+  Future<void> _loadHistory({required bool showSpinner}) async {
+    if (_loadInFlight) return;
+    _loadInFlight = true;
+    if (mounted) {
+      setState(() {
+        if (showSpinner) {
+          _loading = true;
+          _loadError = null;
+        } else {
+          _refreshing = true;
+        }
+      });
     }
-    return result.items;
+
+    try {
+      final result = await _apiService.getRezervacijeFilteredAllResult(
+        includeOtkazane: _includeOtkazane,
+      );
+      if (!mounted) return;
+      if (result.error != null) {
+        setState(() {
+          _loadError = result.error;
+          _loading = false;
+          _refreshing = false;
+          if (_reservations.isEmpty) {
+            _reservations = const [];
+          }
+        });
+        return;
+      }
+      setState(() {
+        _reservations = result.items;
+        _loadError = null;
+        _loading = false;
+        _refreshing = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+        _refreshing = false;
+      });
+    } finally {
+      _loadInFlight = false;
+    }
   }
 
-  Future<void> _refresh() async {
-    setState(() {
-      _futureReservations = _loadHistory();
-    });
-  }
+  Future<void> _refresh() => _loadHistory(showSpinner: _reservations.isEmpty);
 
   Future<void> _cancelReservation(Rezervacija r) async {
     final reason = await showDialog<String>(
@@ -132,7 +197,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
           ),
         ),
       );
-      if (result?.otkazana == true) _refresh();
+      if (result?.otkazana == true) await _refresh();
     } on DioException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -151,7 +216,10 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
   String _statusLabel(Rezervacija r) {
     if (r.isOtkazana) return 'Cancelled';
     if (_isCompletedReservation(r)) return 'Completed';
-    if (r.isPotvrdjena) return 'Confirmed';
+    if (r.isPotvrdjena ||
+        r.status.toLowerCase() == 'confirmed') {
+      return 'Confirmed';
+    }
     return 'Pending';
   }
 
@@ -162,7 +230,7 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
         builder: (_) => const ReservationCreateScreen(),
       ),
     );
-    if (created == true && mounted) _refresh();
+    if (created == true && mounted) await _refresh();
   }
 
   Future<bool> _confirmPay(Rezervacija r) async {
@@ -341,107 +409,221 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          if (_refreshing && !_loading)
+            const LinearProgressIndicator(minHeight: 2),
           Expanded(
-            child: FutureBuilder<List<Rezervacija>>(
-              future: _futureReservations,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return LoadRetryPanel(
-                    title: 'Unable to load bookings',
-                    message: snapshot.error.toString().replaceFirst(
-                          'Exception: ',
-                          '',
-                        ),
-                    onRetry: _refresh,
-                  );
-                }
-
-                final data = snapshot.data ?? [];
-                if (data.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.event_busy_outlined,
-                            size: 48,
-                            color: MobileSpaColors.royalPurple
-                                .withValues(alpha: 0.35),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No reservations yet',
-                            style: tt.titleMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Book a treatment to see it here.',
-                            style: tt.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          if (!hideFab) ...[
-                            const SizedBox(height: 20),
-                            FilledButton(
-                              onPressed: _openCreateReservation,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: MobileSpaColors.royalPurple,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Book now'),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                return RefreshIndicator(
-                  onRefresh: _refresh,
-                  color: MobileSpaColors.royalPurple,
-                  child: ListView.separated(
-                    padding: EdgeInsets.fromLTRB(20, 8, 20, listBottomPad),
-                    itemCount: data.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final r = data[index];
-                      return _MobileReservationCard(
-                        reservation: r,
-                        statusLabel: _statusLabel(r),
-                        hideClientActions: hideFab,
-                        onCancel: () => _cancelReservation(r),
-                        onReview: () {
-                          Navigator.push<void>(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => ServiceDetailsScreen(
-                                serviceId: r.uslugaId,
-                                initialRezervacijaId: r.id,
-                              ),
-                            ),
-                          );
-                        },
-                        onPay: !hideFab &&
-                                r.canPayOnline &&
-                                StripePaymentService.paymentSheetSupported
-                            ? () => _handlePayOnline(r)
-                            : null,
-                      );
-                    },
-                  ),
-                );
-              },
+            child: _buildReservationsBody(
+              hideFab: hideFab,
+              listBottomPad: listBottomPad,
+              textTheme: tt,
+              mobile: true,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildReservationsBody({
+    required bool hideFab,
+    required double listBottomPad,
+    required TextTheme textTheme,
+    required bool mobile,
+  }) {
+    if (_loading && _reservations.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (_loadError != null && _reservations.isEmpty) {
+      return LoadRetryPanel(
+        title: 'Unable to load bookings',
+        message: _loadError!,
+        onRetry: _refresh,
+      );
+    }
+
+    final data = _reservations;
+    if (data.isEmpty) {
+      if (mobile) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.event_busy_outlined,
+                  size: 48,
+                  color: MobileSpaColors.royalPurple.withValues(alpha: 0.35),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No reservations yet',
+                  style: textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Book a treatment to see it here.',
+                  style: textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                if (!hideFab) ...[
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _openCreateReservation,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MobileSpaColors.royalPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Book now'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
+      return Center(
+        child: Text(
+          'No bookings yet.',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+        ),
+      );
+    }
+
+    if (mobile) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        color: MobileSpaColors.royalPurple,
+        child: ListView.separated(
+          padding: EdgeInsets.fromLTRB(20, 8, 20, listBottomPad),
+          itemCount: data.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final r = data[index];
+            return _MobileReservationCard(
+              reservation: r,
+              statusLabel: _statusLabel(r),
+              hideClientActions: hideFab,
+              onCancel: () => _cancelReservation(r),
+              onReview: () {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ServiceDetailsScreen(
+                      serviceId: r.uslugaId,
+                      initialRezervacijaId: r.id,
+                    ),
+                  ),
+                );
+              },
+              onPay: !hideFab &&
+                      r.canPayOnline &&
+                      StripePaymentService.paymentSheetSupported
+                  ? () => _handlePayOnline(r)
+                  : null,
+            );
+          },
+        ),
+      );
+    }
+
+    return Scrollbar(
+      controller: _scrollController,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        primary: false,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: DataTable(
+            headingRowHeight: 44,
+            dataRowMinHeight: 54,
+            dataRowMaxHeight: 66,
+            columns: const [
+              DataColumn(label: Text('Service')),
+              DataColumn(label: Text('Date & time')),
+              DataColumn(label: Text('Therapist')),
+              DataColumn(label: Text('Status')),
+              DataColumn(label: Text('Payment')),
+              DataColumn(label: Text('Actions')),
+            ],
+            rows: [
+              for (final r in data)
+                DataRow(
+                  onSelectChanged: (_) {},
+                  cells: [
+                    DataCell(Text(r.uslugaNaziv ?? 'Service')),
+                    DataCell(Text(
+                      r.datumRezervacije
+                          .toLocal()
+                          .toString()
+                          .split('.')
+                          .first,
+                    )),
+                    DataCell(Text(r.zaposlenikIme ?? '-')),
+                    DataCell(
+                      Chip(
+                        label: Text(_statusLabel(r)),
+                      ),
+                    ),
+                    DataCell(
+                      _DesktopPaymentCell(
+                        reservation: r,
+                        canAct: !hideFab,
+                        onPay: () => _handlePayOnline(r),
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!hideFab && _isCompletedReservation(r))
+                            Tooltip(
+                              message:
+                                  'Leave a review after a completed appointment',
+                              child: IconButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ServiceDetailsScreen(
+                                        serviceId: r.uslugaId,
+                                        initialRezervacijaId: r.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.rate_review_outlined,
+                                ),
+                              ),
+                            ),
+                          Tooltip(
+                            message: r.isOtkazana
+                                ? 'Already cancelled'
+                                : (_isCompletedReservation(r)
+                                    ? 'Completed bookings cannot be cancelled'
+                                    : (r.isPlacena
+                                        ? 'Cancel and refund paid booking'
+                                        : 'Cancel booking')),
+                            child: IconButton(
+                              onPressed: r.isOtkazana ||
+                                      _isCompletedReservation(r)
+                                  ? null
+                                  : () => _cancelReservation(r),
+                              icon: const Icon(Icons.cancel_outlined),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -505,141 +687,14 @@ class _ReservationListScreenState extends State<ReservationListScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          if (_refreshing && !_loading)
+            const LinearProgressIndicator(minHeight: 2),
           Expanded(
-            child: FutureBuilder<List<Rezervacija>>(
-              future: _futureReservations,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return LoadRetryPanel(
-                    title: 'Unable to load bookings',
-                    message: snapshot.error.toString().replaceFirst(
-                          'Exception: ',
-                          '',
-                        ),
-                    onRetry: _refresh,
-                  );
-                }
-
-                final data = snapshot.data ?? [];
-                if (data.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No bookings yet.',
-                      style:
-                          TextStyle(color: Colors.white.withValues(alpha: 0.75)),
-                    ),
-                  );
-                }
-
-                return Scrollbar(
-                  controller: _scrollController,
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    primary: false,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: DataTable(
-                        headingRowHeight: 44,
-                        dataRowMinHeight: 54,
-                        dataRowMaxHeight: 66,
-                        columns: const [
-                          DataColumn(label: Text('Service')),
-                          DataColumn(label: Text('Date & time')),
-                          DataColumn(label: Text('Therapist')),
-                          DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Payment')),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: [
-                          for (final r in data)
-                            DataRow(
-                              onSelectChanged: (_) {},
-                              cells: [
-                                DataCell(Text(r.uslugaNaziv ?? 'Service')),
-                                DataCell(Text(
-                                  r.datumRezervacije
-                                      .toLocal()
-                                      .toString()
-                                      .split('.')
-                                      .first,
-                                )),
-                                DataCell(Text(r.zaposlenikIme ?? '-')),
-                                DataCell(
-                                  Chip(
-                                    label: Text(
-                                      r.isOtkazana
-                                          ? 'Cancelled'
-                                          : (_isCompletedReservation(r)
-                                              ? 'Completed'
-                                              : (r.isPotvrdjena
-                                                  ? 'Confirmed'
-                                                  : 'Pending')),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  _DesktopPaymentCell(
-                                    reservation: r,
-                                    canAct: !hideFab,
-                                    onPay: () => _handlePayOnline(r),
-                                  ),
-                                ),
-                                DataCell(
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (!hideFab && _isCompletedReservation(r))
-                                        Tooltip(
-                                          message:
-                                              'Leave a review after a completed appointment',
-                                          child: IconButton(
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      ServiceDetailsScreen(
-                                                    serviceId: r.uslugaId,
-                                                    initialRezervacijaId: r.id,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            icon: const Icon(
-                                              Icons.rate_review_outlined,
-                                            ),
-                                          ),
-                                        ),
-                                      Tooltip(
-                                        message: r.isOtkazana
-                                            ? 'Already cancelled'
-                                            : (_isCompletedReservation(r)
-                                                ? 'Completed bookings cannot be cancelled'
-                                                : (r.isPlacena
-                                                    ? 'Cancel and refund paid booking'
-                                                    : 'Cancel booking')),
-                                        child: IconButton(
-                                          onPressed: r.isOtkazana ||
-                                                  _isCompletedReservation(r)
-                                              ? null
-                                              : () => _cancelReservation(r),
-                                          icon: const Icon(Icons.cancel_outlined),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+            child: _buildReservationsBody(
+              hideFab: hideFab,
+              listBottomPad: 0,
+              textTheme: Theme.of(context).textTheme,
+              mobile: false,
             ),
           ),
           ],

@@ -1501,7 +1501,7 @@ class ApiService {
       );
     } catch (e) {
       debugPrint('Greška u ApiService._getRezervacijeFilteredPage: $e');
-      return [];
+      rethrow;
     }
   }
 
